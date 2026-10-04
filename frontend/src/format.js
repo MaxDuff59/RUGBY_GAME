@@ -62,7 +62,34 @@ export const CATEGORIES = {
   staff: "Staff",
   facilities: "Infrastructures",
   prize: "Primes",
+  medical: "Médical",
 };
+
+// --- Médical ------------------------------------------------------------------------
+
+export const SEVERITIES = {
+  light: { label: "Légère", short: "Lég." },
+  moderate: { label: "Modérée", short: "Mod." },
+  severe: { label: "Grave", short: "Grave" },
+};
+
+export const INJURY_SOURCES = {
+  match: "en match",
+  training: "à l'entraînement",
+};
+
+// Protocoles de soins, dans l'ordre du plus prudent au plus risqué.
+export const PROTOCOLS = {
+  cautious: { label: "Prudent", scope: "Convalescence allongée, rechute rare" },
+  standard: { label: "Normal", scope: "Durée médicale, risque de rechute modéré" },
+  accelerated: { label: "Retour anticipé", scope: "Plus court et payant, rechute fréquente" },
+};
+
+// 0.04 -> "4 %", 0.125 -> "12,5 %"
+export const formatPercent = (ratio) => `${upToOneDecimal.format(ratio * 100)} %`;
+
+// 1 -> "1 semaine", 6 -> "6 semaines"
+export const formatWeeks = (weeks) => `${weeks} semaine${weeks > 1 ? "s" : ""}`;
 
 // "J12" pour une journée, "Barrages" / "Demi-finales" / "Finale" sinon.
 export const matchdayLabel = (match) =>
@@ -74,6 +101,8 @@ const oneDecimal = new Intl.NumberFormat("fr-FR", {
 });
 
 const upToTwoDecimals = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 });
+
+const upToOneDecimal = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
 
 const integer = new Intl.NumberFormat("fr-FR");
 

@@ -47,6 +47,68 @@ class Position(StrEnum):
 FORWARDS = frozenset({Position.PROP, Position.HOOKER, Position.LOCK, Position.BACK_ROW})
 
 
+# --- Blessures -----------------------------------------------------------------------
+
+
+class InjurySeverity(StrEnum):
+    LIGHT = "light"  # légère : quelques semaines
+    MODERATE = "moderate"  # modérée : un à deux mois
+    SEVERE = "severe"  # grave : plusieurs mois
+
+
+class InjurySource(StrEnum):
+    MATCH = "match"
+    TRAINING = "training"
+
+
+class Protocol(StrEnum):
+    """Protocole de soins choisi par le manager (les règles sont dans engine/medical.py)."""
+
+    CAUTIOUS = "cautious"  # prudent : plus long, rechute rare
+    STANDARD = "standard"  # normal
+    ACCELERATED = "accelerated"  # accéléré : retour anticipé, rechute fréquente, coûteux
+
+
+# Après son retour, un joueur reste fragile pendant quelques semaines.
+FRAGILE_WEEKS = 4
+
+
+@dataclass
+class Injury:
+    """Une blessure d'un joueur, en cours ou passée.
+
+    Les dates font foi : le joueur est indisponible tant que `return_date` n'est
+    pas atteinte, puis fragile (risque de rechute) jusqu'à `fragile_until`.
+    """
+
+    player_id: int
+    severity: InjurySeverity
+    kind: str  # ex. « entorse de la cheville »
+    source: InjurySource
+    occurred_on: datetime.date
+    base_weeks: int  # durée médicale, avant protocole et staff
+    return_date: datetime.date
+    protocol: Protocol = Protocol.STANDARD
+    protocol_chosen: bool = True  # False tant que le manager n'a pas tranché
+    relapse: bool = False  # rechute d'une blessure précédente
+    relapse_risk: float = 0.0  # probabilité de rechute par match, une fois revenu
+    id: int | None = None
+
+    @property
+    def fragile_until(self) -> datetime.date:
+        return self.return_date + datetime.timedelta(weeks=FRAGILE_WEEKS)
+
+    def is_active(self, day: datetime.date) -> bool:
+        return day < self.return_date
+
+    def is_fragile(self, day: datetime.date) -> bool:
+        return self.return_date <= day < self.fragile_until
+
+    def weeks_left(self, day: datetime.date) -> int:
+        """Semaines d'indisponibilité restantes (0 si le joueur est revenu)."""
+        return max(0, -(-(self.return_date - day).days // 7))
+
+
 @dataclass
 class Player:
     id: int
@@ -67,6 +129,8 @@ class Player:
     # Salaire par saison, en euros (fixé au contrat ; la valeur marchande, elle,
     # se calcule : voir engine/economy.py).
     wage: int = 0
+    # Blessure la plus récente (en cours ou guérie), None s'il n'en a jamais eu.
+    injury: Injury | None = None
 
     def __post_init__(self) -> None:
         # On refuse tout attribut hors de l'échelle 1-20 dès la création.
@@ -92,6 +156,14 @@ class Player:
         moteur calcule ses propres notes selon le poste.
         """
         return sum(self.attributes.values()) / len(ATTRIBUTE_NAMES)
+
+    def is_injured(self, day: datetime.date | None) -> bool:
+        """Indisponible à cette date (sans date, on ignore les blessures)."""
+        return day is not None and self.injury is not None and self.injury.is_active(day)
+
+    def is_fragile(self, day: datetime.date | None) -> bool:
+        """Revenu de blessure depuis peu : risque de rechute."""
+        return day is not None and self.injury is not None and self.injury.is_fragile(day)
 
 
 class StaffRole(StrEnum):
@@ -152,6 +224,14 @@ class Club:
         """Joueurs de l'effectif à un poste donné."""
         return [p for p in self.players if p.position == position]
 
+    def available_players(self, day: datetime.date | None) -> list[Player]:
+        """Joueurs aptes à jouer à cette date (les blessés sont exclus)."""
+        return [p for p in self.players if not p.is_injured(day)]
+
+    def staff_level(self, role: StaffRole) -> int:
+        """Niveau (1 à 5) du membre du staff à ce poste, 0 si le poste est vacant."""
+        return next((s.level for s in self.staff if s.role == role), 0)
+
     @property
     def player_wages(self) -> int:
         """Masse salariale des joueurs, par saison."""
@@ -171,6 +251,7 @@ class EventType(StrEnum):
     PENALTY_GOAL = "penalty_goal"  # pénalité réussie
     PENALTY_MISSED = "penalty_missed"
     DROP_GOAL = "drop_goal"  # drop réussi
+    INJURY = "injury"  # un joueur se blesse et quitte le terrain
 
 
 # Points rapportés par chaque type d'événement (0 pour les tentatives manquées).
@@ -181,6 +262,7 @@ EVENT_POINTS = {
     EventType.PENALTY_GOAL: 3,
     EventType.PENALTY_MISSED: 0,
     EventType.DROP_GOAL: 3,
+    EventType.INJURY: 0,
 }
 
 

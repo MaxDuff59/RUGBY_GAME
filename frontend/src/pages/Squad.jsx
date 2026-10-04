@@ -3,7 +3,7 @@ import { useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
 import SortHeader from "../components/SortHeader.jsx";
-import { ATTRIBUTES, POSITION_ORDER, POSITIONS, formatMoney, formatNote } from "../format.js";
+import { ATTRIBUTES, POSITION_ORDER, POSITIONS, formatMoney, formatNote, formatShortDate } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { useSort } from "../hooks/useSort.js";
 
@@ -148,7 +148,10 @@ export default function Squad() {
                       <td className="left jersey">{jerseyByPlayer.get(player.id) ?? ""}</td>
                       <td className="left">
                         <div style={{ fontWeight: 600 }}>{player.name}</div>
-                        <div className="muted">{POSITIONS[player.position].label}</div>
+                        <div className="muted">
+                          {POSITIONS[player.position].label}
+                          <InjuryTag injury={player.injury} />
+                        </div>
                       </td>
                       <td className="muted">{player.age}</td>
                       <td className="note">{formatNote(player.overall)}</td>
@@ -171,11 +174,35 @@ export default function Squad() {
           <p className="table__note">
             {ATTRIBUTES.map((attr) => `${attr.short} ${attr.label.toLowerCase()}`).join(" · ")}.
             Attributs sur 20 ; en gras à partir de 15. Le numéro indique les titulaires. Salaire par saison.
+            Les blessés ne sont pas alignés : voir la page Médical.
           </p>
         </div>
       </div>
     </>
   );
+}
+
+// « Blessé » jusqu'à la date de retour, « Fragile » pendant la reprise, rien sinon.
+function InjuryTag({ injury }) {
+  if (!injury) return null;
+  if (injury.status === "active") {
+    return (
+      <>
+        {" "}
+        <span className="tag tag--injured">Blessé</span>
+        <span> · retour le {formatShortDate(injury.return_date)}</span>
+      </>
+    );
+  }
+  if (injury.status === "fragile") {
+    return (
+      <>
+        {" "}
+        <span className="tag tag--fragile">Fragile</span>
+      </>
+    );
+  }
+  return null;
 }
 
 function Stat({ value, label }) {

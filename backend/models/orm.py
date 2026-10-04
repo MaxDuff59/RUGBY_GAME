@@ -14,10 +14,14 @@ from models.domain import (
     Club,
     EventType,
     Facilities,
+    Injury,
+    InjurySeverity,
+    InjurySource,
     Match,
     MatchEvent,
     Player,
     Position,
+    Protocol,
     StaffMember,
     StaffRole,
     Stage,
@@ -89,8 +93,17 @@ class PlayerRow(Base):
     club_id: Mapped[int | None] = mapped_column(ForeignKey("clubs.id"))
 
     club: Mapped[ClubRow | None] = relationship(back_populates="players")
+    # Dossier médical complet ; le domaine ne garde que la blessure la plus récente.
+    injuries: Mapped[list["InjuryRow"]] = relationship(
+        back_populates="player", cascade="all, delete-orphan"
+    )
+
+    @property
+    def latest_injury(self) -> "InjuryRow | None":
+        return max(self.injuries, key=lambda i: (i.occurred_on, i.id), default=None)
 
     def to_domain(self) -> Player:
+        latest = self.latest_injury
         return Player(
             id=self.id,
             first_name=self.first_name,
@@ -107,6 +120,7 @@ class PlayerRow(Base):
             lineout=self.lineout,
             club_id=self.club_id,
             wage=self.wage,
+            injury=latest.to_domain() if latest is not None else None,
         )
 
     @classmethod
@@ -121,6 +135,67 @@ class PlayerRow(Base):
             wage=player.wage,
             **player.attributes,
         )
+
+
+class InjuryRow(Base):
+    """Une blessure, en cours ou passée (voir engine/medical.py)."""
+
+    __tablename__ = "injuries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id"))
+    severity: Mapped[str] = mapped_column(String(10))
+    kind: Mapped[str] = mapped_column(String(100))
+    source: Mapped[str] = mapped_column(String(10))
+    occurred_on: Mapped[datetime.date] = mapped_column(Date)
+    base_weeks: Mapped[int]
+    return_date: Mapped[datetime.date] = mapped_column(Date)
+    protocol: Mapped[str] = mapped_column(String(12), default=Protocol.STANDARD.value)
+    protocol_chosen: Mapped[bool] = mapped_column(default=True)
+    relapse: Mapped[bool] = mapped_column(default=False)
+    relapse_risk: Mapped[float] = mapped_column(default=0.0)
+
+    player: Mapped[PlayerRow] = relationship(back_populates="injuries")
+
+    def to_domain(self) -> Injury:
+        return Injury(
+            id=self.id,
+            player_id=self.player_id,
+            severity=InjurySeverity(self.severity),
+            kind=self.kind,
+            source=InjurySource(self.source),
+            occurred_on=self.occurred_on,
+            base_weeks=self.base_weeks,
+            return_date=self.return_date,
+            protocol=Protocol(self.protocol),
+            protocol_chosen=self.protocol_chosen,
+            relapse=self.relapse,
+            relapse_risk=self.relapse_risk,
+        )
+
+    @classmethod
+    def from_domain(cls, injury: Injury) -> "InjuryRow":
+        return cls(
+            id=injury.id,
+            player_id=injury.player_id,
+            severity=injury.severity.value,
+            kind=injury.kind,
+            source=injury.source.value,
+            occurred_on=injury.occurred_on,
+            base_weeks=injury.base_weeks,
+            return_date=injury.return_date,
+            protocol=injury.protocol.value,
+            protocol_chosen=injury.protocol_chosen,
+            relapse=injury.relapse,
+            relapse_risk=injury.relapse_risk,
+        )
+
+    def update_from(self, injury: Injury) -> None:
+        """Recopie les champs qui changent avec le protocole."""
+        self.protocol = injury.protocol.value
+        self.protocol_chosen = injury.protocol_chosen
+        self.return_date = injury.return_date
+        self.relapse_risk = injury.relapse_risk
 
 
 class StaffRow(Base):

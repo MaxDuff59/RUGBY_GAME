@@ -1,8 +1,9 @@
 """La saison en cours : calendrier, journée par journée, phases finales, saison suivante.
 
 Le calendrier est tiré au début de la saison (matchs sans score). Chaque appel
-à `play` joue la journée suivante : tous ses matchs, puis les recettes et les
-salaires. Les phases finales se créent au fil des résultats.
+à `play` joue la journée suivante : la semaine d'entraînement (qui peut blesser),
+tous ses matchs (qui blessent aussi), puis les recettes et les salaires. Les
+phases finales se créent au fil des résultats.
 """
 
 import itertools
@@ -14,7 +15,16 @@ from sqlalchemy.orm import Session
 
 from api.deps import SessionDep
 from api.ledger import current_season, record
-from api.schemas import ClubRef, MatchdayOut, MatchSummary, PlayOut, SeasonOut, StandingOut
+from api.routers.medical import injury_case
+from api.schemas import (
+    ClubRef,
+    InjuryCase,
+    MatchdayOut,
+    MatchSummary,
+    PlayOut,
+    SeasonOut,
+    StandingOut,
+)
 from engine.calendar import season_dates
 from engine.economy import (
     CHAMPION_PRIZE,
@@ -26,6 +36,7 @@ from engine.economy import (
     ticketing_revenue,
 )
 from engine.match_engine import simulate_match
+from engine.medical import new_injury, training_injuries
 from engine.offseason import age_players, generate_youth, retirees
 from engine.season import (
     PLAYOFF_QUALIFIERS,
@@ -35,8 +46,8 @@ from engine.season import (
     record_result,
     semi_pairings,
 )
-from models import Club, Season, Stage
-from models.orm import ClubRow, MatchRow, PlayerRow, SeasonRow
+from models import Club, EventType, Injury, InjurySource, Season, Stage
+from models.orm import CareerRow, ClubRow, InjuryRow, MatchRow, PlayerRow, SeasonRow
 
 router = APIRouter(prefix="/seasons", tags=["saisons"])
 
@@ -232,12 +243,18 @@ def _ensure_next_stage(session: Session, season: SeasonRow, clubs: dict[int, Clu
     session.commit()
 
 
-def _play_matchday(session: Session, season: SeasonRow) -> MatchdayOut:
-    """Joue la prochaine journée et passe les écritures financières."""
+def _play_matchday(session: Session, season: SeasonRow) -> tuple[MatchdayOut, list[InjuryCase]]:
+    """Joue la prochaine journée et passe les écritures financières.
+
+    Renvoie la journée jouée et les blessés du club dirigé (entraînement et matchs).
+    """
     club_rows = _club_rows(session)
     rows_by_id = {row.id: row for row in club_rows}
     clubs = {row.id: row.to_domain() for row in club_rows}
     names = {row.id: row.name for row in club_rows}
+    players = {p.id: p for club in clubs.values() for p in club.players}
+    career = session.scalars(select(CareerRow)).first()
+    my_club_id = career.club_id if career is not None else None
 
     _ensure_next_stage(session, season, clubs)
     unplayed = [m for m in season.matches if not m.is_played]
@@ -255,11 +272,40 @@ def _play_matchday(session: Session, season: SeasonRow) -> MatchdayOut:
     regular_count = _regular_matchday_count(season)
     rng = random.Random()
 
+    # Blessures de la journée : enregistrées en base, et renvoyées pour le club dirigé.
+    my_injuries: list[tuple[InjuryRow, Injury]] = []
+
+    def save_injury(injury: Injury, club: Club) -> None:
+        injury_row = InjuryRow.from_domain(injury)
+        session.add(injury_row)
+        if club.id == my_club_id:
+            my_injuries.append((injury_row, injury))
+
+    # Semaine d'entraînement : tous les clubs, avant les matchs. Un blessé à
+    # l'entraînement manque le match du jour.
+    for club in clubs.values():
+        for injury in training_injuries(club, day, rng, decided=club.id != my_club_id):
+            save_injury(injury, club)
+
     for row in todays:
         home, away = clubs[row.home_club_id], clubs[row.away_club_id]
-        result = simulate_match(home, away, rng=rng, matchday=matchday, neutral=row.neutral)
+        result = simulate_match(
+            home, away, rng=rng, matchday=matchday, neutral=row.neutral, day=day
+        )
         row.home_score, row.away_score = result.home_score, result.away_score
         row.events = MatchRow.from_domain(result).events
+        for event in result.events:
+            if event.type == EventType.INJURY:
+                club = clubs[event.club_id]
+                injury = new_injury(
+                    players[event.player_id],
+                    club,
+                    InjurySource.MATCH,
+                    day,
+                    rng,
+                    decided=club.id != my_club_id,
+                )
+                save_injury(injury, club)
 
         home_row, away_row = rows_by_id[home.id], rows_by_id[away.id]
         spectators = attendance(
@@ -321,7 +367,14 @@ def _play_matchday(session: Session, season: SeasonRow) -> MatchdayOut:
 
     session.commit()
     _ensure_next_stage(session, season, clubs)
-    return _matchday_out(todays, names)
+
+    cases = []
+    if my_club_id is not None:
+        my_club = clubs[my_club_id]
+        for injury_row, injury in my_injuries:
+            injury.id = injury_row.id  # attribué à l'enregistrement
+            cases.append(injury_case(players[injury.player_id], injury, my_club, day))
+    return _matchday_out(todays, names), cases
 
 
 def _current_or_404(session: Session) -> SeasonRow:
@@ -344,8 +397,8 @@ def get_current_season(session: SessionDep) -> SeasonOut:
 def play_next_matchday(session: SessionDep) -> PlayOut:
     """Joue la prochaine journée (tous ses matchs) et renvoie la saison mise à jour."""
     season = _current_or_404(session)
-    played = _play_matchday(session, season)
-    return PlayOut(played=played, season=_season_out(session, season))
+    played, injuries = _play_matchday(session, season)
+    return PlayOut(played=played, season=_season_out(session, season), injuries=injuries)
 
 
 @router.post("/next", response_model=SeasonOut, status_code=201)

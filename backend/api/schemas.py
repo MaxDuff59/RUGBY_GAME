@@ -11,7 +11,18 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from engine.economy import FacilityKind, TransactionCategory, market_value
 from engine.match_engine import TeamStrength
-from models import EventType, Match, Player, Position, StaffRole, Stage
+from models import (
+    EventType,
+    Injury,
+    InjurySeverity,
+    InjurySource,
+    Match,
+    Player,
+    Position,
+    Protocol,
+    StaffRole,
+    Stage,
+)
 
 # --- Clubs et joueurs ----------------------------------------------------------------
 
@@ -21,6 +32,53 @@ class ClubRef(BaseModel):
 
     id: int
     name: str
+
+
+class InjuryOut(BaseModel):
+    """Une blessure et son état à la date du jour dans le jeu."""
+
+    id: int
+    player_id: int
+    severity: InjurySeverity
+    kind: str
+    source: InjurySource
+    occurred_on: datetime.date
+    return_date: datetime.date
+    fragile_until: datetime.date
+    weeks_total: int  # durée prévue d'indisponibilité
+    weeks_left: int  # semaines restantes (0 si revenu)
+    protocol: Protocol
+    protocol_chosen: bool
+    relapse: bool
+    relapse_risk: float  # par match, pendant la période de fragilité
+    # active : indisponible ; fragile : revenu, risque de rechute ; healed : guéri.
+    status: Literal["active", "fragile", "healed"]
+
+    @classmethod
+    def from_injury(cls, injury: Injury, day: datetime.date) -> "InjuryOut":
+        if injury.is_active(day):
+            status = "active"
+        elif injury.is_fragile(day):
+            status = "fragile"
+        else:
+            status = "healed"
+        return cls(
+            id=injury.id,
+            player_id=injury.player_id,
+            severity=injury.severity,
+            kind=injury.kind,
+            source=injury.source,
+            occurred_on=injury.occurred_on,
+            return_date=injury.return_date,
+            fragile_until=injury.fragile_until,
+            weeks_total=(injury.return_date - injury.occurred_on).days // 7,
+            weeks_left=injury.weeks_left(day),
+            protocol=injury.protocol,
+            protocol_chosen=injury.protocol_chosen,
+            relapse=injury.relapse,
+            relapse_risk=injury.relapse_risk,
+            status=status,
+        )
 
 
 class PlayerOut(BaseModel):
@@ -44,12 +102,18 @@ class PlayerOut(BaseModel):
     overall: float
     wage: int
     value: int
+    # Blessure en cours ou période de fragilité ; None si le joueur est apte.
+    injury: InjuryOut | None = None
 
     @classmethod
-    def from_player(cls, player: Player) -> "PlayerOut":
+    def from_player(cls, player: Player, day: datetime.date | None = None) -> "PlayerOut":
         # Tous les champs viennent du joueur, sauf la valeur qui se calcule.
-        fields = {name: getattr(player, name) for name in cls.model_fields if name != "value"}
-        return cls(**fields, value=market_value(player))
+        computed = {"value", "injury"}
+        fields = {name: getattr(player, name) for name in cls.model_fields if name not in computed}
+        injury = None
+        if day is not None and (player.is_injured(day) or player.is_fragile(day)):
+            injury = InjuryOut.from_injury(player.injury, day)
+        return cls(**fields, value=market_value(player), injury=injury)
 
 
 class StrengthOut(BaseModel):
@@ -227,6 +291,8 @@ class SeasonOut(BaseModel):
 class PlayOut(BaseModel):
     played: MatchdayOut
     season: SeasonOut
+    # Blessés de la journée (matchs et entraînement) dans le club dirigé.
+    injuries: list["InjuryCase"]
 
 
 # --- Finances, staff, infrastructures, transferts (club du joueur) ---------------------
@@ -303,3 +369,44 @@ class TransfersOverview(BaseModel):
     squad_min: int
     squad_max: int
     listings: list[ListingOut]
+
+
+# --- Médical -------------------------------------------------------------------------
+
+
+class PlayerRef(BaseModel):
+    id: int
+    name: str
+    position: Position
+    age: int
+    overall: float
+
+
+class ProtocolOption(BaseModel):
+    """Ce que donnerait un protocole pour une blessure dont le protocole reste à choisir."""
+
+    protocol: Protocol
+    return_date: datetime.date
+    weeks: int
+    relapse_risk: float
+    cost: int
+    affordable: bool
+
+
+class InjuryCase(BaseModel):
+    player: PlayerRef
+    injury: InjuryOut
+    options: list[ProtocolOption]  # vide une fois le protocole fixé
+
+
+class MedicalOverview(BaseModel):
+    balance: int
+    today: datetime.date
+    squad_size: int
+    available: int  # joueurs aptes
+    physio_level: int  # 0 = poste vacant
+    doctor_level: int
+    fragile_weeks: int
+    injured: list[InjuryCase]  # indisponibles
+    fragile: list[InjuryCase]  # revenus, sous surveillance
+    history: list[InjuryCase]  # blessures guéries, de la plus récente à la plus ancienne

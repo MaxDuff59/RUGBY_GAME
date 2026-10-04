@@ -22,13 +22,14 @@ def _overview(session: Session, club: ClubRow) -> TransfersOverview:
     others = session.scalars(
         select(PlayerRow).where(PlayerRow.club_id.is_not(None), PlayerRow.club_id != club.id)
     )
+    day = game_date(session)
     listings = []
     for row in others:
         player = row.to_domain()
         price = asking_price(player)
         listings.append(
             ListingOut(
-                player=PlayerOut.from_player(player),
+                player=PlayerOut.from_player(player, day),
                 club_id=row.club_id,
                 club_name=row.club.name,
                 asking_price=price,

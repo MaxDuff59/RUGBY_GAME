@@ -42,7 +42,9 @@ src/
     Club.jsx          tableau de bord : prochain match, simuler la journée, rapport de
                       force, classement, derniers résultats, phases finales
     Calendar.jsx      calendrier de la saison : vues semaine, mois, saison
-    Squad.jsx         XV de départ sur le terrain + attributs de tout l'effectif
+    Squad.jsx         XV de départ sur le terrain + attributs de tout l'effectif (blessés signalés)
+    Medical.jsx       infirmerie : blessés et choix du protocole de soins, joueurs fragiles,
+                      staff médical, dossier médical
     Staff.jsx         ton staff (8 postes), licencier, embaucher parmi les candidats
     Transfers.jsx     acheter chez les autres clubs, vendre ses joueurs
     Facilities.jsx    stade, centre d'entraînement, centre de formation

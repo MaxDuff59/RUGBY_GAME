@@ -135,6 +135,7 @@ class TransactionCategory(StrEnum):
     STAFF = "staff"  # embauches, indemnités
     FACILITIES = "facilities"
     PRIZE = "prize"  # primes de phases finales
+    MEDICAL = "medical"  # soins (protocole accéléré)
 
 
 TICKET_PRICE = 30

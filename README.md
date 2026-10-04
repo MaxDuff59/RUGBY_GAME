@@ -63,6 +63,25 @@ le schéma de la base change : l'API le signale au démarrage).
 | `GET /staff`, `POST /staff/hire/{id}`, `POST /staff/{id}/fire` | Staff : voir, embaucher, licencier |
 | `GET /facilities`, `POST /facilities/{kind}/upgrade` | Stade, centre d'entraînement, formation |
 | `GET /transfers`, `POST /transfers/buy/{id}`, `POST /transfers/sell/{id}` | Marché des transferts |
+| `GET /medical`, `POST /medical/{id}/protocol/{protocol}` | Infirmerie : blessés, protocole de soins, dossier médical |
+
+## Blessures
+
+Chaque journée, la semaine d'entraînement puis les matchs peuvent blesser des
+joueurs (événement `injury` du match). Une blessure est **légère** (1 à 3
+semaines), **modérée** (4 à 8) ou **grave** (3 à 9 mois) ; le blessé sort du XV
+jusqu'à sa date de retour. Pour son club, le manager choisit un protocole de
+soins, définitif pour cette blessure :
+
+| Protocole | Durée | Rechute (par match, 4 semaines après le retour) | Coût |
+|---|---|---|---|
+| Prudent | × 1,3 | 1 % | – |
+| Normal (par défaut) | × 1 | 4 % | – |
+| Retour anticipé | × 0,65 | 12 % | 15 k€ / 50 k€ / 150 k€ selon la gravité |
+
+Un bon kinésithérapeute raccourcit la convalescence (jusqu'à −20 %), un bon
+médecin réduit le risque de rechute (jusqu'à −40 %). Une rechute reproduit la
+même blessure. Règles dans `backend/engine/medical.py`.
 
 ## Principe d'architecture
 

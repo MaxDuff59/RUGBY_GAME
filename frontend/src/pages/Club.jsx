@@ -5,7 +5,17 @@ import { api } from "../api.js";
 import FormPills, { recentForm } from "../components/FormPills.jsx";
 import MatchList from "../components/MatchList.jsx";
 import SortHeader from "../components/SortHeader.jsx";
-import { STAGES, formatDiff, formatLongDate, formatNote, formatRank, matchdayLabel } from "../format.js";
+import {
+  INJURY_SOURCES,
+  SEVERITIES,
+  STAGES,
+  formatDiff,
+  formatLongDate,
+  formatNote,
+  formatRank,
+  formatShortDate,
+  matchdayLabel,
+} from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { useSort } from "../hooks/useSort.js";
 
@@ -24,6 +34,7 @@ export default function Club() {
   const myId = career.club_id;
   const season = useApi(useCallback(api.getCurrentSeason, []));
   const [lastPlayed, setLastPlayed] = useState(null); // la journée qu'on vient de simuler
+  const [newInjuries, setNewInjuries] = useState([]); // nos blessés de cette journée
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState(null);
 
@@ -42,12 +53,14 @@ export default function Club() {
   const simulate = () =>
     act(api.playMatchday, (result) => {
       setLastPlayed(result.played);
+      setNewInjuries(result.injuries);
       season.setData(result.season);
     });
 
   const nextSeason = () =>
     act(api.startNextSeason, (data) => {
       setLastPlayed(null);
+      setNewInjuries([]);
       season.setData(data);
     });
 
@@ -125,6 +138,7 @@ export default function Club() {
             </div>
             <div className="card">
               <MatchList matches={lastMatchday.matches} myClubId={myId} />
+              {lastPlayed && newInjuries.length > 0 && <NewInjuries cases={newInjuries} />}
             </div>
           </section>
         )}
@@ -133,6 +147,31 @@ export default function Club() {
 
         <Standings season={data} myId={myId} />
       </div>
+    </>
+  );
+}
+
+// Nos blessés de la journée qu'on vient de simuler (entraînement et match).
+function NewInjuries({ cases }) {
+  return (
+    <>
+      <div className="matches__stage">Blessés · {cases.length}</div>
+      <ul className="injury-list">
+        {cases.map(({ player, injury }) => (
+          <li key={injury.id}>
+            <span className={`tag tag--${injury.severity}`}>{SEVERITIES[injury.severity].label}</span>
+            <span style={{ fontWeight: 600 }}>{player.name}</span>
+            <span className="muted">
+              {injury.kind} {INJURY_SOURCES[injury.source]} · retour le {formatShortDate(injury.return_date)}
+            </span>
+            {!injury.protocol_chosen && (
+              <Link to="/medical" style={{ fontWeight: 600 }}>
+                Choisir le protocole
+              </Link>
+            )}
+          </li>
+        ))}
+      </ul>
     </>
   );
 }

@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { to: "/", label: "Club" },
   { to: "/calendrier", label: "Calendrier" },
   { to: "/effectif", label: "Effectif" },
+  { to: "/medical", label: "Médical" },
   { to: "/staff", label: "Staff" },
   { to: "/transferts", label: "Transferts" },
   { to: "/infrastructures", label: "Infrastructures" },

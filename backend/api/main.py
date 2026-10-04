@@ -10,7 +10,17 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from api.routers import career, clubs, facilities, finances, matches, seasons, staff, transfers
+from api.routers import (
+    career,
+    clubs,
+    facilities,
+    finances,
+    matches,
+    medical,
+    seasons,
+    staff,
+    transfers,
+)
 from database import SessionLocal, init_db, seed_if_empty
 
 
@@ -32,3 +42,4 @@ app.include_router(finances.router)
 app.include_router(staff.router)
 app.include_router(facilities.router)
 app.include_router(transfers.router)
+app.include_router(medical.router)

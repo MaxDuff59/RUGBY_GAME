@@ -55,4 +55,6 @@ export const api = {
   getTransfers: () => request("/transfers"),
   buyPlayer: (playerId) => post(`/transfers/buy/${playerId}`),
   sellPlayer: (playerId) => post(`/transfers/sell/${playerId}`),
+  getMedical: () => request("/medical"),
+  chooseProtocol: (injuryId, protocol) => post(`/medical/${injuryId}/protocol/${protocol}`),
 };

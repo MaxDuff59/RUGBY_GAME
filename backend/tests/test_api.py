@@ -1,47 +1,6 @@
-"""Tests de l'API, sur une base SQLite en mémoire (jamais sur rugby.db)."""
+"""Tests de l'API, sur une base SQLite en mémoire (fixtures `client` et `manager` : conftest)."""
 
-from collections.abc import Iterator
 from datetime import date
-
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
-from api.main import app
-from database import get_session, seed_if_empty
-from models.orm import Base
-
-
-@pytest.fixture
-def client() -> Iterator[TestClient]:
-    # StaticPool : une seule connexion partagée, sinon chaque session verrait
-    # une base en mémoire différente (et vide).
-    engine = create_engine(
-        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
-    )
-    Base.metadata.create_all(engine)
-    TestSession = sessionmaker(bind=engine, expire_on_commit=False)
-    with TestSession() as session:
-        seed_if_empty(session, club_count=10, seed=0)
-
-    def override_get_session() -> Iterator[Session]:
-        with TestSession() as session:
-            yield session
-
-    app.dependency_overrides[get_session] = override_get_session
-    # Pas de `with TestClient(...)` : on n'exécute pas le démarrage de l'app,
-    # qui créerait le fichier rugby.db.
-    yield TestClient(app)
-    app.dependency_overrides.clear()
-
-
-@pytest.fixture
-def manager(client):
-    """Client avec une carrière en cours (club 3)."""
-    client.post("/career", json={"manager_name": "Maxence", "club_id": 3})
-    return client
 
 
 def test_list_clubs(client):
@@ -180,7 +139,7 @@ def test_match_detail(manager):
 
 
 def test_management_routes_need_a_career(client):
-    for path in ("/finances", "/staff", "/facilities", "/transfers"):
+    for path in ("/finances", "/staff", "/facilities", "/transfers", "/medical"):
         assert client.get(path).status_code == 404
 
 
