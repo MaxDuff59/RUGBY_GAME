@@ -1,0 +1,38 @@
+"""Clubs et effectifs."""
+
+from fastapi import APIRouter
+from sqlalchemy import select
+
+from api.deps import SessionDep, load_club
+from api.schemas import ClubDetail, ClubSummary, PlayerOut, StrengthOut
+from engine.match_engine import team_strength
+from models.orm import ClubRow
+
+router = APIRouter(prefix="/clubs", tags=["clubs"])
+
+
+@router.get("", response_model=list[ClubSummary])
+def list_clubs(session: SessionDep) -> list[ClubSummary]:
+    """Liste tous les clubs, triés par nom."""
+    summaries = []
+    for row in session.scalars(select(ClubRow).order_by(ClubRow.name)):
+        team = team_strength(row.to_domain())
+        level = (team.set_piece + team.pack + team.attack + team.defense) / 4
+        summaries.append(
+            ClubSummary(
+                id=row.id, name=row.name, player_count=len(row.players), level=round(level, 1)
+            )
+        )
+    return summaries
+
+
+@router.get("/{club_id}", response_model=ClubDetail)
+def get_club(club_id: int, session: SessionDep) -> ClubDetail:
+    """Effectif complet d'un club et ses notes collectives (XV de départ)."""
+    club = load_club(session, club_id)
+    return ClubDetail(
+        id=club.id,
+        name=club.name,
+        strength=StrengthOut.from_team(team_strength(club)),
+        players=[PlayerOut.model_validate(p) for p in club.players],
+    )

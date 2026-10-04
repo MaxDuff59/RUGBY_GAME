@@ -1,13 +1,20 @@
-"""Connexion SQLite et création des tables."""
+"""Connexion SQLite, création des tables et remplissage initial."""
 
+import os
+import random
 from collections.abc import Iterator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from models.orm import Base
+from data.generator import generate_clubs
+from models.orm import Base, ClubRow
 
-DATABASE_URL = "sqlite:///./rugby.db"
+# Surchargeable par variable d'environnement (ex. une autre base pour essayer).
+DATABASE_URL = os.environ.get("RUGBY_DATABASE_URL", "sqlite:///./rugby.db")
+
+# Nombre de clubs générés au premier lancement.
+DEFAULT_CLUB_COUNT = 10
 
 # check_same_thread=False : nécessaire pour utiliser SQLite depuis FastAPI (plusieurs threads).
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
@@ -19,7 +26,22 @@ def init_db() -> None:
     Base.metadata.create_all(engine)
 
 
+def seed_if_empty(
+    session: Session, club_count: int = DEFAULT_CLUB_COUNT, seed: int | None = None
+) -> int:
+    """Remplit la base avec des clubs fictifs si elle est vide.
+
+    Renvoie le nombre de clubs créés (0 si la base contenait déjà des clubs).
+    """
+    if session.scalar(select(func.count()).select_from(ClubRow)):
+        return 0
+    clubs = generate_clubs(club_count, random.Random(seed))
+    session.add_all(ClubRow.from_domain(club) for club in clubs)
+    session.commit()
+    return len(clubs)
+
+
 def get_session() -> Iterator[Session]:
-    """Fournit une session et la ferme après usage (servira de dépendance FastAPI)."""
+    """Fournit une session et la ferme après usage (dépendance FastAPI)."""
     with SessionLocal() as session:
         yield session
