@@ -63,6 +63,9 @@ class Player:
     lineout: int
     # Référence au club par identifiant (évite une référence circulaire Club <-> Player).
     club_id: int | None = None
+    # Salaire par saison, en euros (fixé au contrat ; la valeur marchande, elle,
+    # se calcule : voir engine/economy.py).
+    wage: int = 0
 
     def __post_init__(self) -> None:
         # On refuse tout attribut hors de l'échelle 1-20 dès la création.
@@ -90,15 +93,72 @@ class Player:
         return sum(self.attributes.values()) / len(ATTRIBUTE_NAMES)
 
 
+class StaffRole(StrEnum):
+    """Postes du staff autour de l'entraîneur principal (le joueur)."""
+
+    FORWARDS_COACH = "FORWARDS_COACH"  # entraîneur des avants (mêlée, touche)
+    ATTACK_COACH = "ATTACK_COACH"  # entraîneur de l'attaque
+    DEFENCE_COACH = "DEFENCE_COACH"  # entraîneur de la défense
+    KICKING_COACH = "KICKING_COACH"  # entraîneur du jeu au pied
+    FITNESS_COACH = "FITNESS_COACH"  # préparateur physique
+    ANALYST = "ANALYST"  # analyste vidéo
+    PHYSIO = "PHYSIO"  # kinésithérapeute
+    DOCTOR = "DOCTOR"  # médecin
+
+
+STAFF_LEVEL_MIN = 1
+STAFF_LEVEL_MAX = 5
+
+
+@dataclass
+class StaffMember:
+    id: int
+    first_name: str
+    last_name: str
+    role: StaffRole
+    level: int  # de 1 à 5 étoiles
+    wage: int  # par saison, en euros
+    club_id: int | None = None  # None = disponible sur le marché
+
+    def __post_init__(self) -> None:
+        if not STAFF_LEVEL_MIN <= self.level <= STAFF_LEVEL_MAX:
+            raise ValueError(f"level={self.level} hors bornes [1, 5]")
+
+    @property
+    def name(self) -> str:
+        return f"{self.first_name} {self.last_name}"
+
+
+@dataclass
+class Facilities:
+    """Infrastructures du club. Les paliers et coûts sont dans engine/economy.py."""
+
+    stadium_capacity: int = 4000
+    training_level: int = 1  # centre d'entraînement, de 1 à 5
+    academy_level: int = 1  # centre de formation, de 1 à 5
+
+
 @dataclass
 class Club:
     id: int
     name: str
     players: list[Player] = field(default_factory=list)
+    staff: list[StaffMember] = field(default_factory=list)
+    balance: int = 0  # trésorerie, en euros
+    facilities: Facilities = field(default_factory=Facilities)
 
     def players_at(self, position: Position) -> list[Player]:
         """Joueurs de l'effectif à un poste donné."""
         return [p for p in self.players if p.position == position]
+
+    @property
+    def player_wages(self) -> int:
+        """Masse salariale des joueurs, par saison."""
+        return sum(p.wage for p in self.players)
+
+    @property
+    def staff_wages(self) -> int:
+        return sum(s.wage for s in self.staff)
 
 
 class EventType(StrEnum):

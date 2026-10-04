@@ -8,7 +8,20 @@ niveau, avec un profil d'attributs cohérent avec leur poste.
 import itertools
 import random
 
-from models import ATTRIBUTE_MAX, ATTRIBUTE_MIN, ATTRIBUTE_NAMES, Club, Player, Position
+from engine.economy import STADIUM_STEPS, staff_wage, wage_for
+from models import (
+    ATTRIBUTE_MAX,
+    ATTRIBUTE_MIN,
+    ATTRIBUTE_NAMES,
+    STAFF_LEVEL_MAX,
+    STAFF_LEVEL_MIN,
+    Club,
+    Facilities,
+    Player,
+    Position,
+    StaffMember,
+    StaffRole,
+)
 
 # --- Noms inventés -------------------------------------------------------------------
 
@@ -94,7 +107,7 @@ def generate_player(
         name: _clamp(rng.gauss(player_level + profile[name], ATTRIBUTE_SPREAD))
         for name in ATTRIBUTE_NAMES
     }
-    return Player(
+    player = Player(
         id=player_id,
         first_name=rng.choice(FIRST_NAMES),
         last_name=_make_last_name(rng),
@@ -103,6 +116,41 @@ def generate_player(
         club_id=club_id,
         **attributes,
     )
+    # Salaire négocié autour de la valeur du joueur (de -10 % à +15 %).
+    player.wage = wage_for(player, noise=rng.uniform(0.9, 1.15))
+    return player
+
+
+# --- Staff ---------------------------------------------------------------------------
+
+
+def generate_staff_member(
+    staff_id: int, role: StaffRole, level: int, club_id: int | None, rng: random.Random
+) -> StaffMember:
+    return StaffMember(
+        id=staff_id,
+        first_name=rng.choice(FIRST_NAMES),
+        last_name=_make_last_name(rng),
+        role=role,
+        level=level,
+        wage=staff_wage(level),
+        club_id=club_id,
+    )
+
+
+def generate_staff_candidates(
+    count_per_role: int, rng: random.Random | None = None, first_id: int = 1
+) -> list[StaffMember]:
+    """Membres de staff sans club, disponibles à l'embauche, de tous niveaux."""
+    rng = rng or random.Random()
+    ids = itertools.count(first_id)
+    return [
+        generate_staff_member(
+            next(ids), role, rng.randint(STAFF_LEVEL_MIN, STAFF_LEVEL_MAX), None, rng
+        )
+        for role in StaffRole
+        for _ in range(count_per_role)
+    ]
 
 
 # --- Clubs ---------------------------------------------------------------------------
@@ -120,6 +168,7 @@ def generate_clubs(
     """
     rng = rng or random.Random()
     player_ids = itertools.count(1)
+    staff_ids = itertools.count(1)
 
     # Noms uniques : on retire tant qu'il y a un doublon.
     names: set[str] = set()
@@ -129,11 +178,37 @@ def generate_clubs(
     clubs = []
     for club_id, name in enumerate(sorted(names), start=1):
         level = rng.uniform(min_level, max_level)
-        club = Club(id=club_id, name=name)
+        # 0 = club modeste, 1 = gros club : sert à doser argent, staff et stade.
+        wealth = (level - min_level) / (max_level - min_level)
+
+        club = Club(
+            id=club_id,
+            name=name,
+            balance=_round_to(rng.uniform(2_000_000, 3_000_000) + wealth * 6_000_000, 50_000),
+            facilities=Facilities(
+                stadium_capacity=STADIUM_STEPS[round(wealth * 3)],
+                training_level=1 + round(wealth * 2),
+                academy_level=1 + round(wealth * 2),
+            ),
+        )
         for position, size in SQUAD_COMPOSITION.items():
             for _ in range(size):
                 club.players.append(
                     generate_player(next(player_ids), position, level, club_id, rng)
                 )
+        # Un membre de staff par poste, de niveau proche de celui du club.
+        for role in StaffRole:
+            staff_level = _clamp_level(round(1.5 + wealth * 2.5 + rng.uniform(-1, 1)))
+            club.staff.append(
+                generate_staff_member(next(staff_ids), role, staff_level, club_id, rng)
+            )
         clubs.append(club)
     return clubs
+
+
+def _round_to(value: float, step: int) -> int:
+    return int(round(value / step) * step)
+
+
+def _clamp_level(level: int) -> int:
+    return max(STAFF_LEVEL_MIN, min(STAFF_LEVEL_MAX, level))
