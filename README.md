@@ -8,7 +8,16 @@ graphique pour l'instant.
 
 ```
 backend/    API FastAPI, moteur de simulation, modèles, données fictives (Python 3.12)
-frontend/   Interface React + Vite (phase 2, vide pour l'instant)
+frontend/   Interface React + Vite (voir frontend/README.md)
+```
+
+## Jouer
+
+Deux terminaux : l'API, puis l'interface.
+
+```bash
+cd backend && uv run uvicorn api.main:app --reload     # terminal 1
+cd frontend && npm install && npm run dev               # terminal 2, puis http://localhost:5173
 ```
 
 ## Démarrage rapide (backend)
@@ -55,4 +64,4 @@ Le moteur de simulation (`backend/engine/`) ne travaille que sur des objets
 Python simples (`backend/models/domain.py`). Il ne connaît ni FastAPI ni la base
 de données, ce qui permet de le tester et de l'utiliser seul (script CLI, tests).
 La persistance SQLAlchemy (`backend/models/orm.py`) est une couche à part qui
-convertit ses lignes en objets du domaine.
+convertit ses lignes en objets du domaine. Le frontend ne parle qu'à l'API.

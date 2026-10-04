@@ -1,11 +1,41 @@
-# Frontend (phase 2)
+# Frontend (React + Vite)
 
-Pas encore de code ici.
+Interface du jeu. Elle consomme l'API FastAPI du dossier `backend/`.
+La direction visuelle est décrite dans [DESIGN.md](DESIGN.md).
 
-L'interface graphique arrivera dans une **phase 2**, en **React + Vite**. Elle
-consommera l'API FastAPI du dossier `backend/` (liste des clubs, effectifs,
-simulation de matchs).
+## Lancer
 
-La direction visuelle validée est décrite dans [DESIGN.md](DESIGN.md).
+Il faut deux terminaux : l'API, puis l'interface.
 
-En attendant, le jeu se pilote via l'API et le script CLI du backend.
+```bash
+# Terminal 1 — l'API (depuis backend/)
+uv run uvicorn api.main:app --reload
+
+# Terminal 2 — l'interface (depuis frontend/)
+npm install        # la première fois seulement
+npm run dev        # puis ouvrir http://localhost:5173
+```
+
+En développement, Vite relaie les appels `/api/...` vers `http://localhost:8000`
+(voir `vite.config.js`) : le navigateur ne parle qu'à un seul serveur, donc
+pas de configuration CORS.
+
+## Organisation
+
+```
+src/
+  main.jsx            point d'entrée (React + routeur)
+  App.jsx             les routes
+  api.js              appels à l'API (une fonction par route)
+  format.js           libellés des postes, attributs, formats de nombres
+  styles.css          styles globaux (variables de DESIGN.md)
+  hooks/useApi.js     charge une ressource de l'API : { data, error, loading, reload }
+  components/Layout.jsx   navigation + en-tête, charge la carrière en cours
+  pages/
+    StartCareer.jsx   choisir son nom et son club (première visite)
+    Club.jsx          niveau du XV et classement
+    Squad.jsx         XV de départ sur le terrain + attributs de tout l'effectif
+```
+
+Pas de TypeScript ni de bibliothèque de composants : du JavaScript, du CSS
+simple, et `react-router-dom` pour les pages.
