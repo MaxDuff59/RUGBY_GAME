@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from api.routers import clubs, matches
+from api.routers import career, clubs, matches, seasons
 from database import SessionLocal, init_db, seed_if_empty
 
 
@@ -26,3 +26,5 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Rugby Manager API", version="0.1.0", lifespan=lifespan)
 app.include_router(clubs.router)
 app.include_router(matches.router)
+app.include_router(career.router)
+app.include_router(seasons.router)
