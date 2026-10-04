@@ -1,6 +1,7 @@
 import { Route, Routes } from "react-router-dom";
 
 import Layout from "./components/Layout.jsx";
+import Calendar from "./pages/Calendar.jsx";
 import Club from "./pages/Club.jsx";
 import Facilities from "./pages/Facilities.jsx";
 import Finances from "./pages/Finances.jsx";
@@ -15,6 +16,7 @@ export default function App() {
       <Route path="/start" element={<StartCareer />} />
       <Route element={<Layout />}>
         <Route index element={<Club />} />
+        <Route path="/calendrier" element={<Calendar />} />
         <Route path="/effectif" element={<Squad />} />
         <Route path="/staff" element={<Staff />} />
         <Route path="/transferts" element={<Transfers />} />

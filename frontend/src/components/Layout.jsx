@@ -6,14 +6,14 @@ import { useApi } from "../hooks/useApi.js";
 
 const NAV_ITEMS = [
   { to: "/", label: "Club" },
+  { to: "/calendrier", label: "Calendrier" },
   { to: "/effectif", label: "Effectif" },
   { to: "/staff", label: "Staff" },
   { to: "/transferts", label: "Transferts" },
   { to: "/infrastructures", label: "Infrastructures" },
   { to: "/finances", label: "Finances" },
-  // Pages à venir : affichées pour donner la forme du menu, mais inactives.
+  // Page à venir : affichée pour donner la forme du menu, mais inactive.
   { label: "Match" },
-  { label: "Calendrier" },
 ];
 
 // Cadre commun à toutes les pages : navigation à gauche, en-tête avec le club.
@@ -50,11 +50,7 @@ export default function Layout() {
             ),
           )}
         </ul>
-        <div className="sidebar__footer">
-          Saison 2026
-          <br />
-          Manager : {career.manager_name}
-        </div>
+        <div className="sidebar__footer">Manager : {career.manager_name}</div>
       </nav>
 
       <main className="main">
@@ -63,7 +59,7 @@ export default function Layout() {
             <span className="crest">{initials(career.club_name)}</span>
             <div>
               <div className="header__name">{career.club_name}</div>
-              <div className="muted">Championnat · saison 2026</div>
+              <div className="muted">Championnat</div>
             </div>
           </div>
         </header>

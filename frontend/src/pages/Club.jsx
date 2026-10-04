@@ -1,11 +1,13 @@
 import { useCallback, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { Link, useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
-import { formatDiff, formatNote } from "../format.js";
+import FormPills, { recentForm } from "../components/FormPills.jsx";
+import MatchList from "../components/MatchList.jsx";
+import SortHeader from "../components/SortHeader.jsx";
+import { STAGES, formatDiff, formatLongDate, formatNote, formatRank, matchdayLabel } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
-
-const SEASON_YEAR = 2026;
+import { useSort } from "../hooks/useSort.js";
 
 // Les 5 notes collectives calculées par le moteur sur le XV de départ.
 const STRENGTH_LINES = [
@@ -16,127 +18,279 @@ const STRENGTH_LINES = [
   { key: "kicking", label: "Buteur" },
 ];
 
+// Tableau de bord : prochain match, rapport de force, classement, derniers résultats.
 export default function Club() {
   const { career } = useOutletContext();
-  const loadClub = useCallback(() => api.getClub(career.club_id), [career.club_id]);
-  const club = useApi(loadClub);
+  const myId = career.club_id;
+  const season = useApi(useCallback(api.getCurrentSeason, []));
+  const [lastPlayed, setLastPlayed] = useState(null); // la journée qu'on vient de simuler
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState(null);
 
-  if (club.loading) return <p className="status">Chargement…</p>;
-  if (club.error) return <p className="status status--error">{club.error.message}</p>;
+  async function act(call, onDone) {
+    setBusy(true);
+    setActionError(null);
+    try {
+      onDone(await call());
+    } catch (err) {
+      setActionError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const simulate = () =>
+    act(api.playMatchday, (result) => {
+      setLastPlayed(result.played);
+      season.setData(result.season);
+    });
+
+  const nextSeason = () =>
+    act(api.startNextSeason, (data) => {
+      setLastPlayed(null);
+      season.setData(data);
+    });
+
+  if (season.loading) return <p className="status">Chargement…</p>;
+  if (season.error) return <p className="status status--error">{season.error.message}</p>;
+
+  const data = season.data;
+  const next = data.next_matchday;
+  const myNextMatch = next?.matches.find((m) => m.home.id === myId || m.away.id === myId) ?? null;
+  const rankOf = (clubId) => data.standings.find((row) => row.club_id === clubId)?.rank;
+
+  // Derniers résultats : la journée qu'on vient de jouer, sinon la dernière jouée.
+  const playedMatches = data.matches.filter((m) => m.home_score !== null);
+  const lastMatchday = lastPlayed ?? lastPlayedMatchday(playedMatches);
 
   return (
-    <div className="club-grid">
-      <section className="section">
-        <div className="section__head">
-          <h2 className="eyebrow">Niveau du XV</h2>
-          <span className="muted">Notes sur 20</span>
-        </div>
-        <div className="card card--padded strength">
-          {STRENGTH_LINES.map((line) => {
-            const value = club.data.strength[line.key];
-            return (
-              <div key={line.key} className="strength__row">
-                <span className="strength__label">{line.label}</span>
-                <div className="meter">
-                  <div className="meter__fill meter__fill--accent" style={{ width: `${(value / 20) * 100}%` }} />
-                </div>
-                <span className="strength__value num">{formatNote(value)}</span>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+    <>
+      {actionError && <p className="status--error">{actionError.message}</p>}
 
-      <Standings myClubId={career.club_id} />
-    </div>
+      {data.phase === "finished" ? (
+        <section className="hero">
+          <p className="eyebrow">Saison {data.year} terminée</p>
+          <h1 className="hero__title">{data.champion.name}</h1>
+          <p className="hero__sub">Champion {data.year}</p>
+          <div className="hero__actions">
+            <button type="button" className="button button--primary" disabled={busy} onClick={nextSeason}>
+              {busy ? "Intersaison…" : `Lancer la saison ${data.year + 1}`}
+            </button>
+          </div>
+          <p className="muted" style={{ margin: 0 }}>
+            Les joueurs prennent un an, ceux de 36 ans et plus arrêtent, le centre de formation
+            apporte des jeunes, et un nouveau calendrier est tiré.
+          </p>
+        </section>
+      ) : (
+        <section className="hero">
+          <p className="eyebrow">
+            {next.stage === "regular" ? `Journée ${next.matchday} sur ${data.regular_matchdays}` : STAGES[next.stage]} ·{" "}
+            {formatLongDate(next.date)}
+          </p>
+          {myNextMatch ? (
+            <NextMatch match={myNextMatch} myId={myId} rankOf={rankOf} matches={data.matches} />
+          ) : (
+            <>
+              <h1 className="hero__title">Tu ne joues pas</h1>
+              <p className="hero__sub">Ton club n'est pas concerné par cette journée.</p>
+            </>
+          )}
+          <div className="hero__actions">
+            <button type="button" className="button" disabled={busy} onClick={simulate}>
+              {busy ? "Simulation…" : "Simuler la journée"}
+            </button>
+            <button type="button" className="button button--primary" disabled title="Bientôt : le match en direct">
+              Jouer le match
+            </button>
+            <Link to="/calendrier" className="muted">
+              Voir le calendrier
+            </Link>
+          </div>
+        </section>
+      )}
+
+      <div className="club-grid">
+        {myNextMatch && (
+          <Strength myId={myId} opponentId={myNextMatch.home.id === myId ? myNextMatch.away.id : myNextMatch.home.id} />
+        )}
+
+        {lastMatchday && (
+          <section className="section">
+            <div className="section__head">
+              <h2 className="eyebrow">
+                {lastPlayed ? "Journée simulée" : "Dernière journée"} · {matchdayLabel(lastMatchday)}
+              </h2>
+              <span className="muted">{formatLongDate(lastMatchday.date)}</span>
+            </div>
+            <div className="card">
+              <MatchList matches={lastMatchday.matches} myClubId={myId} />
+            </div>
+          </section>
+        )}
+
+        {data.phase !== "regular" && <Playoffs season={data} myId={myId} />}
+
+        <Standings season={data} myId={myId} />
+      </div>
+    </>
   );
 }
 
-// Classement de la saison. Tant que la saison n'a pas été jouée, propose de la
-// simuler d'un bloc (le jeu journée par journée arrivera ensuite).
-function Standings({ myClubId }) {
-  const load = useCallback(() => api.getSeason(SEASON_YEAR), []);
-  const season = useApi(load);
-  const [simulating, setSimulating] = useState(false);
-  const [simulateError, setSimulateError] = useState(null);
+function NextMatch({ match, myId, rankOf, matches }) {
+  const home = match.home.id === myId;
+  const opponent = home ? match.away : match.home;
+  const venue = match.neutral ? "Terrain neutre" : home ? "À domicile" : "À l'extérieur";
+  return (
+    <>
+      <h1 className="hero__title">{opponent.name}</h1>
+      <p className="hero__sub">
+        {venue} · {rankOf(opponent.id) ? `${formatRank(rankOf(opponent.id))} du championnat` : ""}
+      </p>
+      <div className="hero__forms">
+        <div>
+          <span className="muted">Notre forme</span>
+          <FormPills results={recentForm(matches, myId)} />
+        </div>
+        <div>
+          <span className="muted">Leur forme</span>
+          <FormPills results={recentForm(matches, opponent.id)} />
+        </div>
+      </div>
+    </>
+  );
+}
 
-  async function simulate() {
-    setSimulating(true);
-    setSimulateError(null);
-    try {
-      await api.simulateSeason(SEASON_YEAR);
-      season.reload();
-    } catch (err) {
-      setSimulateError(err);
-    } finally {
-      setSimulating(false);
-    }
-  }
+// Les 5 notes du moteur, mon club contre l'adversaire du prochain match.
+function Strength({ myId, opponentId }) {
+  const mine = useApi(useCallback(() => api.getClub(myId), [myId]));
+  const theirs = useApi(useCallback(() => api.getClub(opponentId), [opponentId]));
+
+  if (mine.loading || theirs.loading) return <p className="status">Chargement…</p>;
+  if (mine.error || theirs.error) return null;
 
   return (
     <section className="section">
       <div className="section__head">
-        <h2 className="eyebrow">Classement</h2>
-        <span className="muted">Saison {SEASON_YEAR}</span>
+        <h2 className="eyebrow">Rapport de force</h2>
+        <span className="muted">Notes sur 20, XV de départ</span>
       </div>
-
-      {season.loading && <p className="status">Chargement…</p>}
-
-      {season.error?.status === 404 && (
-        <div className="card card--padded">
-          <p style={{ marginTop: 0 }}>La saison n'a pas encore été jouée.</p>
-          <button type="button" className="button button--primary" onClick={simulate} disabled={simulating}>
-            {simulating ? "Simulation…" : "Simuler la saison complète"}
-          </button>
-          {simulateError && <p className="status--error">{simulateError.message}</p>}
+      <div className="card card--padded">
+        <div className="versus__names">
+          <span>{mine.data.name}</span>
+          <span>{theirs.data.name}</span>
         </div>
-      )}
-
-      {season.error && season.error.status !== 404 && (
-        <p className="status status--error">{season.error.message}</p>
-      )}
-
-      {season.data && (
-        <div className="card table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th scope="col" className="left">#</th>
-                <th scope="col" className="left">Club</th>
-                <th scope="col">J</th>
-                <th scope="col">G</th>
-                <th scope="col">N</th>
-                <th scope="col">P</th>
-                <th scope="col">Diff</th>
-                <th scope="col">Ess</th>
-                <th scope="col" title="Bonus offensif">BO</th>
-                <th scope="col" title="Bonus défensif">BD</th>
-                <th scope="col">Pts</th>
-              </tr>
-            </thead>
-            <tbody>
-              {season.data.standings.map((row) => (
-                <tr key={row.club_id} className={row.club_id === myClubId ? "table__row--mine" : ""}>
-                  <td className="left muted">{row.rank}</td>
-                  <td className="left">{row.club_name}</td>
-                  <td>{row.played}</td>
-                  <td>{row.won}</td>
-                  <td>{row.drawn}</td>
-                  <td>{row.lost}</td>
-                  <td>{formatDiff(row.points_difference)}</td>
-                  <td>{row.tries_for}</td>
-                  <td>{row.offensive_bonus}</td>
-                  <td>{row.defensive_bonus}</td>
-                  <td style={{ fontWeight: 600 }}>{row.league_points}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="table__note">
-            Diff : différence de points · Ess : essais marqués · BO/BD : bonus offensif/défensif
-          </p>
-        </div>
-      )}
+        {STRENGTH_LINES.map((line) => {
+          const us = mine.data.strength[line.key];
+          const them = theirs.data.strength[line.key];
+          const usWins = us >= them;
+          return (
+            <div key={line.key} className="versus">
+              <span className={`versus__value num ${usWins ? "versus__value--wins" : ""}`}>{formatNote(us)}</span>
+              <div className="meter meter--reverse">
+                <div className={`meter__fill ${usWins ? "meter__fill--accent" : "meter__fill--muted"}`} style={{ width: `${(us / 20) * 100}%` }} />
+              </div>
+              <span className="versus__label">{line.label}</span>
+              <div className="meter">
+                <div className={`meter__fill ${usWins ? "meter__fill--muted" : ""}`} style={{ width: `${(them / 20) * 100}%` }} />
+              </div>
+              <span className={`versus__value num ${usWins ? "" : "versus__value--wins"}`}>{formatNote(them)}</span>
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
+}
+
+function Playoffs({ season, myId }) {
+  const rounds = ["barrage", "semi", "final"]
+    .map((stage) => ({ stage, matches: season.matches.filter((m) => m.stage === stage) }))
+    .filter((round) => round.matches.length > 0);
+  return (
+    <section className="section">
+      <div className="section__head">
+        <h2 className="eyebrow">Phases finales</h2>
+        <span className="muted">Égalité : le mieux classé passe</span>
+      </div>
+      <div className="card">
+        {rounds.map((round) => (
+          <div key={round.stage}>
+            <div className="matches__stage">{STAGES[round.stage]} · {formatLongDate(round.matches[0].date)}</div>
+            <MatchList matches={round.matches} myClubId={myId} />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Standings({ season, myId }) {
+  const { rows, sort, toggle } = useSort(season.standings, { key: "rank", dir: "asc" });
+  const header = (key, label, first = "desc", left = false) => (
+    <SortHeader sortKey={key} label={label} sort={sort} onToggle={toggle} first={first} left={left} />
+  );
+  return (
+    <section className="section">
+      <div className="section__head">
+        <h2 className="eyebrow">Classement</h2>
+        <span className="muted">Les {season.playoff_qualifiers} premiers jouent les phases finales</span>
+      </div>
+      <div className="card table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              {header("rank", "#", "asc", true)}
+              {header("club_name", "Club", "asc", true)}
+              {header("played", "J")}
+              {header("won", "G")}
+              {header("drawn", "N")}
+              {header("lost", "P")}
+              {header("points_difference", "Diff")}
+              {header("tries_for", "Ess")}
+              {header("offensive_bonus", "BO")}
+              {header("defensive_bonus", "BD")}
+              {header("league_points", "Pts")}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr
+                key={row.club_id}
+                className={[
+                  row.club_id === myId ? "table__row--mine" : "",
+                  row.rank === season.playoff_qualifiers && sort?.key === "rank" ? "table__row--cut" : "",
+                ].join(" ")}
+              >
+                <td className="left muted">{row.rank}</td>
+                <td className="left">{row.club_name}</td>
+                <td>{row.played}</td>
+                <td>{row.won}</td>
+                <td>{row.drawn}</td>
+                <td>{row.lost}</td>
+                <td>{formatDiff(row.points_difference)}</td>
+                <td>{row.tries_for}</td>
+                <td>{row.offensive_bonus}</td>
+                <td>{row.defensive_bonus}</td>
+                <td style={{ fontWeight: 600 }}>{row.league_points}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="table__note">Diff : différence de points · Ess : essais · BO/BD : bonus offensif/défensif</p>
+      </div>
+    </section>
+  );
+}
+
+// La dernière journée jouée, au format { matchday, stage, date, matches }.
+function lastPlayedMatchday(playedMatches) {
+  if (playedMatches.length === 0) return null;
+  const last = playedMatches[playedMatches.length - 1];
+  return {
+    matchday: last.matchday,
+    stage: last.stage,
+    date: last.date,
+    matches: playedMatches.filter((m) => m.matchday === last.matchday),
+  };
 }

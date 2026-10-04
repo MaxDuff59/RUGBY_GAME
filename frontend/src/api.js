@@ -39,9 +39,11 @@ export const api = {
   startCareer: (managerName, clubId) =>
     post("/career", { manager_name: managerName, club_id: clubId }),
 
-  // Saison
-  getSeason: (year) => request(`/seasons/${year}`),
-  simulateSeason: (year) => post("/seasons", { year }),
+  // Saison : calendrier, journée suivante, saison suivante
+  getCurrentSeason: () => request("/seasons/current"),
+  playMatchday: () => post("/seasons/current/play"),
+  startNextSeason: () => post("/seasons/next"),
+  getMatch: (matchId) => request(`/matches/${matchId}`),
 
   // Gestion du club dirigé
   getFinances: () => request("/finances"),

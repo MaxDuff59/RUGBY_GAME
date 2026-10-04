@@ -45,6 +45,29 @@ export const FACILITIES = {
   academy: { label: "Centre de formation", unit: "niveau", scope: "Jeunes joueurs chaque saison" },
 };
 
+// Étapes de la saison.
+export const STAGES = {
+  regular: "Saison régulière",
+  barrage: "Barrages",
+  semi: "Demi-finales",
+  final: "Finale",
+};
+
+// Domaines des opérations financières.
+export const CATEGORIES = {
+  ticketing: "Billetterie",
+  sponsors: "Sponsors",
+  wages: "Salaires",
+  transfer: "Transferts",
+  staff: "Staff",
+  facilities: "Infrastructures",
+  prize: "Primes",
+};
+
+// "J12" pour une journée, "Barrages" / "Demi-finales" / "Finale" sinon.
+export const matchdayLabel = (match) =>
+  match.stage === "regular" ? `J${match.matchday}` : STAGES[match.stage];
+
 const oneDecimal = new Intl.NumberFormat("fr-FR", {
   minimumFractionDigits: 1,
   maximumFractionDigits: 1,
@@ -68,8 +91,56 @@ export function formatMoney(euros) {
   return `${integer.format(euros)} €`;
 }
 
+// -137346 -> "−137 k€", 66000 -> "+66 k€"
+export function formatSignedMoney(euros) {
+  const sign = euros > 0 ? "+" : euros < 0 ? "−" : "";
+  return sign + formatMoney(Math.abs(euros));
+}
+
 // +12 / -3 / 0, avec le signe affiché.
 export const formatDiff = (value) => (value > 0 ? `+${value}` : String(value));
 
 // 1 -> "1er", 2 -> "2e"
 export const formatRank = (rank) => (rank === 1 ? "1er" : `${rank}e`);
+
+// --- Dates --------------------------------------------------------------------------
+// L'API envoie des dates "AAAA-MM-JJ" ; on les lit en heure locale pour éviter
+// qu'un décalage horaire fasse glisser le jour.
+
+export function parseDate(iso) {
+  const [year, month, day] = iso.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+export function toIso(date) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+const shortDay = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+const longDay = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+const monthYear = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
+const numericDay = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+// "sam. 5 sept."
+export const formatShortDate = (iso) => shortDay.format(parseDate(iso));
+// "samedi 5 septembre 2026"
+export const formatLongDate = (iso) => longDay.format(parseDate(iso));
+// "septembre 2026"
+export const formatMonthYear = (date) => monthYear.format(date);
+// "05/09/2026"
+export const formatNumericDate = (iso) => numericDay.format(parseDate(iso));
+
+export function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+// Lundi de la semaine qui contient `date`.
+export function startOfWeek(date) {
+  const monday = new Date(date);
+  monday.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
