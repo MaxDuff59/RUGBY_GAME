@@ -535,6 +535,58 @@ body,
   white-space: nowrap;
 }
 
+.pitch__player--clickable {
+  all: unset;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.pitch__player--clickable:hover .pitch__number,
+.pitch__player--clickable:focus-visible .pitch__number {
+  outline: 2px solid var(--surface);
+  outline-offset: 2px;
+}
+
+/* Fiche joueur : son poste naturel en accent, les autres places en retrait. */
+.pitch__number--accent {
+  background: var(--accent);
+  color: #fff;
+}
+
+.pitch__number--muted {
+  background: rgba(247, 247, 244, 0.35);
+  color: var(--surface);
+}
+
+.pitch--compact .pitch__number {
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+}
+
+.pitch--compact .pitch__name {
+  font-size: 10px;
+}
+
+.pitch--compact .pitch__player {
+  gap: 2px;
+}
+
+.table__row--bench td {
+  color: var(--ink-muted);
+}
+
+.table__row--bench td .note,
+.table__row--bench td.note,
+.table__row--bench td.cell--strong {
+  color: var(--ink);
+}
+
 /* --- Page Effectif ----------------------------------------------------------- */
 
 .squad__head {
@@ -566,12 +618,16 @@ body,
 
 .squad__pitch {
   margin: 0;
-  flex: 0 1 400px;
-  min-width: 260px;
-  align-self: flex-start;
+  flex: 0 0 400px;
+  min-width: 220px;
+  align-self: stretch;
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.squad__pitch .pitch {
+  flex: 0 0 auto;
 }
 
 .squad__table {
@@ -592,6 +648,10 @@ body,
 
 .squad__table .table {
   min-width: 920px;
+}
+
+.squad__table .table td {
+  white-space: nowrap;
 }
 
 /* --- Page Club --------------------------------------------------------------- */
@@ -684,6 +744,11 @@ body,
 
 .club-option:hover {
   border-color: var(--ink);
+}
+
+.club-option:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .club-option[aria-pressed="true"] {
@@ -1001,6 +1066,16 @@ body,
   text-transform: uppercase;
 }
 
+/* Forme du jour : un pourcentage de chaque côté, sans barre */
+.versus--form {
+  grid-template-columns: 72px minmax(0, 1fr) 120px minmax(0, 1fr) 72px;
+}
+
+.versus--form .versus__value {
+  font-size: 18px;
+  white-space: nowrap;
+}
+
 .meter--reverse {
   display: flex;
   justify-content: flex-end;
@@ -1008,6 +1083,105 @@ body,
 
 .meter__fill--muted {
   background: var(--neutral);
+}
+
+/* En-tête de la page Club : le prochain match, et le moral de l'effectif à côté */
+.hero-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+  gap: 28px;
+}
+
+@media (max-width: 960px) {
+  .hero-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Vie du club : une ligne par note, une barre par match joué, la dernière en accent */
+.club-notes {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.club-note {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.club-note:last-child {
+  border-bottom: 0;
+}
+
+.club-note__name {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.club-note__label {
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.club-note__chart {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 40px;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Repère de la note de départ */
+.club-note__neutral {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed var(--line);
+  pointer-events: none;
+}
+
+.club-note__col {
+  flex: 1 1 0;
+  max-width: 14px;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.club-note__bar {
+  width: 100%;
+  background: var(--neutral-soft);
+  border-radius: 2px 2px 0 0;
+}
+
+.club-note__col:hover .club-note__bar {
+  background: var(--ink);
+}
+
+.club-note__bar--current,
+.club-note__col:hover .club-note__bar--current {
+  background: var(--accent);
+}
+
+.club-note__warning {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.club-note__value {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  text-align: right;
 }
 
 /* Liste d'affiches */
@@ -1352,6 +1526,112 @@ body,
   }
 }
 
+/* Fenêtre étroite, à la hauteur de son contenu (affaires entre deux matchs) */
+.modal--compact {
+  max-width: 640px;
+  min-height: 0;
+  margin-top: 8vh;
+  gap: 18px;
+}
+
+/* --- Affaires entre deux matchs ---------------------------------------------------- */
+
+.affair__title {
+  margin: 6px 0 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 34px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.affair__text {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.affair__options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.affair__option {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.affair__option:hover:not(:disabled) {
+  border-color: var(--ink);
+  background: var(--line-soft);
+}
+
+.affair__answer {
+  padding: 12px 14px;
+  border-left: 3px solid var(--accent);
+  background: var(--line-soft);
+  border-radius: 0 6px 6px 0;
+}
+
+.affair__answer p {
+  margin: 6px 0 0;
+  line-height: 1.45;
+}
+
+.affair__effects {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 6px 16px;
+}
+
+.affair__effects li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.affair__effects .num {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+}
+
+/* Hausse en noir plein, baisse en gris : la forme plutôt que le rouge et le vert */
+.affair__effect--down .num {
+  color: var(--ink-muted);
+}
+
+.affair__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px 16px;
+}
+
+.affair__actions .muted {
+  flex: 1 1 240px;
+  font-size: 13px;
+}
+
 /* Fil de la négociation : tes offres à droite, leurs réponses à gauche */
 .talk {
   list-style: none;
@@ -1391,4 +1671,307 @@ body,
 
 .talk li.talk--ok {
   border-left: 3px solid var(--accent);
+}
+
+/* --- Fiche joueur ------------------------------------------------------------------ */
+
+.player-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px 40px;
+}
+
+.player-head__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.player-head__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 12px;
+}
+
+.player-head__first {
+  font-size: 26px;
+  font-weight: 500;
+  color: var(--ink-muted);
+  letter-spacing: 0.04em;
+}
+
+.player-head__line {
+  margin: 0;
+}
+
+.player-head__stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px 36px;
+}
+
+.player-head__overall {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.player-head__note {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 56px;
+  line-height: 0.9;
+  font-variant-numeric: tabular-nums;
+}
+
+.link-button {
+  all: unset;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.link-button:hover {
+  color: var(--ink);
+}
+
+.player-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 28px;
+  align-items: start;
+}
+
+.fill.player-grid {
+  grid-auto-rows: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.fill.player-grid > .section {
+  min-height: 0;
+}
+
+.fill.player-grid > .section > .card {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.player-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.player-card__note {
+  padding: 0;
+  margin: 0;
+}
+
+.player-card__sub {
+  padding-top: 6px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 14px;
+}
+
+.injury-list--flush {
+  padding: 0;
+}
+
+.legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 16px;
+}
+
+.legend::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.legend--player::before {
+  background: var(--accent);
+}
+
+.legend--teammate::before {
+  background: var(--ink);
+}
+
+.legend--others::before {
+  background: var(--neutral-soft);
+}
+
+/* Radar et essaims se partagent toute la hauteur de la carte (5/9 et 4/9),
+   la légende garde sa hauteur naturelle. */
+.player-card--graphs {
+  overflow: hidden;
+}
+
+.player-card__radar {
+  flex: 5 1 0;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
+}
+
+/* Essaims : un par métrique clé du poste, chacun sur une ligne */
+.swarms {
+  flex: 4 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.swarm {
+  flex: 1 1 0;
+  min-height: 28px;
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) 54px;
+  align-items: center;
+  gap: 10px;
+}
+
+.swarm__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  line-height: 1.2;
+}
+
+.swarm__figures {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.1;
+}
+
+.swarm__value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--accent);
+}
+
+.swarm__percentile {
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.player-card__legend {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.player-card__legend .legend {
+  margin-right: 0;
+}
+
+.swarm__chart {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.swarm__axis {
+  stroke: var(--line);
+}
+
+.swarm__tick {
+  stroke: var(--line);
+}
+
+.swarm__dot {
+  fill: var(--neutral-soft);
+  opacity: 0.8;
+}
+
+.swarm__dot--teammate {
+  fill: var(--ink);
+  opacity: 1;
+}
+
+.swarm__dot--player {
+  fill: var(--accent);
+  stroke: var(--surface);
+  stroke-width: 1.5;
+  opacity: 1;
+}
+
+
+/* Radar des attributs */
+.radar {
+  width: 100%;
+  height: 100%;
+  margin: 0 auto;
+  display: block;
+  overflow: visible;
+}
+
+.radar__ring {
+  fill: none;
+  stroke: var(--line-soft);
+}
+
+.radar__ring--outer {
+  stroke: var(--line);
+}
+
+.radar__axis {
+  stroke: var(--line-soft);
+}
+
+.radar__area--average {
+  fill: rgba(169, 171, 176, 0.35);
+  stroke: var(--neutral);
+  stroke-width: 1.5;
+}
+
+.radar__area--player {
+  fill: rgba(122, 31, 43, 0.18);
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.radar__dot {
+  fill: var(--accent);
+}
+
+.radar__label {
+  font-family: var(--font-body);
+  font-size: 11px;
+  fill: var(--ink-muted);
+}
+
+.radar__label-key {
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.radar__label-value {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  fill: var(--ink);
+}
+
+.radar__label-caption {
+  fill: var(--neutral);
 }

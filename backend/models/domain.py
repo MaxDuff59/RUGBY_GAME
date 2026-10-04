@@ -241,6 +241,8 @@ class Club:
     balance: int = 0  # trésorerie, en euros
     facilities: Facilities = field(default_factory=Facilities)
     youths: list[Player] = field(default_factory=list)  # espoirs du centre de formation
+    # Titularisations promises par le manager (engine/affairs.py) : non stocké, posé par l'API.
+    forced_starters: set[int] = field(default_factory=set)
 
     def players_at(self, position: Position) -> list[Player]:
         """Joueurs de l'effectif à un poste donné."""
@@ -334,6 +336,12 @@ class Match:
     stage: Stage = Stage.REGULAR
     date: datetime.date | None = None
     neutral: bool = False  # terrain neutre : pas d'avantage du terrain
+    # XV de départ de chaque club (identifiants), remplis quand le match est joué.
+    home_lineup: list[int] = field(default_factory=list)
+    away_lineup: list[int] = field(default_factory=list)
+
+    def played_by(self, player_id: int) -> bool:
+        return player_id in self.home_lineup or player_id in self.away_lineup
 
     @property
     def is_played(self) -> bool:

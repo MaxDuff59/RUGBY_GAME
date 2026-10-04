@@ -7,6 +7,7 @@ ni de FastAPI ni de la base de données.
 import random
 from enum import StrEnum
 
+from engine.supporters import NEUTRAL as FANS_NEUTRAL
 from models import Club, Facilities, Player, StaffMember, Stage
 
 # --- Joueurs -------------------------------------------------------------------------
@@ -150,6 +151,7 @@ class TransactionCategory(StrEnum):
     FACILITIES = "facilities"
     PRIZE = "prize"  # primes de phases finales
     MEDICAL = "medical"  # soins (protocole accéléré)
+    AFFAIRS = "affairs"  # vie du club : amendes, primes, séjours (engine/affairs.py)
 
 
 TICKET_PRICE = 30
@@ -157,6 +159,9 @@ TICKET_PRICE = 30
 ATTENDANCE_BASE = 0.6
 ATTENDANCE_RANK_BONUS = 0.3
 ATTENDANCE_NOISE = 0.05
+# Ferveur des supporters (engine/supporters.py) : +1,5 % de remplissage par point au-dessus
+# de la note neutre, -1,5 % par point en dessous.
+ATTENDANCE_PER_FERVOUR_POINT = 0.015
 
 # Sponsors, par journée jouée : une part fixe et une part liée à la taille du stade.
 SPONSOR_BASE = 30_000
@@ -173,16 +178,21 @@ def attendance(
     club_count: int,
     playoff: bool = False,
     rng: random.Random | None = None,
+    fervour: float = FANS_NEUTRAL,
 ) -> int:
-    """Spectateurs d'un match à domicile selon le classement (stade plein en phase finale)."""
+    """Spectateurs d'un match à domicile selon le classement et la ferveur des
+    supporters (stade plein en phase finale)."""
     if playoff:
         return capacity
     rng = rng or random.Random()
     rank_share = 1 - (rank - 1) / max(club_count - 1, 1)  # 1 pour le premier, 0 pour le dernier
     rate = (
-        ATTENDANCE_BASE + ATTENDANCE_RANK_BONUS * rank_share + rng.uniform(-1, 1) * ATTENDANCE_NOISE
+        ATTENDANCE_BASE
+        + ATTENDANCE_RANK_BONUS * rank_share
+        + ATTENDANCE_PER_FERVOUR_POINT * (fervour - FANS_NEUTRAL)
+        + rng.uniform(-1, 1) * ATTENDANCE_NOISE
     )
-    return int(capacity * min(rate, 1.0))
+    return int(capacity * min(max(rate, 0.0), 1.0))
 
 
 def ticketing_revenue(spectators: int) -> int:

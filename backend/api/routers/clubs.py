@@ -5,7 +5,8 @@ from sqlalchemy import select
 
 from api.deps import SessionDep, load_club
 from api.ledger import game_date
-from api.schemas import ClubDetail, ClubSummary, FacilitiesOut, PlayerOut, StrengthOut
+from api.notes import club_notes
+from api.schemas import ClubDetail, ClubNotesOut, ClubSummary, FacilitiesOut, PlayerOut, StrengthOut
 from engine.match_engine import team_strength
 from models.orm import ClubRow
 
@@ -42,3 +43,10 @@ def get_club(club_id: int, session: SessionDep) -> ClubDetail:
         strength=StrengthOut.from_team(team_strength(club, day)),
         players=[PlayerOut.from_player(p, day, names) for p in club.players],
     )
+
+
+@router.get("/{club_id}/notes", response_model=ClubNotesOut)
+def get_club_notes(club_id: int, session: SessionDep) -> ClubNotesOut:
+    """Notes de vie du club sur 20 : moral, cohésion, fraîcheur, confiance de la
+    direction et ferveur des supporters, avec leur évolution sur la saison."""
+    return club_notes(session, load_club(session, club_id))

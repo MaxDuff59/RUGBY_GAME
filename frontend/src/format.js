@@ -27,6 +27,20 @@ export const ATTRIBUTES = [
   { key: "lineout", short: "TOU", label: "Touche" },
 ];
 
+// Attributs qui comptent le plus à chaque poste (ceux de la note au poste du moteur),
+// dans l'ordre d'importance.
+export const KEY_ATTRIBUTES = {
+  PROP: ["scrum", "power", "tackling"],
+  HOOKER: ["scrum", "lineout", "power"],
+  LOCK: ["lineout", "power", "tackling"],
+  BACK_ROW: ["power", "tackling", "handling"],
+  SCRUM_HALF: ["passing", "handling", "pace"],
+  FLY_HALF: ["kicking", "passing", "handling"],
+  CENTRE: ["pace", "handling", "tackling", "passing"],
+  WING: ["pace", "handling", "power"],
+  FULLBACK: ["kicking", "pace", "handling"],
+};
+
 // Postes du staff, dans l'ordre d'affichage, avec ce qu'ils apporteront au jeu.
 export const STAFF_ROLES = {
   FORWARDS_COACH: { label: "Entraîneur des avants", scope: "Mêlée et touche" },
@@ -63,6 +77,7 @@ export const CATEGORIES = {
   facilities: "Infrastructures",
   prize: "Primes",
   medical: "Médical",
+  affairs: "Vie du club",
 };
 
 // --- Recrutement --------------------------------------------------------------------

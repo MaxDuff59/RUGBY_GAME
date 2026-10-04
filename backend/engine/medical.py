@@ -6,6 +6,7 @@ moteur, ce module ne dépend ni de FastAPI ni de la base de données.
 """
 
 import random
+from collections.abc import Callable
 from datetime import date, timedelta
 
 from models import Club, Injury, InjurySeverity, InjurySource, Player, Protocol, StaffRole
@@ -170,12 +171,19 @@ def new_injury(
 
 
 def training_injuries(
-    club: Club, day: date, rng: random.Random, decided: bool = True
+    club: Club,
+    day: date,
+    rng: random.Random,
+    decided: bool = True,
+    risk: Callable[[Player], float] = lambda player: 1.0,
 ) -> list[Injury]:
-    """Blessures de la semaine d'entraînement qui précède `day` (souvent aucune)."""
+    """Blessures de la semaine d'entraînement qui précède `day` (souvent aucune).
+
+    `risk` multiplie le risque de chaque joueur (la fatigue, voir engine/form.py).
+    """
     injuries = []
     for player in club.available_players(day):
-        if rng.random() < TRAINING_INJURY_CHANCE_PER_WEEK:
+        if rng.random() < TRAINING_INJURY_CHANCE_PER_WEEK * risk(player):
             # Blessé dans la semaine, entre deux et cinq jours avant le match.
             occurred = day - timedelta(days=rng.randint(2, 5))
             injuries.append(new_injury(player, club, InjurySource.TRAINING, occurred, rng, decided))

@@ -1,15 +1,20 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { api } from "../api.js";
-import { formatNote } from "../format.js";
+import { formatLongDate, formatNote } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 
 // Première page : on choisit son nom de manager et le club que l'on dirige.
+// Après un limogeage, on y revient pour reprendre un autre club du même championnat.
 export default function StartCareer() {
   const navigate = useNavigate();
   const { data: clubs, error, loading } = useApi(useCallback(api.listClubs, []));
+  const { data: dismissal } = useApi(useCallback(api.getLastDismissal, []));
   const [managerName, setManagerName] = useState("");
+  useEffect(() => {
+    if (dismissal) setManagerName(dismissal.manager_name);
+  }, [dismissal]);
   const [clubId, setClubId] = useState(null);
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -41,10 +46,21 @@ export default function StartCareer() {
 
   return (
     <form className="start" onSubmit={handleSubmit}>
-      <div>
-        <p className="eyebrow">Nouvelle carrière</p>
-        <h1 className="title">Choisis ton club</h1>
-      </div>
+      {dismissal ? (
+        <div>
+          <p className="eyebrow">Limogé le {formatLongDate(dismissal.date)}</p>
+          <h1 className="title">Rebondis ailleurs</h1>
+          <p className="muted" style={{ margin: "8px 0 0" }}>
+            La direction de {dismissal.club_name} a perdu confiance ({formatNote(dismissal.confidence)} / 20). Le
+            championnat continue : choisis un autre club.
+          </p>
+        </div>
+      ) : (
+        <div>
+          <p className="eyebrow">Nouvelle carrière</p>
+          <h1 className="title">Choisis ton club</h1>
+        </div>
+      )}
 
       <div className="field">
         <label htmlFor="manager">Ton nom de manager</label>
@@ -67,6 +83,7 @@ export default function StartCareer() {
                 type="button"
                 className="club-option"
                 aria-pressed={club.id === clubId}
+                disabled={club.id === dismissal?.club_id}
                 onClick={() => setClubId(club.id)}
               >
                 <span className="club-option__name">{club.name}</span>

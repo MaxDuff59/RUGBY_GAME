@@ -41,8 +41,28 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
 - Cartes : fond surface, bordure 1 px, rayon 10 px, pas d'ombre.
 - Rapport de force : 5 lignes (conquête, paquet, attaque, défense, buteur), notes
   sur 20 issues directement du moteur (`TeamStrength`).
+- Vie du club (page Club, à droite du prochain match) : 5 lignes (moral, cohésion,
+  fraîcheur, direction, supporters), chacune avec son libellé et son palier, une barre
+  par match joué de la saison (gris, la dernière en accent, pointillé à la note de
+  départ) et la note sur 20 à droite. L'objectif de la direction en tête de carte.
+  Calculs dans `engine/` (`morale.py`, `cohesion.py`, `freshness.py`, `board.py`,
+  `supporters.py`).
+  Sous le seuil d'alerte, le palier de la direction devient « Poste menacé » en accent.
+- Rapport de force : dernière ligne « Forme du jour », l'effet en % de moral, cohésion
+  et fraîcheur sur les notes du match (détail au survol), sans barre.
+- Limogeage : la page de choix du club s'ouvre sur « Limogé le … / Rebondis ailleurs »,
+  le nom du manager prérempli et l'ancien club grisé.
+- Affaires entre deux matchs : fenêtre étroite (`Modal compact`) qui s'ouvre après
+  la journée simulée. Catégorie et date en libellé, titre en capitales, la situation,
+  puis une réponse par ligne. Après la réponse : la réaction (filet accent à gauche)
+  et les effets, note par note (hausse en noir, baisse en gris). Tant qu'une affaire
+  attend, le bouton « Simuler la journée » devient « 1 affaire à régler ».
 - Tableau d'effectif : 8 attributs, gras à partir de 15, gris à 8 et moins.
 - Boutons et liens cliquables : 44 px de haut minimum.
+- Fiche joueur (page entière, depuis une ligne de l'effectif) : radar des 8 attributs
+  en accent ; sous lui, un essaim par métrique clé du poste (`KEY_ATTRIBUTES`) : lui en
+  accent, ses coéquipiers en noir, les autres joueurs du poste en gris, et son percentile ;
+  terrain avec sa note à chaque place, son poste naturel en accent.
 
 ## Hauteur d'écran
 

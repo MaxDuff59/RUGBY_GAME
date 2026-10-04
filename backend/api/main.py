@@ -12,12 +12,14 @@ from fastapi import FastAPI
 
 from api.routers import (
     academy,
+    affairs,
     career,
     clubs,
     facilities,
     finances,
     matches,
     medical,
+    players,
     seasons,
     staff,
     transfers,
@@ -45,3 +47,5 @@ app.include_router(facilities.router)
 app.include_router(transfers.router)
 app.include_router(medical.router)
 app.include_router(academy.router)
+app.include_router(players.router)
+app.include_router(affairs.router)

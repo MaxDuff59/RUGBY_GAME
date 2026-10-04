@@ -13,11 +13,20 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from api.affairs import (
+    affair_out,
+    draw_affair,
+    forced_starters,
+    ignore_pending,
+    settle_promises,
+)
 from api.deps import SessionDep
 from api.ledger import current_season, record
+from api.notes import History, ensure_preseason_ranks
 from api.routers.medical import injury_case
 from api.schemas import (
     ClubRef,
+    DismissalOut,
     InjuryCase,
     MatchdayOut,
     MatchSummary,
@@ -26,6 +35,7 @@ from api.schemas import (
     StandingOut,
 )
 from data.generator import FIRST_SEASON_YEAR
+from engine.board import should_sack
 from engine.calendar import season_dates
 from engine.economy import (
     CHAMPION_PRIZE,
@@ -53,6 +63,7 @@ from models import ATTRIBUTE_NAMES, Club, EventType, Injury, InjurySource, Seaso
 from models.orm import (
     CareerRow,
     ClubRow,
+    DismissalRow,
     InjuryRow,
     MatchRow,
     NegotiationRow,
@@ -218,6 +229,8 @@ def create_season(session: Session, year: int) -> SeasonRow:
         )
     session.add(season)
     session.commit()
+    # Figé maintenant, avant que l'effectif ne bouge : l'objectif de la direction en dépend.
+    ensure_preseason_ranks(session, season)
     return season
 
 
@@ -273,6 +286,9 @@ def _play_matchday(session: Session, season: SeasonRow) -> tuple[MatchdayOut, li
     players = {p.id: p for club in clubs.values() for p in club.players}
     career = session.scalars(select(CareerRow)).first()
     my_club_id = career.club_id if career is not None else None
+    if my_club_id is not None:
+        # Titularisations promises au manager (api/affairs.py).
+        clubs[my_club_id].forced_starters = forced_starters(session, my_club_id)
 
     _ensure_next_stage(session, season, clubs)
     unplayed = [m for m in season.matches if not m.is_played]
@@ -290,6 +306,10 @@ def _play_matchday(session: Session, season: SeasonRow) -> tuple[MatchdayOut, li
     regular_count = _regular_matchday_count(season)
     rng = random.Random()
 
+    # Forme du jour de chaque club (moral, cohésion, fraîcheur), avant toute écriture.
+    history = History.load(session)
+    forms = {club_id: history.form(club, day) for club_id, club in clubs.items()}
+
     # Blessures de la journée : enregistrées en base, et renvoyées pour le club dirigé.
     my_injuries: list[tuple[InjuryRow, Injury]] = []
 
@@ -300,18 +320,27 @@ def _play_matchday(session: Session, season: SeasonRow) -> tuple[MatchdayOut, li
             my_injuries.append((injury_row, injury))
 
     # Semaine d'entraînement : tous les clubs, avant les matchs. Un blessé à
-    # l'entraînement manque le match du jour.
+    # l'entraînement manque le match du jour ; les joueurs fatigués se blessent plus.
     for club in clubs.values():
-        for injury in training_injuries(club, day, rng, decided=club.id != my_club_id):
+        risk = forms[club.id].injury_weight
+        for injury in training_injuries(club, day, rng, club.id != my_club_id, risk):
             save_injury(injury, club)
 
     for row in todays:
         home, away = clubs[row.home_club_id], clubs[row.away_club_id]
         result = simulate_match(
-            home, away, rng=rng, matchday=matchday, neutral=row.neutral, day=day
+            home,
+            away,
+            rng=rng,
+            matchday=matchday,
+            neutral=row.neutral,
+            day=day,
+            home_form=forms[home.id],
+            away_form=forms[away.id],
         )
         row.home_score, row.away_score = result.home_score, result.away_score
         row.events = MatchRow.from_domain(result).events
+        row.home_lineup, row.away_lineup = result.home_lineup, result.away_lineup
         for event in result.events:
             if event.type == EventType.INJURY:
                 club = clubs[event.club_id]
@@ -327,7 +356,12 @@ def _play_matchday(session: Session, season: SeasonRow) -> tuple[MatchdayOut, li
 
         home_row, away_row = rows_by_id[home.id], rows_by_id[away.id]
         spectators = attendance(
-            home_row.stadium_capacity, rank_of[home.id], len(clubs), stage.is_playoff, rng
+            home_row.stadium_capacity,
+            rank_of[home.id],
+            len(clubs),
+            stage.is_playoff,
+            rng,
+            fervour=history.fervour(home.id).value,
         )
         record(
             session,
@@ -382,6 +416,7 @@ def _play_matchday(session: Session, season: SeasonRow) -> tuple[MatchdayOut, li
                 )
                 row.home_score, row.away_score = result.home_score, result.away_score
                 row.events = MatchRow.from_domain(result).events
+                row.home_lineup, row.away_lineup = result.home_lineup, result.away_lineup
 
     # Les salaires se versent à chaque journée de saison régulière, pour tous les clubs.
     if stage == Stage.REGULAR:
@@ -426,10 +461,70 @@ def get_current_season(session: SessionDep) -> SeasonOut:
 
 @router.post("/current/play", response_model=PlayOut)
 def play_next_matchday(session: SessionDep) -> PlayOut:
-    """Joue la prochaine journée (tous ses matchs) et renvoie la saison mise à jour."""
+    """Joue la prochaine journée (tous ses matchs) et renvoie la saison mise à jour.
+
+    Une affaire restée sans réponse est d'abord réglée d'office ; après la journée,
+    les promesses sont tranchées et une nouvelle affaire peut tomber.
+    """
     season = _current_or_404(session)
+    ignore_pending(session)
     played, injuries = _play_matchday(session, season)
-    return PlayOut(played=played, season=_season_out(session, season), injuries=injuries)
+    dismissal = _board_verdict(session, played)
+    affairs = []
+    if dismissal is None:
+        affairs = settle_promises(session, season, played.date)
+        drawn = draw_affair(session, season, random.Random())
+        affairs += [drawn] if drawn is not None else []
+    return PlayOut(
+        played=played,
+        season=_season_out(session, season),
+        injuries=injuries,
+        dismissal=DismissalOut.model_validate(dismissal) if dismissal else None,
+        affairs=[affair_out(row) for row in affairs],
+    )
+
+
+def _board_verdict(session: Session, played: MatchdayOut) -> DismissalRow | None:
+    """Après une journée où le club dirigé a joué, la direction peut limoger le manager.
+
+    La carrière est alors supprimée et les négociations en cours rompues ; le
+    monde continue, et le manager peut reprendre un autre club.
+    """
+    career = session.scalars(select(CareerRow)).first()
+    if career is None:
+        return None
+    club_id = career.club_id
+    if not any(club_id in (m.home.id, m.away.id) for m in played.matches):
+        return None
+
+    history = History.load(session)
+    confidence = history.board(club_id).value
+    regular_played = sum(
+        1
+        for m in history.this_season
+        if m.stage == Stage.REGULAR and club_id in (m.home_club_id, m.away_club_id)
+    )
+    if not should_sack(confidence, regular_played, 2 * (len(history.club_ids) - 1)):
+        return None
+
+    dismissal = DismissalRow(
+        manager_name=career.manager_name,
+        club_id=club_id,
+        date=played.date,
+        confidence=round(confidence, 1),
+    )
+    session.add(dismissal)
+    for negotiation in session.scalars(
+        select(NegotiationRow).where(
+            NegotiationRow.club_id == club_id, NegotiationRow.stage.in_(("club", "player"))
+        )
+    ):
+        negotiation.stage = "failed"
+        negotiation.closed_by = "me"
+        negotiation.message = "Négociation interrompue : le manager a été limogé."
+    session.delete(career)
+    session.commit()
+    return dismissal
 
 
 @router.post("/next", response_model=SeasonOut, status_code=201)

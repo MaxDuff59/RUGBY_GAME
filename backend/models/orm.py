@@ -295,6 +295,9 @@ class MatchRow(Base):
     squad: Mapped[str] = mapped_column(String(5), default=Squad.PRO.value)
     # Événements stockés en JSON : suffisant tant qu'on ne fait pas de requêtes dessus.
     events: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    # XV de départ (identifiants de joueurs), pour les statistiques individuelles.
+    home_lineup: Mapped[list[int]] = mapped_column(JSON, default=list)
+    away_lineup: Mapped[list[int]] = mapped_column(JSON, default=list)
 
     season: Mapped[SeasonRow | None] = relationship(overlaps="matches,youth_matches", viewonly=True)
 
@@ -322,6 +325,8 @@ class MatchRow(Base):
                 )
                 for e in self.events
             ],
+            home_lineup=list(self.home_lineup or []),
+            away_lineup=list(self.away_lineup or []),
         )
 
     @classmethod
@@ -346,6 +351,8 @@ class MatchRow(Base):
                 }
                 for e in match.events
             ],
+            home_lineup=list(match.home_lineup),
+            away_lineup=list(match.away_lineup),
         )
 
 
@@ -413,3 +420,67 @@ class TransactionRow(Base):
     label: Mapped[str] = mapped_column(String(200))
     amount: Mapped[int]  # positif = recette, négatif = dépense
     balance_after: Mapped[int]
+
+
+class PreseasonRankRow(Base):
+    """Rang attendu d'un club avant une saison (niveau de son XV parmi tous les clubs).
+
+    Figé au tirage du calendrier : c'est lui qui fixe l'objectif de la direction
+    (engine/board.py), même si l'effectif change en cours de saison.
+    """
+
+    __tablename__ = "preseason_ranks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    season_id: Mapped[int] = mapped_column(ForeignKey("seasons.id"))
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
+    rank: Mapped[int]
+
+
+class DismissalRow(Base):
+    """Limogeage d'un manager par la direction de son club (engine/board.py).
+
+    La carrière est supprimée ; le dernier limogeage s'affiche au choix du club suivant.
+    """
+
+    __tablename__ = "dismissals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    manager_name: Mapped[str] = mapped_column(String(100))
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
+    date: Mapped[datetime.date] = mapped_column(Date)
+    confidence: Mapped[float]
+
+    club: Mapped[ClubRow] = relationship()
+
+    @property
+    def club_name(self) -> str:
+        return self.club.name
+
+
+class AffairRow(Base):
+    """Une affaire entre deux matchs (engine/affairs.py) et la réponse du manager.
+
+    En attente tant que `answered_on` est vide. Une fois réglée, ses `effects`
+    s'ajoutent aux notes du club à la date `anchor` (dernier match joué à ce
+    moment-là ; voir engine/notes.py, `Boost`). `choice` vide une fois réglée :
+    le manager n'a pas répondu avant le match suivant.
+    """
+
+    __tablename__ = "affairs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
+    season_id: Mapped[int] = mapped_column(ForeignKey("seasons.id"))
+    scenario: Mapped[str] = mapped_column(String(40))
+    created_on: Mapped[datetime.date] = mapped_column(Date)
+    context: Mapped[dict] = mapped_column(JSON, default=dict)  # variables des textes
+    answered_on: Mapped[datetime.date | None] = mapped_column(Date)
+    choice: Mapped[str | None] = mapped_column(String(40))
+    outcome: Mapped[str] = mapped_column(String(300), default="")
+    effects: Mapped[dict] = mapped_column(JSON, default=dict)  # note -> variation
+    money: Mapped[int] = mapped_column(default=0)
+    anchor: Mapped[datetime.date | None] = mapped_column(Date)
+    # Promesse faite en répondant (« start » ou « win ») ; tranchée au match suivant.
+    promise: Mapped[str | None] = mapped_column(String(8))
+    promise_settled: Mapped[bool] = mapped_column(default=False)

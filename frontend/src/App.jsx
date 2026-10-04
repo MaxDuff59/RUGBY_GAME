@@ -7,6 +7,7 @@ import Club from "./pages/Club.jsx";
 import Facilities from "./pages/Facilities.jsx";
 import Finances from "./pages/Finances.jsx";
 import Medical from "./pages/Medical.jsx";
+import Player from "./pages/Player.jsx";
 import Squad from "./pages/Squad.jsx";
 import Staff from "./pages/Staff.jsx";
 import StartCareer from "./pages/StartCareer.jsx";
@@ -20,6 +21,7 @@ export default function App() {
         <Route index element={<Club />} />
         <Route path="/calendrier" element={<Calendar />} />
         <Route path="/effectif" element={<Squad />} />
+        <Route path="/joueurs/:playerId" element={<Player />} />
         <Route path="/medical" element={<Medical />} />
         <Route path="/formation" element={<Academy />} />
         <Route path="/staff" element={<Staff />} />

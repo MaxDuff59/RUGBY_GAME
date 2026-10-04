@@ -8,7 +8,8 @@ export default defineConfig({
     // Même origine pour le navigateur : pas de configuration CORS côté backend.
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        // RUGBY_API_URL permet de viser une autre API (ex. une instance de test).
+        target: process.env.RUGBY_API_URL ?? "http://localhost:8000",
         rewrite: (path) => path.replace(/^\/api/, ""),
       },
     },

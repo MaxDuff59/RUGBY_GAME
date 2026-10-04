@@ -37,12 +37,19 @@ src/
     SortHeader.jsx    en-tête de colonne cliquable
     FormPills.jsx     derniers résultats en pastilles V / N / D
     MatchList.jsx     affiches d'une journée avec leur score
+    Pitch.jsx         terrain vu de dessus avec des marqueurs placés en %
+    Radar.jsx         radar SVG des 8 attributs d'un joueur
+    Swarm.jsx         essaim horizontal : les joueurs du poste sur une échelle 1-20,
+                      le joueur en accent, ses coéquipiers en noir, et son percentile
   pages/
     StartCareer.jsx   choisir son nom et son club (première visite)
     Club.jsx          tableau de bord : prochain match, simuler la journée, rapport de
                       force, classement, derniers résultats, phases finales
     Calendar.jsx      calendrier de la saison : vues semaine, mois, saison
-    Squad.jsx         XV de départ sur le terrain + attributs de tout l'effectif (blessés signalés)
+    Squad.jsx         XV de départ sur le terrain + attributs de tout l'effectif, titulaires
+                      du 1 au 15 puis le banc ; une ligne ouvre la fiche du joueur
+    Player.jsx        fiche d'un joueur : radar des attributs, essaims des métriques clés
+                      du poste, note à chaque place du terrain, notes du moteur, saison, blessures
     Medical.jsx       infirmerie : blessés et choix du protocole de soins, joueurs fragiles,
                       staff médical, dossier médical
     Academy.jsx       centre de formation : espoirs (promouvoir), jeunes pros (rétrograder),

@@ -13,6 +13,8 @@ Principe :
 4. Chaque minute aussi, un joueur peut se blesser (événement `INJURY`) : un
    joueur fragile, revenu de blessure depuis peu, risque en plus la rechute.
    La blessure elle-même (gravité, durée) est tirée par `engine/medical.py`.
+5. La forme du jour (`engine/form.py` : moral, cohésion, fraîcheur) multiplie
+   les notes collectives, et la fatigue augmente le risque de blessure.
 
 Quand le match a une date, les joueurs blessés à cette date ne sont pas
 alignés. Le moteur ne travaille que sur les objets de `models` : aucune
@@ -23,6 +25,7 @@ import datetime
 import random
 from dataclasses import dataclass
 
+from engine.form import NEUTRAL_FORM, Form
 from engine.medical import MATCH_INJURY_CHANCE_PER_MINUTE
 from models import Club, EventType, Match, MatchEvent, Player, Position
 
@@ -153,6 +156,7 @@ class TeamStrength:
 def select_lineup(club: Club, day: datetime.date | None = None) -> list[Player]:
     """Choisit les meilleurs joueurs disponibles à chaque poste selon FORMATION.
 
+    Les titularisations promises (`club.forced_starters`) passent devant à leur poste.
     Les blessés à la date `day` sont écartés (sans date, tout le monde est apte).
     S'il manque des joueurs à un poste, on complète avec les meilleurs restants
     (un effectif incomplet peut quand même jouer).
@@ -162,7 +166,10 @@ def select_lineup(club: Club, day: datetime.date | None = None) -> list[Player]:
     for position, count in FORMATION.items():
         candidates = sorted(
             (p for p in available if p.position == position),
-            key=RATING_FOR_POSITION[position],
+            key=lambda p, rating=RATING_FOR_POSITION[position]: (
+                p.id in club.forced_starters,
+                rating(p),
+            ),
             reverse=True,
         )
         lineup.extend(candidates[:count])
@@ -176,8 +183,12 @@ def select_lineup(club: Club, day: datetime.date | None = None) -> list[Player]:
     return lineup
 
 
-def team_strength(club: Club, day: datetime.date | None = None) -> TeamStrength:
+def team_strength(
+    club: Club, day: datetime.date | None = None, form: Form = NEUTRAL_FORM
+) -> TeamStrength:
+    """XV de départ et notes collectives ; `form` les module (neutre par défaut)."""
     lineup = select_lineup(club, day)
+    factor = form.factor([p.id for p in lineup])
 
     def at(*positions: Position) -> list[Player]:
         return [p for p in lineup if p.position in positions]
@@ -195,11 +206,14 @@ def team_strength(club: Club, day: datetime.date | None = None) -> TeamStrength:
     return TeamStrength(
         club=club,
         lineup=lineup,
-        set_piece=0.5 * scrum + 0.5 * lineout,
-        pack=_average([carrying_rating(p) for p in forwards]),
-        attack=0.8 * _average([attacking_rating(p) for p in backs])
-        + 0.2 * _average([attacking_rating(p) for p in at(Position.BACK_ROW)]),
-        defense=_average([defending_rating(p) for p in lineup]),
+        set_piece=factor * (0.5 * scrum + 0.5 * lineout),
+        pack=factor * _average([carrying_rating(p) for p in forwards]),
+        attack=factor
+        * (
+            0.8 * _average([attacking_rating(p) for p in backs])
+            + 0.2 * _average([attacking_rating(p) for p in at(Position.BACK_ROW)])
+        ),
+        defense=factor * _average([defending_rating(p) for p in lineup]),
         kicker=max(lineup, key=lambda p: p.kicking),
     )
 
@@ -270,13 +284,14 @@ def _play_chance(
 
 
 def _draw_injury_minutes(
-    team: TeamStrength, day: datetime.date | None, rng: random.Random
+    team: TeamStrength, day: datetime.date | None, rng: random.Random, form: Form = NEUTRAL_FORM
 ) -> dict[int, Player]:
     """Minute à laquelle chaque joueur blessé de l'équipe quitte le terrain.
 
     Un joueur fragile tire d'abord sa rechute (risque propre à son protocole),
-    puis chaque minute un joueur apte peut se blesser. Un joueur ne se blesse
-    qu'une fois par match.
+    puis chaque minute un joueur apte peut se blesser : le risque grimpe avec la
+    fatigue du XV, et le blessé est plus souvent un joueur fatigué. Un joueur ne
+    se blesse qu'une fois par match.
     """
     minutes: dict[int, Player] = {}
     injured: set[int] = set()
@@ -287,13 +302,16 @@ def _draw_injury_minutes(
                 minute = rng.randint(1, MATCH_MINUTES)
             minutes[minute] = player
             injured.add(player.id)
+    weights = {p.id: form.injury_weight(p) for p in team.lineup}
     for minute in range(1, MATCH_MINUTES + 1):
-        if rng.random() < MATCH_INJURY_CHANCE_PER_MINUTE:
-            fit = [p for p in team.lineup if p.id not in injured]
-            if fit and minute not in minutes:
-                player = rng.choice(fit)
-                minutes[minute] = player
-                injured.add(player.id)
+        fit = [p for p in team.lineup if p.id not in injured]
+        if not fit:
+            break
+        chance = MATCH_INJURY_CHANCE_PER_MINUTE * sum(weights[p.id] for p in fit) / len(fit)
+        if rng.random() < chance and minute not in minutes:
+            player = rng.choices(fit, weights=[weights[p.id] for p in fit])[0]
+            minutes[minute] = player
+            injured.add(player.id)
     return minutes
 
 
@@ -304,6 +322,8 @@ def simulate_match(
     matchday: int = 0,
     neutral: bool = False,
     day: datetime.date | None = None,
+    home_form: Form = NEUTRAL_FORM,
+    away_form: Form = NEUTRAL_FORM,
 ) -> Match:
     """Simule un match complet et renvoie un `Match` joué (score + événements).
 
@@ -311,9 +331,12 @@ def simulate_match(
     reproductibles, notamment dans les tests. `neutral` supprime l'avantage du
     terrain (finale). `day` est la date du match : les blessés ce jour-là ne
     jouent pas, et les blessures du match sont signalées en événements.
+    `home_form` / `away_form` : forme du jour de chaque club (neutre par défaut).
     """
     rng = rng or random.Random()
-    home_team, away_team = team_strength(home, day), team_strength(away, day)
+    home_team = team_strength(home, day, home_form)
+    away_team = team_strength(away, day, away_form)
+    forms = {home.id: home_form, away.id: away_form}
 
     # Probabilité que l'action de la minute soit pour l'équipe à domicile.
     advantage = 1.0 if neutral else HOME_ADVANTAGE
@@ -322,11 +345,18 @@ def simulate_match(
     # Les blessures sont tirées à part : elles ne changent pas le fil du match
     # (le remplaçant est supposé du même niveau), seulement l'effectif ensuite.
     injuries = {
-        team.club.id: _draw_injury_minutes(team, day, rng) for team in (home_team, away_team)
+        team.club.id: _draw_injury_minutes(team, day, rng, forms[team.club.id])
+        for team in (home_team, away_team)
     }
 
     match = Match(
-        home_club_id=home.id, away_club_id=away.id, matchday=matchday, neutral=neutral, date=day
+        home_club_id=home.id,
+        away_club_id=away.id,
+        matchday=matchday,
+        neutral=neutral,
+        date=day,
+        home_lineup=[p.id for p in home_team.lineup],
+        away_lineup=[p.id for p in away_team.lineup],
     )
     for minute in range(1, MATCH_MINUTES + 1):
         for club_id, minutes in injuries.items():

@@ -35,7 +35,10 @@ export const api = {
   // Clubs et carrière
   listClubs: () => request("/clubs"),
   getClub: (clubId) => request(`/clubs/${clubId}`),
+  getClubNotes: (clubId) => request(`/clubs/${clubId}/notes`),
+  getPlayer: (playerId) => request(`/players/${playerId}`),
   getCareer: () => request("/career"),
+  getLastDismissal: () => request("/career/dismissal"),
   startCareer: (managerName, clubId) =>
     post("/career", { manager_name: managerName, club_id: clubId }),
 
@@ -64,4 +67,6 @@ export const api = {
   demotePro: (playerId) => post(`/academy/demote/${playerId}`),
   getMedical: () => request("/medical"),
   chooseProtocol: (injuryId, protocol) => post(`/medical/${injuryId}/protocol/${protocol}`),
+  getAffairs: () => request("/affairs"),
+  answerAffair: (affairId, choice) => post(`/affairs/${affairId}/answer`, { choice }),
 };

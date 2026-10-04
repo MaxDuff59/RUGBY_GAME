@@ -1,7 +1,8 @@
 import { useCallback, useState } from "react";
-import { Link, useOutletContext } from "react-router-dom";
+import { Link, useNavigate, useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
+import Affairs from "../components/Affairs.jsx";
 import FormPills, { recentForm } from "../components/FormPills.jsx";
 import MatchList from "../components/MatchList.jsx";
 import SortHeader from "../components/SortHeader.jsx";
@@ -31,12 +32,18 @@ const STRENGTH_LINES = [
 // Tableau de bord : prochain match, rapport de force, classement, derniers résultats.
 export default function Club() {
   const { career } = useOutletContext();
+  const navigate = useNavigate();
   const myId = career.club_id;
   const season = useApi(useCallback(api.getCurrentSeason, []));
   const [lastPlayed, setLastPlayed] = useState(null); // la journée qu'on vient de simuler
   const [newInjuries, setNewInjuries] = useState([]); // nos blessés de cette journée
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState(null);
+  // Affaires entre deux matchs : à régler avant de jouer la journée suivante.
+  const affairs = useApi(useCallback(api.getAffairs, []));
+  const pending = affairs.data?.pending ?? [];
+  const [showAffairs, setShowAffairs] = useState(false);
+  const [notesVersion, setNotesVersion] = useState(0); // recharge la vie du club après une réponse
 
   async function act(call, onDone) {
     setBusy(true);
@@ -50,12 +57,31 @@ export default function Club() {
     }
   }
 
-  const simulate = () =>
+  const simulate = () => {
+    if (pending.length > 0) {
+      setShowAffairs(true);
+      return;
+    }
     act(api.playMatchday, (result) => {
+      // Limogé par la direction : la carrière est terminée, on choisit un autre club.
+      if (result.dismissal) {
+        navigate("/start", { replace: true });
+        return;
+      }
       setLastPlayed(result.played);
       setNewInjuries(result.injuries);
       season.setData(result.season);
+      affairs.setData({ pending: result.affairs, recent: affairs.data?.recent ?? [] });
+      setShowAffairs(result.affairs.length > 0);
     });
+  };
+
+  const affairAnswered = (done) => {
+    const left = pending.filter((affair) => affair.id !== done.id);
+    affairs.setData({ pending: left, recent: [done, ...(affairs.data?.recent ?? [])] });
+    setNotesVersion((version) => version + 1);
+    if (left.length === 0) setShowAffairs(false);
+  };
 
   const nextSeason = () =>
     act(api.startNextSeason, (data) => {
@@ -79,49 +105,59 @@ export default function Club() {
   return (
     <>
       {actionError && <p className="status--error">{actionError.message}</p>}
-
-      {data.phase === "finished" ? (
-        <section className="hero">
-          <p className="eyebrow">Saison {data.year} terminée</p>
-          <h1 className="hero__title">{data.champion.name}</h1>
-          <p className="hero__sub">Champion {data.year}</p>
-          <div className="hero__actions">
-            <button type="button" className="button button--primary" disabled={busy} onClick={nextSeason}>
-              {busy ? "Intersaison…" : `Lancer la saison ${data.year + 1}`}
-            </button>
-          </div>
-          <p className="muted" style={{ margin: 0 }}>
-            Les joueurs prennent un an, ceux de 36 ans et plus arrêtent, le centre de formation
-            apporte des jeunes, et un nouveau calendrier est tiré.
-          </p>
-        </section>
-      ) : (
-        <section className="hero">
-          <p className="eyebrow">
-            {next.stage === "regular" ? `Journée ${next.matchday} sur ${data.regular_matchdays}` : STAGES[next.stage]} ·{" "}
-            {formatLongDate(next.date)}
-          </p>
-          {myNextMatch ? (
-            <NextMatch match={myNextMatch} myId={myId} rankOf={rankOf} matches={data.matches} />
-          ) : (
-            <>
-              <h1 className="hero__title">Tu ne joues pas</h1>
-              <p className="hero__sub">Ton club n'est pas concerné par cette journée.</p>
-            </>
-          )}
-          <div className="hero__actions">
-            <button type="button" className="button" disabled={busy} onClick={simulate}>
-              {busy ? "Simulation…" : "Simuler la journée"}
-            </button>
-            <button type="button" className="button button--primary" disabled title="Bientôt : le match en direct">
-              Jouer le match
-            </button>
-            <Link to="/calendrier" className="muted">
-              Voir le calendrier
-            </Link>
-          </div>
-        </section>
+      {showAffairs && pending.length > 0 && (
+        <Affairs affairs={pending} onAnswered={affairAnswered} onClose={() => setShowAffairs(false)} />
       )}
+
+      <div className="hero-row">
+        {data.phase === "finished" ? (
+          <section className="hero">
+            <p className="eyebrow">Saison {data.year} terminée</p>
+            <h1 className="hero__title">{data.champion.name}</h1>
+            <p className="hero__sub">Champion {data.year}</p>
+            <div className="hero__actions">
+              <button type="button" className="button button--primary" disabled={busy} onClick={nextSeason}>
+                {busy ? "Intersaison…" : `Lancer la saison ${data.year + 1}`}
+              </button>
+            </div>
+            <p className="muted" style={{ margin: 0 }}>
+              Les joueurs prennent un an, ceux de 36 ans et plus arrêtent, le centre de formation apporte des jeunes, et
+              un nouveau calendrier est tiré.
+            </p>
+          </section>
+        ) : (
+          <section className="hero">
+            <p className="eyebrow">
+              {next.stage === "regular" ? `Journée ${next.matchday} sur ${data.regular_matchdays}` : STAGES[next.stage]}{" "}
+              · {formatLongDate(next.date)}
+            </p>
+            {myNextMatch ? (
+              <NextMatch match={myNextMatch} myId={myId} rankOf={rankOf} matches={data.matches} />
+            ) : (
+              <>
+                <h1 className="hero__title">Tu ne joues pas</h1>
+                <p className="hero__sub">Ton club n'est pas concerné par cette journée.</p>
+              </>
+            )}
+            <div className="hero__actions">
+              <button type="button" className="button" disabled={busy} onClick={simulate}>
+                {busy
+                  ? "Simulation…"
+                  : pending.length > 0
+                    ? `${pending.length} affaire${pending.length > 1 ? "s" : ""} à régler`
+                    : "Simuler la journée"}
+              </button>
+              <button type="button" className="button button--primary" disabled title="Bientôt : le match en direct">
+                Jouer le match
+              </button>
+              <Link to="/calendrier" className="muted">
+                Voir le calendrier
+              </Link>
+            </div>
+          </section>
+        )}
+        <ClubNotes clubId={myId} season={data} version={notesVersion} />
+      </div>
 
       <div className="club-grid fill">
         {myNextMatch && (
@@ -204,6 +240,8 @@ function NextMatch({ match, myId, rankOf, matches }) {
 function Strength({ myId, opponentId }) {
   const mine = useApi(useCallback(() => api.getClub(myId), [myId]));
   const theirs = useApi(useCallback(() => api.getClub(opponentId), [opponentId]));
+  const myNotes = useApi(useCallback(() => api.getClubNotes(myId), [myId]));
+  const theirNotes = useApi(useCallback(() => api.getClubNotes(opponentId), [opponentId]));
 
   if (mine.loading || theirs.loading) return <p className="status">Chargement…</p>;
   if (mine.error || theirs.error) return null;
@@ -227,7 +265,10 @@ function Strength({ myId, opponentId }) {
             <div key={line.key} className="versus">
               <span className={`versus__value num ${usWins ? "versus__value--wins" : ""}`}>{formatNote(us)}</span>
               <div className="meter meter--reverse">
-                <div className={`meter__fill ${usWins ? "meter__fill--accent" : "meter__fill--muted"}`} style={{ width: `${(us / 20) * 100}%` }} />
+                <div
+                  className={`meter__fill ${usWins ? "meter__fill--accent" : "meter__fill--muted"}`}
+                  style={{ width: `${(us / 20) * 100}%` }}
+                />
               </div>
               <span className="versus__label">{line.label}</span>
               <div className="meter">
@@ -237,8 +278,136 @@ function Strength({ myId, opponentId }) {
             </div>
           );
         })}
+        {myNotes.data && theirNotes.data && <FormLine us={myNotes.data.form} them={theirNotes.data.form} />}
       </div>
     </section>
+  );
+}
+
+// Les notes de vie du club, du haut vers le bas de la carte. `levels` : paliers de la
+// note la plus haute à la plus basse ; `neutral` : note de départ, en pointillé.
+const NOTE_LINES = [
+  {
+    key: "morale",
+    label: "Moral",
+    neutral: 12,
+    levels: ["Euphorique", "Confiant", "Serein", "Inquiet", "Au plus bas"],
+  },
+  {
+    key: "cohesion",
+    label: "Cohésion",
+    neutral: 10,
+    levels: ["Soudé", "Uni", "En rodage", "Décousu", "Éclaté"],
+  },
+  {
+    key: "freshness",
+    label: "Fraîcheur",
+    before: true, // mesurée avant chaque match
+    levels: ["Frais", "En jambes", "Entamé", "Fatigué", "Épuisé"],
+  },
+  {
+    key: "board",
+    label: "Direction",
+    neutral: 12,
+    levels: ["Ravie", "Confiante", "Patiente", "Sceptique", "Excédée"],
+  },
+  {
+    key: "supporters",
+    label: "Supporters",
+    neutral: 10,
+    levels: ["Enflammés", "Enthousiastes", "Fidèles", "Déçus", "Hostiles"],
+  },
+];
+const LEVEL_FLOORS = [16, 13.5, 10.5, 7.5, 0];
+
+// 1.3 -> "+1,3", -0.8 -> "−0,8"
+const formatChange = (value) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${formatNote(Math.abs(value))}`;
+
+// Vie du club : une ligne par note, avec une barre par match joué de la saison.
+function ClubNotes({ clubId, season, version }) {
+  // Rechargé à chaque journée simulée (la saison change d'objet) et après chaque affaire réglée.
+  const notes = useApi(useCallback(() => api.getClubNotes(clubId), [clubId, season, version]));
+  if (notes.loading && !notes.data) return <p className="status">Chargement…</p>;
+  if (notes.error) return null;
+  const { objective } = notes.data;
+
+  return (
+    <section className="card card--padded club-notes">
+      <div className="section__head">
+        <h2 className="eyebrow">Vie du club</h2>
+        {objective && (
+          <span className="muted" title={`Rang attendu en début de saison : ${formatRank(objective.expected_rank)}`}>
+            Objectif : {objective.label.toLowerCase()} ({formatRank(objective.target_rank)})
+          </span>
+        )}
+      </div>
+      {NOTE_LINES.map((line) => (
+        <NoteLine
+          key={line.key}
+          line={line}
+          note={notes.data[line.key]}
+          warning={
+            line.key === "board" && notes.data.board.value < notes.data.sack_warning
+              ? `Poste menacé : limogeage sous ${formatNote(notes.data.sack_threshold)}`
+              : null
+          }
+        />
+      ))}
+    </section>
+  );
+}
+
+function NoteLine({ line, note, warning }) {
+  const level = line.levels[LEVEL_FLOORS.findIndex((floor) => note.value >= floor)];
+  const history = note.history;
+  return (
+    <div className="club-note">
+      <div className="club-note__name">
+        <span className="club-note__label">{line.label}</span>
+        <span className={warning ? "club-note__warning" : "muted"} title={warning ?? undefined}>
+          {warning ? "Poste menacé" : level}
+        </span>
+      </div>
+      <div className="club-note__chart" role="img" aria-label={`${line.label} après chacun des ${history.length} matchs joués`}>
+        {line.neutral && <div className="club-note__neutral" style={{ bottom: `${(line.neutral / 20) * 100}%` }} />}
+        {history.map((step, index) => (
+          <div
+            key={`${step.stage}-${step.matchday}`}
+            className="club-note__col"
+            title={`${matchdayLabel(step)} · ${step.result} ${step.scored}-${step.conceded} contre ${step.opponent.name} · ${line.label.toLowerCase()}${line.before ? " avant le match" : ""} ${formatNote(step.value)} (${formatChange(step.change)})`}
+          >
+            <div
+              className={`club-note__bar ${index === history.length - 1 ? "club-note__bar--current" : ""}`}
+              style={{ height: `${(step.value / 20) * 100}%` }}
+            />
+          </div>
+        ))}
+      </div>
+      <span className="club-note__value num">{formatNote(note.value)}</span>
+    </div>
+  );
+}
+
+// Forme du jour : de combien moral, cohésion et fraîcheur font varier les notes ci-dessus.
+function FormLine({ us, them }) {
+  const percent = (value) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${formatNote(Math.abs(value) * 100)} %`;
+  const detail = (form) =>
+    `Moral ${percent(form.morale)} · cohésion ${percent(form.cohesion)} · fraîcheur ${percent(form.freshness)}`;
+  const usWins = us.total >= them.total;
+  return (
+    <div className="versus versus--form">
+      <span className={`versus__value num ${usWins ? "versus__value--wins" : ""}`} title={detail(us)}>
+        {percent(us.total)}
+      </span>
+      <span />
+      <span className="versus__label" title="Moral, cohésion et fraîcheur du XV multiplient les notes du match">
+        Forme du jour
+      </span>
+      <span />
+      <span className={`versus__value num ${usWins ? "" : "versus__value--wins"}`} title={detail(them)}>
+        {percent(them.total)}
+      </span>
+    </div>
   );
 }
 

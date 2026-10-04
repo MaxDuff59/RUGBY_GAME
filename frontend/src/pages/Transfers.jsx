@@ -3,6 +3,7 @@ import { useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
 import Level from "../components/Level.jsx";
+import Modal from "../components/Modal.jsx";
 import SortHeader from "../components/SortHeader.jsx";
 import {
   DEALS,
@@ -302,22 +303,6 @@ function Ways({ listing }) {
   if (listing.loanable) ways.push(<span key="l" className="tag tag--light">Prêt</span>);
   if (ways.length === 0) return <span className="muted">Intransférable</span>;
   return <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 4 }}>{ways}</span>;
-}
-
-// Fenêtre par-dessus la page ; se ferme par le fond, la touche Échap ou le bouton.
-function Modal({ children, onClose }) {
-  useEffect(() => {
-    const onKey = (event) => event.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-        {children}
-      </div>
-    </div>
-  );
 }
 
 // Approche d'un joueur : sa situation, choix de la voie, puis le fil de la négociation.

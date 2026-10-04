@@ -57,6 +57,9 @@ au démarrage).
 | Route | Rôle |
 |---|---|
 | `GET /clubs`, `GET /clubs/{id}` | Clubs, effectif complet et notes collectives du XV |
+| `GET /clubs/{id}/notes` | Vie du club sur 20 (moral, cohésion, fraîcheur, confiance de la direction, ferveur des supporters) et forme du jour |
+| `GET /career/dismissal` | Dernier limogeage, tant qu'aucune nouvelle carrière n'a commencé |
+| `GET /players/{id}` | Fiche d'un joueur : comparaison à son poste, note à chaque poste, saison, blessures |
 | `POST /career`, `GET /career` | Choisir son club (tire aussi le calendrier de la 1re saison) |
 | `GET /seasons/current` | Calendrier daté, classement, prochaine journée, phases finales |
 | `POST /seasons/current/play` | Joue la journée suivante (matchs, billetterie, sponsors, salaires) |
@@ -70,6 +73,7 @@ au démarrage).
 | `POST /transfers/sell/{id}` | Vendre un de ses joueurs |
 | `GET /medical`, `POST /medical/{id}/protocol/{protocol}` | Infirmerie : blessés, protocole de soins, dossier médical |
 | `GET /academy`, `POST /academy/promote/{id}`, `POST /academy/demote/{id}` | Centre de formation : espoirs, championnat espoirs, promotions |
+| `GET /affairs`, `POST /affairs/{id}/answer` | Affaires entre deux matchs : celles en attente, et la réponse (effets révélés) |
 
 ## Recrutement
 
@@ -134,6 +138,23 @@ soins, définitif pour cette blessure :
 Un bon kinésithérapeute raccourcit la convalescence (jusqu'à −20 %), un bon
 médecin réduit le risque de rechute (jusqu'à −40 %). Une rechute reproduit la
 même blessure. Règles dans `backend/engine/medical.py`.
+
+## Affaires entre deux matchs
+
+Tous les 2 ou 3 matchs, le club dirigé reçoit une affaire à régler :
+conférence de presse, joueur mécontent, vestiaire, direction, supporters, médias
+(une quarantaine de scénarios, tirés d'après les résultats, l'effectif et les
+notes). Une question déjà posée ne revient pas de la saison. Chaque réponse fait bouger le moral, la cohésion, la fraîcheur, la
+confiance de la direction ou la ferveur des supporters (de ±0,1 à ±3 sur 20 ;
+une victoire vaut +1,3 de moral), parfois la trésorerie, et peut prolonger,
+augmenter, vendre ou promouvoir un joueur. Les effets restent cachés jusqu'à la
+réponse.
+
+Certaines réponses sont des promesses, tranchées au match suivant : une
+titularisation promise impose le joueur dans le XV, une victoire annoncée doit
+arriver. Tenue ou non, la promesse revient sous forme d'une nouvelle affaire.
+Une affaire restée sans réponse est réglée d'office avant la journée suivante,
+avec une petite pénalité. Le catalogue est dans `backend/engine/affairs.py`.
 
 ## Principe d'architecture
 

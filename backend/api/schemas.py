@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from engine.economy import FacilityKind, TransactionCategory, market_value
 from engine.match_engine import TeamStrength
+from engine.notes import Note
 from engine.transfers import DealKind
 from models import (
     EventType,
@@ -128,6 +129,58 @@ class PlayerOut(BaseModel):
         return cls(**fields, value=market_value(player), injury=injury, loaned_from_name=owner)
 
 
+class PlayerSeasonStats(BaseModel):
+    """Statistiques individuelles sur la saison en cours (matchs où il était titulaire)."""
+
+    year: int | None
+    matches: int
+    tries: int
+    conversions: int
+    penalties: int
+    drops: int
+    points: int
+
+
+class PeerOut(BaseModel):
+    """Un joueur du même poste (et du même groupe) dans le championnat, pour les comparaisons."""
+
+    id: int
+    club_id: int
+    name: str
+    overall: float
+    position_rating: float  # note au poste, critère de sélection du moteur
+    pace: int
+    power: int
+    handling: int
+    passing: int
+    kicking: int
+    tackling: int
+    scrum: int
+    lineout: int
+
+
+class PlayerDetail(BaseModel):
+    """Fiche complète d'un joueur : identité, comparaison au poste, notes, saison, blessures."""
+
+    player: PlayerOut
+    club: ClubRef | None
+    # Identifiants du XV de départ de son club (vide s'il n'a pas de club).
+    lineup_ids: list[int]
+    starter: bool
+    # Notes du moteur (sur 20) : mêlée, touche, portage, attaque, défense.
+    ratings: dict[str, float]
+    # Sa note à chaque poste, selon le critère de sélection du moteur.
+    position_ratings: dict[Position, float]
+    # Comparaison aux joueurs du même poste (et du même groupe : pros ou espoirs)
+    # dans tous les clubs : part de ceux qu'il devance, par attribut et en note générale.
+    better_than: dict[str, float]
+    # Ces joueurs, lui compris, avec leurs attributs et leur note au poste.
+    peers: list[PeerOut]
+    season: PlayerSeasonStats
+    # Toutes ses blessures, de la plus récente à la plus ancienne.
+    injuries: list[InjuryOut]
+
+
 class StrengthOut(BaseModel):
     """Notes collectives sur 20, calculées par le moteur sur le XV de départ."""
 
@@ -175,6 +228,86 @@ class ClubDetail(BaseModel):
     facilities: FacilitiesOut
     strength: StrengthOut
     players: list[PlayerOut]
+
+
+class NoteStepOut(BaseModel):
+    """Une note juste après un match (juste avant, pour la fraîcheur)."""
+
+    matchday: int
+    stage: Stage
+    date: datetime.date | None
+    opponent: ClubRef
+    result: Literal["V", "N", "D"]
+    scored: int
+    conceded: int
+    change: float
+    value: float
+
+
+class NoteOut(BaseModel):
+    """Une note sur 20 et son évolution, match par match, sur la saison en cours."""
+
+    value: float
+    history: list[NoteStepOut]
+
+    @classmethod
+    def from_note(
+        cls, note: Note, club_id: int, names: dict[int, str], season_match_ids: set[int]
+    ) -> "NoteOut":
+        steps = []
+        for step in note.history:
+            m = step.match
+            if m.id not in season_match_ids:
+                continue
+            home = m.home_club_id == club_id
+            opponent_id = m.away_club_id if home else m.home_club_id
+            scored, conceded = (
+                (m.home_score, m.away_score) if home else (m.away_score, m.home_score)
+            )
+            steps.append(
+                NoteStepOut(
+                    matchday=m.matchday,
+                    stage=m.stage,
+                    date=m.date,
+                    opponent=ClubRef(id=opponent_id, name=names[opponent_id]),
+                    result="V" if scored > conceded else "D" if scored < conceded else "N",
+                    scored=scored,
+                    conceded=conceded,
+                    change=round(step.change, 1),
+                    value=round(step.value, 1),
+                )
+            )
+        return cls(value=round(note.value, 1), history=steps)
+
+
+class ObjectiveOut(BaseModel):
+    label: str
+    target_rank: int
+    expected_rank: int
+
+
+class FormOut(BaseModel):
+    """Forme du jour (engine/form.py) : effet de chaque note sur les notes collectives
+    du XV probable, en fraction (0,03 = +3 %)."""
+
+    morale: float
+    cohesion: float
+    freshness: float
+    total: float
+
+
+class ClubNotesOut(BaseModel):
+    """Notes de vie du club, sur 20 (engine/notes.py et ses voisins)."""
+
+    morale: NoteOut
+    cohesion: NoteOut
+    freshness: NoteOut
+    board: NoteOut
+    supporters: NoteOut
+    objective: ObjectiveOut | None  # objectif de la direction pour la saison en cours
+    form: FormOut  # effet sur le prochain match
+    sack_threshold: float  # sous cette confiance, la direction limoge le manager
+    sack_warning: float  # sous celle-ci, elle le fait savoir
 
 
 # --- Matchs --------------------------------------------------------------------------
@@ -300,11 +433,65 @@ class SeasonOut(BaseModel):
     champion: ClubRef | None
 
 
+class DismissalOut(BaseModel):
+    """Limogeage du manager par la direction (engine/board.py)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    manager_name: str
+    club_id: int
+    club_name: str
+    date: datetime.date
+    confidence: float
+
+
 class PlayOut(BaseModel):
     played: MatchdayOut
     season: SeasonOut
     # Blessés de la journée (matchs et entraînement) dans le club dirigé.
     injuries: list["InjuryCase"]
+    # Renseigné si la direction vient de limoger le manager : la carrière est terminée.
+    dismissal: DismissalOut | None = None
+    # Affaires à régler avant la journée suivante (engine/affairs.py).
+    affairs: list["AffairOut"] = []
+
+
+# --- Affaires entre deux matchs (engine/affairs.py) -----------------------------------
+
+
+class AffairOptionOut(BaseModel):
+    key: str
+    label: str
+
+
+class AffairOut(BaseModel):
+    """Une affaire : en attente (`options`), ou réglée (réponse, réaction et effets)."""
+
+    id: int
+    scenario: str
+    category: str
+    category_label: str
+    title: str
+    text: str
+    date: datetime.date
+    player_id: int | None
+    options: list[AffairOptionOut]
+    answered: bool
+    choice: str | None  # vide une fois réglée : pas de réponse avant le match suivant
+    choice_label: str | None
+    outcome: str
+    effects: dict[str, float]  # moral, cohésion, fraîcheur, direction, supporters
+    money: int  # positif = recette
+    promise: Literal["start", "win"] | None
+
+
+class AffairsOverview(BaseModel):
+    pending: list[AffairOut]
+    recent: list[AffairOut]  # dernières affaires réglées, de la plus récente à la plus ancienne
+
+
+class AnswerIn(BaseModel):
+    choice: str
 
 
 # --- Finances, staff, infrastructures, transferts (club du joueur) ---------------------
