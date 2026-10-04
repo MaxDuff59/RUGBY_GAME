@@ -1,0 +1,35 @@
+[project]
+name = "football-manager-backend"
+version = "0.1.0"
+description = "Backend du jeu de gestion de football : moteur, modèles, API."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",  # requis par le TestClient de FastAPI
+    "ruff>=0.6",
+]
+
+# Application (pas une librairie) : uv n'a pas besoin de construire un paquet.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Permet aux tests d'importer `models`, `engine`, etc. depuis la racine backend/.
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# E/F : erreurs de base, I : tri des imports, UP : syntaxe Python moderne,
+# B : bugs fréquents, SIM : simplifications.
+select = ["E", "F", "I", "UP", "B", "SIM"]
