@@ -14,7 +14,7 @@ from models.orm import Base, ClubRow, StaffRow
 DATABASE_URL = os.environ.get("RUGBY_DATABASE_URL", "sqlite:///./rugby.db")
 
 # Nombre de clubs générés au premier lancement.
-DEFAULT_CLUB_COUNT = 10
+DEFAULT_CLUB_COUNT = 14
 
 # check_same_thread=False : nécessaire pour utiliser SQLite depuis FastAPI (plusieurs threads).
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
@@ -24,14 +24,18 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 def init_db() -> None:
     """Crée les tables si elles n'existent pas encore, et vérifie leur schéma."""
     Base.metadata.create_all(engine)
-    # Pas de migrations pour l'instant : une base créée avec un ancien schéma
-    # doit être supprimée (le monde est régénéré au démarrage suivant).
-    columns = {column["name"] for column in inspect(engine).get_columns("clubs")}
-    if "balance" not in columns:
-        raise RuntimeError(
-            "La base de données a un ancien schéma : supprime le fichier rugby.db "
-            "(dans backend/) puis relance l'API."
-        )
+    # Pas de migrations pour l'instant : create_all ajoute les tables manquantes
+    # mais pas les colonnes. Une base à l'ancien schéma doit être supprimée (le
+    # monde est régénéré au démarrage suivant).
+    inspector = inspect(engine)
+    for table in Base.metadata.sorted_tables:
+        actual = {column["name"] for column in inspector.get_columns(table.name)}
+        expected = {column.name for column in table.columns}
+        if not expected <= actual:
+            raise RuntimeError(
+                f"La base de données a un ancien schéma (table « {table.name} ») : "
+                "supprime le fichier rugby.db (dans backend/) puis relance l'API."
+            )
 
 
 def seed_if_empty(
