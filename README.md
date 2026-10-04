@@ -86,9 +86,20 @@ et l'importance du joueur ; un grand club (note collective ≥ 15) ne vend pas s
 titulaires. Le joueur pèse le prestige du club d'arrivée, son temps de jeu
 attendu et le salaire : un remplaçant d'un gros club ne descend que pour un
 salaire XXL (ou en prêt), un titulaire d'un petit club vient volontiers dans
-un grand. Une offre refusée mais sérieuse (≥ 85 % de la demande) fait baisser
-la demande de 5 % ; au quatrième refus, l'autre partie quitte la table. Les
-contrats arrivés à terme sont renouvelés automatiquement pour l'instant.
+un grand. Le club et le joueur ont un objectif secret et ouvrent au-dessus
+(25 % pour le club, 30 % pour le joueur). À chaque offre refusée ils comblent la
+moitié de l'écart avec ton offre, jusqu'à leur objectif ; arrivés là, ils
+campent, sauf si ton offre s'en approche à moins de 10 % : ils coupent alors
+la poire en deux (dernier effort). Chacun a 6 points de patience : un refus en
+coûte 1, une offre qui n'a pas bougé ou une offre dérisoire (sous 60 % de
+l'objectif) en coûte 2 ; à zéro, il ne veut plus discuter. Le joueur a aussi
+une durée de contrat en tête selon son âge (3 à 5 saisons pour les jeunes,
+1 à 2 pour les plus de 32 ans) : hors de cette fourchette, il ne discute même
+pas le salaire. Et il a de la mémoire : s'il quitte la table, il refuse toute
+discussion pendant 8 semaines, puis revient en ouvrant 10 % plus haut et avec
+un point de patience en moins par rupture passée. Quitter la table soi-même
+ferme la porte 2 semaines, sans rancune. Les contrats arrivés à terme sont
+renouvelés automatiquement pour l'instant.
 
 ## Blessures
 

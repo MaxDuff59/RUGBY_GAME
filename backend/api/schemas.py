@@ -374,9 +374,10 @@ class ListingOut(BaseModel):
     club_level: float
     years_left: int  # saisons de contrat restantes, celle en cours comprise
     playing_time: str  # titulaire, remplaçant, réserviste (dans son club)
-    transfer_fee: int | None  # indemnité demandée ; None = intransférable
+    transfer_fee: int | None  # indemnité demandée à l'ouverture ; None = intransférable
     loanable: bool
     precontract: bool  # dernière année de contrat : négociable sans indemnité
+    talks_closed_until: datetime.date | None  # il ne veut plus discuter avant cette date
 
 
 class NegotiationOut(BaseModel):
@@ -390,12 +391,15 @@ class NegotiationOut(BaseModel):
     stage: Literal["club", "player", "agreed", "done", "failed"]
     opened_on: datetime.date
     rounds: int
+    patience: int  # de 6 (serein) à 0 (il s'en va)
     fee_demand: int | None
     fee: int | None
     wage_demand: int | None
     wage: int | None
     years: int | None
     message: str
+    closed_by: Literal["them", "me"] | None
+    cooldown_until: datetime.date | None
 
 
 class TransfersOverview(BaseModel):
@@ -415,8 +419,8 @@ class DealOption(BaseModel):
     kind: DealKind
     available: bool
     reason: str
-    fee_demand: int | None = None  # transfert : indemnité demandée par le club
-    wage_demand: int | None = None  # transfert, pré-contrat : salaire exigé par le joueur
+    fee_demand: int | None = None  # transfert : indemnité demandée par le club (son ouverture)
+    wage_demand: int | None = None  # transfert, pré-contrat : salaire demandé (son ouverture)
     wage: int | None = None  # prêt : salaire actuel, à ta charge
 
 
@@ -430,6 +434,9 @@ class TransferTargetOut(BaseModel):
     years_left: int
     playing_time_now: str
     playing_time_here: str
+    preferred_years: tuple[int, int]  # durée de contrat qu'il recherche (min, max)
+    talks_closed_until: datetime.date | None  # rupture récente : pas de discussion avant
+    grudges: int  # ruptures passées de son fait : il sera plus exigeant et moins patient
     options: list[DealOption]
     negotiation: NegotiationOut | None
 

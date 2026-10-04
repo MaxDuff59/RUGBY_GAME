@@ -13,10 +13,13 @@ from engine.transfers import (
     TIME_RESERVE,
     TIME_STARTER,
     accepts_loan,
+    bargain,
     can_precontract,
     club_lends,
     club_level,
+    opening_ask,
     playing_time,
+    preferred_years,
     transfer_fee,
     wage_demand,
 )
@@ -78,6 +81,32 @@ def test_big_clubs_keep_their_starters_and_fees_grow_with_the_contract():
 
     small = make_club(2, level=9, seed=2)
     assert transfer_fee(props_by_rating(small)[0], small, YEAR) is not None
+
+
+def test_bargaining_converges_then_makes_a_last_effort():
+    target, ask = 100_000, opening_ask(100_000, 1.3, 1_000)
+    assert ask == 130_000
+    assert bargain(ask, target, 130_000, None, 1_000) == ("accepted", ask)
+    assert bargain(ask, target, 50_000, None, 1_000) == ("insulted", ask)  # sous 60 %
+    # Il descend vers son objectif, jamais en dessous.
+    verdict, lower = bargain(ask, target, 110_000, None, 1_000)
+    assert verdict == "closer" and target < lower < ask
+    assert bargain(ask, target, 70_000, None, 1_000)[1] == target
+    # Une offre qui ne progresse pas l'agace sans le faire bouger.
+    assert bargain(lower, target, 110_000, 110_000, 1_000) == ("stalled", lower)
+    # À son objectif : il campe si l'offre est loin, coupe la poire en deux si elle est proche.
+    assert bargain(target, target, 80_000, 70_000, 1_000) == ("last_word", target)
+    verdict, effort = bargain(target, target, 92_000, 80_000, 1_000)
+    assert verdict == "effort" and 90_000 <= effort < target
+    assert bargain(effort, target, effort, 92_000, 1_000)[0] == "accepted"
+
+
+def test_contract_length_wishes_follow_age():
+    player = make_club(1, level=12).players[0]
+    player.age = 22
+    assert preferred_years(player) == (3, 5)
+    player.age = 34
+    assert preferred_years(player) == (1, 2)
 
 
 def test_precontract_only_in_the_last_contract_year():
@@ -161,15 +190,24 @@ def test_transfer_is_negotiated_with_the_club_then_the_player(manager):
 
     balance = answer["overview"]["balance"]
     wage = answer["negotiation"]["wage_demand"]
+    years = target["preferred_years"][0]
+    # Une durée hors de ses attentes ne se discute pas.
+    low, high = target["preferred_years"]
+    too_long = high + 1 if high < 5 else low - 1  # hors de ses attentes, mais entre 1 et 5
     answer = manager.post(
-        f"/transfers/negotiations/{opened['id']}/offer", json={"wage": wage, "years": 3}
+        f"/transfers/negotiations/{opened['id']}/offer", json={"wage": wage, "years": too_long}
+    ).json()
+    assert not answer["accepted"] and "saisons" in answer["message"]
+
+    answer = manager.post(
+        f"/transfers/negotiations/{opened['id']}/offer", json={"wage": wage, "years": years}
     ).json()
     assert answer["concluded"] and answer["negotiation"]["stage"] == "done"
     assert answer["overview"]["balance"] == balance - fee
     assert answer["overview"]["squad_size"] == 32
 
     player = next(p for p in manager.get("/clubs/3").json()["players"] if p["id"] == player_id)
-    assert player["wage"] == wage and player["contract_until"] == YEAR + 2
+    assert player["wage"] == wage and player["contract_until"] == YEAR + years - 1
     labels = [t["label"] for t in manager.get("/finances").json()["transactions"]]
     assert any(label.startswith("Achat · ") for label in labels)
 
@@ -179,24 +217,70 @@ def test_lowball_offers_end_the_talks(manager):
     opened = manager.post(
         f"/transfers/{listing['player']['id']}/open", json={"kind": "transfer"}
     ).json()
-    for _ in range(4):
+    for _ in range(3):
         answer = manager.post(
             f"/transfers/negotiations/{opened['id']}/offer", json={"fee": 5_000}
         ).json()
+        # Une offre dérisoire ne fait pas bouger le club, et use vite sa patience.
+        assert answer["negotiation"]["fee_demand"] == opened["fee_demand"]
     assert answer["negotiation"]["stage"] == "failed"
+    assert "ne veut plus discuter" in answer["message"]
+    assert answer["negotiation"]["closed_by"] == "them"
     assert (
         manager.post(
             f"/transfers/negotiations/{opened['id']}/offer", json={"fee": 5_000}
         ).status_code
         == 400
     )
-    # On peut rouvrir ensuite.
+    # Il s'en souvient : pas de discussion avant la fin du délai, quelle que soit la voie.
+    player_id = listing["player"]["id"]
+    target = manager.get(f"/transfers/{player_id}").json()
+    assert target["talks_closed_until"] == answer["negotiation"]["cooldown_until"]
+    assert target["grudges"] == 1
+    assert all(not option["available"] for option in target["options"])
     assert (
-        manager.post(
-            f"/transfers/{listing['player']['id']}/open", json={"kind": "transfer"}
-        ).status_code
-        == 201
+        manager.post(f"/transfers/{player_id}/open", json={"kind": "transfer"}).status_code == 400
     )
+    market = manager.get("/transfers").json()
+    row = next(item for item in market["listings"] if item["player"]["id"] == player_id)
+    assert row["talks_closed_until"] is not None
+    # Le délai passé, il revient plus exigeant et moins patient.
+    until = answer["negotiation"]["cooldown_until"]
+    for _ in range(21):
+        if (
+            manager.get("/transfers").json()["listings"]
+            and manager.get(f"/transfers/{player_id}").json()["talks_closed_until"] is None
+        ):
+            break
+        manager.post("/seasons/current/play")
+    target = manager.get(f"/transfers/{player_id}").json()
+    assert target["talks_closed_until"] is None and until is not None
+    option = next(o for o in target["options"] if o["kind"] == "transfer")
+    if option["available"]:
+        reopened = manager.post(f"/transfers/{player_id}/open", json={"kind": "transfer"}).json()
+        assert reopened["fee_demand"] > opened["fee_demand"]
+        assert reopened["patience"] == 5
+        assert "pas oublié" in reopened["message"]
+
+
+def test_leaving_the_table_myself_is_forgiven_quickly(manager):
+    listing, _, _ = _find_target(manager, "transfer")
+    player_id = listing["player"]["id"]
+    opened = manager.post(f"/transfers/{player_id}/open", json={"kind": "transfer"}).json()
+    overview = manager.delete(f"/transfers/negotiations/{opened['id']}").json()
+    assert overview["negotiations"] == []
+    target = manager.get(f"/transfers/{player_id}").json()
+    assert target["grudges"] == 0 and target["talks_closed_until"] is not None
+    assert (
+        manager.post(f"/transfers/{player_id}/open", json={"kind": "transfer"}).status_code == 400
+    )
+    # Deux semaines plus tard, tout est oublié.
+    for _ in range(3):
+        manager.post("/seasons/current/play")
+    target = manager.get(f"/transfers/{player_id}").json()
+    assert target["talks_closed_until"] is None
+    reopened = manager.post(f"/transfers/{player_id}/open", json={"kind": "transfer"}).json()
+    assert reopened["fee_demand"] == opened["fee_demand"] and reopened["patience"] == 6
 
 
 def test_loan_returns_to_the_owner_at_the_end_of_the_season(manager):
@@ -222,16 +306,27 @@ def test_loan_returns_to_the_owner_at_the_end_of_the_season(manager):
 
 
 def test_precontract_brings_the_player_at_the_next_season(manager):
-    listing, _, option = _find_target(manager, "precontract")
+    listing, target, option = _find_target(manager, "precontract")
     player_id = listing["player"]["id"]
     opened = manager.post(f"/transfers/{player_id}/open", json={"kind": "precontract"}).json()
     assert opened["stage"] == "player" and opened["fee_demand"] is None
 
-    wage = option["wage_demand"]
-    answer = manager.post(
-        f"/transfers/negotiations/{opened['id']}/offer", json={"wage": wage, "years": 2}
-    ).json()
+    years = target["preferred_years"][1]
+    # Marchandage : le joueur ouvre haut, se rapproche à chaque offre sérieuse,
+    # et finit par signer à son seuil (inférieur à sa demande d'ouverture).
+    opening = option["wage_demand"]
+    ask, wage = opening, int(opening * 0.8)
+    for _ in range(5):
+        answer = manager.post(
+            f"/transfers/negotiations/{opened['id']}/offer", json={"wage": wage, "years": years}
+        ).json()
+        if answer["concluded"]:
+            break
+        assert answer["negotiation"]["wage_demand"] <= ask
+        ask = answer["negotiation"]["wage_demand"]
+        wage = int(wage * 1.05)
     assert answer["concluded"] and answer["negotiation"]["stage"] == "agreed"
+    assert wage < opening
     # Il n'a pas encore bougé, mais l'accord est listé.
     assert all(p["id"] != player_id for p in manager.get("/clubs/3").json()["players"])
     assert any(n["id"] == opened["id"] for n in answer["overview"]["negotiations"])
@@ -241,17 +336,8 @@ def test_precontract_brings_the_player_at_the_next_season(manager):
         manager.post("/seasons/current/play")
     manager.post("/seasons/next")
     player = next(p for p in manager.get("/clubs/3").json()["players"] if p["id"] == player_id)
-    assert player["wage"] == wage and player["contract_until"] == YEAR + 1 + 1
+    assert player["wage"] == wage and player["contract_until"] == YEAR + 1 + years - 1
     assert manager.get("/transfers").json()["negotiations"] == []
-
-
-def test_abandon_a_negotiation(manager):
-    listing, _, _ = _find_target(manager, "transfer")
-    opened = manager.post(
-        f"/transfers/{listing['player']['id']}/open", json={"kind": "transfer"}
-    ).json()
-    overview = manager.delete(f"/transfers/negotiations/{opened['id']}").json()
-    assert overview["negotiations"] == []
 
 
 def test_contracts_are_renewed_when_they_expire(manager):

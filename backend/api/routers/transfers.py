@@ -9,9 +9,15 @@ Trois voies pour recruter un joueur d'un autre club (règles : engine/transfers.
 - prêt : le club prête ses non-titulaires jusqu'à la fin de la saison, le
   joueur accepte s'il y gagne du temps de jeu ; son salaire est à ta charge.
 
-Chaque offre refusée rapproche un peu l'autre partie de ton prix si l'offre
-était sérieuse ; au bout de quelques refus, elle quitte la table.
+Le club et le joueur ouvrent au-dessus de leur objectif (secret) et s'en
+rapprochent à chaque offre refusée, puis consentent un dernier effort si l'offre
+est proche. Leur patience s'use à chaque refus (plus vite si l'offre ne bouge
+pas ou est dérisoire) ; à bout de patience, ils ne veulent plus discuter. Le
+joueur a aussi une durée de contrat en tête. Et il a de la mémoire : après une
+rupture, pas de discussion avant un moment, puis il revient plus exigeant.
 """
+
+import datetime
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
@@ -33,12 +39,22 @@ from api.schemas import (
 )
 from engine.economy import SQUAD_MAX, SQUAD_MIN, TransactionCategory, sale_price
 from engine.transfers import (
+    CLUB_OPENING_MARKUP,
+    COOLDOWN_WEEKS_AFTER_MY_EXIT,
+    COOLDOWN_WEEKS_AFTER_THEIR_EXIT,
+    PATIENCE_COST,
+    PLAYER_OPENING_MARKUP,
     DealKind,
     accepts_loan,
+    bargain,
     can_precontract,
     club_lends,
     club_level,
+    grudge_markup,
+    grudge_patience,
+    opening_ask,
     playing_time,
+    preferred_years,
     refusal_reason,
     time_label,
     transfer_fee,
@@ -49,17 +65,47 @@ from models.orm import ClubRow, NegotiationRow, PlayerRow
 
 router = APIRouter(prefix="/transfers", tags=["transferts"])
 
-# Offres refusées avant que l'autre partie quitte la table, à chaque étape.
-MAX_ROUNDS = 4
-# Une offre à au moins 85 % de la demande fait baisser celle-ci de 5 %.
-SERIOUS_OFFER_SHARE = 0.85
-CONCESSION = 0.05
+FEE_STEP = 5_000
+WAGE_STEP = 1_000
 
 OPEN_STAGES = ("club", "player")
 
 
-def _round_to(value: float, step: int) -> int:
-    return int(round(value / step) * step)
+def _money(amount: int) -> str:
+    return f"{amount:,} €".replace(",", " ")
+
+
+def _fee_opening(player: Player, club: Club, year: int, grudges: int = 0) -> int | None:
+    target = transfer_fee(player, club, year)
+    if target is None:
+        return None
+    return opening_ask(target, grudge_markup(CLUB_OPENING_MARKUP, grudges), FEE_STEP)
+
+
+def _wage_opening(player: Player, origin: Club, me: Club, grudges: int = 0) -> int | None:
+    target = wage_demand(player, origin, me)
+    if target is None:
+        return None
+    return opening_ask(target, grudge_markup(PLAYER_OPENING_MARKUP, grudges), WAGE_STEP)
+
+
+def _memory(
+    session: Session, club_id: int, player_id: int, day: datetime.date
+) -> tuple[int, datetime.date | None]:
+    """Mémoire du joueur : (ruptures de son fait, date avant laquelle il ne discute pas)."""
+    failed = session.scalars(
+        select(NegotiationRow).where(
+            NegotiationRow.club_id == club_id,
+            NegotiationRow.player_id == player_id,
+            NegotiationRow.stage == "failed",
+        )
+    ).all()
+    grudges = sum(1 for row in failed if row.closed_by == "them")
+    closed_until = max(
+        (row.cooldown_until for row in failed if row.cooldown_until and row.cooldown_until > day),
+        default=None,
+    )
+    return grudges, closed_until
 
 
 # --- Lecture ---------------------------------------------------------------------------
@@ -83,12 +129,15 @@ def _negotiation_out(row: NegotiationRow) -> NegotiationOut:
         stage=row.stage,
         opened_on=row.opened_on,
         rounds=row.rounds,
+        patience=row.patience,
         fee_demand=row.fee_demand,
         fee=row.fee,
         wage_demand=row.wage_demand,
         wage=row.wage,
         years=row.years,
         message=row.message,
+        closed_by=row.closed_by,
+        cooldown_until=row.cooldown_until,
     )
 
 
@@ -109,6 +158,19 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
     day = game_date(session)
     others = [row for row in session.scalars(select(ClubRow)) if row.id != me.id]
     names = {row.id: row.name for row in session.scalars(select(ClubRow))}
+    # Mémoire des ruptures, par joueur.
+    memory: dict[int, tuple[int, datetime.date | None]] = {}
+    for row in session.scalars(
+        select(NegotiationRow).where(
+            NegotiationRow.club_id == me.id, NegotiationRow.stage == "failed"
+        )
+    ):
+        grudges, closed_until = memory.get(row.player_id, (0, None))
+        if row.closed_by == "them":
+            grudges += 1
+        if row.cooldown_until and row.cooldown_until > day:
+            closed_until = max(closed_until or row.cooldown_until, row.cooldown_until)
+        memory[row.player_id] = (grudges, closed_until)
     listings = []
     for row in others:
         club = row.to_domain()
@@ -116,6 +178,7 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
         for player in club.players:
             if player.loaned_from is not None:
                 continue  # un joueur prêté ne se négocie pas avec son club d'accueil
+            grudges, closed_until = memory.get(player.id, (0, None))
             listings.append(
                 ListingOut(
                     player=PlayerOut.from_player(player, day, names),
@@ -124,9 +187,10 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
                     club_level=level,
                     years_left=player.years_left(year),
                     playing_time=time_label(playing_time(player, club)),
-                    transfer_fee=transfer_fee(player, club, year),
+                    transfer_fee=_fee_opening(player, club, year, grudges),
                     loanable=club_lends(player, club),
                     precontract=can_precontract(player, year),
+                    talks_closed_until=closed_until,
                 )
             )
     listings.sort(key=lambda listing: listing.player.value, reverse=True)
@@ -148,10 +212,20 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
     )
 
 
-def _options(player: Player, origin: Club, me: Club, year: int) -> list[DealOption]:
-    """Les trois voies, avec les conditions du club et du joueur."""
-    fee = transfer_fee(player, origin, year)
-    wage = wage_demand(player, origin, me)
+def _options(
+    player: Player,
+    origin: Club,
+    me: Club,
+    year: int,
+    grudges: int = 0,
+    closed_until: datetime.date | None = None,
+) -> list[DealOption]:
+    """Les trois voies, avec ce que demandent le club et le joueur à l'ouverture."""
+    if closed_until is not None:
+        reason = f"Il ne veut plus discuter avec vous avant le {closed_until:%d/%m/%Y}."
+        return [DealOption(kind=kind, available=False, reason=reason) for kind in DealKind]
+    fee = _fee_opening(player, origin, year, grudges)
+    wage = _wage_opening(player, origin, me, grudges)
     refusal = refusal_reason(player, origin, me) if wage is None else ""
     options = []
 
@@ -226,6 +300,7 @@ def approach(player_id: int, session: SessionDep) -> TransferTargetOut:
     me = me_row.to_domain()
     year = _season_year(session)
     active = _active_negotiation(session, me_row.id, player_id)
+    grudges, closed_until = _memory(session, me_row.id, player_id, game_date(session))
     return TransferTargetOut(
         player=PlayerOut.from_player(player, game_date(session)),
         club=ClubRef(id=origin.id, name=origin.name),
@@ -234,7 +309,10 @@ def approach(player_id: int, session: SessionDep) -> TransferTargetOut:
         years_left=player.years_left(year),
         playing_time_now=time_label(playing_time(player, origin)),
         playing_time_here=time_label(playing_time(player, me)),
-        options=_options(player, origin, me, year),
+        preferred_years=preferred_years(player),
+        talks_closed_until=closed_until,
+        grudges=grudges,
+        options=_options(player, origin, me, year, grudges, closed_until),
         negotiation=_negotiation_out(active) if active else None,
     )
 
@@ -253,30 +331,39 @@ def open_negotiation(
         raise HTTPException(status_code=400, detail="Une négociation est déjà en cours avec lui")
     me = me_row.to_domain()
     year = _season_year(session)
-    option = next(o for o in _options(player, origin, me, year) if o.kind == payload.kind)
+    day = game_date(session)
+    grudges, closed_until = _memory(session, me_row.id, player_id, day)
+    options = _options(player, origin, me, year, grudges, closed_until)
+    option = next(o for o in options if o.kind == payload.kind)
     if not option.available:
         raise HTTPException(status_code=400, detail=option.reason)
 
+    low, high = preferred_years(player)
     row = NegotiationRow(
         club_id=me_row.id,
         player_id=player_id,
         kind=payload.kind.value,
-        opened_on=game_date(session),
+        opened_on=day,
+        patience=grudge_patience(grudges),
+        last_offer=None,
         fee_demand=option.fee_demand,
+        fee_floor=transfer_fee(player, origin, year),
         wage_demand=option.wage_demand if payload.kind != DealKind.LOAN else option.wage,
+        wage_floor=wage_demand(player, origin, me) if payload.kind != DealKind.LOAN else None,
         fee=None,
         wage=None,
         years=None,
     )
     if payload.kind == DealKind.TRANSFER:
         row.stage = "club"
-        row.message = f"{origin.name} demande une indemnité de {option.fee_demand:,} €.".replace(
-            ",", " "
+        row.message = (
+            f"{origin.name} ouvre les discussions à {_money(option.fee_demand)} d'indemnité."
         )
     elif payload.kind == DealKind.PRECONTRACT:
         row.stage = "player"
-        row.message = f"{player.name} demande {option.wage_demand:,} € par saison.".replace(
-            ",", " "
+        row.message = (
+            f"{player.name} demande {_money(option.wage_demand)} par saison, "
+            f"sur un contrat de {low} à {high} saisons."
         )
     else:
         row.stage = "player"
@@ -284,6 +371,8 @@ def open_negotiation(
             f"{origin.name} accepte de le prêter ; {player.name} est partant. "
             f"Son salaire ({player.wage:,} € par saison) sera à ta charge.".replace(",", " ")
         )
+    if grudges and payload.kind != DealKind.LOAN:
+        row.message += " Il n'a pas oublié vos dernières discussions : il sera moins patient."
     session.add(row)
     session.commit()
     return _negotiation_out(row)
@@ -330,16 +419,44 @@ def _execute(session: Session, me: ClubRow, row: NegotiationRow, year: int) -> s
     return f"{name} est prêté jusqu'à la fin de la saison."
 
 
-def _counter(demand: int, offer: int, step: int) -> int:
-    """La demande baisse un peu face à une offre sérieuse."""
-    if offer >= SERIOUS_OFFER_SHARE * demand:
-        return _round_to(demand * (1 - CONCESSION), step)
-    return demand
+def _walk_away(row: NegotiationRow, who: str) -> None:
+    """L'autre partie quitte la table et s'en souviendra."""
+    row.stage = "failed"
+    row.closed_by = "them"
+    row.cooldown_until = row.opened_on + datetime.timedelta(weeks=COOLDOWN_WEEKS_AFTER_THEIR_EXIT)
+    row.message = (
+        f"{who} ne veut plus discuter avec vous. "
+        f"Inutile de revenir avant le {row.cooldown_until:%d/%m/%Y}."
+    )
+
+
+def _refuse(row: NegotiationRow, who: str, verdict: str, ask: int, unit: str) -> None:
+    """Après une offre refusée : patience entamée, demande mise à jour, réponse formulée."""
+    row.rounds += 1
+    row.patience -= PATIENCE_COST[verdict]
+    if row.patience <= 0:
+        _walk_away(row, who)
+        return
+    amount = f"{_money(ask)}{unit}"
+    if verdict == "insulted":
+        row.message = f"{who} juge l'offre dérisoire. Encore une comme ça et c'est fini."
+    elif verdict == "stalled":
+        row.message = f"{who} s'impatiente : tu n'as pas bougé. La demande reste à {amount}."
+    elif verdict == "last_word":
+        row.message = (
+            f"{who} campe sur {amount} : c'est un dernier mot, à moins que tu t'en approches."
+        )
+    elif verdict == "effort":
+        row.message = f"{who} consent un dernier effort : {amount}, pas moins."
+    else:
+        row.message = f"{who} refuse, mais pourrait se contenter de {amount}."
+    if row.patience <= 2:
+        row.message += " La patience s'épuise."
 
 
 @router.post("/negotiations/{negotiation_id}/offer", response_model=OfferOut)
 def make_offer(negotiation_id: int, payload: OfferIn, session: SessionDep) -> OfferOut:
-    """Fait une offre pour l'étape en cours : indemnité au club, ou salaire au joueur."""
+    """Fait une offre pour l'étape en cours : indemnité au club, ou salaire et durée au joueur."""
     me = load_my_club_row(session)
     row = session.get(NegotiationRow, negotiation_id)
     if row is None or row.club_id != me.id:
@@ -354,28 +471,50 @@ def make_offer(negotiation_id: int, payload: OfferIn, session: SessionDep) -> Of
     if row.stage == "club":
         if payload.fee is None:
             raise HTTPException(status_code=400, detail="Indique l'indemnité proposée")
-        if payload.fee >= row.fee_demand:
-            row.fee, row.stage, row.rounds, accepted = payload.fee, "player", 0, True
+        verdict, ask = bargain(row.fee_demand, row.fee_floor, payload.fee, row.last_offer, FEE_STEP)
+        row.last_offer = payload.fee
+        if verdict == "accepted":
+            row.fee, row.stage, accepted = payload.fee, "player", True
+            grudges, _ = _memory(session, me.id, row.player_id, game_date(session))
+            row.rounds, row.patience, row.last_offer = 0, grudge_patience(grudges), None
+            low, high = preferred_years(player.to_domain())
             row.message = (
-                f"{player.club.name} accepte {payload.fee:,} €. "
-                f"{name} demande maintenant {row.wage_demand:,} € par saison."
-            ).replace(",", " ")
+                f"{player.club.name} accepte {_money(payload.fee)}. À toi de convaincre {name} : "
+                f"il demande {_money(row.wage_demand)} par saison, sur {low} à {high} saisons."
+            )
         else:
-            row.rounds += 1
-            row.fee_demand = _counter(row.fee_demand, payload.fee, 5_000)
-            if row.rounds >= MAX_ROUNDS:
-                row.stage = "failed"
-                row.message = f"{player.club.name} met fin aux discussions."
-            else:
-                row.message = f"{player.club.name} refuse et demande {row.fee_demand:,} €.".replace(
-                    ",", " "
-                )
+            row.fee_demand = ask
+            _refuse(row, player.club.name, verdict, ask, "")
     else:
         kind = DealKind(row.kind)
-        wage = player.wage if kind == DealKind.LOAN else payload.wage
-        if wage is None:
-            raise HTTPException(status_code=400, detail="Indique le salaire proposé")
-        if wage >= row.wage_demand:
+        if kind == DealKind.LOAN:
+            verdict, ask, wage = "accepted", row.wage_demand, player.wage
+        else:
+            if payload.wage is None:
+                raise HTTPException(status_code=400, detail="Indique le salaire proposé")
+            wage = payload.wage
+            low, high = preferred_years(player.to_domain())
+            if not low <= payload.years <= high:
+                # La durée ne lui convient pas : il ne discute même pas le salaire.
+                row.rounds += 1
+                row.patience -= 1
+                row.message = (
+                    f"{payload.years} saison{'s' if payload.years > 1 else ''} ? {name} cherche "
+                    f"un contrat de {low} à {high} saisons."
+                )
+                if row.patience <= 0:
+                    _walk_away(row, name)
+                session.commit()
+                return OfferOut(
+                    accepted=False,
+                    concluded=False,
+                    message=row.message,
+                    negotiation=_negotiation_out(row),
+                    overview=_overview(session, me),
+                )
+            verdict, ask = bargain(row.wage_demand, row.wage_floor, wage, row.last_offer, WAGE_STEP)
+            row.last_offer = wage
+        if verdict == "accepted":
             row.wage, row.years, row.rounds, accepted = wage, payload.years, 0, True
             row.stage = "agreed"
             row.message = _execute(session, me, row, year)
@@ -383,15 +522,8 @@ def make_offer(negotiation_id: int, payload: OfferIn, session: SessionDep) -> Of
             if kind != DealKind.PRECONTRACT:
                 row.stage = "done"
         else:
-            row.rounds += 1
-            row.wage_demand = _counter(row.wage_demand, wage, 1_000)
-            if row.rounds >= MAX_ROUNDS:
-                row.stage = "failed"
-                row.message = f"{name} ne veut plus discuter."
-            else:
-                row.message = f"{name} refuse et demande {row.wage_demand:,} € par saison.".replace(
-                    ",", " "
-                )
+            row.wage_demand = ask
+            _refuse(row, name, verdict, ask, " par saison")
 
     session.commit()
     session.refresh(me)
@@ -414,6 +546,8 @@ def abandon(negotiation_id: int, session: SessionDep) -> TransfersOverview:
     if row.stage not in OPEN_STAGES:
         raise HTTPException(status_code=400, detail="Cette négociation est terminée")
     row.stage = "failed"
+    row.closed_by = "me"
+    row.cooldown_until = game_date(session) + datetime.timedelta(weeks=COOLDOWN_WEEKS_AFTER_MY_EXIT)
     row.message = "Tu as quitté la table."
     session.commit()
     return _overview(session, me)

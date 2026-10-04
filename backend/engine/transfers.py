@@ -130,6 +130,86 @@ def accepts_loan(player: Player, origin: Club, destination: Club) -> bool:
     return LOAN_TIME_WEIGHT * time + LOAN_PRESTIGE_WEIGHT * prestige >= ACCEPT_THRESHOLD
 
 
+# --- Marchandage ------------------------------------------------------------------------
+#
+# Chaque partie a un objectif secret (l'indemnité ou le salaire qu'elle vise) et
+# ouvre plus haut. À chaque offre refusée, elle se rapproche de l'offre jusqu'à
+# son objectif. Arrivée là, elle peut encore faire un dernier effort si l'offre
+# est proche (jamais sous son plancher). Sa patience s'use à chaque refus, plus
+# vite si l'offre n'a pas bougé ou si elle est dérisoire ; à bout de patience,
+# elle ne veut plus discuter.
+
+CLUB_OPENING_MARKUP = 1.25  # le club ouvre 25 % au-dessus de son objectif
+PLAYER_OPENING_MARKUP = 1.3  # le joueur 30 % au-dessus du sien
+CONCESSION_SHARE = 0.5  # il comble la moitié de l'écart avec l'offre
+ROCK_BOTTOM_SHARE = 0.9  # plancher : 10 % sous l'objectif, pour trouver un terrain d'entente
+INSULT_SHARE = 0.6  # sous 60 % de l'objectif, l'offre est jugée dérisoire
+
+PATIENCE = 6  # points de patience au départ
+
+# Mémoire : après une rupture, l'autre partie refuse de rediscuter pendant un
+# temps ; quand elle revient, elle se souvient (ouverture plus haute, moins de
+# patience). Quitter la table soi-même coûte moins cher.
+COOLDOWN_WEEKS_AFTER_THEIR_EXIT = 8
+COOLDOWN_WEEKS_AFTER_MY_EXIT = 2
+GRUDGE_MARKUP = 0.10  # +10 % sur l'ouverture par rupture passée
+GRUDGE_PATIENCE = 1  # -1 point de patience par rupture passée
+PATIENCE_MIN = 3
+
+
+def grudge_markup(markup: float, grudges: int) -> float:
+    return markup + GRUDGE_MARKUP * grudges
+
+
+def grudge_patience(grudges: int) -> int:
+    return max(PATIENCE_MIN, PATIENCE - GRUDGE_PATIENCE * grudges)
+
+
+PATIENCE_COST = {
+    "closer": 1,  # refus ordinaire
+    "last_word": 1,  # il campe sur son objectif
+    "effort": 1,  # il consent un dernier effort
+    "stalled": 2,  # l'offre n'a pas progressé
+    "insulted": 2,  # offre dérisoire
+}
+
+
+def opening_ask(target: int, markup: float, step: int) -> int:
+    return _round_to(target * markup, step)
+
+
+def bargain(
+    ask: int, target: int, offer: int, last_offer: int | None, step: int
+) -> tuple[str, int]:
+    """Réponse à une offre : (verdict, nouvelle demande).
+
+    Verdicts : accepted, insulted (dérisoire), stalled (pas mieux que la
+    précédente), closer (il descend vers son objectif), last_word (à son
+    objectif, l'offre est trop loin), effort (à son objectif, l'offre est
+    proche : il coupe la poire en deux, jusqu'au plancher).
+    """
+    if offer >= ask:
+        return "accepted", ask
+    if offer < INSULT_SHARE * target:
+        return "insulted", ask
+    if last_offer is not None and offer <= last_offer:
+        return "stalled", ask
+    if ask > target:
+        return "closer", max(target, _round_to(ask - (ask - offer) * CONCESSION_SHARE, step))
+    rock_bottom = _round_to(target * ROCK_BOTTOM_SHARE, step)
+    if offer < rock_bottom:
+        return "last_word", ask
+    return "effort", max(rock_bottom, _round_to((ask + offer) / 2, step))
+
+
+# Durée de contrat souhaitée selon l'âge : les jeunes veulent du long, les anciens du court.
+YEARS_BY_AGE = [(24, (3, 5)), (29, (2, 4)), (32, (1, 3)), (99, (1, 2))]
+
+
+def preferred_years(player: Player) -> tuple[int, int]:
+    return next(years for max_age, years in YEARS_BY_AGE if player.age <= max_age)
+
+
 def refusal_reason(player: Player, origin: Club, destination: Club) -> str:
     """Pourquoi le joueur ne veut pas venir (quand `wage_demand` renvoie None)."""
     if club_level(destination) < club_level(origin):

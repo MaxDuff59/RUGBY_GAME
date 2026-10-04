@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
+import Level from "../components/Level.jsx";
 import SortHeader from "../components/SortHeader.jsx";
 import {
   DEALS,
@@ -58,7 +59,10 @@ export default function Transfers() {
     }
   }
 
-  if (market.loading || myClub.loading) return <p className="status">Chargement…</p>;
+  // Pendant un rechargement (après une offre, une vente...), on garde la page en
+  // place avec les données précédentes : sinon la modale se démonterait.
+  const firstLoad = (market.loading && !market.data) || (myClub.loading && !myClub.data);
+  if (firstLoad) return <p className="status">Chargement…</p>;
   if (market.error) return <p className="status status--error">{market.error.message}</p>;
   if (myClub.error) return <p className="status status--error">{myClub.error.message}</p>;
 
@@ -96,16 +100,18 @@ export default function Transfers() {
       {actionError && <p className="status--error">{actionError.message}</p>}
 
       {targetId !== null && (
-        <Negotiation
-          playerId={targetId}
-          squadFull={squadFull}
-          onClose={() => setTargetId(null)}
-          onChange={(overview, concluded) => {
-            if (overview) market.setData(overview);
-            else market.reload();
-            if (concluded) myClub.reload();
-          }}
-        />
+        <Modal onClose={() => setTargetId(null)}>
+          <Negotiation
+            playerId={targetId}
+            squadFull={squadFull}
+            onClose={() => setTargetId(null)}
+            onChange={(overview, concluded) => {
+              if (overview) market.setData(overview);
+              else market.reload();
+              if (concluded) myClub.reload();
+            }}
+          />
+        </Modal>
       )}
 
       {data.negotiations.length > 0 && (
@@ -285,6 +291,9 @@ function Stat({ value, label }) {
 
 // Les voies ouvertes pour un joueur du marché, en étiquettes.
 function Ways({ listing }) {
+  if (listing.talks_closed_until) {
+    return <span className="tag tag--injured">Ne discute plus · jusqu'au {formatShortDate(listing.talks_closed_until)}</span>;
+  }
   const ways = [];
   if (listing.precontract) ways.push(<span key="p" className="tag tag--severe">Pré-contrat</span>);
   if (listing.transfer_fee !== null) {
@@ -295,20 +304,46 @@ function Ways({ listing }) {
   return <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 4 }}>{ways}</span>;
 }
 
-// Panneau d'approche : situation du joueur, choix de la voie, puis offres étape par étape.
+// Fenêtre par-dessus la page ; se ferme par le fond, la touche Échap ou le bouton.
+function Modal({ children, onClose }) {
+  useEffect(() => {
+    const onKey = (event) => event.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Approche d'un joueur : sa situation, choix de la voie, puis le fil de la négociation.
 function Negotiation({ playerId, squadFull, onClose, onChange }) {
   const target = useApi(useCallback(() => api.approachPlayer(playerId), [playerId]));
   const [negotiation, setNegotiation] = useState(null);
-  const [answer, setAnswer] = useState(null); // { message, accepted }
+  const [talk, setTalk] = useState([]); // fil : { who: "me" | "them", text, ok }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
   // La négociation déjà ouverte avec ce joueur, s'il y en a une.
   useEffect(() => {
-    setNegotiation(target.data?.negotiation ?? null);
-    setAnswer(null);
+    const existing = target.data?.negotiation ?? null;
+    setNegotiation(existing);
+    setTalk(existing ? [{ who: "them", text: existing.message, ok: false }] : []);
     setError(null);
   }, [target.data]);
+
+  const say = (line) => setTalk((previous) => [...previous, line]);
+
+  // Le fil montre toujours les derniers messages (on remonte pour voir les anciens).
+  const talkRef = useRef(null);
+  useEffect(() => {
+    const list = talkRef.current;
+    if (list) list.scrollTop = list.scrollHeight;
+  }, [talk]);
 
   async function run(call, onDone) {
     setBusy(true);
@@ -327,27 +362,29 @@ function Negotiation({ playerId, squadFull, onClose, onChange }) {
       () => api.openNegotiation(playerId, kind),
       (opened) => {
         setNegotiation(opened);
-        setAnswer({ message: opened.message, accepted: false });
+        setTalk([{ who: "them", text: opened.message, ok: false }]);
         onChange(null, false);
       },
     );
 
-  const offer = (payload) =>
-    run(
+  const offer = (payload, label) => {
+    say({ who: "me", text: label });
+    return run(
       () => api.makeOffer(negotiation.id, payload),
       (result) => {
         setNegotiation(result.negotiation);
-        setAnswer({ message: result.message, accepted: result.accepted });
+        say({ who: "them", text: result.message, ok: result.accepted });
         onChange(result.overview, result.concluded);
       },
     );
+  };
 
   const abandon = () =>
     run(
       () => api.abandonNegotiation(negotiation.id),
       (overview) => {
         setNegotiation(null);
-        setAnswer(null);
+        setTalk([]);
         onChange(overview, false);
       },
     );
@@ -356,10 +393,11 @@ function Negotiation({ playerId, squadFull, onClose, onChange }) {
   if (target.error) return <p className="status status--error">{target.error.message}</p>;
 
   const { player, club } = target.data;
+  const [yearsMin, yearsMax] = target.data.preferred_years;
   const openStage = negotiation && (negotiation.stage === "club" || negotiation.stage === "player");
 
   return (
-    <section className="card card--padded section" aria-label={`Négociation avec ${player.name}`}>
+    <>
       <div className="section__head">
         <div>
           <h2 className="eyebrow">Approche</h2>
@@ -379,9 +417,22 @@ function Negotiation({ playerId, squadFull, onClose, onChange }) {
         <Fact label="Contrat" value={`jusqu'en juin ${formatContractEnd(player.contract_until)} (${target.data.years_left} saison${target.data.years_left > 1 ? "s" : ""})`} />
         <Fact label="Dans son club" value={`${target.data.playing_time_now} · niveau ${formatNote(target.data.club_level)}`} />
         <Fact label="Chez toi" value={`${target.data.playing_time_here} · niveau ${formatNote(target.data.my_level)}`} />
+        <Fact label="Il cherche" value={`un contrat de ${yearsMin} à ${yearsMax} saisons`} />
       </div>
 
       {error && <p className="status--error" style={{ margin: 0 }}>{error.message}</p>}
+
+      {target.data.talks_closed_until && !negotiation && (
+        <p className="negotiation__message" style={{ margin: 0 }}>
+          Il ne veut plus discuter avec vous avant le {formatShortDate(target.data.talks_closed_until)}.
+        </p>
+      )}
+      {target.data.grudges > 0 && !target.data.talks_closed_until && !negotiation && (
+        <p className="negotiation__message" style={{ margin: 0 }}>
+          Il n'a pas oublié vos {target.data.grudges > 1 ? `${target.data.grudges} ruptures passées` : "dernières discussions"} :
+          il ouvrira plus haut et sera moins patient.
+        </p>
+      )}
 
       {!negotiation && (
         <div className="deal-options">
@@ -396,10 +447,10 @@ function Negotiation({ playerId, squadFull, onClose, onChange }) {
             >
               <span className="protocol__name">{DEALS[option.kind].label}</span>
               {option.fee_demand !== null && option.fee_demand !== undefined && (
-                <span className="protocol__line">Indemnité demandée : <strong>{formatMoney(option.fee_demand)}</strong></span>
+                <span className="protocol__line">Le club en espère <strong>{formatMoney(option.fee_demand)}</strong></span>
               )}
               {option.wage_demand !== null && option.wage_demand !== undefined && (
-                <span className="protocol__line">Salaire exigé : <strong>{formatMoney(option.wage_demand)}</strong> / saison</span>
+                <span className="protocol__line">Il espère <strong>{formatMoney(option.wage_demand)}</strong> / saison</span>
               )}
               {option.kind === "loan" && option.available && (
                 <span className="protocol__line">Salaire à ta charge : <strong>{formatMoney(option.wage)}</strong> / saison</span>
@@ -412,24 +463,47 @@ function Negotiation({ playerId, squadFull, onClose, onChange }) {
 
       {negotiation && (
         <>
-          <div className="muted">
-            <span className="tag tag--fragile">{DEALS[negotiation.kind].label}</span>{" "}
-            {NEGOTIATION_STAGES[negotiation.stage]}
-            {openStage && negotiation.rounds > 0 && ` · ${negotiation.rounds} refus`}
-            {" · ouverte le "}
-            {formatShortDate(negotiation.opened_on)}
+          <div className="section__head" style={{ flexWrap: "wrap", gap: 12 }}>
+            <span className="muted">
+              <span className="tag tag--fragile">{DEALS[negotiation.kind].label}</span>{" "}
+              {NEGOTIATION_STAGES[negotiation.stage]}
+              {openStage && negotiation.rounds > 0 && ` · ${negotiation.rounds} refus`}
+              {" · ouverte le "}
+              {formatShortDate(negotiation.opened_on)}
+            </span>
+            {openStage && (
+              <span className="patience muted">
+                Patience
+                <Level value={negotiation.patience} max={6} label={`patience ${negotiation.patience} sur 6`} />
+              </span>
+            )}
           </div>
-          {answer && (
-            <p className={`negotiation__message${answer.accepted ? " negotiation__message--ok" : ""}`} style={{ margin: 0 }}>
-              {answer.message}
-            </p>
-          )}
+          <ul className="talk" aria-live="polite" ref={talkRef}>
+            {talk.map((line, index) => (
+              <li key={index} className={line.who === "me" ? "talk--me" : line.ok ? "talk--ok" : undefined}>
+                {line.text}
+              </li>
+            ))}
+          </ul>
           {openStage && (
-            <OfferForm negotiation={negotiation} busy={busy} onOffer={offer} onAbandon={abandon} />
+            <OfferForm
+              key={negotiation.stage}
+              negotiation={negotiation}
+              player={player}
+              years={[yearsMin, yearsMax]}
+              busy={busy}
+              onOffer={offer}
+              onAbandon={abandon}
+            />
+          )}
+          {!openStage && (
+            <div>
+              <button type="button" className="button" onClick={onClose}>Fermer</button>
+            </div>
           )}
         </>
       )}
-    </section>
+    </>
   );
 }
 
@@ -443,32 +517,40 @@ function Fact({ label, value }) {
 }
 
 // Formulaire de l'étape en cours : indemnité (club), ou salaire et durée (joueur).
-function OfferForm({ negotiation, busy, onOffer, onAbandon }) {
+// Pré-rempli avec un point de départ raisonnable (valeur du joueur, salaire
+// actuel), pas avec la demande : à toi de monter.
+function OfferForm({ negotiation, player, years: [yearsMin, yearsMax], busy, onOffer, onAbandon }) {
   const clubStage = negotiation.stage === "club";
   const isLoan = negotiation.kind === "loan";
-  const [fee, setFee] = useState(negotiation.fee_demand ?? 0);
-  const [wage, setWage] = useState(negotiation.wage_demand ?? 0);
-  const [years, setYears] = useState(2);
+  const [fee, setFee] = useState(player.value);
+  const [wage, setWage] = useState(player.wage);
+  const [years, setYears] = useState(Math.min(yearsMax, Math.max(yearsMin, 2)));
 
   function submit(event) {
     event.preventDefault();
-    if (clubStage) onOffer({ fee: Number(fee) });
-    else if (isLoan) onOffer({});
-    else onOffer({ wage: Number(wage), years: Number(years) });
+    if (clubStage) onOffer({ fee: Number(fee) }, `Tu proposes ${formatMoney(Number(fee))} d'indemnité.`);
+    else if (isLoan) onOffer({}, "Tu confirmes le prêt.");
+    else {
+      const n = Number(years);
+      onOffer(
+        { wage: Number(wage), years: n },
+        `Tu proposes ${formatMoney(Number(wage))} par saison sur ${n} saison${n > 1 ? "s" : ""}.`,
+      );
+    }
   }
 
   return (
     <form className="offer-form" onSubmit={submit}>
       {clubStage && (
         <div className="field">
-          <label htmlFor="offer-fee">Indemnité proposée (€)</label>
+          <label htmlFor="offer-fee">Indemnité proposée (€) · demande : {formatMoney(negotiation.fee_demand)}</label>
           <input id="offer-fee" className="input" type="number" min="0" step="5000" value={fee} onChange={(e) => setFee(e.target.value)} />
         </div>
       )}
       {!clubStage && !isLoan && (
         <>
           <div className="field">
-            <label htmlFor="offer-wage">Salaire proposé (€ / saison)</label>
+            <label htmlFor="offer-wage">Salaire (€ / saison) · demande : {formatMoney(negotiation.wage_demand)}</label>
             <input id="offer-wage" className="input" type="number" min="0" step="1000" value={wage} onChange={(e) => setWage(e.target.value)} />
           </div>
           <div className="field">
@@ -487,13 +569,11 @@ function OfferForm({ negotiation, busy, onOffer, onAbandon }) {
       <button type="button" className="button" disabled={busy} onClick={onAbandon}>
         Quitter la table
       </button>
-      {!clubStage && !isLoan && (
+      {!isLoan && (
         <span className="muted">
-          Une offre proche de sa demande le fait baisser un peu ; après quatre refus il part.
+          Monte à chaque offre : une offre qui ne bouge pas l'agace, une offre dérisoire l'insulte. Proche de sa
+          demande, il peut faire un dernier effort. À bout de patience, il ne discute plus.
         </span>
-      )}
-      {clubStage && (
-        <span className="muted">Une offre proche de la demande fait baisser le club ; après quatre refus il part.</span>
       )}
     </form>
   );

@@ -358,12 +358,19 @@ class NegotiationRow(Base):
     stage: Mapped[str] = mapped_column(String(8))
     opened_on: Mapped[datetime.date] = mapped_column(Date)
     rounds: Mapped[int] = mapped_column(default=0)  # offres refusées à l'étape en cours
-    fee_demand: Mapped[int | None]  # indemnité demandée par le club
+    patience: Mapped[int] = mapped_column(default=6)  # à zéro, l'autre partie s'en va
+    last_offer: Mapped[int | None]  # ta dernière offre à cette étape
+    fee_demand: Mapped[int | None]  # indemnité demandée par le club (visible)
+    fee_floor: Mapped[int | None]  # objectif du club (secret)
     fee: Mapped[int | None]  # indemnité convenue
-    wage_demand: Mapped[int | None]  # salaire exigé par le joueur
+    wage_demand: Mapped[int | None]  # salaire demandé par le joueur (visible)
+    wage_floor: Mapped[int | None]  # objectif du joueur (secret)
     wage: Mapped[int | None]  # salaire convenu
     years: Mapped[int | None]  # durée du contrat convenue
     message: Mapped[str] = mapped_column(String(300), default="")  # dernière réponse
+    # Rupture : qui a quitté la table ("them" ou "me"), et jusqu'à quand on ne rediscute pas.
+    closed_by: Mapped[str | None] = mapped_column(String(4))
+    cooldown_until: Mapped[datetime.date | None] = mapped_column(Date)
 
     player: Mapped[PlayerRow] = relationship()
 
