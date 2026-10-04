@@ -22,6 +22,7 @@ from models.domain import (
     Player,
     Position,
     Protocol,
+    Squad,
     StaffMember,
     StaffRole,
     Stage,
@@ -42,8 +43,16 @@ class ClubRow(Base):
     training_level: Mapped[int] = mapped_column(default=1)
     academy_level: Mapped[int] = mapped_column(default=1)
 
+    # Pros et espoirs sont dans la même table, séparés par `squad`.
     players: Mapped[list["PlayerRow"]] = relationship(
-        back_populates="club", foreign_keys="PlayerRow.club_id"
+        primaryjoin="and_(PlayerRow.club_id == ClubRow.id, PlayerRow.squad == 'pro')",
+        foreign_keys="PlayerRow.club_id",
+        overlaps="youths,club",
+    )
+    youths: Mapped[list["PlayerRow"]] = relationship(
+        primaryjoin="and_(PlayerRow.club_id == ClubRow.id, PlayerRow.squad == 'youth')",
+        foreign_keys="PlayerRow.club_id",
+        overlaps="players,club",
     )
     staff: Mapped[list["StaffRow"]] = relationship(back_populates="club")
 
@@ -52,6 +61,7 @@ class ClubRow(Base):
             id=self.id,
             name=self.name,
             players=[p.to_domain() for p in self.players],
+            youths=[p.to_domain() for p in self.youths],
             staff=[s.to_domain() for s in self.staff],
             balance=self.balance,
             facilities=Facilities(
@@ -71,6 +81,7 @@ class ClubRow(Base):
             training_level=club.facilities.training_level,
             academy_level=club.facilities.academy_level,
             players=[PlayerRow.from_domain(p) for p in club.players],
+            youths=[PlayerRow.from_domain(p) for p in club.youths],
             staff=[StaffRow.from_domain(s) for s in club.staff],
         )
 
@@ -95,8 +106,11 @@ class PlayerRow(Base):
     contract_until: Mapped[int] = mapped_column(default=0)
     club_id: Mapped[int | None] = mapped_column(ForeignKey("clubs.id"))
     loaned_from: Mapped[int | None] = mapped_column(ForeignKey("clubs.id"))
+    squad: Mapped[str] = mapped_column(String(5), default=Squad.PRO.value)
 
-    club: Mapped[ClubRow | None] = relationship(back_populates="players", foreign_keys=[club_id])
+    club: Mapped[ClubRow | None] = relationship(
+        foreign_keys=[club_id], overlaps="players,youths", viewonly=True
+    )
     # Dossier médical complet ; le domaine ne garde que la blessure la plus récente.
     injuries: Mapped[list["InjuryRow"]] = relationship(
         back_populates="player", cascade="all, delete-orphan"
@@ -127,6 +141,7 @@ class PlayerRow(Base):
             injury=latest.to_domain() if latest is not None else None,
             contract_until=self.contract_until,
             loaned_from=self.loaned_from,
+            squad=Squad(self.squad),
         )
 
     @classmethod
@@ -141,6 +156,7 @@ class PlayerRow(Base):
             wage=player.wage,
             contract_until=player.contract_until,
             loaned_from=player.loaned_from,
+            squad=player.squad.value,
             **player.attributes,
         )
 
@@ -251,7 +267,15 @@ class SeasonRow(Base):
     year: Mapped[int] = mapped_column(unique=True)
 
     # Le classement n'est pas stocké : il se recalcule à partir des matchs.
-    matches: Mapped[list["MatchRow"]] = relationship(back_populates="season")
+    # Les matchs des pros et ceux des espoirs partagent la table, séparés par `squad`.
+    matches: Mapped[list["MatchRow"]] = relationship(
+        primaryjoin="and_(MatchRow.season_id == SeasonRow.id, MatchRow.squad == 'pro')",
+        overlaps="youth_matches,season",
+    )
+    youth_matches: Mapped[list["MatchRow"]] = relationship(
+        primaryjoin="and_(MatchRow.season_id == SeasonRow.id, MatchRow.squad == 'youth')",
+        overlaps="matches,season",
+    )
 
 
 class MatchRow(Base):
@@ -268,10 +292,11 @@ class MatchRow(Base):
     stage: Mapped[str] = mapped_column(String(10), default=Stage.REGULAR.value)
     date: Mapped[datetime.date | None] = mapped_column(Date)
     neutral: Mapped[bool] = mapped_column(default=False)
+    squad: Mapped[str] = mapped_column(String(5), default=Squad.PRO.value)
     # Événements stockés en JSON : suffisant tant qu'on ne fait pas de requêtes dessus.
     events: Mapped[list[dict]] = mapped_column(JSON, default=list)
 
-    season: Mapped[SeasonRow | None] = relationship(back_populates="matches")
+    season: Mapped[SeasonRow | None] = relationship(overlaps="matches,youth_matches", viewonly=True)
 
     @property
     def is_played(self) -> bool:

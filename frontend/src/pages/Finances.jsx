@@ -12,7 +12,7 @@ export default function Finances() {
   if (loading) return <p className="status">Chargement…</p>;
   if (error) return <p className="status status--error">{error.message}</p>;
 
-  const totalWages = data.player_wages + data.staff_wages;
+  const totalWages = data.player_wages + data.youth_wages + data.staff_wages;
 
   return (
     <>
@@ -20,7 +20,8 @@ export default function Finances() {
 
       <div className="tiles">
         <Tile label="Trésorerie" value={formatMoney(data.balance)} />
-        <Tile label="Salaires des joueurs" value={formatMoney(data.player_wages)} note="par saison" />
+        <Tile label="Salaires des pros" value={formatMoney(data.player_wages)} note="par saison" />
+        <Tile label="Salaires des espoirs" value={formatMoney(data.youth_wages)} note="par saison" />
         <Tile label="Salaires du staff" value={formatMoney(data.staff_wages)} note="par saison" />
         <Tile label="Masse salariale" value={formatMoney(totalWages)} note="par saison" />
         <Tile label="Valeur de l'effectif" value={formatMoney(data.squad_value)} note={`${data.squad_size} joueurs`} />

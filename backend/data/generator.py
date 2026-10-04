@@ -20,6 +20,7 @@ from models import (
     Facilities,
     Player,
     Position,
+    Squad,
     StaffMember,
     StaffRole,
 )
@@ -69,6 +70,25 @@ SQUAD_COMPOSITION = {
     Position.WING: 4,
     Position.FULLBACK: 2,
 }
+
+# Centre de formation : effectif espoirs et niveau de départ des jeunes.
+YOUTH_COMPOSITION = {
+    Position.PROP: 4,
+    Position.HOOKER: 2,
+    Position.LOCK: 3,
+    Position.BACK_ROW: 4,
+    Position.SCRUM_HALF: 2,
+    Position.FLY_HALF: 2,
+    Position.CENTRE: 3,
+    Position.WING: 3,
+    Position.FULLBACK: 2,
+}
+YOUTH_AGES = (16, 21)
+YOUTH_WAGE = 15_000
+# Un espoir démarre loin du niveau pro ; un bon centre réduit l'écart.
+YOUTH_LEVEL_GAP = 4.5
+YOUTH_LEVEL_PER_ACADEMY_LEVEL = 0.4
+YOUTH_CONTRACT_YEARS = 3
 
 # Écart au niveau de base selon le poste : un pilier pousse en mêlée mais ne court
 # pas vite, un ailier est rapide mais inutile en mêlée, etc.
@@ -131,6 +151,29 @@ def generate_player(
     # Contrat : de la dernière année (négociable par les autres clubs) à quatre saisons.
     player.contract_until = season_year + rng.randint(0, CONTRACT_MAX_YEARS - 1)
     return player
+
+
+def youth_level(club_level: float, academy_level: int) -> float:
+    """Niveau de départ d'un jeune du centre de formation."""
+    return club_level - YOUTH_LEVEL_GAP + YOUTH_LEVEL_PER_ACADEMY_LEVEL * academy_level
+
+
+def generate_youth_player(
+    player_id: int,
+    position: Position,
+    level: float,
+    club_id: int,
+    rng: random.Random,
+    season_year: int = FIRST_SEASON_YEAR,
+    age: int | None = None,
+) -> Player:
+    """Un espoir : jeune, mal payé, sous contrat de formation."""
+    youth = generate_player(player_id, position, level, club_id, rng, season_year)
+    youth.age = age if age is not None else rng.randint(*YOUTH_AGES)
+    youth.wage = YOUTH_WAGE
+    youth.contract_until = season_year + YOUTH_CONTRACT_YEARS - 1
+    youth.squad = Squad.YOUTH
+    return youth
 
 
 # --- Staff ---------------------------------------------------------------------------
@@ -243,6 +286,12 @@ def _make_club(
     for position, size in SQUAD_COMPOSITION.items():
         for _ in range(size):
             club.players.append(generate_player(next(player_ids), position, level, club_id, rng))
+    junior_level = youth_level(level, club.facilities.academy_level)
+    for position, size in YOUTH_COMPOSITION.items():
+        for _ in range(size):
+            club.youths.append(
+                generate_youth_player(next(player_ids), position, junior_level, club_id, rng)
+            )
     # Un membre de staff par poste, de niveau proche de celui du club.
     for role in StaffRole:
         staff_level = _clamp_level(round(1.5 + wealth * 2.5 + rng.uniform(-1, 1)))

@@ -50,7 +50,7 @@ uv run uvicorn api.main:app --reload
 Puis ouvrir http://localhost:8000/docs pour tester les routes dans le navigateur.
 Au premier démarrage, la base `backend/rugby.db` est créée avec les 14 clubs du
 Top 14 (saison 2025-26 ; voir `backend/data/top14.py`), leurs vrais stades, et des
-joueurs et un staff inventés à leur niveau. Supprime ce fichier pour repartir d'un
+joueurs (pros et espoirs) et un staff inventés à leur niveau. Supprime ce fichier pour repartir d'un
 monde neuf (obligatoire aussi quand le schéma de la base change : l'API le signale
 au démarrage).
 
@@ -69,6 +69,7 @@ au démarrage).
 | `POST /transfers/negotiations/{id}/offer`, `DELETE /transfers/negotiations/{id}` | Offre pour l'étape en cours ; quitter la table |
 | `POST /transfers/sell/{id}` | Vendre un de ses joueurs |
 | `GET /medical`, `POST /medical/{id}/protocol/{protocol}` | Infirmerie : blessés, protocole de soins, dossier médical |
+| `GET /academy`, `POST /academy/promote/{id}`, `POST /academy/demote/{id}` | Centre de formation : espoirs, championnat espoirs, promotions |
 
 ## Recrutement
 
@@ -100,6 +101,21 @@ discussion pendant 8 semaines, puis revient en ouvrant 10 % plus haut et avec
 un point de patience en moins par rupture passée. Quitter la table soi-même
 ferme la porte 2 semaines, sans rancune. Les contrats arrivés à terme sont
 renouvelés automatiquement pour l'instant.
+
+## Centre de formation
+
+Chaque club a un effectif espoirs (16 à 21 ans) à côté des pros. Les espoirs
+jouent leur propre championnat, mêmes affiches et mêmes jours que les pros
+(saison régulière seulement, sans blessures). Un espoir peut être promu chez
+les pros à tout moment (il signe un salaire de pro) ; un pro de 23 ans ou moins
+peut redescendre chez les espoirs. À l'intersaison : tous les joueurs
+progressent selon leur âge (2 à 4 points d'attributs jusqu'à 20 ans, 1 à 3
+jusqu'à 23, puis moins, et un déclin à partir de 33 ans), avec un bonus du
+centre de formation pour les espoirs et du centre d'entraînement pour les pros
+(+1 point à partir du niveau 3, +2 au niveau 5) ; les espoirs de 22 ans non
+promus quittent le centre (les clubs IA promeuvent les leurs s'ils ont de la
+place) ; 2 jeunes de 16-17 ans entrent, plus un par niveau du centre. Règles
+dans `backend/engine/offseason.py`.
 
 ## Blessures
 

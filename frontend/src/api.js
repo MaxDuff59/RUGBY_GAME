@@ -59,6 +59,9 @@ export const api = {
   abandonNegotiation: (negotiationId) =>
     request(`/transfers/negotiations/${negotiationId}`, { method: "DELETE" }),
   sellPlayer: (playerId) => post(`/transfers/sell/${playerId}`),
+  getAcademy: () => request("/academy"),
+  promoteYouth: (playerId) => post(`/academy/promote/${playerId}`),
+  demotePro: (playerId) => post(`/academy/demote/${playerId}`),
   getMedical: () => request("/medical"),
   chooseProtocol: (injuryId, protocol) => post(`/medical/${injuryId}/protocol/${protocol}`),
 };

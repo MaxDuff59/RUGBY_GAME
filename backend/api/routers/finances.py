@@ -23,6 +23,7 @@ def get_finances(session: SessionDep) -> FinancesOut:
     return FinancesOut(
         balance=club.balance,
         player_wages=club.player_wages,
+        youth_wages=club.youth_wages,
         staff_wages=club.staff_wages,
         squad_value=squad_value(club),
         squad_size=len(club.players),

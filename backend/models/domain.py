@@ -47,6 +47,18 @@ class Position(StrEnum):
 FORWARDS = frozenset({Position.PROP, Position.HOOKER, Position.LOCK, Position.BACK_ROW})
 
 
+class Squad(StrEnum):
+    """Groupe auquel appartient un joueur : effectif pro ou centre de formation."""
+
+    PRO = "pro"
+    YOUTH = "youth"  # espoirs
+
+
+# Âge maximal pour redescendre un pro chez les espoirs, et pour y rester.
+YOUTH_MAX_AGE = 23
+YOUTH_EXIT_AGE = 22  # un espoir non promu à cet âge quitte le centre
+
+
 # --- Blessures -----------------------------------------------------------------------
 
 
@@ -135,6 +147,7 @@ class Player:
     contract_until: int = 0
     # Club propriétaire quand le joueur est prêté (None sinon) ; il y retourne à l'intersaison.
     loaned_from: int | None = None
+    squad: Squad = Squad.PRO
 
     def __post_init__(self) -> None:
         # On refuse tout attribut hors de l'échelle 1-20 dès la création.
@@ -223,10 +236,11 @@ class Facilities:
 class Club:
     id: int
     name: str
-    players: list[Player] = field(default_factory=list)
+    players: list[Player] = field(default_factory=list)  # effectif pro
     staff: list[StaffMember] = field(default_factory=list)
     balance: int = 0  # trésorerie, en euros
     facilities: Facilities = field(default_factory=Facilities)
+    youths: list[Player] = field(default_factory=list)  # espoirs du centre de formation
 
     def players_at(self, position: Position) -> list[Player]:
         """Joueurs de l'effectif à un poste donné."""
@@ -242,8 +256,16 @@ class Club:
 
     @property
     def player_wages(self) -> int:
-        """Masse salariale des joueurs, par saison."""
+        """Masse salariale des joueurs pros, par saison."""
         return sum(p.wage for p in self.players)
+
+    @property
+    def youth_wages(self) -> int:
+        return sum(p.wage for p in self.youths)
+
+    def youth_team(self) -> "Club":
+        """Les espoirs vus comme une équipe, pour les faire jouer avec le moteur."""
+        return Club(id=self.id, name=self.name, players=self.youths, facilities=self.facilities)
 
     @property
     def staff_wages(self) -> int:

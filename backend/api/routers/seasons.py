@@ -30,15 +30,17 @@ from engine.calendar import season_dates
 from engine.economy import (
     CHAMPION_PRIZE,
     PLAYOFF_PRIZES,
+    SQUAD_MAX,
     TransactionCategory,
     attendance,
     matchday_wages,
     sponsor_revenue,
     ticketing_revenue,
+    wage_for,
 )
 from engine.match_engine import simulate_match
 from engine.medical import new_injury, training_injuries
-from engine.offseason import age_players, generate_youth, retirees
+from engine.offseason import age_players, develop_players, retirees, youth_exits, youth_intake
 from engine.season import (
     PLAYOFF_QUALIFIERS,
     barrage_pairings,
@@ -47,7 +49,7 @@ from engine.season import (
     record_result,
     semi_pairings,
 )
-from models import Club, EventType, Injury, InjurySource, Season, Stage
+from models import ATTRIBUTE_NAMES, Club, EventType, Injury, InjurySource, Season, Squad, Stage
 from models.orm import (
     CareerRow,
     ClubRow,
@@ -196,17 +198,24 @@ def create_season(session: Session, year: int) -> SeasonRow:
     regular_dates, _ = season_dates(year, len(fixtures))
 
     season = SeasonRow(year=year)
-    season.matches = [
-        MatchRow(
-            matchday=number,
-            stage=Stage.REGULAR.value,
-            date=regular_dates[number - 1],
-            home_club_id=home,
-            away_club_id=away,
+    # Les espoirs jouent les mêmes affiches, le même jour (saison régulière seulement).
+    for squad, target in ((Squad.PRO, "matches"), (Squad.YOUTH, "youth_matches")):
+        setattr(
+            season,
+            target,
+            [
+                MatchRow(
+                    matchday=number,
+                    stage=Stage.REGULAR.value,
+                    date=regular_dates[number - 1],
+                    home_club_id=home,
+                    away_club_id=away,
+                    squad=squad.value,
+                )
+                for number, matchday in enumerate(fixtures, start=1)
+                for home, away in matchday
+            ],
         )
-        for number, matchday in enumerate(fixtures, start=1)
-        for home, away in matchday
-    ]
     session.add(season)
     session.commit()
     return season
@@ -361,6 +370,19 @@ def _play_matchday(session: Session, season: SeasonRow) -> tuple[MatchdayOut, li
                 matchday,
             )
 
+    # Les espoirs jouent leur journée en même temps que les pros (sans blessures).
+    if stage == Stage.REGULAR:
+        for row in season.youth_matches:
+            if row.matchday == matchday and not row.is_played:
+                result = simulate_match(
+                    clubs[row.home_club_id].youth_team(),
+                    clubs[row.away_club_id].youth_team(),
+                    rng=rng,
+                    matchday=matchday,
+                )
+                row.home_score, row.away_score = result.home_score, result.away_score
+                row.events = MatchRow.from_domain(result).events
+
     # Les salaires se versent à chaque journée de saison régulière, pour tous les clubs.
     if stage == Stage.REGULAR:
         for club_row in club_rows:
@@ -420,20 +442,39 @@ def start_next_season(session: SessionDep) -> SeasonOut:
         raise HTTPException(status_code=400, detail="La saison n'est pas terminée")
 
     rng = random.Random()
-    _offseason_moves(session, season.year + 1, rng)
+    year = season.year + 1
+    _offseason_moves(session, year, rng)
     next_id = (session.scalar(select(func.max(PlayerRow.id))) or 0) + 1
     player_ids = itertools.count(next_id)
+    career = session.scalars(select(CareerRow)).first()
+    my_club_id = career.club_id if career is not None else None
+
     for club_row in _club_rows(session):
         club = club_row.to_domain()
+        rows = {row.id: row for row in [*club_row.players, *club_row.youths]}
         age_players(club)
+        develop_players(club, rng)
+
+        # Retraites, et espoirs trop âgés : les clubs IA promeuvent ceux qu'ils
+        # peuvent garder, le manager a dû le faire lui-même avant l'intersaison.
         gone = {player.id for player in retirees(club)}
-        club.players = [p for p in club.players if p.id not in gone]
-        for player_row in list(club_row.players):
-            if player_row.id in gone:
-                session.delete(player_row)
+        for youth in sorted(youth_exits(club), key=lambda p: p.overall, reverse=True):
+            if club_row.id != my_club_id and len(club.players) - len(gone) < SQUAD_MAX:
+                rows[youth.id].squad = Squad.PRO.value
+                rows[youth.id].wage = wage_for(youth)
+                club.players.append(youth)
             else:
-                player_row.age += 1
-        for youth in generate_youth(club, player_ids, rng, season.year + 1):
+                gone.add(youth.id)
+        for player in [*club.players, *club.youths]:
+            if player.id in gone:
+                session.delete(rows[player.id])
+            else:
+                row = rows[player.id]
+                row.age = player.age
+                for name in ATTRIBUTE_NAMES:
+                    setattr(row, name, getattr(player, name))
+        club.youths = [p for p in club.youths if p.id not in gone]
+        for youth in youth_intake(club, player_ids, rng, year):
             session.add(PlayerRow.from_domain(youth))
     session.commit()
 

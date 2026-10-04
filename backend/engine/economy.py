@@ -194,5 +194,5 @@ def sponsor_revenue(facilities: Facilities) -> int:
 
 
 def matchday_wages(club: Club, regular_matchdays: int) -> int:
-    """Part des salaires annuels versée à chaque journée de saison régulière."""
-    return (club.player_wages + club.staff_wages) // regular_matchdays
+    """Part des salaires annuels (pros, espoirs, staff) versée à chaque journée régulière."""
+    return (club.player_wages + club.youth_wages + club.staff_wages) // regular_matchdays

@@ -152,7 +152,9 @@ def _find_target(manager, kind):
             continue
         target = manager.get(f"/transfers/{listing['player']['id']}").json()
         option = next(o for o in target["options"] if o["kind"] == kind)
-        if option["available"]:
+        # Un transfert doit rester payable, sinon l'accord échouerait sur la trésorerie.
+        affordable = kind != "transfer" or option["fee_demand"] <= market["balance"]
+        if option["available"] and affordable:
             return listing, target, option
     pytest.fail(f"aucune cible pour un {kind}")
 

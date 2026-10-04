@@ -9,7 +9,7 @@ export default function Facilities() {
   const { data, error, loading, setData } = useApi(useCallback(api.getFacilities, []));
   const [actionError, setActionError] = useState(null);
 
-  async function upgrade(kind, cost) {
+  async function improve(kind, cost) {
     const { label } = FACILITIES[kind];
     if (!window.confirm(`Améliorer ${label.toLowerCase()} pour ${formatMoney(cost)} ?`)) return;
     setActionError(null);
@@ -73,7 +73,7 @@ export default function Facilities() {
                     className="button button--primary"
                     disabled={!upgrade.affordable}
                     title={upgrade.affordable ? undefined : "Trésorerie insuffisante"}
-                    onClick={() => upgrade(upgrade.kind, upgrade.cost)}
+                    onClick={() => improve(upgrade.kind, upgrade.cost)}
                   >
                     {isStadium ? "Agrandir" : "Améliorer"}
                   </button>
@@ -85,8 +85,9 @@ export default function Facilities() {
       </div>
 
       <p className="muted">
-        Les effets sur le jeu (billetterie, progression des joueurs, jeunes issus de la formation)
-        arriveront avec la saison journée par journée. Les travaux sont immédiats pour l'instant.
+        Le stade fixe la billetterie et les sponsors. Le centre d'entraînement accélère la progression des
+        pros, le centre de formation celle des espoirs et le nombre de jeunes qui entrent chaque
+        intersaison. Les travaux sont immédiats.
       </p>
     </>
   );

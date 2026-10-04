@@ -8,7 +8,7 @@ import pytest
 
 from engine.calendar import PLAYOFF_ROUNDS, season_dates
 from engine.economy import attendance, matchday_wages
-from engine.offseason import age_players, generate_youth, retirees
+from engine.offseason import age_players, retirees, youth_intake
 from engine.season import barrage_pairings, final_pairing, semi_pairings
 from models import Facilities, Match, Stage
 from tests.conftest import make_club
@@ -99,12 +99,16 @@ def test_players_age_and_the_oldest_retire():
     assert retirees(club) == [club.players[0]]
 
 
-def test_academy_produces_young_players_where_the_squad_is_thin():
+def test_academy_produces_young_players_where_the_youth_squad_is_thin():
     club = make_club(1, level=12)
     club.facilities = Facilities(academy_level=3)
-    club.players = [p for p in club.players if p.position.value != "HOOKER"]  # plus de talonneur
+    # Des espoirs à tous les postes sauf talonneur.
+    for player in club.players[:8]:
+        if player.position.value != "HOOKER":
+            club.youths.append(player)
 
-    youths = generate_youth(club, itertools.count(1000), random.Random(0))
-    assert len(youths) == 3
-    assert all(18 <= y.age <= 20 and y.club_id == club.id for y in youths)
-    assert youths[0].position.value == "HOOKER"
+    newcomers = youth_intake(club, itertools.count(1000), random.Random(0))
+    assert len(newcomers) == 2 + 3
+    assert all(16 <= y.age <= 17 and y.club_id == club.id for y in newcomers)
+    assert all(y.squad.value == "youth" and y.wage == 15_000 for y in newcomers)
+    assert newcomers[0].position.value == "HOOKER"

@@ -45,6 +45,8 @@ src/
     Squad.jsx         XV de départ sur le terrain + attributs de tout l'effectif (blessés signalés)
     Medical.jsx       infirmerie : blessés et choix du protocole de soins, joueurs fragiles,
                       staff médical, dossier médical
+    Academy.jsx       centre de formation : espoirs (promouvoir), jeunes pros (rétrograder),
+                      championnat espoirs (journées, classement)
     Staff.jsx         ton staff (8 postes), licencier, embaucher parmi les candidats
     Transfers.jsx     marché (voies de recrutement), approche d'un joueur, négociation par
                       étapes (indemnité, salaire), prêts, pré-contrats, vendre ses joueurs

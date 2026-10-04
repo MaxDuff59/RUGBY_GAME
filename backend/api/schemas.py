@@ -21,6 +21,7 @@ from models import (
     Player,
     Position,
     Protocol,
+    Squad,
     StaffRole,
     Stage,
 )
@@ -105,6 +106,7 @@ class PlayerOut(BaseModel):
     value: int
     contract_until: int  # dernière saison sous contrat (2026 = jusqu'à la fin de 2026-27)
     loaned_from: int | None  # club propriétaire si le joueur est prêté
+    squad: Squad
     loaned_from_name: str | None = None
     # Blessure en cours ou période de fragilité ; None si le joueur est apte.
     injury: InjuryOut | None = None
@@ -322,7 +324,8 @@ class TransactionOut(BaseModel):
 
 class FinancesOut(BaseModel):
     balance: int
-    player_wages: int  # masse salariale des joueurs, par saison
+    player_wages: int  # masse salariale des pros, par saison
+    youth_wages: int  # espoirs
     staff_wages: int
     squad_value: int
     squad_size: int
@@ -457,6 +460,26 @@ class OfferOut(BaseModel):
     message: str
     negotiation: NegotiationOut
     overview: TransfersOverview
+
+
+# --- Centre de formation -------------------------------------------------------------
+
+
+class AcademyOverview(BaseModel):
+    academy_level: int
+    intake_per_year: int  # jeunes qui entrent à chaque intersaison
+    youth_max_age: int  # au-delà, un pro ne redescend plus chez les espoirs
+    youth_exit_age: int  # un espoir non promu à cet âge quitte le centre
+    squad_size: int  # effectif pro
+    squad_min: int
+    squad_max: int
+    youths: list[PlayerOut]
+    eligible_pros: list[PlayerOut]  # pros assez jeunes pour redescendre
+    strength: StrengthOut  # XV espoirs
+    standings: list[StandingOut]
+    matches: list[MatchSummary]
+    next_matchday: MatchdayOut | None
+    last_matchday: MatchdayOut | None
 
 
 # --- Médical -------------------------------------------------------------------------

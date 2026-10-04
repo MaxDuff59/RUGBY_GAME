@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from api.routers import (
+    academy,
     career,
     clubs,
     facilities,
@@ -43,3 +44,4 @@ app.include_router(staff.router)
 app.include_router(facilities.router)
 app.include_router(transfers.router)
 app.include_router(medical.router)
+app.include_router(academy.router)
