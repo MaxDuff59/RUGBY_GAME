@@ -2,14 +2,17 @@ import { useCallback, useState } from "react";
 
 import { api } from "../api.js";
 import Level from "../components/Level.jsx";
+import SortHeader from "../components/SortHeader.jsx";
 import { STAFF_ROLES, formatMoney } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
+import { useSort } from "../hooks/useSort.js";
 
 // Le staff : un poste par ligne à gauche ; à droite, les candidats du poste choisi.
 export default function Staff() {
   const { data, error, loading, setData } = useApi(useCallback(api.getStaff, []));
   const [selectedRole, setSelectedRole] = useState(Object.keys(STAFF_ROLES)[0]);
   const [actionError, setActionError] = useState(null);
+  const candidateSort = useSort(data?.candidates ?? [], { key: "level", dir: "desc" });
 
   async function act(call) {
     setActionError(null);
@@ -24,7 +27,10 @@ export default function Staff() {
   if (error) return <p className="status status--error">{error.message}</p>;
 
   const selectedSlot = data.slots.find((slot) => slot.role === selectedRole);
-  const candidates = data.candidates.filter((c) => c.role === selectedRole);
+  const candidates = candidateSort.rows.filter((c) => c.role === selectedRole);
+  const header = (key, label, first = "desc", left = false) => (
+    <SortHeader sortKey={key} label={label} sort={candidateSort.sort} onToggle={candidateSort.toggle} first={first} left={left} />
+  );
 
   return (
     <>
@@ -99,9 +105,9 @@ export default function Staff() {
             <table className="table">
               <thead>
                 <tr>
-                  <th scope="col" className="left">Nom</th>
-                  <th scope="col" className="left">Niveau</th>
-                  <th scope="col">Salaire</th>
+                  {header("name", "Nom", "asc", true)}
+                  {header("level", "Niveau", "desc", true)}
+                  {header("wage", "Salaire")}
                   <th scope="col"></th>
                 </tr>
               </thead>

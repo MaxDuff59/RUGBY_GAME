@@ -2,8 +2,10 @@ import { useCallback, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
+import SortHeader from "../components/SortHeader.jsx";
 import { POSITIONS, formatMoney, formatNote } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
+import { useSort } from "../hooks/useSort.js";
 
 // Marché des transferts : acheter chez les autres clubs, vendre ses joueurs.
 export default function Transfers() {
@@ -14,6 +16,8 @@ export default function Transfers() {
   const [position, setPosition] = useState(null); // null = tous les postes
   const [affordableOnly, setAffordableOnly] = useState(false);
   const [actionError, setActionError] = useState(null);
+  const listingSort = useSort(market.data?.listings ?? [], { key: "player.value", dir: "desc" });
+  const squadSort = useSort(myClub.data?.players ?? [], { key: "value", dir: "desc" });
 
   async function act(call) {
     setActionError(null);
@@ -44,12 +48,18 @@ export default function Transfers() {
   const data = market.data;
   const squadFull = data.squad_size >= data.squad_max;
   const squadAtMinimum = data.squad_size <= data.squad_min;
-  const listings = data.listings.filter(
+  const listings = listingSort.rows.filter(
     (listing) =>
       (position === null || listing.player.position === position) &&
       (!affordableOnly || listing.affordable),
   );
-  const myPlayers = [...myClub.data.players].sort((a, b) => b.value - a.value);
+  const myPlayers = squadSort.rows;
+  const listingHeader = (key, label, first = "desc", left = false) => (
+    <SortHeader sortKey={key} label={label} sort={listingSort.sort} onToggle={listingSort.toggle} first={first} left={left} />
+  );
+  const squadHeader = (key, label, first = "desc", left = false) => (
+    <SortHeader sortKey={key} label={label} sort={squadSort.sort} onToggle={squadSort.toggle} first={first} left={left} />
+  );
 
   return (
     <>
@@ -93,13 +103,13 @@ export default function Transfers() {
           <table className="table">
             <thead>
               <tr>
-                <th scope="col" className="left">Joueur</th>
-                <th scope="col" className="left">Club</th>
-                <th scope="col">Âge</th>
-                <th scope="col">Note</th>
-                <th scope="col">Valeur</th>
-                <th scope="col">Salaire</th>
-                <th scope="col">Prix demandé</th>
+                {listingHeader("player.name", "Joueur", "asc", true)}
+                {listingHeader("club_name", "Club", "asc", true)}
+                {listingHeader("player.age", "Âge", "asc")}
+                {listingHeader("player.overall", "Note")}
+                {listingHeader("player.value", "Valeur")}
+                {listingHeader("player.wage", "Salaire")}
+                {listingHeader("asking_price", "Prix demandé")}
                 <th scope="col"></th>
               </tr>
             </thead>
@@ -145,11 +155,11 @@ export default function Transfers() {
           <table className="table">
             <thead>
               <tr>
-                <th scope="col" className="left">Joueur</th>
-                <th scope="col">Âge</th>
-                <th scope="col">Note</th>
-                <th scope="col">Salaire</th>
-                <th scope="col">Valeur</th>
+                {squadHeader("name", "Joueur", "asc", true)}
+                {squadHeader("age", "Âge", "asc")}
+                {squadHeader("overall", "Note")}
+                {squadHeader("wage", "Salaire")}
+                {squadHeader("value", "Valeur")}
                 <th scope="col"></th>
               </tr>
             </thead>

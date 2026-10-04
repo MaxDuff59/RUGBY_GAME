@@ -2,8 +2,10 @@ import { useCallback } from "react";
 import { useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
+import SortHeader from "../components/SortHeader.jsx";
 import { ATTRIBUTES, POSITION_ORDER, POSITIONS, formatMoney, formatNote } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
+import { useSort } from "../hooks/useSort.js";
 
 // Places du XV sur le terrain : numéro, poste, position en % (attaque vers le haut).
 const SLOTS = [
@@ -52,6 +54,8 @@ export default function Squad() {
   const { career } = useOutletContext();
   const load = useCallback(() => api.getClub(career.club_id), [career.club_id]);
   const { data: club, error, loading } = useApi(load);
+  // Sans tri choisi (null), l'ordre reste celui du staff : par poste, titulaires d'abord.
+  const squadSort = useSort(club?.players ?? [], null);
 
   if (loading) return <p className="status">Chargement de l'effectif…</p>;
   if (error) return <p className="status status--error">{error.message}</p>;
@@ -61,7 +65,10 @@ export default function Squad() {
   const starters = lineup.map(({ player }) => player);
 
   const average = (values) => values.reduce((sum, v) => sum + v, 0) / values.length;
-  const sortedPlayers = sortSquad(club.players, jerseyByPlayer);
+  const sortedPlayers = squadSort.sort ? squadSort.rows : sortSquad(club.players, jerseyByPlayer);
+  const header = (key, label, first = "desc", left = false, title) => (
+    <SortHeader sortKey={key} label={label} sort={squadSort.sort} onToggle={squadSort.toggle} first={first} left={left} title={title} />
+  );
 
   return (
     <>
@@ -106,15 +113,21 @@ export default function Squad() {
             <thead>
               <tr>
                 <th scope="col" className="left">N°</th>
-                <th scope="col" className="left">Joueur</th>
-                <th scope="col">Âge</th>
-                <th scope="col">Note</th>
-                <th scope="col">Valeur</th>
-                <th scope="col">Salaire</th>
+                {header("name", "Joueur", "asc", true)}
+                {header("age", "Âge", "asc")}
+                {header("overall", "Note")}
+                {header("value", "Valeur")}
+                {header("wage", "Salaire")}
                 {ATTRIBUTES.map((attr) => (
-                  <th key={attr.key} scope="col" title={attr.label}>
-                    {attr.short}
-                  </th>
+                  <SortHeader
+                    key={attr.key}
+                    sortKey={attr.key}
+                    label={attr.short}
+                    title={attr.label}
+                    sort={squadSort.sort}
+                    onToggle={squadSort.toggle}
+                    first="desc"
+                  />
                 ))}
               </tr>
             </thead>
