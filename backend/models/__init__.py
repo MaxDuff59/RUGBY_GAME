@@ -24,6 +24,7 @@ from models.domain import (
     Season,
     StaffMember,
     StaffRole,
+    Stage,
     StandingRow,
 )
 
@@ -46,5 +47,6 @@ __all__ = [
     "Season",
     "StaffMember",
     "StaffRole",
+    "Stage",
     "StandingRow",
 ]

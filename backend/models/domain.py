@@ -4,6 +4,7 @@ Ce sont ces objets que manipule le moteur de simulation. La base de données
 (voir `orm.py`) n'est qu'un moyen de les sauvegarder et de les recharger.
 """
 
+import datetime
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -195,6 +196,19 @@ class MatchEvent:
         return EVENT_POINTS[self.type]
 
 
+class Stage(StrEnum):
+    """Étape de la saison à laquelle appartient un match."""
+
+    REGULAR = "regular"  # saison régulière
+    BARRAGE = "barrage"  # barrages (3e-6e, 4e-5e)
+    SEMI = "semi"  # demi-finales
+    FINAL = "final"  # finale, sur terrain neutre
+
+    @property
+    def is_playoff(self) -> bool:
+        return self != Stage.REGULAR
+
+
 @dataclass
 class Match:
     home_club_id: int
@@ -205,10 +219,25 @@ class Match:
     away_score: int | None = None
     events: list[MatchEvent] = field(default_factory=list)
     id: int | None = None
+    stage: Stage = Stage.REGULAR
+    date: datetime.date | None = None
+    neutral: bool = False  # terrain neutre : pas d'avantage du terrain
 
     @property
     def is_played(self) -> bool:
         return self.home_score is not None and self.away_score is not None
+
+    def winner_id(self, seeding: list[int]) -> int:
+        """Vainqueur d'un match de phase finale.
+
+        En cas d'égalité, le mieux classé en saison régulière (`seeding`, du 1er
+        au dernier) se qualifie.
+        """
+        if not self.is_played:
+            raise ValueError("Le match n'a pas encore été joué")
+        if self.home_score != self.away_score:
+            return self.home_club_id if self.home_score > self.away_score else self.away_club_id
+        return min(self.home_club_id, self.away_club_id, key=seeding.index)
 
     def points_for(self, club_id: int) -> int:
         """Points marqués par un club, recalculés à partir des événements."""

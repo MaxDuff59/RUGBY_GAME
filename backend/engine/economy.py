@@ -4,9 +4,10 @@ Tous les montants sont en euros. Comme le reste du moteur, ce module ne dépend
 ni de FastAPI ni de la base de données.
 """
 
+import random
 from enum import StrEnum
 
-from models import Club, Facilities, Player, StaffMember
+from models import Club, Facilities, Player, StaffMember, Stage
 
 # --- Joueurs -------------------------------------------------------------------------
 
@@ -119,3 +120,64 @@ def apply_upgrade(facilities: Facilities, kind: FacilityKind) -> None:
 
 def squad_value(club: Club) -> int:
     return sum(market_value(p) for p in club.players)
+
+
+# --- Recettes et dépenses d'une journée ---------------------------------------------
+
+
+class TransactionCategory(StrEnum):
+    """Domaine d'une opération financière."""
+
+    TICKETING = "ticketing"  # billetterie
+    SPONSORS = "sponsors"
+    WAGES = "wages"  # salaires joueurs + staff
+    TRANSFER = "transfer"
+    STAFF = "staff"  # embauches, indemnités
+    FACILITIES = "facilities"
+    PRIZE = "prize"  # primes de phases finales
+
+
+TICKET_PRICE = 30
+# Taux de remplissage : 60 % pour le dernier, jusqu'à 90 % pour le premier, ± 5 % de hasard.
+ATTENDANCE_BASE = 0.6
+ATTENDANCE_RANK_BONUS = 0.3
+ATTENDANCE_NOISE = 0.05
+
+# Sponsors, par journée jouée : une part fixe et une part liée à la taille du stade.
+SPONSOR_BASE = 30_000
+SPONSOR_PER_SEAT = 4
+
+# Primes des phases finales : par match disputé, et pour le champion.
+PLAYOFF_PRIZES = {Stage.BARRAGE: 100_000, Stage.SEMI: 200_000, Stage.FINAL: 400_000}
+CHAMPION_PRIZE = 600_000
+
+
+def attendance(
+    capacity: int,
+    rank: int,
+    club_count: int,
+    playoff: bool = False,
+    rng: random.Random | None = None,
+) -> int:
+    """Spectateurs d'un match à domicile selon le classement (stade plein en phase finale)."""
+    if playoff:
+        return capacity
+    rng = rng or random.Random()
+    rank_share = 1 - (rank - 1) / max(club_count - 1, 1)  # 1 pour le premier, 0 pour le dernier
+    rate = (
+        ATTENDANCE_BASE + ATTENDANCE_RANK_BONUS * rank_share + rng.uniform(-1, 1) * ATTENDANCE_NOISE
+    )
+    return int(capacity * min(rate, 1.0))
+
+
+def ticketing_revenue(spectators: int) -> int:
+    return spectators * TICKET_PRICE
+
+
+def sponsor_revenue(facilities: Facilities) -> int:
+    return SPONSOR_BASE + SPONSOR_PER_SEAT * facilities.stadium_capacity
+
+
+def matchday_wages(club: Club, regular_matchdays: int) -> int:
+    """Part des salaires annuels versée à chaque journée de saison régulière."""
+    return (club.player_wages + club.staff_wages) // regular_matchdays

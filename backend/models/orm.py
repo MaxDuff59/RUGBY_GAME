@@ -4,7 +4,9 @@ Le moteur ne voit jamais ces classes : l'API charge des lignes, les convertit
 avec `to_domain()`, appelle le moteur, puis sauvegarde le résultat.
 """
 
-from sqlalchemy import JSON, ForeignKey, String
+import datetime
+
+from sqlalchemy import JSON, Date, ForeignKey, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from models.domain import (
@@ -18,6 +20,7 @@ from models.domain import (
     Position,
     StaffMember,
     StaffRole,
+    Stage,
 )
 
 
@@ -179,10 +182,17 @@ class MatchRow(Base):
     away_club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
     home_score: Mapped[int | None]
     away_score: Mapped[int | None]
+    stage: Mapped[str] = mapped_column(String(10), default=Stage.REGULAR.value)
+    date: Mapped[datetime.date | None] = mapped_column(Date)
+    neutral: Mapped[bool] = mapped_column(default=False)
     # Événements stockés en JSON : suffisant tant qu'on ne fait pas de requêtes dessus.
     events: Mapped[list[dict]] = mapped_column(JSON, default=list)
 
     season: Mapped[SeasonRow | None] = relationship(back_populates="matches")
+
+    @property
+    def is_played(self) -> bool:
+        return self.home_score is not None
 
     def to_domain(self) -> Match:
         return Match(
@@ -192,6 +202,9 @@ class MatchRow(Base):
             matchday=self.matchday,
             home_score=self.home_score,
             away_score=self.away_score,
+            stage=Stage(self.stage),
+            date=self.date,
+            neutral=self.neutral,
             events=[
                 MatchEvent(
                     minute=e["minute"],
@@ -213,6 +226,9 @@ class MatchRow(Base):
             away_club_id=match.away_club_id,
             home_score=match.home_score,
             away_score=match.away_score,
+            stage=match.stage.value,
+            date=match.date,
+            neutral=match.neutral,
             events=[
                 {
                     "minute": e.minute,
@@ -240,3 +256,18 @@ class CareerRow(Base):
     @classmethod
     def from_domain(cls, career: Career) -> "CareerRow":
         return cls(id=career.id, manager_name=career.manager_name, club_id=career.club_id)
+
+
+class TransactionRow(Base):
+    """Une opération financière d'un club (voir api/ledger.py)."""
+
+    __tablename__ = "transactions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
+    date: Mapped[datetime.date] = mapped_column(Date)
+    matchday: Mapped[int | None]  # journée concernée, s'il y en a une
+    category: Mapped[str] = mapped_column(String(20))
+    label: Mapped[str] = mapped_column(String(200))
+    amount: Mapped[int]  # positif = recette, négatif = dépense
+    balance_after: Mapped[int]

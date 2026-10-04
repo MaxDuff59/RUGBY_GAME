@@ -260,20 +260,26 @@ def _play_chance(
 
 
 def simulate_match(
-    home: Club, away: Club, rng: random.Random | None = None, matchday: int = 0
+    home: Club,
+    away: Club,
+    rng: random.Random | None = None,
+    matchday: int = 0,
+    neutral: bool = False,
 ) -> Match:
     """Simule un match complet et renvoie un `Match` joué (score + événements).
 
     `rng` permet de fixer le hasard (ex. `random.Random(42)`) pour des résultats
-    reproductibles, notamment dans les tests.
+    reproductibles, notamment dans les tests. `neutral` supprime l'avantage du
+    terrain (finale).
     """
     rng = rng or random.Random()
     home_team, away_team = team_strength(home), team_strength(away)
 
     # Probabilité que l'action de la minute soit pour l'équipe à domicile.
-    home_share = _win_probability(home_team.territory * HOME_ADVANTAGE, away_team.territory)
+    advantage = 1.0 if neutral else HOME_ADVANTAGE
+    home_share = _win_probability(home_team.territory * advantage, away_team.territory)
 
-    match = Match(home_club_id=home.id, away_club_id=away.id, matchday=matchday)
+    match = Match(home_club_id=home.id, away_club_id=away.id, matchday=matchday, neutral=neutral)
     for minute in range(1, MATCH_MINUTES + 1):
         if rng.random() >= CHANCE_PER_MINUTE:
             continue

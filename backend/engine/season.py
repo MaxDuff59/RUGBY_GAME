@@ -1,9 +1,12 @@
-"""Calendrier aller-retour et simulation d'une saison complète."""
+"""Calendrier aller-retour, phases finales et simulation d'une saison complète."""
 
 import random
 
 from engine.match_engine import simulate_match
 from models import Club, Match, Season
+
+# Phases finales façon Top 14 : 6 qualifiés.
+PLAYOFF_QUALIFIERS = 6
 
 # Une journée = liste de rencontres (id domicile, id extérieur).
 Fixture = tuple[int, int]
@@ -82,3 +85,31 @@ def simulate_season(clubs: list[Club], year: int, rng: random.Random | None = No
             record_result(season, match)
 
     return season
+
+
+# --- Phases finales ------------------------------------------------------------------
+#
+# `seeding` est le classement final de la saison régulière (identifiants de clubs,
+# du 1er au dernier). Chaque fonction renvoie des affiches (domicile, extérieur) :
+# le mieux classé reçoit, sauf en finale, jouée sur terrain neutre.
+
+
+def barrage_pairings(seeding: list[int]) -> list[Fixture]:
+    """Barrages : 3e contre 6e, 4e contre 5e."""
+    if len(seeding) < PLAYOFF_QUALIFIERS:
+        raise ValueError(f"Il faut au moins {PLAYOFF_QUALIFIERS} clubs pour des phases finales")
+    return [(seeding[2], seeding[5]), (seeding[3], seeding[4])]
+
+
+def semi_pairings(seeding: list[int], barrages: list[Match]) -> list[Fixture]:
+    """Demi-finales : le 1er reçoit le vainqueur de 4e-5e, le 2e celui de 3e-6e."""
+    winners = {m.home_club_id: m.winner_id(seeding) for m in barrages}
+    winner_3_6 = winners[seeding[2]]
+    winner_4_5 = winners[seeding[3]]
+    return [(seeding[0], winner_4_5), (seeding[1], winner_3_6)]
+
+
+def final_pairing(seeding: list[int], semis: list[Match]) -> Fixture:
+    """Finale entre les deux vainqueurs, le mieux classé cité en premier."""
+    winners = sorted((m.winner_id(seeding) for m in semis), key=seeding.index)
+    return (winners[0], winners[1])
