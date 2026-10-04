@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Base de données locale
+*.db
+*.sqlite3
+
+# Frontend (phase 2)
+node_modules/
+dist/
+
+# Système / éditeurs
+.DS_Store
+.vscode/
+.idea/
