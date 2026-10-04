@@ -1,6 +1,7 @@
 """Tests de l'API, sur une base SQLite en mémoire (jamais sur rugby.db)."""
 
 from collections.abc import Iterator
+from datetime import date
 
 import pytest
 from fastapi.testclient import TestClient
@@ -34,6 +35,13 @@ def client() -> Iterator[TestClient]:
     # qui créerait le fichier rugby.db.
     yield TestClient(app)
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def manager(client):
+    """Client avec une carrière en cours (club 3)."""
+    client.post("/career", json={"manager_name": "Maxence", "club_id": 3})
+    return client
 
 
 def test_list_clubs(client):
@@ -95,29 +103,80 @@ def test_career_needs_an_existing_club(client):
     )
 
 
-def test_simulate_and_reload_season(client):
-    created = client.post("/seasons", json={"year": 2026, "seed": 1})
-    assert created.status_code == 201
-    season = created.json()
-    assert season["matchdays"] == 18
-    assert len(season["standings"]) == 10
-    assert [row["rank"] for row in season["standings"]] == list(range(1, 11))
+def test_career_draws_a_dated_calendar(client):
+    client.post("/career", json={"manager_name": "Maxence", "club_id": 3})
+    season = client.get("/seasons/current").json()
+    assert season["year"] == 2026
+    assert season["phase"] == "regular"
+    assert season["regular_matchdays"] == 18  # 10 clubs dans les tests
+    assert len(season["matches"]) == 90
+    assert season["next_matchday"]["matchday"] == 1
+    assert all(match["home_score"] is None for match in season["matches"])
+    assert all(date.fromisoformat(match["date"]).weekday() == 5 for match in season["matches"])
+    assert season["standings"][0]["played"] == 0
 
-    # Le classement recalculé depuis la base est identique.
-    assert client.get("/seasons/2026").json() == season
-    # Pas deux fois la même saison.
-    assert client.post("/seasons", json={"year": 2026}).status_code == 409
-    assert client.get("/seasons/1999").status_code == 404
+
+def test_no_season_without_a_career(client):
+    assert client.get("/seasons/current").status_code == 404
+
+
+def test_play_the_whole_season_until_the_final(manager):
+    first = manager.post("/seasons/current/play").json()
+    assert first["played"]["matchday"] == 1
+    assert len(first["played"]["matches"]) == 5
+    assert all(m["home_score"] is not None for m in first["played"]["matches"])
+    assert first["season"]["next_matchday"]["matchday"] == 2
+
+    # Après une journée : billetterie ou sponsors en recette, salaires en dépense.
+    categories = {t["category"] for t in manager.get("/finances").json()["transactions"]}
+    assert {"sponsors", "wages"} <= categories
+
+    # 18 journées, puis barrages, demi-finales et finale.
+    for _ in range(17 + 3):
+        season = manager.post("/seasons/current/play").json()["season"]
+    assert season["phase"] == "finished"
+    assert season["champion"] is not None
+    assert len(season["matches"]) == 90 + 2 + 2 + 1
+    assert all(row["played"] == 18 for row in season["standings"])
+    assert season["next_matchday"] is None
+
+    stages = [m["stage"] for m in season["matches"] if m["stage"] != "regular"]
+    assert stages == ["barrage", "barrage", "semi", "semi", "final"]
+    final = next(m for m in season["matches"] if m["stage"] == "final")
+    assert final["neutral"] and final["home_score"] is not None
+    # Le champion a reçu sa prime.
+    assert manager.post("/seasons/current/play").status_code == 400
+
+
+def test_next_season_ages_players_and_draws_a_new_calendar(manager):
+    assert manager.post("/seasons/next").status_code == 400  # saison en cours
+
+    for _ in range(21):
+        manager.post("/seasons/current/play")
+    ages_before = sorted(p["age"] for p in manager.get("/clubs/3").json()["players"])
+
+    season = manager.post("/seasons/next").json()
+    assert season["year"] == 2027
+    assert season["phase"] == "regular"
+    assert len(season["matches"]) == 90
+
+    players = manager.get("/clubs/3").json()["players"]
+    assert all(p["age"] < 36 for p in players)
+    youths = [p for p in players if p["age"] <= 20]
+    assert youths  # le centre de formation a produit au moins un jeune
+    assert max(p["age"] for p in players) <= max(ages_before) + 1
+
+
+def test_match_detail(manager):
+    played = manager.post("/seasons/current/play").json()["played"]["matches"][0]
+    match = manager.get(f"/matches/{played['id']}").json()
+    assert match["home_score"] == played["home_score"]
+    assert match["events"]
+    unplayed = manager.get("/seasons/current").json()["next_matchday"]["matches"][0]
+    assert manager.get(f"/matches/{unplayed['id']}").status_code == 400
 
 
 # --- Gestion du club : finances, staff, infrastructures, transferts -------------------
-
-
-@pytest.fixture
-def manager(client):
-    """Client avec une carrière en cours (club 3)."""
-    client.post("/career", json={"manager_name": "Maxence", "club_id": 3})
-    return client
 
 
 def test_management_routes_need_a_career(client):
@@ -199,6 +258,9 @@ def test_transfers_buy_and_sell(manager):
     sold = manager.post(f"/transfers/sell/{player_id}").json()
     assert sold["squad_size"] == 31
     assert sold["balance"] > bought["balance"]
+    labels = [t["label"] for t in manager.get("/finances").json()["transactions"]]
+    assert any(label.startswith("Vente · ") for label in labels)
+    assert any(label.startswith("Achat · ") for label in labels)
     # Le joueur vendu est de nouveau sur le marché.
     assert any(listing["player"]["id"] == player_id for listing in sold["listings"])
 

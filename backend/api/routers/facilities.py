@@ -3,12 +3,25 @@
 from fastapi import APIRouter, HTTPException
 
 from api.deps import SessionDep, load_my_club_row
+from api.ledger import game_date, record
 from api.schemas import FacilitiesOut, FacilitiesOverview, UpgradeOut
-from engine.economy import STADIUM_STEPS, FacilityKind, apply_upgrade, upgrade_cost
+from engine.economy import (
+    STADIUM_STEPS,
+    FacilityKind,
+    TransactionCategory,
+    apply_upgrade,
+    upgrade_cost,
+)
 from models import Facilities
 from models.orm import ClubRow
 
 router = APIRouter(prefix="/facilities", tags=["infrastructures"])
+
+FACILITY_LABELS = {
+    FacilityKind.STADIUM: "Stade",
+    FacilityKind.TRAINING: "Centre d'entraînement",
+    FacilityKind.ACADEMY: "Centre de formation",
+}
 
 
 def _facilities(club: ClubRow) -> Facilities:
@@ -68,7 +81,21 @@ def upgrade(kind: FacilityKind, session: SessionDep) -> FacilitiesOverview:
         raise HTTPException(status_code=400, detail="Trésorerie insuffisante")
 
     apply_upgrade(facilities, kind)
-    club.balance -= cost
+    if kind == FacilityKind.STADIUM:
+        detail = f"{facilities.stadium_capacity:,} places".replace(",", " ")
+    else:
+        level = (
+            facilities.training_level if kind == FacilityKind.TRAINING else facilities.academy_level
+        )
+        detail = f"niveau {level}"
+    record(
+        session,
+        club,
+        TransactionCategory.FACILITIES,
+        f"{FACILITY_LABELS[kind]} · {detail}",
+        -cost,
+        game_date(session),
+    )
     club.stadium_capacity = facilities.stadium_capacity
     club.training_level = facilities.training_level
     club.academy_level = facilities.academy_level

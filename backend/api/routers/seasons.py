@@ -1,29 +1,124 @@
-"""Saisons : simulation complète et classement.
+"""La saison en cours : calendrier, journée par journée, phases finales, saison suivante.
 
-Le classement n'est pas stocké : il est recalculé à partir des matchs enregistrés.
+Le calendrier est tiré au début de la saison (matchs sans score). Chaque appel
+à `play` joue la journée suivante : tous ses matchs, puis les recettes et les
+salaires. Les phases finales se créent au fil des résultats.
 """
 
+import itertools
 import random
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from api.deps import SessionDep
-from api.schemas import SeasonIn, SeasonOut, StandingOut
-from engine.season import record_result, simulate_season
-from models import Club, Season
-from models.orm import ClubRow, MatchRow, SeasonRow
+from api.ledger import current_season, record
+from api.schemas import ClubRef, MatchdayOut, MatchSummary, PlayOut, SeasonOut, StandingOut
+from engine.calendar import season_dates
+from engine.economy import (
+    CHAMPION_PRIZE,
+    PLAYOFF_PRIZES,
+    TransactionCategory,
+    attendance,
+    matchday_wages,
+    sponsor_revenue,
+    ticketing_revenue,
+)
+from engine.match_engine import simulate_match
+from engine.offseason import age_players, generate_youth, retirees
+from engine.season import (
+    PLAYOFF_QUALIFIERS,
+    barrage_pairings,
+    final_pairing,
+    generate_fixtures,
+    record_result,
+    semi_pairings,
+)
+from models import Club, Season, Stage
+from models.orm import ClubRow, MatchRow, PlayerRow, SeasonRow
 
 router = APIRouter(prefix="/seasons", tags=["saisons"])
 
+FIRST_SEASON_YEAR = 2026
 
-def _load_clubs(session: Session) -> list[Club]:
-    return [row.to_domain() for row in session.scalars(select(ClubRow).order_by(ClubRow.id))]
+STAGE_LABELS = {
+    Stage.BARRAGE: "barrages",
+    Stage.SEMI: "demi-finales",
+    Stage.FINAL: "finale",
+}
 
 
-def _season_out(season: Season) -> SeasonOut:
-    names = {club.id: club.name for club in season.clubs}
+def _matchday_label(stage: Stage, matchday: int) -> str:
+    return f"journée {matchday}" if stage == Stage.REGULAR else STAGE_LABELS[stage]
+
+
+# --- Lecture de la saison ------------------------------------------------------------
+
+
+def _club_rows(session: Session) -> list[ClubRow]:
+    return list(session.scalars(select(ClubRow).order_by(ClubRow.id)))
+
+
+def _regular_matchday_count(season: SeasonRow) -> int:
+    return max(m.matchday for m in season.matches if m.stage == Stage.REGULAR.value)
+
+
+def _standings(season: SeasonRow, clubs: dict[int, Club]) -> Season:
+    """Classement de la saison régulière, recalculé à partir des matchs joués."""
+    table = Season(year=season.year, clubs=list(clubs.values()))
+    for row in season.matches:
+        if row.stage == Stage.REGULAR.value and row.is_played:
+            match = row.to_domain()
+            table.matches.append(match)
+            record_result(table, match)
+    return table
+
+
+def _seeding(season: SeasonRow, clubs: dict[int, Club]) -> list[int]:
+    """Identifiants des clubs du 1er au dernier de la saison régulière."""
+    return [row.club_id for row in _standings(season, clubs).table()]
+
+
+def _phase(season: SeasonRow) -> str:
+    matches = season.matches
+    if any(m.stage == Stage.REGULAR.value and not m.is_played for m in matches):
+        return "regular"
+    finals = [m for m in matches if m.stage == Stage.FINAL.value]
+    if finals and all(m.is_played for m in finals):
+        return "finished"
+    return "playoffs"
+
+
+def _summary(row: MatchRow, names: dict[int, str]) -> MatchSummary:
+    return MatchSummary(
+        id=row.id,
+        matchday=row.matchday,
+        stage=Stage(row.stage),
+        date=row.date,
+        neutral=row.neutral,
+        home=ClubRef(id=row.home_club_id, name=names[row.home_club_id]),
+        away=ClubRef(id=row.away_club_id, name=names[row.away_club_id]),
+        home_score=row.home_score,
+        away_score=row.away_score,
+    )
+
+
+def _matchday_out(rows: list[MatchRow], names: dict[int, str]) -> MatchdayOut:
+    first = rows[0]
+    return MatchdayOut(
+        matchday=first.matchday,
+        stage=Stage(first.stage),
+        date=first.date,
+        matches=[_summary(row, names) for row in rows],
+    )
+
+
+def _season_out(session: Session, season: SeasonRow) -> SeasonOut:
+    club_rows = _club_rows(session)
+    clubs = {row.id: row.to_domain() for row in club_rows}
+    names = {row.id: row.name for row in club_rows}
+
     standings = [
         StandingOut(
             rank=rank,
@@ -41,39 +136,250 @@ def _season_out(season: Season) -> SeasonOut:
             defensive_bonus=row.defensive_bonus,
             league_points=row.league_points,
         )
-        for rank, row in enumerate(season.table(), start=1)
+        for rank, row in enumerate(_standings(season, clubs).table(), start=1)
     ]
-    matchdays = max((m.matchday for m in season.matches), default=0)
-    return SeasonOut(year=season.year, matchdays=matchdays, standings=standings)
+
+    matches = sorted(season.matches, key=lambda m: (m.matchday, m.id))
+    unplayed = [m for m in matches if not m.is_played]
+    next_matchday = None
+    if unplayed:
+        first = unplayed[0].matchday
+        next_matchday = _matchday_out([m for m in unplayed if m.matchday == first], names)
+
+    phase = _phase(season)
+    champion = None
+    if phase == "finished":
+        final = next(m for m in matches if m.stage == Stage.FINAL.value)
+        winner_id = final.to_domain().winner_id(_seeding(season, clubs))
+        champion = ClubRef(id=winner_id, name=names[winner_id])
+
+    return SeasonOut(
+        year=season.year,
+        phase=phase,
+        regular_matchdays=_regular_matchday_count(season),
+        club_count=len(club_rows),
+        playoff_qualifiers=PLAYOFF_QUALIFIERS,
+        next_matchday=next_matchday,
+        standings=standings,
+        matches=[_summary(m, names) for m in matches],
+        champion=champion,
+    )
 
 
-@router.post("", response_model=SeasonOut, status_code=201)
-def simulate_full_season(payload: SeasonIn, session: SessionDep) -> SeasonOut:
-    """Simule une saison complète avec tous les clubs et l'enregistre."""
-    if session.scalars(select(SeasonRow).where(SeasonRow.year == payload.year)).first():
-        raise HTTPException(status_code=409, detail=f"La saison {payload.year} existe déjà")
+# --- Création et avancement ----------------------------------------------------------
 
-    clubs = _load_clubs(session)
-    rng = random.Random(payload.seed) if payload.seed is not None else None
-    season = simulate_season(clubs, year=payload.year, rng=rng)
 
-    row = SeasonRow(year=season.year)
-    row.matches = [MatchRow.from_domain(match) for match in season.matches]
-    session.add(row)
+def create_season(session: Session, year: int) -> SeasonRow:
+    """Tire le calendrier de la saison régulière (matchs sans score) et l'enregistre."""
+    club_ids = [row.id for row in _club_rows(session)]
+    fixtures = generate_fixtures(club_ids)
+    regular_dates, _ = season_dates(year, len(fixtures))
+
+    season = SeasonRow(year=year)
+    season.matches = [
+        MatchRow(
+            matchday=number,
+            stage=Stage.REGULAR.value,
+            date=regular_dates[number - 1],
+            home_club_id=home,
+            away_club_id=away,
+        )
+        for number, matchday in enumerate(fixtures, start=1)
+        for home, away in matchday
+    ]
+    session.add(season)
     session.commit()
-    return _season_out(season)
+    return season
+
+
+def _ensure_next_stage(session: Session, season: SeasonRow, clubs: dict[int, Club]) -> None:
+    """Crée les matchs de l'étape suivante quand tous ceux de l'étape en cours sont joués."""
+    matches = season.matches
+    if any(not m.is_played for m in matches):
+        return
+
+    def played_at(stage: Stage) -> list[MatchRow]:
+        return [m for m in matches if m.stage == stage.value]
+
+    seeding = _seeding(season, clubs)
+    regular_count = _regular_matchday_count(season)
+    _, playoff_dates = season_dates(season.year, regular_count)
+    neutral = False
+
+    if not played_at(Stage.BARRAGE):
+        stage, pairings = Stage.BARRAGE, barrage_pairings(seeding)
+    elif not played_at(Stage.SEMI):
+        barrages = [m.to_domain() for m in played_at(Stage.BARRAGE)]
+        stage, pairings = Stage.SEMI, semi_pairings(seeding, barrages)
+    elif not played_at(Stage.FINAL):
+        semis = [m.to_domain() for m in played_at(Stage.SEMI)]
+        stage, pairings, neutral = Stage.FINAL, [final_pairing(seeding, semis)], True
+    else:
+        return  # finale jouée : la saison est terminée
+
+    round_index = [Stage.BARRAGE, Stage.SEMI, Stage.FINAL].index(stage)
+    for home, away in pairings:
+        season.matches.append(
+            MatchRow(
+                matchday=regular_count + round_index + 1,
+                stage=stage.value,
+                date=playoff_dates[round_index],
+                home_club_id=home,
+                away_club_id=away,
+                neutral=neutral,
+            )
+        )
+    session.commit()
+
+
+def _play_matchday(session: Session, season: SeasonRow) -> MatchdayOut:
+    """Joue la prochaine journée et passe les écritures financières."""
+    club_rows = _club_rows(session)
+    rows_by_id = {row.id: row for row in club_rows}
+    clubs = {row.id: row.to_domain() for row in club_rows}
+    names = {row.id: row.name for row in club_rows}
+
+    _ensure_next_stage(session, season, clubs)
+    unplayed = [m for m in season.matches if not m.is_played]
+    if not unplayed:
+        raise HTTPException(status_code=400, detail="La saison est terminée")
+
+    matchday = min(m.matchday for m in unplayed)
+    todays = sorted((m for m in unplayed if m.matchday == matchday), key=lambda m: m.id)
+    stage, day = Stage(todays[0].stage), todays[0].date
+    label = _matchday_label(stage, matchday)
+
+    # Classement avant la journée : il fixe l'affluence (et départage les phases finales).
+    seeding = _seeding(season, clubs)
+    rank_of = {club_id: rank for rank, club_id in enumerate(seeding, start=1)}
+    regular_count = _regular_matchday_count(season)
+    rng = random.Random()
+
+    for row in todays:
+        home, away = clubs[row.home_club_id], clubs[row.away_club_id]
+        result = simulate_match(home, away, rng=rng, matchday=matchday, neutral=row.neutral)
+        row.home_score, row.away_score = result.home_score, result.away_score
+        row.events = MatchRow.from_domain(result).events
+
+        home_row, away_row = rows_by_id[home.id], rows_by_id[away.id]
+        spectators = attendance(
+            home_row.stadium_capacity, rank_of[home.id], len(clubs), stage.is_playoff, rng
+        )
+        record(
+            session,
+            home_row,
+            TransactionCategory.TICKETING,
+            f"Billetterie · {away.name} · {spectators:,} spectateurs".replace(",", " "),
+            ticketing_revenue(spectators),
+            day,
+            matchday,
+        )
+        for club_row, club in ((home_row, home), (away_row, away)):
+            record(
+                session,
+                club_row,
+                TransactionCategory.SPONSORS,
+                f"Sponsors · {label}",
+                sponsor_revenue(club.facilities),
+                day,
+                matchday,
+            )
+            if stage.is_playoff:
+                record(
+                    session,
+                    club_row,
+                    TransactionCategory.PRIZE,
+                    f"Prime · {label}",
+                    PLAYOFF_PRIZES[stage],
+                    day,
+                    matchday,
+                )
+        if stage == Stage.FINAL:
+            winner = rows_by_id[result.winner_id(seeding)]
+            record(
+                session,
+                winner,
+                TransactionCategory.PRIZE,
+                "Prime · champion",
+                CHAMPION_PRIZE,
+                day,
+                matchday,
+            )
+
+    # Les salaires se versent à chaque journée de saison régulière, pour tous les clubs.
+    if stage == Stage.REGULAR:
+        for club_row in club_rows:
+            record(
+                session,
+                club_row,
+                TransactionCategory.WAGES,
+                f"Salaires · {label}",
+                -matchday_wages(clubs[club_row.id], regular_count),
+                day,
+                matchday,
+            )
+
+    session.commit()
+    _ensure_next_stage(session, season, clubs)
+    return _matchday_out(todays, names)
+
+
+def _current_or_404(session: Session) -> SeasonRow:
+    season = current_season(session)
+    if season is None:
+        raise HTTPException(status_code=404, detail="Aucune saison : commence une carrière")
+    return season
+
+
+# --- Routes --------------------------------------------------------------------------
+
+
+@router.get("/current", response_model=SeasonOut)
+def get_current_season(session: SessionDep) -> SeasonOut:
+    """Calendrier complet, classement et prochaine journée de la saison en cours."""
+    return _season_out(session, _current_or_404(session))
+
+
+@router.post("/current/play", response_model=PlayOut)
+def play_next_matchday(session: SessionDep) -> PlayOut:
+    """Joue la prochaine journée (tous ses matchs) et renvoie la saison mise à jour."""
+    season = _current_or_404(session)
+    played = _play_matchday(session, season)
+    return PlayOut(played=played, season=_season_out(session, season))
+
+
+@router.post("/next", response_model=SeasonOut, status_code=201)
+def start_next_season(session: SessionDep) -> SeasonOut:
+    """Intersaison : les joueurs vieillissent, les plus âgés partent, les jeunes
+    arrivent, puis un nouveau calendrier est tiré."""
+    season = _current_or_404(session)
+    if _phase(season) != "finished":
+        raise HTTPException(status_code=400, detail="La saison n'est pas terminée")
+
+    rng = random.Random()
+    next_id = (session.scalar(select(func.max(PlayerRow.id))) or 0) + 1
+    player_ids = itertools.count(next_id)
+    for club_row in _club_rows(session):
+        club = club_row.to_domain()
+        age_players(club)
+        gone = {player.id for player in retirees(club)}
+        club.players = [p for p in club.players if p.id not in gone]
+        for player_row in list(club_row.players):
+            if player_row.id in gone:
+                session.delete(player_row)
+            else:
+                player_row.age += 1
+        for youth in generate_youth(club, player_ids, rng):
+            session.add(PlayerRow.from_domain(youth))
+    session.commit()
+
+    return _season_out(session, create_season(session, season.year + 1))
 
 
 @router.get("/{year}", response_model=SeasonOut)
 def get_season(year: int, session: SessionDep) -> SeasonOut:
-    """Classement d'une saison enregistrée, recalculé à partir de ses matchs."""
-    row = session.scalars(select(SeasonRow).where(SeasonRow.year == year)).first()
-    if row is None:
+    """Une saison passée (ou en cours), par année."""
+    season = session.scalars(select(SeasonRow).where(SeasonRow.year == year)).first()
+    if season is None:
         raise HTTPException(status_code=404, detail=f"Saison {year} introuvable")
-
-    season = Season(year=year, clubs=_load_clubs(session))
-    for match_row in row.matches:
-        match = match_row.to_domain()
-        season.matches.append(match)
-        record_result(season, match)
-    return _season_out(season)
+    return _season_out(session, season)

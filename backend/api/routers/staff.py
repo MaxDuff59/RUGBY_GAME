@@ -9,8 +9,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api.deps import SessionDep, load_my_club_row
+from api.ledger import game_date, record
 from api.schemas import StaffMemberOut, StaffOverview, StaffSlotOut
-from engine.economy import severance
+from engine.economy import TransactionCategory, severance
 from models import StaffRole
 from models.orm import ClubRow, StaffRow
 
@@ -75,7 +76,14 @@ def fire(staff_id: int, session: SessionDep) -> StaffOverview:
     if club.balance < cost:
         raise HTTPException(status_code=400, detail="Trésorerie insuffisante pour l'indemnité")
 
-    club.balance -= cost
+    record(
+        session,
+        club,
+        TransactionCategory.STAFF,
+        f"Indemnité de licenciement · {member.first_name} {member.last_name}",
+        -cost,
+        game_date(session),
+    )
     member.club_id = None  # il redevient disponible sur le marché
     session.commit()
     session.refresh(club)

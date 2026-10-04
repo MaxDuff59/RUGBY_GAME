@@ -10,8 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api.deps import SessionDep, load_my_club_row
+from api.ledger import game_date, record
 from api.schemas import ListingOut, PlayerOut, TransfersOverview
-from engine.economy import SQUAD_MAX, SQUAD_MIN, asking_price, sale_price
+from engine.economy import SQUAD_MAX, SQUAD_MIN, TransactionCategory, asking_price, sale_price
 from models.orm import ClubRow, PlayerRow
 
 router = APIRouter(prefix="/transfers", tags=["transferts"])
@@ -64,9 +65,13 @@ def buy(player_id: int, session: SessionDep) -> TransfersOverview:
     if club.balance < price:
         raise HTTPException(status_code=400, detail="Trésorerie insuffisante")
 
-    seller = row.club
-    seller.balance += price
-    club.balance -= price
+    seller, day, name = row.club, game_date(session), f"{row.first_name} {row.last_name}"
+    record(
+        session, club, TransactionCategory.TRANSFER, f"Achat · {name} ({seller.name})", -price, day
+    )
+    record(
+        session, seller, TransactionCategory.TRANSFER, f"Vente · {name} ({club.name})", price, day
+    )
     row.club_id = club.id
     session.commit()
     session.refresh(club)
@@ -95,8 +100,13 @@ def sell(player_id: int, session: SessionDep) -> TransfersOverview:
     buyer = min(buyers, key=lambda c: len(c.players))
 
     price = sale_price(row.to_domain())
-    buyer.balance -= price
-    club.balance += price
+    day, name = game_date(session), f"{row.first_name} {row.last_name}"
+    record(
+        session, club, TransactionCategory.TRANSFER, f"Vente · {name} ({buyer.name})", price, day
+    )
+    record(
+        session, buyer, TransactionCategory.TRANSFER, f"Achat · {name} ({club.name})", -price, day
+    )
     row.club_id = buyer.id
     session.commit()
     session.refresh(club)

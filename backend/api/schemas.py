@@ -4,13 +4,23 @@ Ils sont séparés des objets du domaine : on choisit ce qu'on expose au fronten
 sans contraindre le moteur.
 """
 
+import datetime
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
-from engine.economy import FacilityKind, market_value
+from engine.economy import FacilityKind, TransactionCategory, market_value
 from engine.match_engine import TeamStrength
-from models import EventType, Match, Player, Position, StaffRole
+from models import EventType, Match, Player, Position, StaffRole, Stage
 
 # --- Clubs et joueurs ----------------------------------------------------------------
+
+
+class ClubRef(BaseModel):
+    """Juste de quoi nommer un club."""
+
+    id: int
+    name: str
 
 
 class PlayerOut(BaseModel):
@@ -91,7 +101,147 @@ class ClubDetail(BaseModel):
     players: list[PlayerOut]
 
 
+# --- Matchs --------------------------------------------------------------------------
+
+
+class SimulateMatchIn(BaseModel):
+    home_club_id: int
+    away_club_id: int
+    # Graine optionnelle pour rejouer exactement le même match.
+    seed: int | None = None
+
+
+class MatchEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    minute: int
+    type: EventType
+    club_id: int
+    player_id: int | None
+    points: int
+
+
+class MatchOut(BaseModel):
+    """Un match avec le détail de ses événements."""
+
+    id: int | None
+    home_club_id: int
+    away_club_id: int
+    matchday: int
+    stage: Stage
+    date: datetime.date | None
+    neutral: bool
+    home_score: int
+    away_score: int
+    home_tries: int
+    away_tries: int
+    events: list[MatchEventOut]
+
+    @classmethod
+    def from_match(cls, match: Match) -> "MatchOut":
+        return cls(
+            id=match.id,
+            home_club_id=match.home_club_id,
+            away_club_id=match.away_club_id,
+            matchday=match.matchday,
+            stage=match.stage,
+            date=match.date,
+            neutral=match.neutral,
+            home_score=match.home_score,
+            away_score=match.away_score,
+            home_tries=match.tries_for(match.home_club_id),
+            away_tries=match.tries_for(match.away_club_id),
+            events=[MatchEventOut.model_validate(e) for e in match.events],
+        )
+
+
+class MatchSummary(BaseModel):
+    """Une affiche du calendrier, avec son score si elle a été jouée."""
+
+    id: int
+    matchday: int
+    stage: Stage
+    date: datetime.date
+    neutral: bool
+    home: ClubRef
+    away: ClubRef
+    home_score: int | None
+    away_score: int | None
+
+
+class MatchdayOut(BaseModel):
+    matchday: int
+    stage: Stage
+    date: datetime.date
+    matches: list[MatchSummary]
+
+
+# --- Carrière ------------------------------------------------------------------------
+
+
+class CareerIn(BaseModel):
+    manager_name: str = Field(min_length=1, max_length=100)
+    club_id: int
+
+
+class CareerOut(BaseModel):
+    id: int
+    manager_name: str
+    club_id: int
+    club_name: str
+
+
+# --- Saisons -------------------------------------------------------------------------
+
+
+class StandingOut(BaseModel):
+    rank: int
+    club_id: int
+    club_name: str
+    played: int
+    won: int
+    drawn: int
+    lost: int
+    points_for: int
+    points_against: int
+    points_difference: int
+    tries_for: int
+    offensive_bonus: int
+    defensive_bonus: int
+    league_points: int
+
+
+class SeasonOut(BaseModel):
+    year: int
+    # regular : journées à jouer ; playoffs : phases finales en cours ; finished : finale jouée.
+    phase: Literal["regular", "playoffs", "finished"]
+    regular_matchdays: int
+    club_count: int
+    playoff_qualifiers: int
+    next_matchday: MatchdayOut | None
+    standings: list[StandingOut]  # saison régulière seulement
+    matches: list[MatchSummary]  # tout le calendrier, phases finales comprises
+    champion: ClubRef | None
+
+
+class PlayOut(BaseModel):
+    played: MatchdayOut
+    season: SeasonOut
+
+
 # --- Finances, staff, infrastructures, transferts (club du joueur) ---------------------
+
+
+class TransactionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    date: datetime.date
+    matchday: int | None
+    category: TransactionCategory
+    label: str
+    amount: int
+    balance_after: int
 
 
 class FinancesOut(BaseModel):
@@ -100,6 +250,7 @@ class FinancesOut(BaseModel):
     staff_wages: int
     squad_value: int
     squad_size: int
+    transactions: list[TransactionOut]  # de la plus récente à la plus ancienne
 
 
 class StaffMemberOut(BaseModel):
@@ -152,93 +303,3 @@ class TransfersOverview(BaseModel):
     squad_min: int
     squad_max: int
     listings: list[ListingOut]
-
-
-# --- Matchs --------------------------------------------------------------------------
-
-
-class SimulateMatchIn(BaseModel):
-    home_club_id: int
-    away_club_id: int
-    # Graine optionnelle pour rejouer exactement le même match.
-    seed: int | None = None
-
-
-class MatchEventOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    minute: int
-    type: EventType
-    club_id: int
-    player_id: int | None
-    points: int
-
-
-class MatchOut(BaseModel):
-    home_club_id: int
-    away_club_id: int
-    matchday: int
-    home_score: int
-    away_score: int
-    home_tries: int
-    away_tries: int
-    events: list[MatchEventOut]
-
-    @classmethod
-    def from_match(cls, match: Match) -> "MatchOut":
-        return cls(
-            home_club_id=match.home_club_id,
-            away_club_id=match.away_club_id,
-            matchday=match.matchday,
-            home_score=match.home_score,
-            away_score=match.away_score,
-            home_tries=match.tries_for(match.home_club_id),
-            away_tries=match.tries_for(match.away_club_id),
-            events=[MatchEventOut.model_validate(e) for e in match.events],
-        )
-
-
-# --- Carrière ------------------------------------------------------------------------
-
-
-class CareerIn(BaseModel):
-    manager_name: str = Field(min_length=1, max_length=100)
-    club_id: int
-
-
-class CareerOut(BaseModel):
-    id: int
-    manager_name: str
-    club_id: int
-    club_name: str
-
-
-# --- Saisons -------------------------------------------------------------------------
-
-
-class SeasonIn(BaseModel):
-    year: int
-    seed: int | None = None
-
-
-class StandingOut(BaseModel):
-    rank: int
-    club_id: int
-    club_name: str
-    played: int
-    won: int
-    drawn: int
-    lost: int
-    points_for: int
-    points_against: int
-    points_difference: int
-    tries_for: int
-    offensive_bonus: int
-    defensive_bonus: int
-    league_points: int
-
-
-class SeasonOut(BaseModel):
-    year: int
-    matchdays: int
-    standings: list[StandingOut]

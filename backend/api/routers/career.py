@@ -1,12 +1,15 @@
 """Carrière : le club que dirige le joueur.
 
 Une seule carrière à la fois pour l'instant : en créer une remplace la précédente.
+La première saison (et son calendrier) est tirée au démarrage de la carrière.
 """
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import delete, select
 
 from api.deps import SessionDep, load_club
+from api.ledger import current_season
+from api.routers.seasons import FIRST_SEASON_YEAR, create_season
 from api.schemas import CareerIn, CareerOut
 from models.orm import CareerRow
 
@@ -21,6 +24,10 @@ def start_career(payload: CareerIn, session: SessionDep) -> CareerOut:
     row = CareerRow(manager_name=payload.manager_name, club_id=club.id)
     session.add(row)
     session.commit()
+
+    if current_season(session) is None:
+        create_season(session, FIRST_SEASON_YEAR)
+
     return CareerOut(id=row.id, manager_name=row.manager_name, club_id=club.id, club_name=club.name)
 
 
