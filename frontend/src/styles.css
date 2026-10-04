@@ -513,7 +513,7 @@ h3 {
 }
 
 .squad__table .table {
-  min-width: 760px;
+  min-width: 920px;
 }
 
 /* --- Page Club --------------------------------------------------------------- */
@@ -617,4 +617,132 @@ h3 {
 
 .field label {
   font-weight: 600;
+}
+
+/* --- Pages de gestion -------------------------------------------------------- */
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.page-head__stats {
+  display: flex;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.tiles--wide {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.tile {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tile__value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 34px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 28px;
+  align-items: start;
+}
+
+.facility {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.facility__upgrade {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+}
+
+/* Niveau en carrés */
+.level {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.level__dot {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--ink);
+  border-radius: 2px;
+}
+
+.level__dot--on {
+  background: var(--ink);
+}
+
+/* Filtres */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--ink);
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--surface);
+  border-color: var(--ink);
+}
+
+.button--small {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.table__row--clickable {
+  cursor: pointer;
+}
+
+.table__row--clickable:hover {
+  background: var(--line-soft);
+}
+
+.table__row--selected {
+  background: #e4e4de;
+  cursor: pointer;
 }

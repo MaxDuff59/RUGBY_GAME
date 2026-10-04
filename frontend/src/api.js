@@ -29,12 +29,28 @@ async function request(path, { method = "GET", body } = {}) {
   return response.json();
 }
 
+const post = (path, body) => request(path, { method: "POST", body });
+
 export const api = {
+  // Clubs et carrière
   listClubs: () => request("/clubs"),
   getClub: (clubId) => request(`/clubs/${clubId}`),
   getCareer: () => request("/career"),
   startCareer: (managerName, clubId) =>
-    request("/career", { method: "POST", body: { manager_name: managerName, club_id: clubId } }),
+    post("/career", { manager_name: managerName, club_id: clubId }),
+
+  // Saison
   getSeason: (year) => request(`/seasons/${year}`),
-  simulateSeason: (year) => request("/seasons", { method: "POST", body: { year } }),
+  simulateSeason: (year) => post("/seasons", { year }),
+
+  // Gestion du club dirigé
+  getFinances: () => request("/finances"),
+  getStaff: () => request("/staff"),
+  hireStaff: (staffId) => post(`/staff/hire/${staffId}`),
+  fireStaff: (staffId) => post(`/staff/${staffId}/fire`),
+  getFacilities: () => request("/facilities"),
+  upgradeFacility: (kind) => post(`/facilities/${kind}/upgrade`),
+  getTransfers: () => request("/transfers"),
+  buyPlayer: (playerId) => post(`/transfers/buy/${playerId}`),
+  sellPlayer: (playerId) => post(`/transfers/sell/${playerId}`),
 };

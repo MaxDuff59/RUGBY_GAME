@@ -7,11 +7,13 @@ import { useApi } from "../hooks/useApi.js";
 const NAV_ITEMS = [
   { to: "/", label: "Club" },
   { to: "/effectif", label: "Effectif" },
+  { to: "/staff", label: "Staff" },
+  { to: "/transferts", label: "Transferts" },
+  { to: "/infrastructures", label: "Infrastructures" },
+  { to: "/finances", label: "Finances" },
   // Pages à venir : affichées pour donner la forme du menu, mais inactives.
   { label: "Match" },
   { label: "Calendrier" },
-  { label: "Classement" },
-  { label: "Recrutement" },
 ];
 
 // Cadre commun à toutes les pages : navigation à gauche, en-tête avec le club.

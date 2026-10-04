@@ -29,12 +29,18 @@ src/
   api.js              appels à l'API (une fonction par route)
   format.js           libellés des postes, attributs, formats de nombres
   styles.css          styles globaux (variables de DESIGN.md)
-  hooks/useApi.js     charge une ressource de l'API : { data, error, loading, reload }
-  components/Layout.jsx   navigation + en-tête, charge la carrière en cours
+  hooks/useApi.js     charge une ressource de l'API : { data, error, loading, reload, setData }
+  components/
+    Layout.jsx        navigation + en-tête, charge la carrière en cours
+    Level.jsx         niveau de 1 à 5 en petits carrés
   pages/
     StartCareer.jsx   choisir son nom et son club (première visite)
     Club.jsx          niveau du XV et classement
     Squad.jsx         XV de départ sur le terrain + attributs de tout l'effectif
+    Staff.jsx         ton staff (8 postes), licencier, embaucher parmi les candidats
+    Transfers.jsx     acheter chez les autres clubs, vendre ses joueurs
+    Facilities.jsx    stade, centre d'entraînement, centre de formation
+    Finances.jsx      trésorerie, masse salariale, valeur de l'effectif
 ```
 
 Pas de TypeScript ni de bibliothèque de composants : du JavaScript, du CSS

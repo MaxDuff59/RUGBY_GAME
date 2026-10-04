@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
-import { ATTRIBUTES, POSITION_ORDER, POSITIONS, formatNote } from "../format.js";
+import { ATTRIBUTES, POSITION_ORDER, POSITIONS, formatMoney, formatNote } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 
 // Places du XV sur le terrain : numéro, poste, position en % (attaque vers le haut).
@@ -109,6 +109,8 @@ export default function Squad() {
                 <th scope="col" className="left">Joueur</th>
                 <th scope="col">Âge</th>
                 <th scope="col">Note</th>
+                <th scope="col">Valeur</th>
+                <th scope="col">Salaire</th>
                 {ATTRIBUTES.map((attr) => (
                   <th key={attr.key} scope="col" title={attr.label}>
                     {attr.short}
@@ -122,7 +124,7 @@ export default function Squad() {
             ].map((group) => (
               <tbody key={group.title}>
                 <tr>
-                  <th scope="rowgroup" colSpan={4 + ATTRIBUTES.length} className="table__group">
+                  <th scope="rowgroup" colSpan={6 + ATTRIBUTES.length} className="table__group">
                     {group.title}
                   </th>
                 </tr>
@@ -137,6 +139,8 @@ export default function Squad() {
                       </td>
                       <td className="muted">{player.age}</td>
                       <td className="note">{formatNote(player.overall)}</td>
+                      <td>{formatMoney(player.value)}</td>
+                      <td className="muted">{formatMoney(player.wage)}</td>
                       {ATTRIBUTES.map((attr) => {
                         const value = player[attr.key];
                         const tone = value >= 15 ? "cell--strong" : value <= 8 ? "cell--weak" : "";
@@ -153,7 +157,7 @@ export default function Squad() {
           </table>
           <p className="table__note">
             {ATTRIBUTES.map((attr) => `${attr.short} ${attr.label.toLowerCase()}`).join(" · ")}.
-            Attributs sur 20 ; en gras à partir de 15. Le numéro indique les titulaires.
+            Attributs sur 20 ; en gras à partir de 15. Le numéro indique les titulaires. Salaire par saison.
           </p>
         </div>
       </div>
