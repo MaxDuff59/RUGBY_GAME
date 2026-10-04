@@ -123,7 +123,7 @@ export default function Club() {
         </section>
       )}
 
-      <div className="club-grid">
+      <div className="club-grid fill">
         {myNextMatch && (
           <Strength myId={myId} opponentId={myNextMatch.home.id === myId ? myNextMatch.away.id : myNextMatch.home.id} />
         )}

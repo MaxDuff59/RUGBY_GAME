@@ -43,3 +43,19 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   sur 20 issues directement du moteur (`TeamStrength`).
 - Tableau d'effectif : 8 attributs, gras à partir de 15, gris à 8 et moins.
 - Boutons et liens cliquables : 44 px de haut minimum.
+
+## Hauteur d'écran
+
+- Aucune page ne dépasse 100 % de la hauteur de la fenêtre : jamais de défilement
+  de la page vers le bas.
+- Ce qui ne tient pas (listing de l'effectif, calendrier, opérations financières…)
+  défile **à l'intérieur de sa carte**, dont la hauteur est bornée par celle de la fenêtre.
+- L'en-tête, la navigation et le titre de page restent toujours visibles.
+- Mise en œuvre (`styles.css`, section « Structure ») : `.app` est une grille à la
+  hauteur de la fenêtre, `.main` une colonne flex sans débordement. Dans chaque page,
+  le bloc qui absorbe la hauteur restante porte la classe `fill` (section, `club-grid`,
+  `two-col` ou carte) ; sa carte reçoit `overflow: auto` et les en-têtes de tableau
+  restent collés en haut. Deux blocs `fill` se partagent la place ; `fill--main` en
+  donne deux tiers à l'un.
+- Sur téléphone (≤ 720 px), le cadre reste à la hauteur de l'écran mais le contenu
+  principal défile sous la navigation.

@@ -50,7 +50,7 @@ function Ledger({ transactions }) {
   );
 
   return (
-    <section className="section">
+    <section className="section fill">
       <div className="section__head">
         <h2 className="eyebrow">Opérations · {transactions.length}</h2>
         <span className="muted">Billetterie et sponsors à chaque journée, salaires en saison régulière</span>

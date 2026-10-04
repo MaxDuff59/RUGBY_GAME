@@ -142,7 +142,7 @@ export default function Transfers() {
         </section>
       )}
 
-      <section className="section">
+      <section className="section fill fill--main">
         <div className="section__head">
           <h2 className="eyebrow">Marché · {listings.length} joueurs</h2>
           <span className="muted">Clique sur « Approcher » pour connaître les conditions</span>
@@ -223,7 +223,7 @@ export default function Transfers() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section fill">
         <h2 className="eyebrow">Vendre · ton effectif</h2>
         <div className="card table-wrap">
           <table className="table">

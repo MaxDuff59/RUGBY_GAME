@@ -48,16 +48,27 @@ h3 {
 
 /* --- Structure ------------------------------------------------------------- */
 
+/* Règle (DESIGN.md, « Hauteur d'écran ») : l'application occupe exactement la hauteur
+   de la fenêtre. Rien ne la fait défiler ; ce qui ne tient pas défile dans sa carte. */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
 .app {
-  display: flex;
-  flex-wrap: wrap;
-  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 .sidebar {
-  flex: 1 1 200px;
-  max-width: 232px;
-  min-width: 200px;
+  min-height: 0;
+  overflow-y: auto;
   padding: 28px 20px;
   display: flex;
   flex-direction: column;
@@ -66,22 +77,71 @@ h3 {
 }
 
 .main {
-  flex: 999 1 560px;
   min-width: 0;
-  padding: 28px 40px 48px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 28px 40px 32px;
   display: flex;
   flex-direction: column;
   gap: 28px;
 }
 
+/* Bloc qui absorbe la hauteur restante de la page. Dans un bloc « fill », les cartes
+   gardent leur taille naturelle mais se compriment et défilent quand la place manque. */
+.fill {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+/* Quand deux blocs se partagent la page, celui-ci prend deux tiers. */
+.fill--main {
+  flex-grow: 2;
+}
+
+.main > .card.fill {
+  overflow: auto;
+}
+
+.section.fill > .card {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.fill.club-grid,
+.fill.two-col {
+  grid-auto-rows: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.fill.club-grid > .section,
+.fill.two-col > .section {
+  min-height: 0;
+}
+
+.fill.club-grid > .section > .card,
+.fill.two-col > .section > .card {
+  min-height: 0;
+  overflow: auto;
+}
+
 @media (max-width: 720px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
   .sidebar {
-    max-width: none;
+    overflow: visible;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
+  /* Sur téléphone, le cadre reste à la hauteur de l'écran mais le contenu défile. */
   .main {
+    overflow-y: auto;
     padding: 20px 16px 40px;
+  }
+  .fill {
+    flex: 0 0 auto;
   }
 }
 
@@ -335,6 +395,13 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 
+.table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+
 .table th {
   padding: 14px 8px 10px;
   font-size: 11px;
@@ -493,15 +560,15 @@ h3 {
 
 .squad__body {
   display: flex;
-  flex-wrap: wrap;
   gap: 32px;
-  align-items: flex-start;
+  align-items: stretch;
 }
 
 .squad__pitch {
   margin: 0;
-  flex: 0 1 420px;
-  min-width: 280px;
+  flex: 0 1 400px;
+  min-width: 260px;
+  align-self: flex-start;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -510,6 +577,17 @@ h3 {
 .squad__table {
   flex: 1 1 560px;
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+@media (max-width: 720px) {
+  .squad__body {
+    flex-wrap: wrap;
+  }
+  .squad__table {
+    overflow: visible;
+  }
 }
 
 .squad__table .table {
@@ -561,10 +639,23 @@ h3 {
 /* --- Choix du club ----------------------------------------------------------- */
 
 .start {
-  padding: 48px 40px 64px;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  padding: 48px 40px 40px;
   display: flex;
   flex-direction: column;
   gap: 28px;
+}
+
+.start > .section {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.start .club-list {
+  min-height: 0;
+  overflow: auto;
 }
 
 .club-list {
@@ -986,6 +1077,15 @@ h3 {
 
 .calendar {
   padding: 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+
+.calendar__grid {
+  flex: 1 1 auto;
+  grid-auto-rows: minmax(88px, 1fr);
 }
 
 .calendar__weekdays,

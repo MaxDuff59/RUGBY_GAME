@@ -76,7 +76,7 @@ export default function Academy() {
       </div>
 
       {view === "youths" && (
-        <section className="section">
+        <section className="section fill">
           <div className="section__head">
             <h2 className="eyebrow">Espoirs</h2>
             <span className="muted">
@@ -111,7 +111,7 @@ export default function Academy() {
       )}
 
       {view === "pros" && (
-        <section className="section">
+        <section className="section fill">
           <div className="section__head">
             <h2 className="eyebrow">Pros de {data.youth_max_age} ans ou moins</h2>
             <span className="muted">Redescendre un jeune pro lui donne du temps de jeu chez les espoirs</span>
@@ -140,7 +140,7 @@ export default function Academy() {
       )}
 
       {view === "calendar" && (
-        <div className="club-grid">
+        <div className="club-grid fill">
           {data.last_matchday && (
             <section className="section">
               <div className="section__head">

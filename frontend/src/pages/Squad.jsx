@@ -90,7 +90,7 @@ export default function Squad() {
         <p className="muted">Composition choisie par le staff</p>
       </header>
 
-      <div className="squad__body">
+      <div className="squad__body fill">
         <figure className="squad__pitch" aria-label="XV de départ sur le terrain">
           <div className="pitch">
             {PITCH_LINES.map((line) => (

@@ -112,7 +112,7 @@ function WeekView({ current, matchdays, myId }) {
   }
 
   return inWeek.map((md) => (
-    <section key={md.matchday} className="section">
+    <section key={md.matchday} className="section fill">
       <div className="section__head">
         <h2 className="eyebrow">{md.stage === "regular" ? `Journée ${md.matchday}` : STAGES[md.stage]}</h2>
         <span className="muted">{formatLongDate(md.date)}</span>
@@ -135,7 +135,7 @@ function MonthView({ current, matchdays, myId, onPick }) {
   const days = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
 
   return (
-    <div className="card calendar">
+    <div className="card calendar fill">
       <div className="calendar__weekdays">
         {WEEKDAYS.map((day) => (
           <span key={day}>{day}</span>
@@ -182,7 +182,7 @@ function MyMatchLine({ match, myId }) {
 
 function SeasonView({ matchdays, myId }) {
   return (
-    <div className="card table-wrap">
+    <div className="card table-wrap fill">
       <table className="table">
         <thead>
           <tr>

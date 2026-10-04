@@ -44,7 +44,7 @@ export default function Staff() {
 
       {actionError && <p className="status--error">{actionError.message}</p>}
 
-      <div className="two-col">
+      <div className="two-col fill">
         <section className="section">
           <h2 className="eyebrow">Ton staff</h2>
           <div className="card table-wrap">

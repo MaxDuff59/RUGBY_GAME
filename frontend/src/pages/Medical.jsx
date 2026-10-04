@@ -63,7 +63,7 @@ export default function Medical() {
 
       {actionError && <p className="status--error">{actionError.message}</p>}
 
-      <section className="section">
+      <section className="section fill">
         <div className="section__head">
           <h2 className="eyebrow">Infirmerie · {data.injured.length}</h2>
           <span className="muted">Du retour le plus proche au plus lointain</span>
@@ -197,7 +197,7 @@ function InjuredPlayer({ injuryCase, busy, onChoose }) {
 
 function History({ cases }) {
   return (
-    <section className="section">
+    <section className="section fill">
       <div className="section__head">
         <h2 className="eyebrow">Dossier médical · {cases.length}</h2>
         <span className="muted">Blessures guéries, de la plus récente à la plus ancienne</span>
