@@ -6,8 +6,9 @@ sans contraindre le moteur.
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from engine.economy import FacilityKind, market_value
 from engine.match_engine import TeamStrength
-from models import EventType, Match, Position
+from models import EventType, Match, Player, Position, StaffRole
 
 # --- Clubs et joueurs ----------------------------------------------------------------
 
@@ -31,6 +32,14 @@ class PlayerOut(BaseModel):
     scrum: int
     lineout: int
     overall: float
+    wage: int
+    value: int
+
+    @classmethod
+    def from_player(cls, player: Player) -> "PlayerOut":
+        # Tous les champs viennent du joueur, sauf la valeur qui se calcule.
+        fields = {name: getattr(player, name) for name in cls.model_fields if name != "value"}
+        return cls(**fields, value=market_value(player))
 
 
 class StrengthOut(BaseModel):
@@ -65,11 +74,84 @@ class ClubSummary(BaseModel):
     level: float
 
 
+class FacilitiesOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    stadium_capacity: int
+    training_level: int
+    academy_level: int
+
+
 class ClubDetail(BaseModel):
     id: int
     name: str
+    balance: int
+    facilities: FacilitiesOut
     strength: StrengthOut
     players: list[PlayerOut]
+
+
+# --- Finances, staff, infrastructures, transferts (club du joueur) ---------------------
+
+
+class FinancesOut(BaseModel):
+    balance: int
+    player_wages: int  # masse salariale des joueurs, par saison
+    staff_wages: int
+    squad_value: int
+    squad_size: int
+
+
+class StaffMemberOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    role: StaffRole
+    level: int
+    wage: int
+
+
+class StaffSlotOut(BaseModel):
+    role: StaffRole
+    member: StaffMemberOut | None
+    severance: int | None  # indemnité si on licencie le titulaire
+
+
+class StaffOverview(BaseModel):
+    balance: int
+    slots: list[StaffSlotOut]
+    candidates: list[StaffMemberOut]
+
+
+class UpgradeOut(BaseModel):
+    kind: FacilityKind
+    current: int  # capacité du stade, ou niveau
+    next: int | None  # None = maximum atteint
+    cost: int | None
+    affordable: bool
+
+
+class FacilitiesOverview(BaseModel):
+    balance: int
+    facilities: FacilitiesOut
+    upgrades: list[UpgradeOut]
+
+
+class ListingOut(BaseModel):
+    player: PlayerOut
+    club_id: int
+    club_name: str
+    asking_price: int
+    affordable: bool
+
+
+class TransfersOverview(BaseModel):
+    balance: int
+    squad_size: int
+    squad_min: int
+    squad_max: int
+    listings: list[ListingOut]
 
 
 # --- Matchs --------------------------------------------------------------------------

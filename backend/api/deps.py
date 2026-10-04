@@ -3,11 +3,12 @@
 from typing import Annotated
 
 from fastapi import Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database import get_session
 from models import Club
-from models.orm import ClubRow
+from models.orm import CareerRow, ClubRow
 
 # Raccourci : `session: SessionDep` dans une route injecte une session SQLAlchemy.
 SessionDep = Annotated[Session, Depends(get_session)]
@@ -19,3 +20,15 @@ def load_club(session: Session, club_id: int) -> Club:
     if row is None:
         raise HTTPException(status_code=404, detail=f"Club {club_id} introuvable")
     return row.to_domain()
+
+
+def load_my_club_row(session: Session) -> ClubRow:
+    """Ligne du club dirigé par le joueur (404 sans carrière en cours).
+
+    On renvoie la ligne SQLAlchemy, pas l'objet du domaine : les routes de
+    gestion (staff, transferts...) modifient directement la base.
+    """
+    career = session.scalars(select(CareerRow)).first()
+    if career is None:
+        raise HTTPException(status_code=404, detail="Aucune carrière en cours")
+    return session.get(ClubRow, career.club_id)

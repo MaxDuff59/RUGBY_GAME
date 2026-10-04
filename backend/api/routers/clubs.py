@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from sqlalchemy import select
 
 from api.deps import SessionDep, load_club
-from api.schemas import ClubDetail, ClubSummary, PlayerOut, StrengthOut
+from api.schemas import ClubDetail, ClubSummary, FacilitiesOut, PlayerOut, StrengthOut
 from engine.match_engine import team_strength
 from models.orm import ClubRow
 
@@ -33,6 +33,8 @@ def get_club(club_id: int, session: SessionDep) -> ClubDetail:
     return ClubDetail(
         id=club.id,
         name=club.name,
+        balance=club.balance,
+        facilities=FacilitiesOut.model_validate(club.facilities),
         strength=StrengthOut.from_team(team_strength(club)),
-        players=[PlayerOut.model_validate(p) for p in club.players],
+        players=[PlayerOut.from_player(p) for p in club.players],
     )

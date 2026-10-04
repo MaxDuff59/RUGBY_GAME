@@ -7,8 +7,8 @@ from collections.abc import Iterator
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from data.generator import generate_clubs
-from models.orm import Base, ClubRow
+from data.generator import generate_clubs, generate_staff_candidates
+from models.orm import Base, ClubRow, StaffRow
 
 # Surchargeable par variable d'environnement (ex. une autre base pour essayer).
 DATABASE_URL = os.environ.get("RUGBY_DATABASE_URL", "sqlite:///./rugby.db")
@@ -35,8 +35,13 @@ def seed_if_empty(
     """
     if session.scalar(select(func.count()).select_from(ClubRow)):
         return 0
-    clubs = generate_clubs(club_count, random.Random(seed))
+    rng = random.Random(seed)
+    clubs = generate_clubs(club_count, rng)
     session.add_all(ClubRow.from_domain(club) for club in clubs)
+    # Staff disponible à l'embauche (3 candidats par poste), après ceux des clubs.
+    first_id = sum(len(club.staff) for club in clubs) + 1
+    candidates = generate_staff_candidates(3, rng, first_id=first_id)
+    session.add_all(StaffRow.from_domain(member) for member in candidates)
     session.commit()
     return len(clubs)
 
