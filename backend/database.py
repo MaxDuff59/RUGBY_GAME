@@ -4,7 +4,7 @@ import os
 import random
 from collections.abc import Iterator
 
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, func, inspect, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from data.generator import generate_clubs, generate_staff_candidates
@@ -22,8 +22,16 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
 def init_db() -> None:
-    """Crée les tables si elles n'existent pas encore."""
+    """Crée les tables si elles n'existent pas encore, et vérifie leur schéma."""
     Base.metadata.create_all(engine)
+    # Pas de migrations pour l'instant : une base créée avec un ancien schéma
+    # doit être supprimée (le monde est régénéré au démarrage suivant).
+    columns = {column["name"] for column in inspect(engine).get_columns("clubs")}
+    if "balance" not in columns:
+        raise RuntimeError(
+            "La base de données a un ancien schéma : supprime le fichier rugby.db "
+            "(dans backend/) puis relance l'API."
+        )
 
 
 def seed_if_empty(
