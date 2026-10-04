@@ -1178,3 +1178,41 @@ h3 {
 .injury-list li:last-child {
   border-bottom: 0;
 }
+
+/* --- Recrutement ----------------------------------------------------------------- */
+
+.deal-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.offer-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.offer-form .field {
+  max-width: 200px;
+}
+
+.negotiation__message {
+  padding: 12px 14px;
+  border-left: 3px solid var(--ink);
+  background: var(--line-soft);
+  border-radius: 0 6px 6px 0;
+}
+
+.negotiation__message--ok {
+  border-left-color: var(--accent);
+}
+
+.situation {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px 24px;
+}

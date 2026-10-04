@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from engine.economy import FacilityKind, TransactionCategory, market_value
 from engine.match_engine import TeamStrength
+from engine.transfers import DealKind
 from models import (
     EventType,
     Injury,
@@ -102,18 +103,27 @@ class PlayerOut(BaseModel):
     overall: float
     wage: int
     value: int
+    contract_until: int  # dernière saison sous contrat (2026 = jusqu'à la fin de 2026-27)
+    loaned_from: int | None  # club propriétaire si le joueur est prêté
+    loaned_from_name: str | None = None
     # Blessure en cours ou période de fragilité ; None si le joueur est apte.
     injury: InjuryOut | None = None
 
     @classmethod
-    def from_player(cls, player: Player, day: datetime.date | None = None) -> "PlayerOut":
-        # Tous les champs viennent du joueur, sauf la valeur qui se calcule.
-        computed = {"value", "injury"}
+    def from_player(
+        cls,
+        player: Player,
+        day: datetime.date | None = None,
+        club_names: dict[int, str] | None = None,
+    ) -> "PlayerOut":
+        # Tous les champs viennent du joueur, sauf ceux qui se calculent.
+        computed = {"value", "injury", "loaned_from_name"}
         fields = {name: getattr(player, name) for name in cls.model_fields if name not in computed}
         injury = None
         if day is not None and (player.is_injured(day) or player.is_fragile(day)):
             injury = InjuryOut.from_injury(player.injury, day)
-        return cls(**fields, value=market_value(player), injury=injury)
+        owner = (club_names or {}).get(player.loaned_from) if player.loaned_from else None
+        return cls(**fields, value=market_value(player), injury=injury, loaned_from_name=owner)
 
 
 class StrengthOut(BaseModel):
@@ -356,19 +366,90 @@ class FacilitiesOverview(BaseModel):
 
 
 class ListingOut(BaseModel):
+    """Un joueur d'un autre club et les voies possibles pour le recruter."""
+
     player: PlayerOut
     club_id: int
     club_name: str
-    asking_price: int
-    affordable: bool
+    club_level: float
+    years_left: int  # saisons de contrat restantes, celle en cours comprise
+    playing_time: str  # titulaire, remplaçant, réserviste (dans son club)
+    transfer_fee: int | None  # indemnité demandée ; None = intransférable
+    loanable: bool
+    precontract: bool  # dernière année de contrat : négociable sans indemnité
+
+
+class NegotiationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    player_id: int
+    player_name: str
+    club_name: str  # club actuel du joueur
+    kind: DealKind
+    stage: Literal["club", "player", "agreed", "done", "failed"]
+    opened_on: datetime.date
+    rounds: int
+    fee_demand: int | None
+    fee: int | None
+    wage_demand: int | None
+    wage: int | None
+    years: int | None
+    message: str
 
 
 class TransfersOverview(BaseModel):
     balance: int
+    season_year: int
     squad_size: int
     squad_min: int
     squad_max: int
+    my_level: float
     listings: list[ListingOut]
+    negotiations: list[NegotiationOut]  # en cours, et pré-contrats en attente de l'intersaison
+
+
+class DealOption(BaseModel):
+    """Une voie de recrutement : possible ou non, et pourquoi."""
+
+    kind: DealKind
+    available: bool
+    reason: str
+    fee_demand: int | None = None  # transfert : indemnité demandée par le club
+    wage_demand: int | None = None  # transfert, pré-contrat : salaire exigé par le joueur
+    wage: int | None = None  # prêt : salaire actuel, à ta charge
+
+
+class TransferTargetOut(BaseModel):
+    """Approche d'un joueur : sa situation et ce qu'il attend."""
+
+    player: PlayerOut
+    club: ClubRef
+    club_level: float
+    my_level: float
+    years_left: int
+    playing_time_now: str
+    playing_time_here: str
+    options: list[DealOption]
+    negotiation: NegotiationOut | None
+
+
+class OpenNegotiationIn(BaseModel):
+    kind: DealKind
+
+
+class OfferIn(BaseModel):
+    fee: int | None = Field(default=None, ge=0)  # étape club
+    wage: int | None = Field(default=None, ge=0)  # étape joueur
+    years: int = Field(default=2, ge=1, le=5)  # durée de contrat proposée (transfert, pré-contrat)
+
+
+class OfferOut(BaseModel):
+    accepted: bool  # l'offre de cette étape est acceptée
+    concluded: bool  # l'accord est complet (joueur arrivé, ou pré-contrat signé)
+    message: str
+    negotiation: NegotiationOut
+    overview: TransfersOverview
 
 
 # --- Médical -------------------------------------------------------------------------

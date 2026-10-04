@@ -190,9 +190,14 @@ def test_same_seed_gives_same_injuries(even_clubs):
 
 
 def _play_until_injured(manager, max_matchdays: int = 21) -> dict:
-    """Joue des journées jusqu'à ce que le club dirigé ait un blessé (protocole à choisir)."""
+    """Joue des journées jusqu'à ce que le club dirigé ait un blessé (protocole à choisir).
+
+    On ignore les blessures d'une semaine : le joueur serait déjà de retour à la
+    journée suivante, donc plus à l'infirmerie.
+    """
     for _ in range(max_matchdays):
         result = manager.post("/seasons/current/play").json()
+        result["injuries"] = [c for c in result["injuries"] if c["injury"]["weeks_total"] >= 2]
         if result["injuries"]:
             return result
     pytest.fail("aucun blessé sur toute une saison : très improbable")

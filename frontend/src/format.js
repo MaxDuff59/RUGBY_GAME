@@ -65,6 +65,26 @@ export const CATEGORIES = {
   medical: "Médical",
 };
 
+// --- Recrutement --------------------------------------------------------------------
+
+// Les trois voies pour recruter, dans l'ordre d'affichage.
+export const DEALS = {
+  precontract: { label: "Pré-contrat", scope: "Dernière année de contrat : il signe pour la saison prochaine, sans indemnité" },
+  transfer: { label: "Transfert", scope: "Indemnité au club, puis salaire au joueur ; il arrive tout de suite" },
+  loan: { label: "Prêt", scope: "Jusqu'à la fin de la saison, salaire à ta charge" },
+};
+
+export const NEGOTIATION_STAGES = {
+  club: "Indemnité à convenir avec le club",
+  player: "Salaire à convenir avec le joueur",
+  agreed: "Accord signé · arrive à l'intersaison",
+  done: "Arrivé",
+  failed: "Rompue",
+};
+
+// 2026 -> "2027" : un contrat qui couvre la saison 2026-27 se termine en juin 2027.
+export const formatContractEnd = (contractUntil) => String(contractUntil + 1);
+
 // --- Médical ------------------------------------------------------------------------
 
 export const SEVERITIES = {

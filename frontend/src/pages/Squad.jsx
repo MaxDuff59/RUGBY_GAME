@@ -3,7 +3,15 @@ import { useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
 import SortHeader from "../components/SortHeader.jsx";
-import { ATTRIBUTES, POSITION_ORDER, POSITIONS, formatMoney, formatNote, formatShortDate } from "../format.js";
+import {
+  ATTRIBUTES,
+  POSITION_ORDER,
+  POSITIONS,
+  formatContractEnd,
+  formatMoney,
+  formatNote,
+  formatShortDate,
+} from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { useSort } from "../hooks/useSort.js";
 
@@ -118,6 +126,7 @@ export default function Squad() {
                 {header("overall", "Note")}
                 {header("value", "Valeur")}
                 {header("wage", "Salaire")}
+                {header("contract_until", "Contrat", "asc", false, "Fin du contrat")}
                 {ATTRIBUTES.map((attr) => (
                   <SortHeader
                     key={attr.key}
@@ -137,7 +146,7 @@ export default function Squad() {
             ].map((group) => (
               <tbody key={group.title}>
                 <tr>
-                  <th scope="rowgroup" colSpan={6 + ATTRIBUTES.length} className="table__group">
+                  <th scope="rowgroup" colSpan={7 + ATTRIBUTES.length} className="table__group">
                     {group.title}
                   </th>
                 </tr>
@@ -157,6 +166,9 @@ export default function Squad() {
                       <td className="note">{formatNote(player.overall)}</td>
                       <td>{formatMoney(player.value)}</td>
                       <td className="muted">{formatMoney(player.wage)}</td>
+                      <td className="muted">
+                        {player.loaned_from ? `Prêt · ${player.loaned_from_name}` : formatContractEnd(player.contract_until)}
+                      </td>
                       {ATTRIBUTES.map((attr) => {
                         const value = player[attr.key];
                         const tone = value >= 15 ? "cell--strong" : value <= 8 ? "cell--weak" : "";
@@ -173,8 +185,8 @@ export default function Squad() {
           </table>
           <p className="table__note">
             {ATTRIBUTES.map((attr) => `${attr.short} ${attr.label.toLowerCase()}`).join(" · ")}.
-            Attributs sur 20 ; en gras à partir de 15. Le numéro indique les titulaires. Salaire par saison.
-            Les blessés ne sont pas alignés : voir la page Médical.
+            Attributs sur 20 ; en gras à partir de 15. Le numéro indique les titulaires. Salaire par saison,
+            contrat jusqu'en juin de l'année indiquée. Les blessés ne sont pas alignés : voir la page Médical.
           </p>
         </div>
       </div>

@@ -202,31 +202,25 @@ def test_facility_upgrade_refused_without_money(manager):
     assert response.json()["detail"] in ("Trésorerie insuffisante", "Niveau maximum déjà atteint")
 
 
-def test_transfers_buy_and_sell(manager):
+def test_sell_a_player(manager):
     market = manager.get("/transfers").json()
     assert market["squad_size"] == 31
     assert all(listing["club_id"] != 3 for listing in market["listings"])
-    cheapest = min(market["listings"], key=lambda listing: listing["asking_price"])
-    player_id = cheapest["player"]["id"]
+    mine = manager.get("/clubs/3").json()["players"][0]
 
-    bought = manager.post(f"/transfers/buy/{player_id}").json()
-    assert bought["squad_size"] == 32
-    assert bought["balance"] == market["balance"] - cheapest["asking_price"]
-    assert all(listing["player"]["id"] != player_id for listing in bought["listings"])
-
-    sold = manager.post(f"/transfers/sell/{player_id}").json()
-    assert sold["squad_size"] == 31
-    assert sold["balance"] > bought["balance"]
+    sold = manager.post(f"/transfers/sell/{mine['id']}").json()
+    assert sold["squad_size"] == 30
+    assert sold["balance"] == market["balance"] + mine["value"]
     labels = [t["label"] for t in manager.get("/finances").json()["transactions"]]
     assert any(label.startswith("Vente · ") for label in labels)
-    assert any(label.startswith("Achat · ") for label in labels)
     # Le joueur vendu est de nouveau sur le marché.
-    assert any(listing["player"]["id"] == player_id for listing in sold["listings"])
+    assert any(listing["player"]["id"] == mine["id"] for listing in sold["listings"])
 
 
 def test_transfer_limits(manager):
-    # Un joueur d'un autre club ne se vend pas ; le nôtre ne s'achète pas.
+    # Un joueur d'un autre club ne se vend pas ; le nôtre ne s'approche pas.
     other = manager.get("/clubs/1").json()["players"][0]["id"]
     mine = manager.get("/clubs/3").json()["players"][0]["id"]
     assert manager.post(f"/transfers/sell/{other}").status_code == 404
-    assert manager.post(f"/transfers/buy/{mine}").status_code == 404
+    assert manager.get(f"/transfers/{mine}").status_code == 404
+    assert manager.post(f"/transfers/{mine}/open", json={"kind": "loan"}).status_code == 404

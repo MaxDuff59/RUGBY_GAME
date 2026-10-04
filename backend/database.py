@@ -7,13 +7,13 @@ from collections.abc import Iterator
 from sqlalchemy import create_engine, func, inspect, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from data.generator import generate_clubs, generate_staff_candidates
+from data.generator import generate_clubs, generate_staff_candidates, generate_top14
 from models.orm import Base, ClubRow, StaffRow
 
 # Surchargeable par variable d'environnement (ex. une autre base pour essayer).
 DATABASE_URL = os.environ.get("RUGBY_DATABASE_URL", "sqlite:///./rugby.db")
 
-# Nombre de clubs générés au premier lancement.
+# Nombre de clubs inventés quand on ne prend pas les vrais clubs du Top 14.
 DEFAULT_CLUB_COUNT = 14
 
 # check_same_thread=False : nécessaire pour utiliser SQLite depuis FastAPI (plusieurs threads).
@@ -39,16 +39,20 @@ def init_db() -> None:
 
 
 def seed_if_empty(
-    session: Session, club_count: int = DEFAULT_CLUB_COUNT, seed: int | None = None
+    session: Session,
+    club_count: int = DEFAULT_CLUB_COUNT,
+    seed: int | None = None,
+    top14: bool = True,
 ) -> int:
-    """Remplit la base avec des clubs fictifs si elle est vide.
+    """Remplit la base si elle est vide : les vrais clubs du Top 14 (joueurs
+    inventés), ou `club_count` clubs fictifs avec `top14=False`.
 
     Renvoie le nombre de clubs créés (0 si la base contenait déjà des clubs).
     """
     if session.scalar(select(func.count()).select_from(ClubRow)):
         return 0
     rng = random.Random(seed)
-    clubs = generate_clubs(club_count, rng)
+    clubs = generate_top14(rng) if top14 else generate_clubs(club_count, rng)
     session.add_all(ClubRow.from_domain(club) for club in clubs)
     # Staff disponible à l'embauche (3 candidats par poste), après ceux des clubs.
     first_id = sum(len(club.staff) for club in clubs) + 1

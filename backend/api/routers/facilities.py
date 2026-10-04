@@ -6,10 +6,10 @@ from api.deps import SessionDep, load_my_club_row
 from api.ledger import game_date, record
 from api.schemas import FacilitiesOut, FacilitiesOverview, UpgradeOut
 from engine.economy import (
-    STADIUM_STEPS,
     FacilityKind,
     TransactionCategory,
     apply_upgrade,
+    next_stadium_step,
     upgrade_cost,
 )
 from models import Facilities
@@ -39,8 +39,7 @@ def _overview(club: ClubRow) -> FacilitiesOverview:
         cost = upgrade_cost(facilities, kind)
         if kind == FacilityKind.STADIUM:
             current = facilities.stadium_capacity
-            step = STADIUM_STEPS.index(current)
-            next_value = STADIUM_STEPS[step + 1] if cost is not None else None
+            next_value = next_stadium_step(current)
         else:
             current = (
                 facilities.training_level

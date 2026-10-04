@@ -42,7 +42,9 @@ class ClubRow(Base):
     training_level: Mapped[int] = mapped_column(default=1)
     academy_level: Mapped[int] = mapped_column(default=1)
 
-    players: Mapped[list["PlayerRow"]] = relationship(back_populates="club")
+    players: Mapped[list["PlayerRow"]] = relationship(
+        back_populates="club", foreign_keys="PlayerRow.club_id"
+    )
     staff: Mapped[list["StaffRow"]] = relationship(back_populates="club")
 
     def to_domain(self) -> Club:
@@ -90,9 +92,11 @@ class PlayerRow(Base):
     scrum: Mapped[int]
     lineout: Mapped[int]
     wage: Mapped[int] = mapped_column(default=0)
+    contract_until: Mapped[int] = mapped_column(default=0)
     club_id: Mapped[int | None] = mapped_column(ForeignKey("clubs.id"))
+    loaned_from: Mapped[int | None] = mapped_column(ForeignKey("clubs.id"))
 
-    club: Mapped[ClubRow | None] = relationship(back_populates="players")
+    club: Mapped[ClubRow | None] = relationship(back_populates="players", foreign_keys=[club_id])
     # Dossier médical complet ; le domaine ne garde que la blessure la plus récente.
     injuries: Mapped[list["InjuryRow"]] = relationship(
         back_populates="player", cascade="all, delete-orphan"
@@ -121,6 +125,8 @@ class PlayerRow(Base):
             club_id=self.club_id,
             wage=self.wage,
             injury=latest.to_domain() if latest is not None else None,
+            contract_until=self.contract_until,
+            loaned_from=self.loaned_from,
         )
 
     @classmethod
@@ -133,6 +139,8 @@ class PlayerRow(Base):
             position=player.position.value,
             club_id=player.club_id,
             wage=player.wage,
+            contract_until=player.contract_until,
+            loaned_from=player.loaned_from,
             **player.attributes,
         )
 
@@ -331,6 +339,33 @@ class CareerRow(Base):
     @classmethod
     def from_domain(cls, career: Career) -> "CareerRow":
         return cls(id=career.id, manager_name=career.manager_name, club_id=career.club_id)
+
+
+class NegotiationRow(Base):
+    """Négociation du club dirigé avec un joueur d'un autre club (api/routers/transfers.py).
+
+    Étapes : `club` (indemnité à convenir), `player` (salaire à convenir),
+    `agreed` (accord conclu ; un pré-contrat attend l'intersaison), `done`
+    (joueur arrivé), `failed` (rompue).
+    """
+
+    __tablename__ = "negotiations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id"))
+    kind: Mapped[str] = mapped_column(String(12))
+    stage: Mapped[str] = mapped_column(String(8))
+    opened_on: Mapped[datetime.date] = mapped_column(Date)
+    rounds: Mapped[int] = mapped_column(default=0)  # offres refusées à l'étape en cours
+    fee_demand: Mapped[int | None]  # indemnité demandée par le club
+    fee: Mapped[int | None]  # indemnité convenue
+    wage_demand: Mapped[int | None]  # salaire exigé par le joueur
+    wage: Mapped[int | None]  # salaire convenu
+    years: Mapped[int | None]  # durée du contrat convenue
+    message: Mapped[str] = mapped_column(String(300), default="")  # dernière réponse
+
+    player: Mapped[PlayerRow] = relationship()
 
 
 class TransactionRow(Base):

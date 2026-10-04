@@ -83,20 +83,35 @@ class FacilityKind(StrEnum):
     ACADEMY = "academy"
 
 
-# Paliers de capacité du stade, et coût pour passer au palier suivant.
-STADIUM_STEPS = [4_000, 6_000, 9_000, 12_000, 16_000, 20_000]
-STADIUM_UPGRADE_COSTS = [1_500_000, 2_500_000, 3_500_000, 5_000_000, 7_000_000]
+# Paliers de capacité du stade, et coût pour atteindre chacun. Un stade réel
+# peut avoir une capacité entre deux paliers : on agrandit alors au suivant.
+STADIUM_STEPS = [4_000, 6_000, 9_000, 12_000, 16_000, 20_000, 25_000, 30_000, 35_000]
+STADIUM_UPGRADE_COSTS = {
+    6_000: 1_500_000,
+    9_000: 2_500_000,
+    12_000: 3_500_000,
+    16_000: 5_000_000,
+    20_000: 7_000_000,
+    25_000: 10_000_000,
+    30_000: 14_000_000,
+    35_000: 20_000_000,
+}
 
 FACILITY_LEVEL_MAX = 5
 # Centre d'entraînement et de formation : coût = 800 k€ x niveau visé.
 FACILITY_UPGRADE_COST_PER_LEVEL = 800_000
 
 
+def next_stadium_step(capacity: int) -> int | None:
+    """Palier de capacité suivant, ou None si le stade est déjà au maximum."""
+    return next((step for step in STADIUM_STEPS if step > capacity), None)
+
+
 def upgrade_cost(facilities: Facilities, kind: FacilityKind) -> int | None:
     """Coût de l'amélioration suivante, ou None si le maximum est atteint."""
     if kind == FacilityKind.STADIUM:
-        step = STADIUM_STEPS.index(facilities.stadium_capacity)
-        return STADIUM_UPGRADE_COSTS[step] if step < len(STADIUM_UPGRADE_COSTS) else None
+        step = next_stadium_step(facilities.stadium_capacity)
+        return STADIUM_UPGRADE_COSTS[step] if step is not None else None
 
     level = facilities.training_level if kind == FacilityKind.TRAINING else facilities.academy_level
     if level >= FACILITY_LEVEL_MAX:
@@ -107,8 +122,7 @@ def upgrade_cost(facilities: Facilities, kind: FacilityKind) -> int | None:
 def apply_upgrade(facilities: Facilities, kind: FacilityKind) -> None:
     """Passe une infrastructure au palier suivant (le paiement est fait par l'appelant)."""
     if kind == FacilityKind.STADIUM:
-        step = STADIUM_STEPS.index(facilities.stadium_capacity)
-        facilities.stadium_capacity = STADIUM_STEPS[step + 1]
+        facilities.stadium_capacity = next_stadium_step(facilities.stadium_capacity)
     elif kind == FacilityKind.TRAINING:
         facilities.training_level += 1
     else:

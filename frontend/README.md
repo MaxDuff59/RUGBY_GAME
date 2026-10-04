@@ -46,7 +46,8 @@ src/
     Medical.jsx       infirmerie : blessés et choix du protocole de soins, joueurs fragiles,
                       staff médical, dossier médical
     Staff.jsx         ton staff (8 postes), licencier, embaucher parmi les candidats
-    Transfers.jsx     acheter chez les autres clubs, vendre ses joueurs
+    Transfers.jsx     marché (voies de recrutement), approche d'un joueur, négociation par
+                      étapes (indemnité, salaire), prêts, pré-contrats, vendre ses joueurs
     Facilities.jsx    stade, centre d'entraînement, centre de formation
     Finances.jsx      trésorerie, masse salariale, et toutes les opérations (grand livre)
 ```

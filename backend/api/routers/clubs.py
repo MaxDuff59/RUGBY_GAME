@@ -33,11 +33,12 @@ def get_club(club_id: int, session: SessionDep) -> ClubDetail:
     """Effectif complet d'un club et ses notes collectives (XV de départ, blessés exclus)."""
     club = load_club(session, club_id)
     day = game_date(session)
+    names = {row.id: row.name for row in session.scalars(select(ClubRow))}
     return ClubDetail(
         id=club.id,
         name=club.name,
         balance=club.balance,
         facilities=FacilitiesOut.model_validate(club.facilities),
         strength=StrengthOut.from_team(team_strength(club, day)),
-        players=[PlayerOut.from_player(p, day) for p in club.players],
+        players=[PlayerOut.from_player(p, day, names) for p in club.players],
     )

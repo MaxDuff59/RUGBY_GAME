@@ -1,20 +1,43 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
 import SortHeader from "../components/SortHeader.jsx";
-import { POSITIONS, formatMoney, formatNote } from "../format.js";
+import {
+  DEALS,
+  NEGOTIATION_STAGES,
+  POSITIONS,
+  formatContractEnd,
+  formatMoney,
+  formatNote,
+  formatShortDate,
+} from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { useSort } from "../hooks/useSort.js";
 
-// Marché des transferts : acheter chez les autres clubs, vendre ses joueurs.
+// Filtres par voie de recrutement.
+const WAYS = [
+  { key: null, label: "Tous" },
+  { key: "precontract", label: "Pré-contrat" },
+  { key: "transfer", label: "Transfert" },
+  { key: "loan", label: "Prêt" },
+];
+
+const hasWay = (listing, way) =>
+  way === null ||
+  (way === "precontract" && listing.precontract) ||
+  (way === "transfer" && listing.transfer_fee !== null) ||
+  (way === "loan" && listing.loanable);
+
+// Recrutement : approcher un joueur, négocier avec son club puis avec lui ; vendre les siens.
 export default function Transfers() {
   const { career } = useOutletContext();
   const market = useApi(useCallback(api.getTransfers, []));
   const myClub = useApi(useCallback(() => api.getClub(career.club_id), [career.club_id]));
 
   const [position, setPosition] = useState(null); // null = tous les postes
-  const [affordableOnly, setAffordableOnly] = useState(false);
+  const [way, setWay] = useState(null);
+  const [targetId, setTargetId] = useState(null); // joueur approché
   const [actionError, setActionError] = useState(null);
   const listingSort = useSort(market.data?.listings ?? [], { key: "player.value", dir: "desc" });
   const squadSort = useSort(myClub.data?.players ?? [], { key: "value", dir: "desc" });
@@ -27,12 +50,6 @@ export default function Transfers() {
     } catch (err) {
       setActionError(err);
     }
-  }
-
-  function buy(listing) {
-    const { player } = listing;
-    const message = `Acheter ${player.name} (${listing.club_name}) pour ${formatMoney(listing.asking_price)} ? Salaire : ${formatMoney(player.wage)} par saison.`;
-    if (window.confirm(message)) act(() => api.buyPlayer(player.id));
   }
 
   function sell(player) {
@@ -50,10 +67,8 @@ export default function Transfers() {
   const squadAtMinimum = data.squad_size <= data.squad_min;
   const listings = listingSort.rows.filter(
     (listing) =>
-      (position === null || listing.player.position === position) &&
-      (!affordableOnly || listing.affordable),
+      (position === null || listing.player.position === position) && hasWay(listing, way),
   );
-  const myPlayers = squadSort.rows;
   const listingHeader = (key, label, first = "desc", left = false) => (
     <SortHeader sortKey={key} label={label} sort={listingSort.sort} onToggle={listingSort.toggle} first={first} left={left} />
   );
@@ -64,30 +79,76 @@ export default function Transfers() {
   return (
     <>
       <header className="page-head">
-        <h1 className="title">Transferts</h1>
+        <div>
+          <h1 className="title">Transferts</h1>
+          <p className="muted" style={{ margin: "8px 0 0" }}>
+            Saison {data.season_year}-{String(data.season_year + 1).slice(2)}. Les transferts en cours de contrat
+            sont rares et chers : vise les joueurs en dernière année de contrat, ou un prêt.
+          </p>
+        </div>
         <div className="page-head__stats">
-          <div className="stat">
-            <span className="big-num">{formatMoney(data.balance)}</span>
-            <span className="muted">trésorerie</span>
-          </div>
-          <div className="stat">
-            <span className="big-num">{data.squad_size}</span>
-            <span className="muted">joueurs (de {data.squad_min} à {data.squad_max})</span>
-          </div>
+          <Stat value={formatMoney(data.balance)} label="trésorerie" />
+          <Stat value={data.squad_size} label={`joueurs (de ${data.squad_min} à ${data.squad_max})`} />
+          <Stat value={formatNote(data.my_level)} label="niveau de ton XV" />
         </div>
       </header>
 
       {actionError && <p className="status--error">{actionError.message}</p>}
 
+      {targetId !== null && (
+        <Negotiation
+          playerId={targetId}
+          squadFull={squadFull}
+          onClose={() => setTargetId(null)}
+          onChange={(overview, concluded) => {
+            if (overview) market.setData(overview);
+            else market.reload();
+            if (concluded) myClub.reload();
+          }}
+        />
+      )}
+
+      {data.negotiations.length > 0 && (
+        <section className="section">
+          <div className="section__head">
+            <h2 className="eyebrow">Négociations · {data.negotiations.length}</h2>
+            <span className="muted">En cours, et accords qui attendent l'intersaison</span>
+          </div>
+          <div className="card">
+            <ul className="injury-list">
+              {data.negotiations.map((negotiation) => (
+                <li key={negotiation.id}>
+                  <span className={`tag ${negotiation.stage === "agreed" ? "tag--injured" : "tag--fragile"}`}>
+                    {DEALS[negotiation.kind].label}
+                  </span>
+                  <span style={{ fontWeight: 600 }}>{negotiation.player_name}</span>
+                  <span className="muted">{negotiation.club_name}</span>
+                  <span className="muted">{NEGOTIATION_STAGES[negotiation.stage]}</span>
+                  {negotiation.stage !== "agreed" && (
+                    <button type="button" className="button button--small" onClick={() => setTargetId(negotiation.player_id)}>
+                      Reprendre
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
+
       <section className="section">
         <div className="section__head">
-          <h2 className="eyebrow">Acheter · {listings.length} joueurs</h2>
-          <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input type="checkbox" checked={affordableOnly} onChange={(e) => setAffordableOnly(e.target.checked)} />
-            Seulement ce que je peux payer
-          </label>
+          <h2 className="eyebrow">Marché · {listings.length} joueurs</h2>
+          <span className="muted">Clique sur « Approcher » pour connaître les conditions</span>
         </div>
 
+        <div className="chips" role="group" aria-label="Filtrer par voie">
+          {WAYS.map((item) => (
+            <button key={item.label} type="button" className="chip" aria-pressed={way === item.key} onClick={() => setWay(item.key)}>
+              {item.label}
+            </button>
+          ))}
+        </div>
         <div className="chips" role="group" aria-label="Filtrer par poste">
           <button type="button" className="chip" aria-pressed={position === null} onClick={() => setPosition(null)}>
             Tous
@@ -109,35 +170,39 @@ export default function Transfers() {
                 {listingHeader("player.overall", "Note")}
                 {listingHeader("player.value", "Valeur")}
                 {listingHeader("player.wage", "Salaire")}
-                {listingHeader("asking_price", "Prix demandé")}
+                {listingHeader("years_left", "Contrat", "asc")}
+                {listingHeader("playing_time", "Statut", "asc", true)}
+                <th scope="col" className="left">Voies</th>
                 <th scope="col"></th>
               </tr>
             </thead>
             <tbody>
               {listings.map((listing) => {
                 const { player } = listing;
-                const blocked = !listing.affordable || squadFull;
                 return (
-                  <tr key={player.id}>
+                  <tr key={player.id} className={player.id === targetId ? "table__row--selected" : undefined}>
                     <td className="left">
                       <div style={{ fontWeight: 600 }}>{player.name}</div>
                       <div className="muted">{POSITIONS[player.position].label}</div>
                     </td>
-                    <td className="left muted">{listing.club_name}</td>
+                    <td className="left">
+                      <div>{listing.club_name}</div>
+                      <div className="muted">niveau {formatNote(listing.club_level)}</div>
+                    </td>
                     <td className="muted">{player.age}</td>
                     <td className="note">{formatNote(player.overall)}</td>
                     <td>{formatMoney(player.value)}</td>
                     <td className="muted">{formatMoney(player.wage)}</td>
-                    <td style={{ fontWeight: 600 }}>{formatMoney(listing.asking_price)}</td>
+                    <td className={listing.precontract ? "cell--strong" : "muted"}>
+                      {formatContractEnd(player.contract_until)}
+                    </td>
+                    <td className="left muted">{listing.playing_time}</td>
+                    <td className="left">
+                      <Ways listing={listing} />
+                    </td>
                     <td>
-                      <button
-                        type="button"
-                        className="button button--small button--primary"
-                        disabled={blocked}
-                        title={squadFull ? "Effectif complet" : !listing.affordable ? "Trésorerie insuffisante" : undefined}
-                        onClick={() => buy(listing)}
-                      >
-                        Acheter
+                      <button type="button" className="button button--small" onClick={() => setTargetId(player.id)}>
+                        Approcher
                       </button>
                     </td>
                   </tr>
@@ -145,7 +210,10 @@ export default function Transfers() {
               })}
             </tbody>
           </table>
-          <p className="table__note">Les clubs vendent 25 % au-dessus de la valeur du joueur. Salaires par saison.</p>
+          <p className="table__note">
+            Contrat : fin en juin de l'année indiquée, en gras quand il reste une saison (négociable sans
+            indemnité). Statut : sa place dans son club. Salaires par saison.
+          </p>
         </div>
       </section>
 
@@ -159,12 +227,13 @@ export default function Transfers() {
                 {squadHeader("age", "Âge", "asc")}
                 {squadHeader("overall", "Note")}
                 {squadHeader("wage", "Salaire")}
+                {squadHeader("contract_until", "Contrat", "asc")}
                 {squadHeader("value", "Valeur")}
                 <th scope="col"></th>
               </tr>
             </thead>
             <tbody>
-              {myPlayers.map((player) => (
+              {squadSort.rows.map((player) => (
                 <tr key={player.id}>
                   <td className="left">
                     <div style={{ fontWeight: 600 }}>{player.name}</div>
@@ -173,13 +242,22 @@ export default function Transfers() {
                   <td className="muted">{player.age}</td>
                   <td className="note">{formatNote(player.overall)}</td>
                   <td className="muted">{formatMoney(player.wage)}</td>
+                  <td className="muted">
+                    {player.loaned_from ? `Prêt · ${player.loaned_from_name}` : formatContractEnd(player.contract_until)}
+                  </td>
                   <td style={{ fontWeight: 600 }}>{formatMoney(player.value)}</td>
                   <td>
                     <button
                       type="button"
                       className="button button--small"
-                      disabled={squadAtMinimum}
-                      title={squadAtMinimum ? `Effectif minimum (${data.squad_min})` : undefined}
+                      disabled={squadAtMinimum || player.loaned_from !== null}
+                      title={
+                        player.loaned_from !== null
+                          ? "Un joueur prêté ne se vend pas"
+                          : squadAtMinimum
+                            ? `Effectif minimum (${data.squad_min})`
+                            : undefined
+                      }
                       onClick={() => sell(player)}
                     >
                       Vendre
@@ -193,5 +271,230 @@ export default function Transfers() {
         </div>
       </section>
     </>
+  );
+}
+
+function Stat({ value, label }) {
+  return (
+    <div className="stat">
+      <span className="big-num">{value}</span>
+      <span className="muted">{label}</span>
+    </div>
+  );
+}
+
+// Les voies ouvertes pour un joueur du marché, en étiquettes.
+function Ways({ listing }) {
+  const ways = [];
+  if (listing.precontract) ways.push(<span key="p" className="tag tag--severe">Pré-contrat</span>);
+  if (listing.transfer_fee !== null) {
+    ways.push(<span key="t" className="tag tag--moderate">Transfert · {formatMoney(listing.transfer_fee)}</span>);
+  }
+  if (listing.loanable) ways.push(<span key="l" className="tag tag--light">Prêt</span>);
+  if (ways.length === 0) return <span className="muted">Intransférable</span>;
+  return <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 4 }}>{ways}</span>;
+}
+
+// Panneau d'approche : situation du joueur, choix de la voie, puis offres étape par étape.
+function Negotiation({ playerId, squadFull, onClose, onChange }) {
+  const target = useApi(useCallback(() => api.approachPlayer(playerId), [playerId]));
+  const [negotiation, setNegotiation] = useState(null);
+  const [answer, setAnswer] = useState(null); // { message, accepted }
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  // La négociation déjà ouverte avec ce joueur, s'il y en a une.
+  useEffect(() => {
+    setNegotiation(target.data?.negotiation ?? null);
+    setAnswer(null);
+    setError(null);
+  }, [target.data]);
+
+  async function run(call, onDone) {
+    setBusy(true);
+    setError(null);
+    try {
+      onDone(await call());
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const open = (kind) =>
+    run(
+      () => api.openNegotiation(playerId, kind),
+      (opened) => {
+        setNegotiation(opened);
+        setAnswer({ message: opened.message, accepted: false });
+        onChange(null, false);
+      },
+    );
+
+  const offer = (payload) =>
+    run(
+      () => api.makeOffer(negotiation.id, payload),
+      (result) => {
+        setNegotiation(result.negotiation);
+        setAnswer({ message: result.message, accepted: result.accepted });
+        onChange(result.overview, result.concluded);
+      },
+    );
+
+  const abandon = () =>
+    run(
+      () => api.abandonNegotiation(negotiation.id),
+      (overview) => {
+        setNegotiation(null);
+        setAnswer(null);
+        onChange(overview, false);
+      },
+    );
+
+  if (target.loading) return <p className="status">Approche…</p>;
+  if (target.error) return <p className="status status--error">{target.error.message}</p>;
+
+  const { player, club } = target.data;
+  const openStage = negotiation && (negotiation.stage === "club" || negotiation.stage === "player");
+
+  return (
+    <section className="card card--padded section" aria-label={`Négociation avec ${player.name}`}>
+      <div className="section__head">
+        <div>
+          <h2 className="eyebrow">Approche</h2>
+          <div className="header__name">{player.name}</div>
+          <div className="muted">
+            {POSITIONS[player.position].label} · {player.age} ans · note {formatNote(player.overall)} ·{" "}
+            {club.name}
+          </div>
+        </div>
+        <button type="button" className="button button--small" onClick={onClose}>
+          Fermer
+        </button>
+      </div>
+
+      <div className="situation">
+        <Fact label="Salaire actuel" value={`${formatMoney(player.wage)} / saison`} />
+        <Fact label="Contrat" value={`jusqu'en juin ${formatContractEnd(player.contract_until)} (${target.data.years_left} saison${target.data.years_left > 1 ? "s" : ""})`} />
+        <Fact label="Dans son club" value={`${target.data.playing_time_now} · niveau ${formatNote(target.data.club_level)}`} />
+        <Fact label="Chez toi" value={`${target.data.playing_time_here} · niveau ${formatNote(target.data.my_level)}`} />
+      </div>
+
+      {error && <p className="status--error" style={{ margin: 0 }}>{error.message}</p>}
+
+      {!negotiation && (
+        <div className="deal-options">
+          {target.data.options.map((option) => (
+            <button
+              key={option.kind}
+              type="button"
+              className="protocol"
+              disabled={busy || !option.available || (option.kind !== "precontract" && squadFull)}
+              title={option.kind !== "precontract" && squadFull ? "Effectif complet" : undefined}
+              onClick={() => open(option.kind)}
+            >
+              <span className="protocol__name">{DEALS[option.kind].label}</span>
+              {option.fee_demand !== null && option.fee_demand !== undefined && (
+                <span className="protocol__line">Indemnité demandée : <strong>{formatMoney(option.fee_demand)}</strong></span>
+              )}
+              {option.wage_demand !== null && option.wage_demand !== undefined && (
+                <span className="protocol__line">Salaire exigé : <strong>{formatMoney(option.wage_demand)}</strong> / saison</span>
+              )}
+              {option.kind === "loan" && option.available && (
+                <span className="protocol__line">Salaire à ta charge : <strong>{formatMoney(option.wage)}</strong> / saison</span>
+              )}
+              <span className="protocol__line">{option.reason}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {negotiation && (
+        <>
+          <div className="muted">
+            <span className="tag tag--fragile">{DEALS[negotiation.kind].label}</span>{" "}
+            {NEGOTIATION_STAGES[negotiation.stage]}
+            {openStage && negotiation.rounds > 0 && ` · ${negotiation.rounds} refus`}
+            {" · ouverte le "}
+            {formatShortDate(negotiation.opened_on)}
+          </div>
+          {answer && (
+            <p className={`negotiation__message${answer.accepted ? " negotiation__message--ok" : ""}`} style={{ margin: 0 }}>
+              {answer.message}
+            </p>
+          )}
+          {openStage && (
+            <OfferForm negotiation={negotiation} busy={busy} onOffer={offer} onAbandon={abandon} />
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function Fact({ label, value }) {
+  return (
+    <div className="stat">
+      <span className="eyebrow">{label}</span>
+      <span>{value}</span>
+    </div>
+  );
+}
+
+// Formulaire de l'étape en cours : indemnité (club), ou salaire et durée (joueur).
+function OfferForm({ negotiation, busy, onOffer, onAbandon }) {
+  const clubStage = negotiation.stage === "club";
+  const isLoan = negotiation.kind === "loan";
+  const [fee, setFee] = useState(negotiation.fee_demand ?? 0);
+  const [wage, setWage] = useState(negotiation.wage_demand ?? 0);
+  const [years, setYears] = useState(2);
+
+  function submit(event) {
+    event.preventDefault();
+    if (clubStage) onOffer({ fee: Number(fee) });
+    else if (isLoan) onOffer({});
+    else onOffer({ wage: Number(wage), years: Number(years) });
+  }
+
+  return (
+    <form className="offer-form" onSubmit={submit}>
+      {clubStage && (
+        <div className="field">
+          <label htmlFor="offer-fee">Indemnité proposée (€)</label>
+          <input id="offer-fee" className="input" type="number" min="0" step="5000" value={fee} onChange={(e) => setFee(e.target.value)} />
+        </div>
+      )}
+      {!clubStage && !isLoan && (
+        <>
+          <div className="field">
+            <label htmlFor="offer-wage">Salaire proposé (€ / saison)</label>
+            <input id="offer-wage" className="input" type="number" min="0" step="1000" value={wage} onChange={(e) => setWage(e.target.value)} />
+          </div>
+          <div className="field">
+            <label htmlFor="offer-years">Durée (saisons)</label>
+            <select id="offer-years" className="input" value={years} onChange={(e) => setYears(e.target.value)}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          </div>
+        </>
+      )}
+      <button type="submit" className="button button--primary" disabled={busy}>
+        {isLoan ? `Confirmer le prêt (${formatMoney(negotiation.wage_demand)} / saison)` : "Faire l'offre"}
+      </button>
+      <button type="button" className="button" disabled={busy} onClick={onAbandon}>
+        Quitter la table
+      </button>
+      {!clubStage && !isLoan && (
+        <span className="muted">
+          Une offre proche de sa demande le fait baisser un peu ; après quatre refus il part.
+        </span>
+      )}
+      {clubStage && (
+        <span className="muted">Une offre proche de la demande fait baisser le club ; après quatre refus il part.</span>
+      )}
+    </form>
   );
 }

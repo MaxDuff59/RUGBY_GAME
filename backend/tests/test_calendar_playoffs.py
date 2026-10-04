@@ -91,8 +91,9 @@ def test_matchday_wages_split_the_season_bill():
 
 def test_players_age_and_the_oldest_retire():
     club = make_club(1, level=12)
+    for player in club.players:
+        player.age = 30
     club.players[0].age = 35
-    club.players[1].age = 30
     age_players(club)
     assert club.players[0].age == 36
     assert retirees(club) == [club.players[0]]

@@ -3,7 +3,7 @@
 import random
 from collections.abc import Iterator
 
-from data.generator import generate_player
+from data.generator import FIRST_SEASON_YEAR, generate_player
 from models import Club, Player, Position
 
 RETIREMENT_AGE = 36
@@ -13,6 +13,8 @@ YOUTH_AGES = (18, 20)
 # Les jeunes arrivent sous le niveau moyen de l'effectif ; un bon centre réduit l'écart.
 YOUTH_LEVEL_GAP = 3.0
 YOUTH_LEVEL_PER_ACADEMY_LEVEL = 0.4
+# Un jeune signe pour trois saisons.
+YOUTH_CONTRACT_YEARS = 3
 
 
 def age_players(club: Club) -> None:
@@ -31,7 +33,10 @@ def youth_intake_size(academy_level: int) -> int:
 
 
 def generate_youth(
-    club: Club, player_ids: Iterator[int], rng: random.Random | None = None
+    club: Club,
+    player_ids: Iterator[int],
+    rng: random.Random | None = None,
+    season_year: int = FIRST_SEASON_YEAR,
 ) -> list[Player]:
     """Jeunes issus de la formation, aux postes les moins fournis de l'effectif."""
     rng = rng or random.Random()
@@ -51,5 +56,6 @@ def generate_youth(
         position = min(Position, key=lambda p: counts[p])
         youth = generate_player(next(player_ids), position, level, club.id, rng)
         youth.age = rng.randint(*YOUTH_AGES)
+        youth.contract_until = season_year + YOUTH_CONTRACT_YEARS - 1
         youths.append(youth)
     return youths

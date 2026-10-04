@@ -25,6 +25,7 @@ from api.schemas import (
     SeasonOut,
     StandingOut,
 )
+from data.generator import FIRST_SEASON_YEAR
 from engine.calendar import season_dates
 from engine.economy import (
     CHAMPION_PRIZE,
@@ -47,11 +48,19 @@ from engine.season import (
     semi_pairings,
 )
 from models import Club, EventType, Injury, InjurySource, Season, Stage
-from models.orm import CareerRow, ClubRow, InjuryRow, MatchRow, PlayerRow, SeasonRow
+from models.orm import (
+    CareerRow,
+    ClubRow,
+    InjuryRow,
+    MatchRow,
+    NegotiationRow,
+    PlayerRow,
+    SeasonRow,
+)
 
 router = APIRouter(prefix="/seasons", tags=["saisons"])
 
-FIRST_SEASON_YEAR = 2026
+__all__ = ["FIRST_SEASON_YEAR", "create_season", "router"]
 
 STAGE_LABELS = {
     Stage.BARRAGE: "barrages",
@@ -403,13 +412,15 @@ def play_next_matchday(session: SessionDep) -> PlayOut:
 
 @router.post("/next", response_model=SeasonOut, status_code=201)
 def start_next_season(session: SessionDep) -> SeasonOut:
-    """Intersaison : les joueurs vieillissent, les plus âgés partent, les jeunes
-    arrivent, puis un nouveau calendrier est tiré."""
+    """Intersaison : fin des prêts, arrivée des joueurs sous pré-contrat, contrats
+    renouvelés, puis les joueurs vieillissent, les plus âgés partent, les jeunes
+    arrivent, et un nouveau calendrier est tiré."""
     season = _current_or_404(session)
     if _phase(season) != "finished":
         raise HTTPException(status_code=400, detail="La saison n'est pas terminée")
 
     rng = random.Random()
+    _offseason_moves(session, season.year + 1, rng)
     next_id = (session.scalar(select(func.max(PlayerRow.id))) or 0) + 1
     player_ids = itertools.count(next_id)
     for club_row in _club_rows(session):
@@ -422,11 +433,39 @@ def start_next_season(session: SessionDep) -> SeasonOut:
                 session.delete(player_row)
             else:
                 player_row.age += 1
-        for youth in generate_youth(club, player_ids, rng):
+        for youth in generate_youth(club, player_ids, rng, season.year + 1):
             session.add(PlayerRow.from_domain(youth))
     session.commit()
 
     return _season_out(session, create_season(session, season.year + 1))
+
+
+# Un contrat arrivé à terme est renouvelé d'une à trois saisons (pas encore de
+# vraie gestion des contrats : les joueurs ne partent pas libres).
+RENEWAL_YEARS = (1, 3)
+
+
+def _offseason_moves(session: Session, year: int, rng: random.Random) -> None:
+    """Mouvements de l'intersaison, avant le vieillissement : prêts, pré-contrats, contrats."""
+    # Les prêtés rentrent chez leur club propriétaire.
+    for row in session.scalars(select(PlayerRow).where(PlayerRow.loaned_from.is_not(None))):
+        row.club_id, row.loaned_from = row.loaned_from, None
+
+    # Les pré-contrats signés s'exécutent ; les négociations inachevées tombent.
+    for neg in session.scalars(select(NegotiationRow).where(NegotiationRow.stage != "done")):
+        if neg.stage == "agreed":
+            player = neg.player
+            player.club_id = neg.club_id
+            player.wage = neg.wage
+            player.contract_until = year + neg.years - 1
+            neg.stage = "done"
+        elif neg.stage != "failed":
+            neg.stage = "failed"
+            neg.message = "La saison est terminée sans accord."
+
+    for row in session.scalars(select(PlayerRow).where(PlayerRow.contract_until < year)):
+        row.contract_until = year + rng.randint(*RENEWAL_YEARS) - 1
+    session.commit()
 
 
 @router.get("/{year}", response_model=SeasonOut)

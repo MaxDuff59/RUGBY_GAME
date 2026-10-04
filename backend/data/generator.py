@@ -8,6 +8,7 @@ niveau, avec un profil d'attributs cohérent avec leur poste.
 import itertools
 import random
 
+from data.top14 import TOP14, RealClub
 from engine.economy import STADIUM_STEPS, staff_wage, wage_for
 from models import (
     ATTRIBUTE_MAX,
@@ -91,13 +92,22 @@ POSITION_PROFILES: dict[Position, dict[str, int]] = {
 # Dispersion des attributs autour du niveau visé (écart-type).
 ATTRIBUTE_SPREAD = 2.0
 
+# Saison de départ : les contrats générés se terminent entre cette saison et trois plus tard.
+FIRST_SEASON_YEAR = 2026
+CONTRACT_MAX_YEARS = 4
+
 
 def _clamp(value: float) -> int:
     return max(ATTRIBUTE_MIN, min(ATTRIBUTE_MAX, round(value)))
 
 
 def generate_player(
-    player_id: int, position: Position, level: float, club_id: int, rng: random.Random
+    player_id: int,
+    position: Position,
+    level: float,
+    club_id: int,
+    rng: random.Random,
+    season_year: int = FIRST_SEASON_YEAR,
 ) -> Player:
     """Crée un joueur dont les attributs tournent autour de `level` (sur 20)."""
     # Chaque joueur a son propre niveau, un peu au-dessus ou en dessous de son club.
@@ -118,6 +128,8 @@ def generate_player(
     )
     # Salaire négocié autour de la valeur du joueur (de -10 % à +15 %).
     player.wage = wage_for(player, noise=rng.uniform(0.9, 1.15))
+    # Contrat : de la dernière année (négociable par les autres clubs) à quatre saisons.
+    player.contract_until = season_year + rng.randint(0, CONTRACT_MAX_YEARS - 1)
     return player
 
 
@@ -180,30 +192,62 @@ def generate_clubs(
         level = rng.uniform(min_level, max_level)
         # 0 = club modeste, 1 = gros club : sert à doser argent, staff et stade.
         wealth = (level - min_level) / (max_level - min_level)
-
-        club = Club(
-            id=club_id,
-            name=name,
-            balance=_round_to(rng.uniform(2_000_000, 3_000_000) + wealth * 6_000_000, 50_000),
-            facilities=Facilities(
-                stadium_capacity=STADIUM_STEPS[round(wealth * 3)],
-                training_level=1 + round(wealth * 2),
-                academy_level=1 + round(wealth * 2),
-            ),
+        club = _make_club(
+            club_id,
+            name,
+            level,
+            wealth,
+            STADIUM_STEPS[round(wealth * 3)],
+            player_ids,
+            staff_ids,
+            rng,
         )
-        for position, size in SQUAD_COMPOSITION.items():
-            for _ in range(size):
-                club.players.append(
-                    generate_player(next(player_ids), position, level, club_id, rng)
-                )
-        # Un membre de staff par poste, de niveau proche de celui du club.
-        for role in StaffRole:
-            staff_level = _clamp_level(round(1.5 + wealth * 2.5 + rng.uniform(-1, 1)))
-            club.staff.append(
-                generate_staff_member(next(staff_ids), role, staff_level, club_id, rng)
-            )
         clubs.append(club)
     return clubs
+
+
+def generate_top14(rng: random.Random | None = None, clubs: list[RealClub] = TOP14) -> list[Club]:
+    """Les vrais clubs du Top 14, avec des joueurs et un staff inventés à leur niveau."""
+    rng = rng or random.Random()
+    player_ids = itertools.count(1)
+    staff_ids = itertools.count(1)
+    return [
+        _make_club(
+            club_id, real.name, real.level, real.wealth, real.capacity, player_ids, staff_ids, rng
+        )
+        for club_id, real in enumerate(clubs, start=1)
+    ]
+
+
+def _make_club(
+    club_id: int,
+    name: str,
+    level: float,
+    wealth: float,
+    stadium_capacity: int,
+    player_ids: itertools.count,
+    staff_ids: itertools.count,
+    rng: random.Random,
+) -> Club:
+    """Un club complet : trésorerie et infrastructures selon `wealth`, effectif selon `level`."""
+    club = Club(
+        id=club_id,
+        name=name,
+        balance=_round_to(rng.uniform(2_000_000, 3_000_000) + wealth * 6_000_000, 50_000),
+        facilities=Facilities(
+            stadium_capacity=stadium_capacity,
+            training_level=1 + round(wealth * 2),
+            academy_level=1 + round(wealth * 2),
+        ),
+    )
+    for position, size in SQUAD_COMPOSITION.items():
+        for _ in range(size):
+            club.players.append(generate_player(next(player_ids), position, level, club_id, rng))
+    # Un membre de staff par poste, de niveau proche de celui du club.
+    for role in StaffRole:
+        staff_level = _clamp_level(round(1.5 + wealth * 2.5 + rng.uniform(-1, 1)))
+        club.staff.append(generate_staff_member(next(staff_ids), role, staff_level, club_id, rng))
+    return club
 
 
 def _round_to(value: float, step: int) -> int:

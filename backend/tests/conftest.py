@@ -53,7 +53,7 @@ def client() -> Iterator[TestClient]:
     Base.metadata.create_all(engine)
     TestSession = sessionmaker(bind=engine, expire_on_commit=False)
     with TestSession() as session:
-        seed_if_empty(session, club_count=10, seed=0)
+        seed_if_empty(session, club_count=10, seed=0, top14=False)
 
     def override_get_session() -> Iterator[Session]:
         with TestSession() as session:

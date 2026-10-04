@@ -131,6 +131,10 @@ class Player:
     wage: int = 0
     # Blessure la plus récente (en cours ou guérie), None s'il n'en a jamais eu.
     injury: Injury | None = None
+    # Année de la dernière saison sous contrat (2026 = jusqu'à la fin de 2026-27).
+    contract_until: int = 0
+    # Club propriétaire quand le joueur est prêté (None sinon) ; il y retourne à l'intersaison.
+    loaned_from: int | None = None
 
     def __post_init__(self) -> None:
         # On refuse tout attribut hors de l'échelle 1-20 dès la création.
@@ -156,6 +160,10 @@ class Player:
         moteur calcule ses propres notes selon le poste.
         """
         return sum(self.attributes.values()) / len(ATTRIBUTE_NAMES)
+
+    def years_left(self, season_year: int) -> int:
+        """Saisons de contrat restantes, celle en cours comprise (1 = dernière année)."""
+        return max(1, self.contract_until - season_year + 1)
 
     def is_injured(self, day: datetime.date | None) -> bool:
         """Indisponible à cette date (sans date, on ignore les blessures)."""
