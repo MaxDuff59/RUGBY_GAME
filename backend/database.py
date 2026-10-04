@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from models.orm import Base
 
-DATABASE_URL = "sqlite:///./football.db"
+DATABASE_URL = "sqlite:///./rugby.db"
 
 # check_same_thread=False : nécessaire pour utiliser SQLite depuis FastAPI (plusieurs threads).
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})

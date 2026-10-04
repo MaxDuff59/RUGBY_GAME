@@ -1,6 +1,8 @@
-# Football Manager (prototype)
+# Rugby Manager (prototype)
 
-Jeu de gestion de football, sans interface graphique pour l'instant.
+Jeu de gestion de rugby à XV, dans l'esprit de Football Manager : on incarne
+le manager d'un club et on le mène à travers les saisons. Pas d'interface
+graphique pour l'instant.
 
 ## Organisation
 

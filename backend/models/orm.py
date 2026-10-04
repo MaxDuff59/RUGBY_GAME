@@ -7,7 +7,7 @@ avec `to_domain()`, appelle le moteur, puis sauvegarde le résultat.
 from sqlalchemy import JSON, ForeignKey, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from models.domain import Club, EventType, Match, MatchEvent, Player, Position
+from models.domain import Career, Club, EventType, Match, MatchEvent, Player, Position
 
 
 class Base(DeclarativeBase):
@@ -41,13 +41,15 @@ class PlayerRow(Base):
     first_name: Mapped[str] = mapped_column(String(50))
     last_name: Mapped[str] = mapped_column(String(50))
     age: Mapped[int]
-    position: Mapped[str] = mapped_column(String(3))
+    position: Mapped[str] = mapped_column(String(12))
     pace: Mapped[int]
-    technique: Mapped[int]
+    power: Mapped[int]
+    handling: Mapped[int]
     passing: Mapped[int]
-    shooting: Mapped[int]
-    defending: Mapped[int]
-    physical: Mapped[int]
+    kicking: Mapped[int]
+    tackling: Mapped[int]
+    scrum: Mapped[int]
+    lineout: Mapped[int]
     club_id: Mapped[int | None] = mapped_column(ForeignKey("clubs.id"))
 
     club: Mapped[ClubRow | None] = relationship(back_populates="players")
@@ -60,11 +62,13 @@ class PlayerRow(Base):
             age=self.age,
             position=Position(self.position),
             pace=self.pace,
-            technique=self.technique,
+            power=self.power,
+            handling=self.handling,
             passing=self.passing,
-            shooting=self.shooting,
-            defending=self.defending,
-            physical=self.physical,
+            kicking=self.kicking,
+            tackling=self.tackling,
+            scrum=self.scrum,
+            lineout=self.lineout,
             club_id=self.club_id,
         )
 
@@ -100,8 +104,8 @@ class MatchRow(Base):
     matchday: Mapped[int] = mapped_column(default=0)
     home_club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
     away_club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
-    home_goals: Mapped[int | None]
-    away_goals: Mapped[int | None]
+    home_score: Mapped[int | None]
+    away_score: Mapped[int | None]
     # Événements stockés en JSON : suffisant tant qu'on ne fait pas de requêtes dessus.
     events: Mapped[list[dict]] = mapped_column(JSON, default=list)
 
@@ -113,8 +117,8 @@ class MatchRow(Base):
             home_club_id=self.home_club_id,
             away_club_id=self.away_club_id,
             matchday=self.matchday,
-            home_goals=self.home_goals,
-            away_goals=self.away_goals,
+            home_score=self.home_score,
+            away_score=self.away_score,
             events=[
                 MatchEvent(
                     minute=e["minute"],
@@ -134,8 +138,8 @@ class MatchRow(Base):
             matchday=match.matchday,
             home_club_id=match.home_club_id,
             away_club_id=match.away_club_id,
-            home_goals=match.home_goals,
-            away_goals=match.away_goals,
+            home_score=match.home_score,
+            away_score=match.away_score,
             events=[
                 {
                     "minute": e.minute,
@@ -146,3 +150,20 @@ class MatchRow(Base):
                 for e in match.events
             ],
         )
+
+
+class CareerRow(Base):
+    """Partie sauvegardée : le club dirigé par le joueur."""
+
+    __tablename__ = "careers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    manager_name: Mapped[str] = mapped_column(String(100))
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
+
+    def to_domain(self) -> Career:
+        return Career(id=self.id, manager_name=self.manager_name, club_id=self.club_id)
+
+    @classmethod
+    def from_domain(cls, career: Career) -> "CareerRow":
+        return cls(id=career.id, manager_name=career.manager_name, club_id=career.club_id)

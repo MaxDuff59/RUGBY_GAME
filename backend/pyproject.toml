@@ -1,7 +1,7 @@
 [project]
-name = "football-manager-backend"
+name = "rugby-manager-backend"
 version = "0.1.0"
-description = "Backend du jeu de gestion de football : moteur, modèles, API."
+description = "Backend du jeu de gestion de rugby : moteur, modèles, API."
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
