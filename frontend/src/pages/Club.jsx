@@ -5,6 +5,8 @@ import { api } from "../api.js";
 import Affairs from "../components/Affairs.jsx";
 import FormPills, { recentForm } from "../components/FormPills.jsx";
 import MatchList from "../components/MatchList.jsx";
+import { NOTE_LINES, NoteLine } from "../components/NoteLine.jsx";
+import SeasonReview from "../components/SeasonReview.jsx";
 import SortHeader from "../components/SortHeader.jsx";
 import {
   INJURY_SOURCES,
@@ -37,6 +39,8 @@ export default function Club() {
   const season = useApi(useCallback(api.getCurrentSeason, []));
   const [lastPlayed, setLastPlayed] = useState(null); // la journée qu'on vient de simuler
   const [newInjuries, setNewInjuries] = useState([]); // nos blessés de cette journée
+  const [signings, setSignings] = useState([]); // nos joueurs signés ailleurs cette journée
+  const [showReview, setShowReview] = useState(false); // bilan de fin de saison
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState(null);
   // Affaires entre deux matchs : à régler avant de jouer la journée suivante.
@@ -70,7 +74,10 @@ export default function Club() {
       }
       setLastPlayed(result.played);
       setNewInjuries(result.injuries);
+      setSignings(result.signings);
       season.setData(result.season);
+      // La finale vient d'être jouée : place au bilan (les affaires passent devant).
+      setShowReview(result.season.phase === "finished" && result.affairs.length === 0);
       affairs.setData({ pending: result.affairs, recent: affairs.data?.recent ?? [] });
       setShowAffairs(result.affairs.length > 0);
     });
@@ -80,13 +87,18 @@ export default function Club() {
     const left = pending.filter((affair) => affair.id !== done.id);
     affairs.setData({ pending: left, recent: [done, ...(affairs.data?.recent ?? [])] });
     setNotesVersion((version) => version + 1);
-    if (left.length === 0) setShowAffairs(false);
+    if (left.length === 0) {
+      setShowAffairs(false);
+      setShowReview(season.data?.phase === "finished");
+    }
   };
 
   const nextSeason = () =>
     act(api.startNextSeason, (data) => {
       setLastPlayed(null);
       setNewInjuries([]);
+      setSignings([]);
+      setShowReview(false);
       season.setData(data);
     });
 
@@ -105,6 +117,15 @@ export default function Club() {
   return (
     <>
       {actionError && <p className="status--error">{actionError.message}</p>}
+      {showReview && (
+        <SeasonReview
+          clubId={myId}
+          onClose={() => setShowReview(false)}
+          onNextSeason={nextSeason}
+          busy={busy}
+          error={actionError}
+        />
+      )}
       {showAffairs && pending.length > 0 && (
         <Affairs affairs={pending} onAnswered={affairAnswered} onClose={() => setShowAffairs(false)} />
       )}
@@ -116,13 +137,16 @@ export default function Club() {
             <h1 className="hero__title">{data.champion.name}</h1>
             <p className="hero__sub">Champion {data.year}</p>
             <div className="hero__actions">
+              <button type="button" className="button" onClick={() => setShowReview(true)}>
+                Bilan de la saison
+              </button>
               <button type="button" className="button button--primary" disabled={busy} onClick={nextSeason}>
                 {busy ? "Intersaison…" : `Lancer la saison ${data.year + 1}`}
               </button>
             </div>
             <p className="muted" style={{ margin: 0 }}>
-              Les joueurs prennent un an, ceux de 36 ans et plus arrêtent, le centre de formation apporte des jeunes, et
-              un nouveau calendrier est tiré.
+              Les joueurs en fin de contrat non prolongés partent libres, ceux de 36 ans et plus arrêtent, le centre de
+              formation apporte des jeunes, et un nouveau calendrier est tiré.
             </p>
           </section>
         ) : (
@@ -175,6 +199,7 @@ export default function Club() {
             <div className="card">
               <MatchList matches={lastMatchday.matches} myClubId={myId} />
               {lastPlayed && newInjuries.length > 0 && <NewInjuries cases={newInjuries} />}
+              {lastPlayed && signings.length > 0 && <NewSignings signings={signings} />}
             </div>
           </section>
         )}
@@ -205,6 +230,24 @@ function NewInjuries({ cases }) {
                 Choisir le protocole
               </Link>
             )}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+// Nos joueurs en fin de contrat qu'un concurrent vient de signer : ils partiront à l'intersaison.
+function NewSignings({ signings }) {
+  return (
+    <>
+      <div className="matches__stage">Signés ailleurs · {signings.length}</div>
+      <ul className="injury-list">
+        {signings.map(({ player, new_club }) => (
+          <li key={player.id}>
+            <span className="tag tag--fragile">Fin de contrat</span>
+            <span style={{ fontWeight: 600 }}>{player.name}</span>
+            <span className="muted">rejoindra {new_club.name} à l'intersaison</span>
           </li>
         ))}
       </ul>
@@ -284,45 +327,6 @@ function Strength({ myId, opponentId }) {
   );
 }
 
-// Les notes de vie du club, du haut vers le bas de la carte. `levels` : paliers de la
-// note la plus haute à la plus basse ; `neutral` : note de départ, en pointillé.
-const NOTE_LINES = [
-  {
-    key: "morale",
-    label: "Moral",
-    neutral: 12,
-    levels: ["Euphorique", "Confiant", "Serein", "Inquiet", "Au plus bas"],
-  },
-  {
-    key: "cohesion",
-    label: "Cohésion",
-    neutral: 10,
-    levels: ["Soudé", "Uni", "En rodage", "Décousu", "Éclaté"],
-  },
-  {
-    key: "freshness",
-    label: "Fraîcheur",
-    before: true, // mesurée avant chaque match
-    levels: ["Frais", "En jambes", "Entamé", "Fatigué", "Épuisé"],
-  },
-  {
-    key: "board",
-    label: "Direction",
-    neutral: 12,
-    levels: ["Ravie", "Confiante", "Patiente", "Sceptique", "Excédée"],
-  },
-  {
-    key: "supporters",
-    label: "Supporters",
-    neutral: 10,
-    levels: ["Enflammés", "Enthousiastes", "Fidèles", "Déçus", "Hostiles"],
-  },
-];
-const LEVEL_FLOORS = [16, 13.5, 10.5, 7.5, 0];
-
-// 1.3 -> "+1,3", -0.8 -> "−0,8"
-const formatChange = (value) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${formatNote(Math.abs(value))}`;
-
 // Vie du club : une ligne par note, avec une barre par match joué de la saison.
 function ClubNotes({ clubId, season, version }) {
   // Rechargé à chaque journée simulée (la saison change d'objet) et après chaque affaire réglée.
@@ -354,37 +358,6 @@ function ClubNotes({ clubId, season, version }) {
         />
       ))}
     </section>
-  );
-}
-
-function NoteLine({ line, note, warning }) {
-  const level = line.levels[LEVEL_FLOORS.findIndex((floor) => note.value >= floor)];
-  const history = note.history;
-  return (
-    <div className="club-note">
-      <div className="club-note__name">
-        <span className="club-note__label">{line.label}</span>
-        <span className={warning ? "club-note__warning" : "muted"} title={warning ?? undefined}>
-          {warning ? "Poste menacé" : level}
-        </span>
-      </div>
-      <div className="club-note__chart" role="img" aria-label={`${line.label} après chacun des ${history.length} matchs joués`}>
-        {line.neutral && <div className="club-note__neutral" style={{ bottom: `${(line.neutral / 20) * 100}%` }} />}
-        {history.map((step, index) => (
-          <div
-            key={`${step.stage}-${step.matchday}`}
-            className="club-note__col"
-            title={`${matchdayLabel(step)} · ${step.result} ${step.scored}-${step.conceded} contre ${step.opponent.name} · ${line.label.toLowerCase()}${line.before ? " avant le match" : ""} ${formatNote(step.value)} (${formatChange(step.change)})`}
-          >
-            <div
-              className={`club-note__bar ${index === history.length - 1 ? "club-note__bar--current" : ""}`}
-              style={{ height: `${(step.value / 20) * 100}%` }}
-            />
-          </div>
-        ))}
-      </div>
-      <span className="club-note__value num">{formatNote(note.value)}</span>
-    </div>
   );
 }
 

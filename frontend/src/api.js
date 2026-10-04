@@ -45,6 +45,7 @@ export const api = {
   // Saison : calendrier, journée suivante, saison suivante
   getCurrentSeason: () => request("/seasons/current"),
   playMatchday: () => post("/seasons/current/play"),
+  getSeasonReview: () => request("/seasons/current/review"),
   startNextSeason: () => post("/seasons/next"),
   getMatch: (matchId) => request(`/matches/${matchId}`),
 
@@ -62,6 +63,8 @@ export const api = {
   abandonNegotiation: (negotiationId) =>
     request(`/transfers/negotiations/${negotiationId}`, { method: "DELETE" }),
   sellPlayer: (playerId) => post(`/transfers/sell/${playerId}`),
+  getContracts: () => request("/contracts"),
+  extendContract: (playerId, years) => post(`/contracts/${playerId}/extend`, { years }),
   getAcademy: () => request("/academy"),
   promoteYouth: (playerId) => post(`/academy/promote/${playerId}`),
   demotePro: (playerId) => post(`/academy/demote/${playerId}`),

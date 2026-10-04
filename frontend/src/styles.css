@@ -1975,3 +1975,187 @@ body,
 .radar__label-caption {
   fill: var(--neutral);
 }
+
+/* --- Bilan de fin de saison -------------------------------------------------------- */
+
+.review__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+
+.review__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Le contenu de l'étape absorbe la hauteur et défile à l'intérieur de la fenêtre */
+.review__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.review__hero .hero__title {
+  margin: 0;
+}
+
+.review__hero .hero__sub {
+  margin: 6px 0 0;
+}
+
+.review__stats {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 0 24px;
+}
+
+.review__stat {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.review__stat dt {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.review__stat dd {
+  margin: 4px 0 0;
+}
+
+.review__stat .num {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+.review__detail {
+  font-size: 13px;
+}
+
+.review__scorers {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.review__scorers li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 72px;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.review__scorers .num {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  text-align: right;
+}
+
+/* Une note : la ligne de la carte « Vie du club », puis début → fin de saison */
+.review__note {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 190px;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.review__note:last-child {
+  border-bottom: 0;
+}
+
+.review__note .club-note {
+  border-bottom: 0;
+}
+
+.review__change {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  font-size: 13px;
+}
+
+.review__change .num {
+  grid-row: span 2;
+  align-self: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+}
+
+@media (max-width: 720px) {
+  .review__note {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding-bottom: 8px;
+  }
+}
+
+.review__contracts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 24px;
+}
+
+.contract-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.contract {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.contract__who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.contract__name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.contract__what {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 12px;
+  font-size: 13px;
+}
+
+.contract__years {
+  width: auto;
+}
+
+.contract__error {
+  flex-basis: 100%;
+  margin: 0;
+}

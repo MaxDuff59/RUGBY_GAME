@@ -103,8 +103,22 @@ une durée de contrat en tête selon son âge (3 à 5 saisons pour les jeunes,
 pas le salaire. Et il a de la mémoire : s'il quitte la table, il refuse toute
 discussion pendant 8 semaines, puis revient en ouvrant 10 % plus haut et avec
 un point de patience en moins par rupture passée. Quitter la table soi-même
-ferme la porte 2 semaines, sans rancune. Les contrats arrivés à terme sont
-renouvelés automatiquement pour l'instant.
+ferme la porte 2 semaines, sans rancune.
+
+## Fins de contrat
+
+Règles dans `engine/contracts.py`, routes dans `api/routers/contracts.py`.
+Un contrat n'est plus renouvelé d'office : en dernière année, un joueur de ton
+club (pro ou espoir) peut être prolongé au salaire qu'il demande (selon sa valeur
+et son temps de jeu ; un vétéran accepte une baisse) et pour une durée qui
+dépend de son âge. Sinon il part libre à l'intersaison et signe dans le club le
+moins fourni. Pendant la phase retour, les concurrents signent des pré-contrats
+avec tes joueurs en fin de contrat (les meilleurs de l'effectif sont les plus
+convoités) : ceux-là sont perdus. Les clubs IA prolongent leurs propres joueurs.
+L'intersaison est refusée si moins de 25 pros restent sous contrat.
+
+Le bilan de fin de saison (`GET /seasons/current/review`, puis `GET /contracts`)
+s'ouvre après la finale, en trois étapes : résultats, vie du club, contrats.
 
 ## Centre de formation
 

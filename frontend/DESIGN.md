@@ -52,6 +52,13 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   et fraîcheur sur les notes du match (détail au survol), sans barre.
 - Limogeage : la page de choix du club s'ouvre sur « Limogé le … / Rebondis ailleurs »,
   le nom du manager prérempli et l'ancien club grisé.
+- Bilan de fin de saison : grande fenêtre (`Modal`) qui s'ouvre après la finale (ou par
+  « Bilan de la saison »), en trois étapes repérées par des pastilles : résultats (titre
+  en capitales, chiffres clés, meilleurs marqueurs), vie du club (les lignes de la carte
+  « Vie du club », plus début → fin de saison et paliers), contrats (pros et espoirs en
+  fin de contrat : durée + « Prolonger », « Signé ailleurs », retraite, « Passer pro »).
+  En pied : pros sous contrat la saison prochaine, en accent sous le minimum, et
+  « Lancer la saison » (désactivé tant que l'effectif est insuffisant).
 - Affaires entre deux matchs : fenêtre étroite (`Modal compact`) qui s'ouvre après
   la journée simulée. Catégorie et date en libellé, titre en capitales, la situation,
   puis une réponse par ligne. Après la réponse : la réaction (filet accent à gauche)

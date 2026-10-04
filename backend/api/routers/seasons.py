@@ -23,6 +23,7 @@ from api.affairs import (
 from api.deps import SessionDep
 from api.ledger import current_season, record
 from api.notes import History, ensure_preseason_ranks
+from api.routers.contracts import contracts_overview, expire_contracts, rival_signings
 from api.routers.medical import injury_case
 from api.schemas import (
     ClubRef,
@@ -30,8 +31,11 @@ from api.schemas import (
     InjuryCase,
     MatchdayOut,
     MatchSummary,
+    ObjectiveOut,
     PlayOut,
+    ScorerOut,
     SeasonOut,
+    SeasonReviewOut,
     StandingOut,
 )
 from data.generator import FIRST_SEASON_YEAR
@@ -41,6 +45,7 @@ from engine.economy import (
     CHAMPION_PRIZE,
     PLAYOFF_PRIZES,
     SQUAD_MAX,
+    SQUAD_MIN,
     TransactionCategory,
     attendance,
     matchday_wages,
@@ -69,6 +74,7 @@ from models.orm import (
     NegotiationRow,
     PlayerRow,
     SeasonRow,
+    TransactionRow,
 )
 
 router = APIRouter(prefix="/seasons", tags=["saisons"])
@@ -459,28 +465,132 @@ def get_current_season(session: SessionDep) -> SeasonOut:
     return _season_out(session, _current_or_404(session))
 
 
+@router.get("/current/review", response_model=SeasonReviewOut)
+def get_season_review(session: SessionDep) -> SeasonReviewOut:
+    """Bilan sportif du club dirigé, une fois la finale jouée : classement, phases
+    finales, objectif de la direction, espoirs, trésorerie, meilleurs marqueurs."""
+    season = _current_or_404(session)
+    if _phase(season) != "finished":
+        raise HTTPException(status_code=400, detail="La saison n'est pas terminée")
+    career = session.scalars(select(CareerRow)).first()
+    if career is None:
+        raise HTTPException(status_code=404, detail="Aucune carrière en cours")
+    club_id = career.club_id
+    club_rows = _club_rows(session)
+    clubs = {row.id: row.to_domain() for row in club_rows}
+    names = {row.id: row.name for row in club_rows}
+
+    table = _standings(season, clubs).table()
+    seeding = [line.club_id for line in table]
+    rank = seeding.index(club_id) + 1
+    line = table[rank - 1]
+
+    # Phases finales : le dernier tour joué, ou le titre.
+    playoffs = "none"
+    for row in sorted(season.matches, key=lambda m: m.matchday):
+        if row.stage != Stage.REGULAR.value and club_id in (row.home_club_id, row.away_club_id):
+            playoffs = row.stage
+    final = next(m for m in season.matches if m.stage == Stage.FINAL.value)
+    champion_id = final.to_domain().winner_id(seeding)
+    if champion_id == club_id:
+        playoffs = "champion"
+
+    history = History.load(session)
+    goal = history.objective(club_id)
+    objective = ObjectiveOut(
+        label=goal.label, target_rank=goal.target_rank, expected_rank=history.ranks[-1][club_id]
+    )
+
+    youth_table = Season(year=season.year, clubs=list(clubs.values()))
+    for row in season.youth_matches:
+        if row.is_played:
+            record_result(youth_table, row.to_domain())
+    youth_ids = [youth_line.club_id for youth_line in youth_table.table()]
+
+    start = min(m.date for m in season.matches)
+    season_total = session.scalar(
+        select(func.coalesce(func.sum(TransactionRow.amount), 0)).where(
+            TransactionRow.club_id == club_id, TransactionRow.date >= start
+        )
+    )
+    balance = session.get(ClubRow, club_id).balance
+
+    points: dict[int, int] = {}
+    tries: dict[int, int] = {}
+    for row in season.matches:
+        if not row.is_played:
+            continue
+        for event in row.to_domain().events:
+            if event.club_id == club_id and event.player_id is not None and event.points:
+                points[event.player_id] = points.get(event.player_id, 0) + event.points
+                if event.type == EventType.TRY:
+                    tries[event.player_id] = tries.get(event.player_id, 0) + 1
+    scorers = []
+    for player_id in sorted(points, key=points.get, reverse=True)[:3]:
+        player = session.get(PlayerRow, player_id)
+        if player is not None:
+            scorers.append(
+                ScorerOut(
+                    player_id=player_id,
+                    name=f"{player.first_name} {player.last_name}",
+                    points=points[player_id],
+                    tries=tries.get(player_id, 0),
+                )
+            )
+
+    return SeasonReviewOut(
+        year=season.year,
+        club=ClubRef(id=club_id, name=names[club_id]),
+        champion=ClubRef(id=champion_id, name=names[champion_id]),
+        club_count=len(club_rows),
+        playoff_qualifiers=PLAYOFF_QUALIFIERS,
+        rank=rank,
+        played=line.played,
+        won=line.won,
+        drawn=line.drawn,
+        lost=line.lost,
+        points_for=line.points_for,
+        points_against=line.points_against,
+        tries_for=line.tries_for,
+        league_points=line.league_points,
+        playoffs=playoffs,
+        objective=objective,
+        objective_met=rank <= goal.target_rank,
+        youth_rank=youth_ids.index(club_id) + 1 if season.youth_matches else None,
+        balance_start=balance - season_total,
+        balance_end=balance,
+        scorers=scorers,
+    )
+
+
 @router.post("/current/play", response_model=PlayOut)
 def play_next_matchday(session: SessionDep) -> PlayOut:
     """Joue la prochaine journée (tous ses matchs) et renvoie la saison mise à jour.
 
     Une affaire restée sans réponse est d'abord réglée d'office ; après la journée,
-    les promesses sont tranchées et une nouvelle affaire peut tomber.
+    les promesses sont tranchées et une nouvelle affaire peut tomber. Pendant la
+    phase retour, des concurrents peuvent signer nos joueurs en fin de contrat.
     """
     season = _current_or_404(session)
     ignore_pending(session)
     played, injuries = _play_matchday(session, season)
     dismissal = _board_verdict(session, played)
-    affairs = []
+    affairs, signings = [], []
     if dismissal is None:
+        rng = random.Random()
         affairs = settle_promises(session, season, played.date)
-        drawn = draw_affair(session, season, random.Random())
+        drawn = draw_affair(session, season, rng)
         affairs += [drawn] if drawn is not None else []
+        second_half = played.matchday > _regular_matchday_count(season) // 2
+        if played.stage != Stage.REGULAR or second_half:
+            signings = rival_signings(session, season, played.date, rng)
     return PlayOut(
         played=played,
         season=_season_out(session, season),
         injuries=injuries,
         dismissal=DismissalOut.model_validate(dismissal) if dismissal else None,
         affairs=[affair_out(row) for row in affairs],
+        signings=signings,
     )
 
 
@@ -529,20 +639,33 @@ def _board_verdict(session: Session, played: MatchdayOut) -> DismissalRow | None
 
 @router.post("/next", response_model=SeasonOut, status_code=201)
 def start_next_season(session: SessionDep) -> SeasonOut:
-    """Intersaison : fin des prêts, arrivée des joueurs sous pré-contrat, contrats
-    renouvelés, puis les joueurs vieillissent, les plus âgés partent, les jeunes
-    arrivent, et un nouveau calendrier est tiré."""
+    """Intersaison : fin des prêts, pré-contrats exécutés (les nôtres et ceux des
+    concurrents), fins de contrat, puis les joueurs vieillissent, les plus âgés
+    partent, les jeunes arrivent, et un nouveau calendrier est tiré.
+
+    Refusée si l'effectif pro du club dirigé passerait sous le minimum."""
     season = _current_or_404(session)
     if _phase(season) != "finished":
         raise HTTPException(status_code=400, detail="La saison n'est pas terminée")
+    career = session.scalars(select(CareerRow)).first()
+    my_club_id = career.club_id if career is not None else None
+    if career is not None:
+        contracts = contracts_overview(session, session.get(ClubRow, my_club_id))
+        if contracts.squad_next < SQUAD_MIN:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Effectif pro insuffisant la saison prochaine : {contracts.squad_next} "
+                    f"joueurs sous contrat (minimum {SQUAD_MIN}). Prolonge des joueurs, "
+                    "fais passer des espoirs pros ou recrute."
+                ),
+            )
 
     rng = random.Random()
     year = season.year + 1
-    _offseason_moves(session, year, rng)
+    _offseason_moves(session, year, rng, my_club_id)
     next_id = (session.scalar(select(func.max(PlayerRow.id))) or 0) + 1
     player_ids = itertools.count(next_id)
-    career = session.scalars(select(CareerRow)).first()
-    my_club_id = career.club_id if career is not None else None
 
     for club_row in _club_rows(session):
         club = club_row.to_domain()
@@ -576,18 +699,16 @@ def start_next_season(session: SessionDep) -> SeasonOut:
     return _season_out(session, create_season(session, season.year + 1))
 
 
-# Un contrat arrivé à terme est renouvelé d'une à trois saisons (pas encore de
-# vraie gestion des contrats : les joueurs ne partent pas libres).
-RENEWAL_YEARS = (1, 3)
-
-
-def _offseason_moves(session: Session, year: int, rng: random.Random) -> None:
+def _offseason_moves(
+    session: Session, year: int, rng: random.Random, my_club_id: int | None
+) -> None:
     """Mouvements de l'intersaison, avant le vieillissement : prêts, pré-contrats, contrats."""
     # Les prêtés rentrent chez leur club propriétaire.
     for row in session.scalars(select(PlayerRow).where(PlayerRow.loaned_from.is_not(None))):
         row.club_id, row.loaned_from = row.loaned_from, None
 
-    # Les pré-contrats signés s'exécutent ; les négociations inachevées tombent.
+    # Les pré-contrats signés (par le manager ou par un concurrent) s'exécutent ;
+    # les négociations inachevées tombent.
     for neg in session.scalars(select(NegotiationRow).where(NegotiationRow.stage != "done")):
         if neg.stage == "agreed":
             player = neg.player
@@ -599,9 +720,10 @@ def _offseason_moves(session: Session, year: int, rng: random.Random) -> None:
             neg.stage = "failed"
             neg.message = "La saison est terminée sans accord."
 
-    for row in session.scalars(select(PlayerRow).where(PlayerRow.contract_until < year)):
-        row.contract_until = year + rng.randint(*RENEWAL_YEARS) - 1
+    session.flush()
+    expire_contracts(session, year, my_club_id, rng)
     session.commit()
+    session.expire_all()  # les effectifs ont changé : relationships à relire
 
 
 @router.get("/{year}", response_model=SeasonOut)

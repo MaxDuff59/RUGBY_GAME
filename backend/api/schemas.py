@@ -454,6 +454,8 @@ class PlayOut(BaseModel):
     dismissal: DismissalOut | None = None
     # Affaires à régler avant la journée suivante (engine/affairs.py).
     affairs: list["AffairOut"] = []
+    # Joueurs du club dirigé en fin de contrat qu'un concurrent vient de signer.
+    signings: list["ContractOut"] = []
 
 
 # --- Affaires entre deux matchs (engine/affairs.py) -----------------------------------
@@ -708,3 +710,76 @@ class MedicalOverview(BaseModel):
     injured: list[InjuryCase]  # indisponibles
     fragile: list[InjuryCase]  # revenus, sous surveillance
     history: list[InjuryCase]  # blessures guéries, de la plus récente à la plus ancienne
+
+
+# --- Fins de contrat et bilan de saison ------------------------------------------------
+
+
+class ContractOut(BaseModel):
+    """Un joueur du club dirigé dont l'avenir se joue à l'intersaison (engine/contracts.py).
+
+    Statuts : open (à prolonger, sinon il part libre), extended (prolongé cette
+    saison), signed_elsewhere (un concurrent l'a signé), retiring (raccroche),
+    leaving_academy (espoir trop âgé pour le centre : à passer pro).
+    """
+
+    player: PlayerOut
+    status: Literal["open", "extended", "signed_elsewhere", "retiring", "leaving_academy"]
+    playing_time: str  # titulaire, remplaçant, réserviste (pros)
+    # Prolongation possible (open) : ce qu'il demande.
+    wage_demand: int | None = None
+    years_min: int | None = None
+    years_max: int | None = None
+    # Prolongé ou signé ailleurs : le nouveau contrat.
+    new_club: ClubRef | None = None
+    new_wage: int | None = None
+    new_years: int | None = None
+    signed_on: datetime.date | None = None
+
+
+class ContractsOverview(BaseModel):
+    season_year: int
+    pros: list[ContractOut]
+    youths: list[ContractOut]
+    # Pros sous contrat la saison prochaine (arrivées sous pré-contrat comprises).
+    squad_next: int
+    squad_min: int
+    squad_max: int
+
+
+class ExtendIn(BaseModel):
+    years: int = Field(ge=1, le=5)
+
+
+class ScorerOut(BaseModel):
+    player_id: int
+    name: str
+    points: int
+    tries: int
+
+
+class SeasonReviewOut(BaseModel):
+    """Bilan sportif de la saison du club dirigé, une fois la finale jouée."""
+
+    year: int
+    club: ClubRef
+    champion: ClubRef
+    club_count: int
+    playoff_qualifiers: int
+    rank: int  # saison régulière
+    played: int
+    won: int
+    drawn: int
+    lost: int
+    points_for: int
+    points_against: int
+    tries_for: int
+    league_points: int
+    # none : pas qualifié ; barrage, semi, final : éliminé à ce tour ; champion.
+    playoffs: Literal["none", "barrage", "semi", "final", "champion"]
+    objective: ObjectiveOut | None
+    objective_met: bool | None
+    youth_rank: int | None  # championnat espoirs
+    balance_start: int
+    balance_end: int
+    scorers: list[ScorerOut]  # meilleurs marqueurs pros, trois au plus

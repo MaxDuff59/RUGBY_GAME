@@ -340,11 +340,3 @@ def test_precontract_brings_the_player_at_the_next_season(manager):
     player = next(p for p in manager.get("/clubs/3").json()["players"] if p["id"] == player_id)
     assert player["wage"] == wage and player["contract_until"] == YEAR + 1 + years - 1
     assert manager.get("/transfers").json()["negotiations"] == []
-
-
-def test_contracts_are_renewed_when_they_expire(manager):
-    for _ in range(21):
-        manager.post("/seasons/current/play")
-    manager.post("/seasons/next")
-    players = manager.get("/clubs/3").json()["players"]
-    assert all(p["contract_until"] >= YEAR + 1 for p in players)
