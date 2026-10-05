@@ -76,6 +76,23 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   boutique derrière la tribune, loges en bandeau sombre, écran noir au sommet. Les centres
   (`CampusView`) : les installations apparaissent niveau par niveau, et le panneau les
   liste avec « Améliorer ».
+- Match en direct (page `/match`, ouverte par « Jouer le match » ; pas d'entrée dans le menu) :
+  en haut le tableau d'affichage (une carte) : nom de chaque club en capitales (le nôtre en
+  accent) et ses essais, score en très grand, au centre le chrono `MM:SS` dont les secondes
+  défilent entre deux minutes de jeu, la période (1re mi-temps, mi-temps, prolongation…),
+  puis les commandes : « Coup d'envoi / Pause / Reprendre » (accent), vitesse ×1 à ×8 en
+  pastilles, « Terminer » (le staff finit le match). Le match se met de lui-même en pause à
+  la mi-temps et sur une blessure ou un carton de notre équipe (motif affiché sous les
+  commandes). En dessous, deux colonnes, domicile à gauche, extérieur à droite : les faits de
+  jeu de chaque équipe (les plus récents en haut ; minute, repère — rond accent pour un
+  essai, noir pour un coup de pied réussi, contour pour un raté, carton jaune ou rouge —,
+  libellé, joueur, points), puis sa composition : les 15 places dans l'ordre des numéros
+  avec le joueur qui l'occupe, son poste, son énergie (barre verticale qui se vide au fil
+  du match, noire, en accent sous 30 %, grise pour un joueur hors du terrain, le pourcentage
+  à côté) et sa note sur 10 (gras à partir de 7,5), puis le banc (sortis en gris avec la minute). Notre carte porte en tête trois listes déroulantes
+  de tactique (plan de jeu, défense, pénalités) et accepte les remplacements en pause : on
+  clique un joueur du terrain, puis « Faire entrer » sur un remplaçant. Les deux rangées
+  défilent dans leur carte ; la page tient dans l'écran.
 - Tableau d'effectif : 8 attributs, gras à partir de 15, gris à 8 et moins.
 - Boutons et liens cliquables : 44 px de haut minimum.
 - Fiche joueur (page entière, depuis une ligne de l'effectif) : radar des 8 attributs

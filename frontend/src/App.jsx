@@ -6,6 +6,7 @@ import Calendar from "./pages/Calendar.jsx";
 import Club from "./pages/Club.jsx";
 import Facilities from "./pages/Facilities.jsx";
 import Finances from "./pages/Finances.jsx";
+import Match from "./pages/Match.jsx";
 import Medical from "./pages/Medical.jsx";
 import Player from "./pages/Player.jsx";
 import Squad from "./pages/Squad.jsx";
@@ -20,6 +21,7 @@ export default function App() {
       <Route element={<Layout />}>
         <Route index element={<Club />} />
         <Route path="/calendrier" element={<Calendar />} />
+        <Route path="/match" element={<Match />} />
         <Route path="/effectif" element={<Squad />} />
         <Route path="/joueurs/:playerId" element={<Player />} />
         <Route path="/medical" element={<Medical />} />

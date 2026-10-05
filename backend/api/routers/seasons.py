@@ -24,6 +24,7 @@ from api.deps import SessionDep
 from api.free_agents import age_free_agents, release, renew_pool
 from api.jokers import close_jokers, end_piges
 from api.ledger import current_season, record
+from api.live import load_live, run_training_week
 from api.notes import History, ensure_preseason_ranks
 from api.routers.contracts import contracts_overview, expire_contracts, rival_signings
 from api.routers.medical import injury_case
@@ -58,7 +59,7 @@ from engine.economy import (
     wage_for,
 )
 from engine.match_engine import simulate_match
-from engine.medical import new_injury, training_injuries
+from engine.medical import new_injury
 from engine.offseason import age_players, develop_players, retirees, youth_exits, youth_intake
 from engine.season import (
     PLAYOFF_QUALIFIERS,
@@ -277,7 +278,10 @@ def _ensure_next_stage(session: Session, season: SeasonRow, clubs: dict[int, Clu
 def _play_matchday(session: Session, season: SeasonRow) -> tuple[MatchdayOut, list[InjuryCase]]:
     """Joue la prochaine journée et passe les écritures financières.
 
-    Renvoie la journée jouée et les blessés du club dirigé (entraînement et matchs).
+    Si le match du club dirigé est en cours en direct (api/live.py), il est joué
+    jusqu'au bout par le staff et compte tel quel ; la semaine d'entraînement a
+    alors déjà eu lieu. Renvoie la journée jouée et les blessés du club dirigé
+    (entraînement et matchs).
     """
     club_rows = _club_rows(session)
     rows_by_id = {row.id: row for row in club_rows}
@@ -300,6 +304,13 @@ def _play_matchday(session: Session, season: SeasonRow) -> tuple[MatchdayOut, li
     stage, day = Stage(todays[0].stage), todays[0].date
     label = _matchday_label(stage, matchday)
 
+    # Match en direct du club dirigé : le staff finit ce qu'il reste à jouer.
+    live = load_live(session, clubs)
+    if live is not None and live.match_row not in todays:
+        session.delete(live.row)
+        session.commit()
+        live = None
+
     # Classement avant la journée : il fixe l'affluence (et départage les phases finales).
     seeding = _seeding(season, clubs)
     rank_of = {club_id: rank for rank, club_id in enumerate(seeding, start=1)}
@@ -319,26 +330,33 @@ def _play_matchday(session: Session, season: SeasonRow) -> tuple[MatchdayOut, li
         if club.id == my_club_id:
             my_injuries.append((injury_row, injury))
 
-    # Semaine d'entraînement : tous les clubs, avant les matchs. Un blessé à
-    # l'entraînement manque le match du jour ; les joueurs fatigués se blessent plus.
-    for club in clubs.values():
-        risk = forms[club.id].injury_weight
-        for injury in training_injuries(club, day, rng, club.id != my_club_id, risk):
-            save_injury(injury, club)
+    # Semaine d'entraînement : tous les clubs, avant les matchs (déjà faite si le
+    # match en direct a commencé : ses blessés sont dans la sauvegarde).
+    if live is None:
+        my_injuries.extend(run_training_week(session, clubs, forms, day, rng, my_club_id))
+    else:
+        for injury_row in session.scalars(
+            select(InjuryRow).where(InjuryRow.id.in_(live.row.my_injuries))
+        ):
+            my_injuries.append((injury_row, injury_row.to_domain()))
 
     for row in todays:
         home, away = clubs[row.home_club_id], clubs[row.away_club_id]
-        result = simulate_match(
-            home,
-            away,
-            rng=rng,
-            matchday=matchday,
-            neutral=row.neutral,
-            day=day,
-            home_form=forms[home.id],
-            away_form=forms[away.id],
-            knockout=stage.is_playoff,
-        )
+        if live is not None and row.id == live.match_row.id:
+            live.match.auto = {home.id, away.id}
+            result = live.match.play_to_end()
+        else:
+            result = simulate_match(
+                home,
+                away,
+                rng=rng,
+                matchday=matchday,
+                neutral=row.neutral,
+                day=day,
+                home_form=forms[home.id],
+                away_form=forms[away.id],
+                knockout=stage.is_playoff,
+            )
         row.home_score, row.away_score = result.home_score, result.away_score
         row.events = MatchRow.from_domain(result).events
         row.home_lineup, row.away_lineup = result.home_lineup, result.away_lineup
@@ -443,6 +461,8 @@ def _play_matchday(session: Session, season: SeasonRow) -> tuple[MatchdayOut, li
                 matchday,
             )
 
+    if live is not None:
+        session.delete(live.row)
     session.commit()
     _ensure_next_stage(session, season, clubs)
 

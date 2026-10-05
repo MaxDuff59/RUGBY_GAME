@@ -14,8 +14,7 @@ const NAV_ITEMS = [
   { to: "/transferts", label: "Transferts" },
   { to: "/infrastructures", label: "Infrastructures" },
   { to: "/finances", label: "Finances" },
-  // Page à venir : affichée pour donner la forme du menu, mais inactive.
-  { label: "Match" },
+  // La page Match (/match) n'a pas d'entrée ici : on y va par « Jouer le match », page Club.
 ];
 
 // Cadre commun à toutes les pages : navigation à gauche, en-tête avec le club.
@@ -36,21 +35,13 @@ export default function Layout() {
           <span className="brand__name">Rugby Manager</span>
         </div>
         <ul className="nav">
-          {NAV_ITEMS.map((item) =>
-            item.to ? (
-              <li key={item.label}>
-                <NavLink to={item.to} end className="nav__link">
-                  {item.label}
-                </NavLink>
-              </li>
-            ) : (
-              <li key={item.label}>
-                <span className="nav__link nav__link--disabled" aria-disabled="true">
-                  {item.label}
-                </span>
-              </li>
-            ),
-          )}
+          {NAV_ITEMS.map((item) => (
+            <li key={item.label}>
+              <NavLink to={item.to} end className="nav__link">
+                {item.label}
+              </NavLink>
+            </li>
+          ))}
         </ul>
         <div className="sidebar__footer">Manager : {career.manager_name}</div>
       </nav>

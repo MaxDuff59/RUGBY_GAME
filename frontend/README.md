@@ -51,6 +51,11 @@ src/
     Club.jsx          tableau de bord : prochain match, simuler la journée, rapport de
                       force, classement, derniers résultats, phases finales
     Calendar.jsx      calendrier de la saison : vues semaine, mois, saison
+    Match.jsx         le match en direct (sans entrée dans le menu : bouton « Jouer le match » de
+                      la page Club) : tableau d'affichage et chrono réglable, faits de jeu de chaque
+                      équipe de son côté, compositions avec la note sur 10 de chaque joueur ; en
+                      pause, tactique et remplacements ; « Continuer » finit la journée et revient
+                      au tableau de bord avec son résultat
     Squad.jsx         XV de départ sur le terrain + attributs de tout l'effectif, titulaires
                       du 1 au 15 puis le banc ; une ligne ouvre la fiche du joueur
     Player.jsx        fiche d'un joueur : radar des attributs, essaims des métriques clés

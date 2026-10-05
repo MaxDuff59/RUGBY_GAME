@@ -10,7 +10,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from engine.economy import FacilityKind, TransactionCategory, market_value
-from engine.match_engine import TeamStrength
+from engine.match_engine import Defence, GamePlan, PenaltyChoice, TeamStrength
 from engine.notes import Note
 from engine.transfers import DealKind
 from models import (
@@ -371,6 +371,102 @@ class MatchOut(BaseModel):
             away_shootout=shootout_score(match, match.away_club_id),
             events=[MatchEventOut.model_validate(e) for e in match.events],
         )
+
+
+# --- Match en direct (engine/match_engine.py : LiveMatch) --------------------------------
+
+
+class TacticsOut(BaseModel):
+    game_plan: GamePlan
+    defence: Defence
+    penalties: PenaltyChoice
+
+
+class TacticsIn(BaseModel):
+    """Changement de tactique : seuls les champs renseignés changent."""
+
+    game_plan: GamePlan | None = None
+    defence: Defence | None = None
+    penalties: PenaltyChoice | None = None
+
+
+class LivePlayerOut(BaseModel):
+    """Un joueur de la feuille de match et son état à la minute en cours."""
+
+    id: int
+    name: str
+    last_name: str
+    position: Position  # poste naturel
+    number: int  # maillot : 1 à 15 pour les titulaires, 16 à 23 pour le banc
+    slot_number: int | None  # place occupée sur le terrain (1 à 15), None s'il n'y est pas
+    slot: Position | None  # poste occupé sur le terrain
+    # field : sur le terrain ; sin_bin : banc des pénalités ; sent_off : exclu ;
+    # injured : blessé, sorti ; replaced : remplacé ; bench : sur le banc, peut entrer.
+    status: Literal["field", "sin_bin", "sent_off", "injured", "replaced", "bench"]
+    rating: float | None  # note sur 10, None s'il n'a pas joué
+    yellow: int
+    red: bool
+    since: int | None  # minute d'entrée sur le terrain
+    until: int | None  # minute de sortie (remplacé, blessé, exclu)
+    back_at: int | None  # banc des pénalités : minute du retour
+    overall: float
+    kicking: int
+    # Énergie de 0 à 1 : celle du coup d'envoi (selon sa fraîcheur) moins ses minutes
+    # de jeu ; figée à sa sortie. Un remplaçant sur le banc montre celle qu'il aurait.
+    energy: float
+
+
+class LiveSideOut(BaseModel):
+    club: ClubRef
+    score: int
+    tries: int
+    shootout: int | None  # tirs au but réussis, si séance
+    tactics: TacticsOut
+    players: list[LivePlayerOut]  # titulaires (1 à 15) puis le banc (16 à 23)
+    substitutions_left: int
+    missing: int  # joueurs en moins sur le terrain (cartons, blessés sans remplaçant)
+    kicker_id: int | None  # buteur du moment
+    strength: dict[str, float]  # notes collectives du moment : set_piece, pack, attack, defense
+
+
+class LiveEventOut(BaseModel):
+    minute: int
+    type: EventType
+    club_id: int
+    player_id: int | None
+    player_name: str | None
+    other_player_id: int | None  # remplacement : le joueur qui entre
+    other_player_name: str | None
+    points: int
+
+
+class LiveOut(BaseModel):
+    """Le match en direct du club dirigé, tel qu'il en est."""
+
+    match_id: int
+    matchday: int
+    stage: Stage
+    date: datetime.date
+    neutral: bool
+    knockout: bool
+    my_club_id: int
+    minute: int  # dernière minute jouée (0 avant le coup d'envoi)
+    last_minute: int  # 80, ou 100 si la prolongation est engagée
+    half_time: int
+    extra_time: bool
+    finished: bool
+    home: LiveSideOut
+    away: LiveSideOut
+    events: list[LiveEventOut]  # dans l'ordre du match
+
+
+class AdvanceIn(BaseModel):
+    minutes: int = Field(default=1, ge=1, le=100)
+
+
+class SubstituteIn(BaseModel):
+    player_out: int
+    player_in: int
 
 
 class MatchSummary(BaseModel):

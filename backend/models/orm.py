@@ -349,6 +349,7 @@ class MatchRow(Base):
                     type=EventType(e["type"]),
                     club_id=e["club_id"],
                     player_id=e.get("player_id"),
+                    other_player_id=e.get("other_player_id"),
                 )
                 for e in self.events
             ],
@@ -375,12 +376,31 @@ class MatchRow(Base):
                     "type": e.type.value,
                     "club_id": e.club_id,
                     "player_id": e.player_id,
+                    "other_player_id": e.other_player_id,
                 }
                 for e in match.events
             ],
             home_lineup=list(match.home_lineup),
             away_lineup=list(match.away_lineup),
         )
+
+
+class LiveMatchRow(Base):
+    """Le match du club dirigé en train d'être joué minute par minute (un seul à la fois).
+
+    `state` : tout l'état du moteur (`LiveMatch.to_state`), pour reprendre le match
+    à la minute où on l'a laissé, même après un redémarrage de l'API. La semaine
+    d'entraînement de la journée a déjà eu lieu quand ce match commence :
+    `my_injuries` garde les blessés à l'entraînement du club dirigé, pour les
+    annoncer avec ceux du match.
+    """
+
+    __tablename__ = "live_matches"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"), unique=True)
+    my_injuries: Mapped[list[int]] = mapped_column(JSON, default=list)
+    state: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
 class CareerRow(Base):

@@ -65,6 +65,9 @@ au démarrage).
 | `POST /seasons/current/play` | Joue la journée suivante (matchs, billetterie, sponsors, salaires) |
 | `POST /seasons/next` | Intersaison : âges, retraites, jeunes, nouveau calendrier |
 | `GET /matches/{id}`, `POST /matches/simulate` | Détail d'un match joué ; match amical |
+| `POST /live`, `GET /live` | Lancer (ou reprendre) le match du club dirigé en direct, minute par minute |
+| `POST /live/advance`, `POST /live/tactics`, `POST /live/substitute` | Avancer le chrono ; changer la tactique ; faire un remplacement |
+| `POST /live/finish` | Finir la journée avec ce match (le staff joue les minutes restantes) |
 | `GET /finances` | Trésorerie, masse salariale et toutes les opérations |
 | `GET /staff`, `POST /staff/hire/{id}`, `POST /staff/{id}/fire` | Staff : voir, embaucher, licencier |
 | `GET /facilities`, `POST /facilities/{kind}/upgrade` | Stade, centre d'entraînement, formation |
@@ -75,6 +78,39 @@ au démarrage).
 | `GET /medical`, `POST /medical/{id}/protocol/{protocol}` | Infirmerie : blessés, protocole de soins, dossier médical |
 | `GET /academy`, `POST /academy/promote/{id}`, `POST /academy/demote/{id}` | Centre de formation : espoirs, championnat espoirs, promotions |
 | `GET /affairs`, `POST /affairs/{id}/answer` | Affaires entre deux matchs : celles en attente, et la réponse (effets révélés) |
+
+## Jouer le match
+
+Le match du club dirigé peut se jouer en direct (`engine/match_engine.py`,
+classe `LiveMatch` ; routes dans `api/routers/live.py`). `POST /live` joue
+d'abord la semaine d'entraînement de tous les clubs, puis fige le XV et le banc
+(8 remplaçants : talonneur, 2 piliers, 2e ligne, 3e ligne, demi de mêlée,
+ouvreur, un arrière) de chaque équipe ; l'état complet du moteur est sauvegardé
+en base (`live_matches`) à chaque minute, donc le match reprend où on l'a laissé.
+À tout moment on peut changer la **tactique** (plan de jeu au pied / équilibré /
+à la main ; défense prudente / normale / agressive ; pénalités tentées au pied
+ou jouées à la main) ou faire un **remplacement** (8 au plus, un sortant ne
+revient pas). L'adversaire est géré par son staff : il adapte son plan de jeu à
+ses forces et remplace ses joueurs usés entre la 50e et la 74e minute.
+
+Ce que le moteur ajoute au match :
+
+- l'**énergie** : chaque joueur commence entre 60 % (fraîcheur nulle) et 100 %
+  (tout frais) et perd 1 % par minute de jeu ; son apport aux notes collectives
+  va de 100 % de ses moyens (énergie pleine) à 80 % (vide), d'où l'intérêt des
+  remplaçants frais ;
+- les **cartons** : ~0,3 jaune (10 minutes à 14, 12 % de force en moins par
+  joueur manquant) et ~0,03 rouge par équipe et par match, chaque carton donnant
+  une pénalité à l'adversaire ; une défense agressive en prend plus ;
+- les **blessés** sortent et sont remplacés d'office s'il reste un changement ;
+- une **note sur 10** par joueur, qui part de 6 et bouge avec ses actions
+  (essai +1, coup de pied réussi ou raté, carton −1 / −2) et la domination de sa
+  ligne minute après minute.
+
+`POST /live/finish` (ou « Simuler la journée ») joue ce qu'il reste par le staff
+et termine la journée comme d'habitude : autres matchs, billetterie, salaires,
+affaires. `simulate_match` (journées simulées, matchs amicaux) utilise le même
+moteur, les deux bancs gérés par le staff.
 
 ## Recrutement
 

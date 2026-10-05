@@ -49,6 +49,15 @@ export const api = {
   startNextSeason: () => post("/seasons/next"),
   getMatch: (matchId) => request(`/matches/${matchId}`),
 
+  // Match en direct (le match du club dirigé, minute par minute)
+  getLive: () => request("/live"),
+  startLive: () => post("/live"),
+  advanceLive: (minutes = 1) => post("/live/advance", { minutes }),
+  setLiveTactics: (tactics) => post("/live/tactics", tactics),
+  substituteLive: (playerOut, playerIn) =>
+    post("/live/substitute", { player_out: playerOut, player_in: playerIn }),
+  finishLive: () => post("/live/finish"),
+
   // Gestion du club dirigé
   getFinances: () => request("/finances"),
   getStaff: () => request("/staff"),

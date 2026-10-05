@@ -308,6 +308,10 @@ class EventType(StrEnum):
     PENALTY_MISSED = "penalty_missed"
     DROP_GOAL = "drop_goal"  # drop réussi
     INJURY = "injury"  # un joueur se blesse et quitte le terrain
+    YELLOW_CARD = "yellow_card"  # 10 minutes sur le banc des pénalités
+    RED_CARD = "red_card"  # exclusion définitive
+    # Remplacement : `player_id` sort, `other_player_id` entre.
+    SUBSTITUTION = "substitution"
     # Tirs au but d'une phase finale restée à égalité après prolongation : ils
     # départagent les deux clubs sans changer le score.
     SHOOTOUT_GOAL = "shootout_goal"
@@ -323,6 +327,9 @@ EVENT_POINTS = {
     EventType.PENALTY_MISSED: 0,
     EventType.DROP_GOAL: 3,
     EventType.INJURY: 0,
+    EventType.YELLOW_CARD: 0,
+    EventType.RED_CARD: 0,
+    EventType.SUBSTITUTION: 0,
     EventType.SHOOTOUT_GOAL: 0,
     EventType.SHOOTOUT_MISSED: 0,
 }
@@ -340,6 +347,8 @@ class MatchEvent:
     type: EventType
     club_id: int
     player_id: int | None = None
+    # Second joueur concerné : le remplaçant qui entre (`SUBSTITUTION`).
+    other_player_id: int | None = None
 
     @property
     def points(self) -> int:

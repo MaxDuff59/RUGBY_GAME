@@ -18,6 +18,7 @@ from api.routers import (
     contracts,
     facilities,
     finances,
+    live,
     matches,
     medical,
     players,
@@ -51,3 +52,4 @@ app.include_router(academy.router)
 app.include_router(players.router)
 app.include_router(affairs.router)
 app.include_router(contracts.router)
+app.include_router(live.router)

@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
-import { Link, useNavigate, useOutletContext } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useLocation, useNavigate, useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
 import Affairs from "../components/Affairs.jsx";
@@ -35,8 +35,11 @@ const STRENGTH_LINES = [
 export default function Club() {
   const { career } = useOutletContext();
   const navigate = useNavigate();
+  const location = useLocation();
   const myId = career.club_id;
   const season = useApi(useCallback(api.getCurrentSeason, []));
+  // Match en direct en cours (404 sinon) : « Jouer le match » le reprend.
+  const liveMatch = useApi(useCallback(api.getLive, []));
   const [lastPlayed, setLastPlayed] = useState(null); // la journée qu'on vient de simuler
   const [newInjuries, setNewInjuries] = useState([]); // nos blessés de cette journée
   const [signings, setSignings] = useState([]); // nos joueurs signés ailleurs cette journée
@@ -61,12 +64,9 @@ export default function Club() {
     }
   }
 
-  const simulate = () => {
-    if (pending.length > 0) {
-      setShowAffairs(true);
-      return;
-    }
-    act(api.playMatchday, (result) => {
+  // Après une journée jouée (simulée ici, ou finie depuis la page Match) : la suite.
+  const applyResult = useCallback(
+    (result) => {
       // Limogé par la direction : la carrière est terminée, on choisit un autre club.
       if (result.dismissal) {
         navigate("/start", { replace: true });
@@ -80,7 +80,40 @@ export default function Club() {
       setShowReview(result.season.phase === "finished" && result.affairs.length === 0);
       affairs.setData({ pending: result.affairs, recent: affairs.data?.recent ?? [] });
       setShowAffairs(result.affairs.length > 0);
-    });
+    },
+    [navigate, season.setData, affairs.setData, affairs.data],
+  );
+
+  // La page Match renvoie ici avec le résultat de la journée qu'elle vient de finir
+  // (une seule fois : l'état de navigation est effacé aussitôt).
+  const applied = useRef(null);
+  useEffect(() => {
+    const played = location.state?.played;
+    if (!played || applied.current === played) return;
+    applied.current = played;
+    applyResult(played);
+    liveMatch.setData(null);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location, applyResult, navigate, liveMatch.setData]);
+
+  const simulate = () => {
+    if (pending.length > 0) {
+      setShowAffairs(true);
+      return;
+    }
+    act(api.playMatchday, applyResult);
+  };
+
+  const playLive = () => {
+    if (pending.length > 0) {
+      setShowAffairs(true);
+      return;
+    }
+    if (liveMatch.data) {
+      navigate("/match");
+      return;
+    }
+    act(api.startLive, () => navigate("/match"));
   };
 
   const affairAnswered = (done) => {
@@ -171,8 +204,14 @@ export default function Club() {
                     ? `${pending.length} affaire${pending.length > 1 ? "s" : ""} à régler`
                     : "Simuler la journée"}
               </button>
-              <button type="button" className="button button--primary" disabled title="Bientôt : le match en direct">
-                Jouer le match
+              <button
+                type="button"
+                className="button button--primary"
+                disabled={busy || !myNextMatch}
+                title={myNextMatch ? "Le match en direct, minute par minute" : "Ton club ne joue pas cette journée"}
+                onClick={playLive}
+              >
+                {liveMatch.data ? `Reprendre le match (${liveMatch.data.minute}')` : "Jouer le match"}
               </button>
               <Link to="/calendrier" className="muted">
                 Voir le calendrier

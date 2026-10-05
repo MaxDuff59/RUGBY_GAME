@@ -136,6 +136,67 @@ export const formatWeeks = (weeks) => `${weeks} semaine${weeks > 1 ? "s" : ""}`;
 export const matchdayLabel = (match) =>
   match.stage === "regular" ? `J${match.matchday}` : STAGES[match.stage];
 
+// --- Match en direct ------------------------------------------------------------------
+
+// Libellé de chaque événement d'un match (sans le nom du joueur).
+export const EVENTS = {
+  try: "Essai",
+  conversion: "Transformation",
+  conversion_missed: "Transformation manquée",
+  penalty_goal: "Pénalité",
+  penalty_missed: "Pénalité manquée",
+  drop_goal: "Drop",
+  injury: "Blessure",
+  yellow_card: "Carton jaune",
+  red_card: "Carton rouge",
+  substitution: "Remplacement",
+  shootout_goal: "Tir au but réussi",
+  shootout_missed: "Tir au but manqué",
+};
+
+// Les trois curseurs de la tactique, avec leurs options dans l'ordre d'affichage.
+export const TACTICS = [
+  {
+    key: "game_plan",
+    label: "Plan de jeu",
+    options: [
+      { key: "kicking", label: "Au pied", scope: "Occupation : territoire et pénalités, moins d'essais" },
+      { key: "balanced", label: "Équilibré", scope: "Ni l'un ni l'autre" },
+      { key: "hands", label: "À la main", scope: "Plus d'essais marqués… et encaissés" },
+    ],
+  },
+  {
+    key: "defence",
+    label: "Défense",
+    options: [
+      { key: "cautious", label: "Prudente", scope: "Moins de fautes et de cartons, défense moins dense" },
+      { key: "normal", label: "Normale", scope: "L'équilibre du staff" },
+      { key: "aggressive", label: "Agressive", scope: "Défense qui monte, plus de pénalités et de cartons" },
+    ],
+  },
+  {
+    key: "penalties",
+    label: "Pénalités",
+    options: [
+      { key: "kick", label: "Au pied", scope: "Trois points face aux perches" },
+      { key: "play", label: "Jouées", scope: "On tente l'essai, rien si ça échoue" },
+    ],
+  },
+];
+
+// Abréviation d'un poste pour les compositions serrées.
+export const POSITION_SHORT = {
+  PROP: "PIL",
+  HOOKER: "TAL",
+  LOCK: "2L",
+  BACK_ROW: "3L",
+  SCRUM_HALF: "DM",
+  FLY_HALF: "DO",
+  CENTRE: "CEN",
+  WING: "AIL",
+  FULLBACK: "ARR",
+};
+
 // --- Résultats ----------------------------------------------------------------------
 
 // Résultat d'un match joué pour un club : "V", "N" ou "D". En phase finale, les
