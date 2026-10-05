@@ -1,23 +1,41 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 
 import { api } from "../api.js";
+import { useConfirm } from "../components/ConfirmDialog.jsx";
 import Level from "../components/Level.jsx";
 import { FACILITIES, formatInteger, formatMoney } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 
+// Ce que les travaux changent, en une phrase, pour la fenêtre de confirmation.
+const EFFECTS = {
+  stadium: "Plus de places : davantage de billetterie les jours de match, et des sponsors plus généreux.",
+  training: "Les pros progressent plus vite à chaque intersaison.",
+  academy: "Les espoirs progressent plus vite, et davantage de jeunes entrent au centre chaque intersaison.",
+};
+
 export default function Facilities() {
   const { data, error, loading, setData } = useApi(useCallback(api.getFacilities, []));
-  const [actionError, setActionError] = useState(null);
+  const confirm = useConfirm();
 
-  async function improve(kind, cost) {
-    const { label } = FACILITIES[kind];
-    if (!window.confirm(`Améliorer ${label.toLowerCase()} pour ${formatMoney(cost)} ?`)) return;
-    setActionError(null);
-    try {
-      setData(await api.upgradeFacility(kind));
-    } catch (err) {
-      setActionError(err);
-    }
+  function improve(upgrade) {
+    const info = FACILITIES[upgrade.kind];
+    const isStadium = upgrade.kind === "stadium";
+    const verb = isStadium ? "Agrandir" : "Améliorer";
+    confirm.ask({
+      eyebrow: `Infrastructures · ${info.label}`,
+      title: isStadium ? `Agrandir à ${formatInteger(upgrade.next)} places` : `Passer au niveau ${upgrade.next}`,
+      text: EFFECTS[upgrade.kind],
+      rows: [
+        isStadium
+          ? { label: "Capacité", from: formatInteger(upgrade.current), to: formatInteger(upgrade.next), hint: "places" }
+          : { label: "Niveau", from: upgrade.current, to: upgrade.next, hint: "sur 5" },
+        { label: "Coût des travaux", value: formatMoney(upgrade.cost) },
+        { label: "Trésorerie", from: formatMoney(data.balance), to: formatMoney(data.balance - upgrade.cost) },
+      ],
+      warning: "Les travaux sont immédiats et la dépense n'est pas remboursable.",
+      confirmLabel: `${verb} pour ${formatMoney(upgrade.cost)}`,
+      onConfirm: async () => setData(await api.upgradeFacility(upgrade.kind)),
+    });
   }
 
   if (loading) return <p className="status">Chargement…</p>;
@@ -33,7 +51,7 @@ export default function Facilities() {
         </div>
       </header>
 
-      {actionError && <p className="status--error">{actionError.message}</p>}
+      {confirm.dialog}
 
       <div className="tiles tiles--wide">
         {data.upgrades.map((upgrade) => {
@@ -73,7 +91,7 @@ export default function Facilities() {
                     className="button button--primary"
                     disabled={!upgrade.affordable}
                     title={upgrade.affordable ? undefined : "Trésorerie insuffisante"}
-                    onClick={() => improve(upgrade.kind, upgrade.cost)}
+                    onClick={() => improve(upgrade)}
                   >
                     {isStadium ? "Agrandir" : "Améliorer"}
                   </button>

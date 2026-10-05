@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 
 import { api } from "../api.js";
+import { useConfirm } from "../components/ConfirmDialog.jsx";
 import Level from "../components/Level.jsx";
 import SortHeader from "../components/SortHeader.jsx";
 import { STAFF_ROLES, formatMoney } from "../format.js";
@@ -12,6 +13,7 @@ export default function Staff() {
   const { data, error, loading, setData } = useApi(useCallback(api.getStaff, []));
   const [selectedRole, setSelectedRole] = useState(Object.keys(STAFF_ROLES)[0]);
   const [actionError, setActionError] = useState(null);
+  const confirm = useConfirm();
   const candidateSort = useSort(data?.candidates ?? [], { key: "level", dir: "desc" });
 
   async function act(call) {
@@ -21,6 +23,22 @@ export default function Staff() {
     } catch (err) {
       setActionError(err);
     }
+  }
+
+  function fire(slot) {
+    const role = STAFF_ROLES[slot.role];
+    confirm.ask({
+      eyebrow: `Staff · ${role.label}`,
+      title: `Licencier ${slot.member.name}`,
+      text: `${role.scope}. Le poste reste vacant jusqu'à une nouvelle embauche, et l'équipe perd son apport dès le prochain match.`,
+      rows: [
+        { label: "Indemnité de licenciement", value: formatMoney(slot.severance), hint: "la moitié du salaire annuel" },
+        { label: "Salaire libéré", value: formatMoney(slot.member.wage), hint: "par saison" },
+        { label: "Trésorerie", from: formatMoney(data.balance), to: formatMoney(data.balance - slot.severance) },
+      ],
+      confirmLabel: "Licencier",
+      onConfirm: async () => setData(await api.fireStaff(slot.member.id)),
+    });
   }
 
   if (loading) return <p className="status">Chargement…</p>;
@@ -43,6 +61,7 @@ export default function Staff() {
       </header>
 
       {actionError && <p className="status--error">{actionError.message}</p>}
+      {confirm.dialog}
 
       <div className="two-col fill">
         <section className="section">
@@ -79,9 +98,7 @@ export default function Staff() {
                           className="button button--small"
                           onClick={(event) => {
                             event.stopPropagation();
-                            if (window.confirm(`Licencier ${slot.member.name} ? Indemnité : ${formatMoney(slot.severance)}.`)) {
-                              act(() => api.fireStaff(slot.member.id));
-                            }
+                            fire(slot);
                           }}
                         >
                           Licencier

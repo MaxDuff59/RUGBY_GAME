@@ -1,7 +1,8 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { Link } from "react-router-dom";
 
 import { api } from "../api.js";
+import { useConfirm } from "../components/ConfirmDialog.jsx";
 import Level from "../components/Level.jsx";
 import {
   INJURY_SOURCES,
@@ -20,23 +21,26 @@ import { useApi } from "../hooks/useApi.js";
 // sous surveillance, et le dossier médical du club.
 export default function Medical() {
   const { data, error, loading, setData } = useApi(useCallback(api.getMedical, []));
-  const [actionError, setActionError] = useState(null);
-  const [busy, setBusy] = useState(false);
+  const confirm = useConfirm();
 
-  async function choose(injuryCase, option) {
-    const { label } = PROTOCOLS[option.protocol];
-    const cost = option.cost ? ` Coût : ${formatMoney(option.cost)}.` : "";
-    const message = `${label} pour ${injuryCase.player.name} : retour le ${formatNumericDate(option.return_date)}, rechute ${formatPercent(option.relapse_risk)} par match.${cost} Ce choix est définitif.`;
-    if (!window.confirm(message)) return;
-    setBusy(true);
-    setActionError(null);
-    try {
-      setData(await api.chooseProtocol(injuryCase.injury.id, option.protocol));
-    } catch (err) {
-      setActionError(err);
-    } finally {
-      setBusy(false);
-    }
+  function choose(injuryCase, option) {
+    const { player, injury } = injuryCase;
+    const protocol = PROTOCOLS[option.protocol];
+    confirm.ask({
+      eyebrow: `Protocole · ${player.name} · ${POSITIONS[player.position].label}`,
+      title: protocol.label,
+      text: `${injury.kind}, ${INJURY_SOURCES[injury.source]} le ${formatShortDate(injury.occurred_on)}. ${protocol.scope}.`,
+      rows: [
+        { label: "Retour à la compétition", value: formatNumericDate(option.return_date), hint: formatWeeks(option.weeks) },
+        { label: "Risque de rechute", value: formatPercent(option.relapse_risk), hint: "par match, le temps de la reprise" },
+        option.cost > 0
+          ? { label: "Trésorerie", from: formatMoney(data.balance), to: formatMoney(data.balance - option.cost), hint: `soins : ${formatMoney(option.cost)}` }
+          : { label: "Coût des soins", value: "Gratuit" },
+      ],
+      warning: "Ce choix est définitif : on ne change plus de protocole en cours de convalescence.",
+      confirmLabel: "Choisir ce protocole",
+      onConfirm: async () => setData(await api.chooseProtocol(injury.id, option.protocol)),
+    });
   }
 
   if (loading) return <p className="status">Chargement…</p>;
@@ -61,7 +65,7 @@ export default function Medical() {
         </div>
       </header>
 
-      {actionError && <p className="status--error">{actionError.message}</p>}
+      {confirm.dialog}
 
       <section className="section fill">
         <div className="section__head">
@@ -71,7 +75,7 @@ export default function Medical() {
         <div className="card">
           {data.injured.length === 0 && <p className="table__note">Personne à l'infirmerie : tout l'effectif est apte.</p>}
           {data.injured.map((injuryCase) => (
-            <InjuredPlayer key={injuryCase.injury.id} injuryCase={injuryCase} busy={busy} onChoose={choose} />
+            <InjuredPlayer key={injuryCase.injury.id} injuryCase={injuryCase} onChoose={choose} />
           ))}
         </div>
       </section>
@@ -144,7 +148,7 @@ function SeverityTag({ severity }) {
 }
 
 // Un blessé : son état, et les trois protocoles tant que le manager n'a pas tranché.
-function InjuredPlayer({ injuryCase, busy, onChoose }) {
+function InjuredPlayer({ injuryCase, onChoose }) {
   const { player, injury, options } = injuryCase;
   return (
     <div>
@@ -185,7 +189,7 @@ function InjuredPlayer({ injuryCase, busy, onChoose }) {
               key={option.protocol}
               type="button"
               className="protocol"
-              disabled={busy || !option.affordable}
+              disabled={!option.affordable}
               title={option.affordable ? undefined : "Trésorerie insuffisante"}
               onClick={() => onChoose(injuryCase, option)}
             >

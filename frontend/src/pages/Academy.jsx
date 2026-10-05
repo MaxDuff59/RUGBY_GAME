@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
+import { useConfirm } from "../components/ConfirmDialog.jsx";
 import Level from "../components/Level.jsx";
 import MatchList from "../components/MatchList.jsx";
 import SortHeader from "../components/SortHeader.jsx";
@@ -14,18 +15,40 @@ export default function Academy() {
   const { career } = useOutletContext();
   const myId = career.club_id;
   const { data, error, loading, setData } = useApi(useCallback(api.getAcademy, []));
-  const [actionError, setActionError] = useState(null);
   const [view, setView] = useState("youths"); // youths | pros | calendar
   const youthSort = useSort(data?.youths ?? [], { key: "overall", dir: "desc" });
   const proSort = useSort(data?.eligible_pros ?? [], { key: "age", dir: "asc" });
 
-  async function act(call) {
-    setActionError(null);
-    try {
-      setData(await call());
-    } catch (err) {
-      setActionError(err);
-    }
+  const confirm = useConfirm();
+
+  function promote(player) {
+    confirm.ask({
+      eyebrow: "Centre de formation · Promotion",
+      title: `Promouvoir ${player.name}`,
+      text: `${POSITIONS[player.position].label}, ${player.age} ans, note ${formatNote(player.overall)}. Il quitte les espoirs pour l'effectif pro et signe un contrat de pro.`,
+      rows: [
+        { label: "Effectif pro", from: data.squad_size, to: data.squad_size + 1, hint: `${data.squad_max} au maximum` },
+        { label: "Salaire", from: formatMoney(player.wage), to: "salaire de pro", hint: "fixé à la signature selon son niveau" },
+        { label: "Fin de contrat", value: formatContractEnd(player.contract_until) },
+      ],
+      confirmLabel: "Promouvoir",
+      onConfirm: async () => setData(await api.promoteYouth(player.id)),
+    });
+  }
+
+  function demote(player) {
+    confirm.ask({
+      eyebrow: "Centre de formation · Rétrogradation",
+      title: `Rétrograder ${player.name}`,
+      text: `${POSITIONS[player.position].label}, ${player.age} ans, note ${formatNote(player.overall)}. Il redescend chez les espoirs pour y gagner du temps de jeu.`,
+      rows: [
+        { label: "Effectif pro", from: data.squad_size, to: data.squad_size - 1, hint: `${data.squad_min} au minimum` },
+        { label: "Salaire", value: formatMoney(player.wage), hint: "inchangé" },
+        { label: "Fin de contrat", value: formatContractEnd(player.contract_until) },
+      ],
+      confirmLabel: "Rétrograder",
+      onConfirm: async () => setData(await api.demotePro(player.id)),
+    });
   }
 
   if (loading && !data) return <p className="status">Chargement…</p>;
@@ -61,7 +84,7 @@ export default function Academy() {
         </div>
       </header>
 
-      {actionError && <p className="status--error">{actionError.message}</p>}
+      {confirm.dialog}
 
       <div className="chips" role="tablist" aria-label="Vue">
         {[
@@ -97,11 +120,7 @@ export default function Academy() {
                 className="button button--small button--primary"
                 disabled={squadFull}
                 title={squadFull ? "Effectif pro complet" : undefined}
-                onClick={() => {
-                  if (window.confirm(`Promouvoir ${player.name} chez les pros ? Il signera un salaire de pro.`)) {
-                    act(() => api.promoteYouth(player.id));
-                  }
-                }}
+                onClick={() => promote(player)}
               >
                 Promouvoir
               </button>
@@ -126,11 +145,7 @@ export default function Academy() {
                 className="button button--small"
                 disabled={squadAtMinimum}
                 title={squadAtMinimum ? `Effectif pro minimum (${data.squad_min})` : undefined}
-                onClick={() => {
-                  if (window.confirm(`Rétrograder ${player.name} chez les espoirs ? Son salaire reste le même.`)) {
-                    act(() => api.demotePro(player.id));
-                  }
-                }}
+                onClick={() => demote(player)}
               >
                 Rétrograder
               </button>

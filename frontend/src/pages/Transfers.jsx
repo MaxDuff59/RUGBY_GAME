@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
+import { useConfirm } from "../components/ConfirmDialog.jsx";
 import Level from "../components/Level.jsx";
 import Modal from "../components/Modal.jsx";
 import SortHeader from "../components/SortHeader.jsx";
@@ -44,24 +45,29 @@ export default function Transfers() {
   const location = useLocation();
   const [way, setWay] = useState(location.state?.way ?? null); // l'infirmerie ouvre sur les agents libres
   const [targetId, setTargetId] = useState(null); // joueur approché
-  const [actionError, setActionError] = useState(null);
+  const confirm = useConfirm();
   const listingSort = useSort(market.data?.listings ?? [], { key: "player.value", dir: "desc" });
   const squadSort = useSort(myClub.data?.players ?? [], { key: "value", dir: "desc" });
 
-  async function act(call) {
-    setActionError(null);
-    try {
-      market.setData(await call());
-      myClub.reload(); // l'effectif a changé
-    } catch (err) {
-      setActionError(err);
-    }
-  }
-
   function sell(player) {
-    if (window.confirm(`Vendre ${player.name} pour ${formatMoney(player.value)} ?`)) {
-      act(() => api.sellPlayer(player.id));
-    }
+    const { balance, squad_size: squadSize, squad_min: squadMin } = market.data;
+    confirm.ask({
+      eyebrow: "Transferts · Vente",
+      title: `Vendre ${player.name}`,
+      text: `${POSITIONS[player.position].label}, ${player.age} ans, note ${formatNote(player.overall)}. Il part tout de suite dans un autre club du championnat, à sa valeur marchande.`,
+      rows: [
+        { label: "Indemnité perçue", value: formatMoney(player.value) },
+        { label: "Salaire libéré", value: formatMoney(player.wage), hint: "par saison" },
+        { label: "Trésorerie", from: formatMoney(balance), to: formatMoney(balance + player.value) },
+        { label: "Effectif", from: squadSize, to: squadSize - 1, hint: `${squadMin} au minimum` },
+      ],
+      warning: "Une vente est définitive.",
+      confirmLabel: `Vendre pour ${formatMoney(player.value)}`,
+      onConfirm: async () => {
+        market.setData(await api.sellPlayer(player.id));
+        myClub.reload(); // l'effectif a changé
+      },
+    });
   }
 
   // Pendant un rechargement (après une offre, une vente...), on garde la page en
@@ -107,7 +113,7 @@ export default function Transfers() {
         </div>
       </header>
 
-      {actionError && <p className="status--error">{actionError.message}</p>}
+      {confirm.dialog}
 
       {targetId !== null && (
         <Modal onClose={() => setTargetId(null)}>
