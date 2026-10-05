@@ -104,6 +104,7 @@ class PlayerOut(BaseModel):
     tackling: int
     scrum: int
     lineout: int
+    stamina: int
     overall: float
     wage: int
     value: int
@@ -159,6 +160,7 @@ class PeerOut(BaseModel):
     tackling: int
     scrum: int
     lineout: int
+    stamina: int
 
 
 class PlayerDetail(BaseModel):

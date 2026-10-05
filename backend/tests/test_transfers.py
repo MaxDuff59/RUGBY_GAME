@@ -143,12 +143,15 @@ def test_real_stadium_capacities_fit_between_the_steps():
 # --- API -----------------------------------------------------------------------------
 
 
-def _find_target(manager, kind):
-    """Un joueur du marché pour lequel la voie `kind` est ouverte, avec son approche."""
+def _find_target(manager, kind, keep=lambda listing: True):
+    """Un joueur du marché pour lequel la voie `kind` est ouverte, avec son approche.
+
+    `keep` : condition supplémentaire sur la fiche du marché.
+    """
     market = manager.get("/transfers").json()
     flag = {"transfer": "transfer_fee", "loan": "loanable", "precontract": "precontract"}[kind]
     for listing in market["listings"]:
-        if not listing[flag]:
+        if not listing[flag] or not keep(listing):
             continue
         target = manager.get(f"/transfers/{listing['player']['id']}").json()
         option = next(o for o in target["options"] if o["kind"] == kind)
@@ -286,7 +289,11 @@ def test_leaving_the_table_myself_is_forgiven_quickly(manager):
 
 
 def test_loan_returns_to_the_owner_at_the_end_of_the_season(manager):
-    listing, _, option = _find_target(manager, "loan")
+    # Un prêté encore sous contrat la saison prochaine et loin de la retraite :
+    # sinon il pourrait partir libre ou raccrocher au lieu de rentrer chez lui.
+    listing, _, option = _find_target(
+        manager, "loan", keep=lambda row: row["years_left"] >= 2 and row["player"]["age"] <= 32
+    )
     player_id, owner_id = listing["player"]["id"], listing["club_id"]
     opened = manager.post(f"/transfers/{player_id}/open", json={"kind": "loan"}).json()
     assert opened["stage"] == "player" and opened["wage_demand"] == option["wage"]

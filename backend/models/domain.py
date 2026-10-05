@@ -12,7 +12,7 @@ from enum import StrEnum
 ATTRIBUTE_MIN = 1
 ATTRIBUTE_MAX = 20
 
-# Noms des 8 attributs, dans un ordre fixe (pratique pour boucler dessus).
+# Noms des 9 attributs, dans un ordre fixe (pratique pour boucler dessus).
 ATTRIBUTE_NAMES = (
     "pace",  # vitesse
     "power",  # puissance, impact dans les contacts
@@ -22,6 +22,7 @@ ATTRIBUTE_NAMES = (
     "tackling",  # plaquage
     "scrum",  # mêlée
     "lineout",  # touche (lancer, saut, soutien)
+    "stamina",  # endurance : l'énergie tient plus longtemps pendant un match
 )
 
 
@@ -136,6 +137,7 @@ class Player:
     tackling: int
     scrum: int
     lineout: int
+    stamina: int
     # Référence au club par identifiant (évite une référence circulaire Club <-> Player).
     club_id: int | None = None
     # Salaire par saison, en euros (fixé au contrat ; la valeur marchande, elle,

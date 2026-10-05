@@ -1,4 +1,4 @@
-// Graphique radar des 8 attributs (sur 20) d'un joueur.
+// Graphique radar des attributs (sur 20) d'un joueur.
 // `axes` : [{ key, short }], `values` : { [key]: nombre }.
 // Marge autour du cercle extérieur pour les libellés (ils restent dans le viewBox).
 const SIZE = 240;

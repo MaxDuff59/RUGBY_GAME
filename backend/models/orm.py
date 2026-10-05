@@ -129,6 +129,7 @@ class PlayerRow(Base):
     tackling: Mapped[int]
     scrum: Mapped[int]
     lineout: Mapped[int]
+    stamina: Mapped[int] = mapped_column(server_default="12")
     wage: Mapped[int] = mapped_column(default=0)
     contract_until: Mapped[int] = mapped_column(default=0)
     club_id: Mapped[int | None] = mapped_column(ForeignKey("clubs.id"))
@@ -163,6 +164,7 @@ class PlayerRow(Base):
             tackling=self.tackling,
             scrum=self.scrum,
             lineout=self.lineout,
+            stamina=self.stamina,
             club_id=self.club_id,
             wage=self.wage,
             injury=latest.to_domain() if latest is not None else None,

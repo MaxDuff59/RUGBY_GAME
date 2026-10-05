@@ -15,7 +15,7 @@ export const POSITIONS = {
 // Ordre des postes, du 1 au 15.
 export const POSITION_ORDER = Object.keys(POSITIONS);
 
-// Les 8 attributs, avec l'abréviation affichée en tête de colonne.
+// Les 9 attributs, avec l'abréviation affichée en tête de colonne.
 export const ATTRIBUTES = [
   { key: "pace", short: "VIT", label: "Vitesse" },
   { key: "power", short: "PUI", label: "Puissance" },
@@ -25,6 +25,7 @@ export const ATTRIBUTES = [
   { key: "tackling", short: "PLA", label: "Plaquage" },
   { key: "scrum", short: "MÊL", label: "Mêlée" },
   { key: "lineout", short: "TOU", label: "Touche" },
+  { key: "stamina", short: "END", label: "Endurance" },
 ];
 
 // Attributs qui comptent le plus à chaque poste (ceux de la note au poste du moteur),
@@ -33,7 +34,7 @@ export const KEY_ATTRIBUTES = {
   PROP: ["scrum", "power", "tackling"],
   HOOKER: ["scrum", "lineout", "power"],
   LOCK: ["lineout", "power", "tackling"],
-  BACK_ROW: ["power", "tackling", "handling"],
+  BACK_ROW: ["power", "tackling", "handling", "stamina"],
   SCRUM_HALF: ["passing", "handling", "pace"],
   FLY_HALF: ["kicking", "passing", "handling"],
   CENTRE: ["pace", "handling", "tackling", "passing"],

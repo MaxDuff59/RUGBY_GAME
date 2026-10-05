@@ -197,11 +197,12 @@ GAME_PLAN_EFFECTS = {
     GamePlan.BALANCED: {"territory": 1.0, "tries": 1.0, "penalties": 1.0, "conceded": 1.0},
     GamePlan.HANDS: {"territory": 0.96, "tries": 1.20, "penalties": 0.90, "conceded": 1.08},
 }
-# Effets de l'agressivité : sur la note de défense, les cartons et les pénalités concédées.
+# Effets de l'agressivité : sur la note de défense, les cartons, les pénalités
+# concédées et l'énergie dépensée (une défense qui monte vite use plus).
 DEFENCE_EFFECTS = {
-    Defence.CAUTIOUS: {"defense": 0.93, "cards": 0.6, "fouls": 0.9},
-    Defence.NORMAL: {"defense": 1.0, "cards": 1.0, "fouls": 1.0},
-    Defence.AGGRESSIVE: {"defense": 1.10, "cards": 1.6, "fouls": 1.1},
+    Defence.CAUTIOUS: {"defense": 0.93, "cards": 0.6, "fouls": 0.9, "effort": 1.0},
+    Defence.NORMAL: {"defense": 1.0, "cards": 1.0, "fouls": 1.0, "effort": 1.0},
+    Defence.AGGRESSIVE: {"defense": 1.10, "cards": 1.6, "fouls": 1.1, "effort": 1.1},
 }
 # Pénalité jouée à la main : chance d'essai entre équipes égales (contre 3 points
 # quasi assurés au pied : le pari paie surtout quand l'attaque domine).
@@ -221,12 +222,19 @@ CARD_WEIGHT_FORWARD, CARD_WEIGHT_BACK = 2.0, 1.0
 # --- Énergie et remplacements ------------------------------------------------------------
 
 # Chaque joueur a une énergie de 0 à 1. Il commence le match entre 60 % (fraîcheur
-# nulle, engine/freshness.py) et 100 % (tout frais), et perd 1 % par minute de
-# jeu : un titulaire frais est à 20 % à la 80e. Son apport aux notes collectives
-# va de 100 % de ses moyens (énergie pleine) à 80 % (énergie vide).
+# nulle, engine/freshness.py) et 100 % (tout frais), et en perd à chaque minute
+# de jeu selon son endurance : 1,6 % moins 0,05 % par point (endurance 4 : 1,4 %,
+# 12 : 1 %, 20 : 0,6 %). À la 80e, un titulaire parti à 100 % garde donc 0 %,
+# 20 % ou 52 % selon qu'il est fragile, moyen ou increvable. Son apport aux
+# notes collectives va de 100 % de ses moyens (énergie pleine) à 80 % (vide).
 ENERGY_START_MIN = 0.6
-ENERGY_PER_MINUTE = 0.01
+ENERGY_DRAIN_BASE = 0.016
+ENERGY_DRAIN_PER_STAMINA = 0.0005
 EFFICIENCY_MIN = 0.80
+# Les faits de jeu pèsent sur l'énergie : à 14 ou 13 (carton, blessé sans
+# remplaçant), ceux qui restent couvrent plus de terrain et s'usent 25 % plus
+# vite par joueur manquant. Un joueur au banc des pénalités, lui, souffle.
+SHORT_HANDED_EFFORT = 0.25
 # Le staff (IA) fait entrer un remplaçant à ces minutes, en gardant un
 # changement en réserve pour une blessure.
 AI_SUBSTITUTION_MINUTES = (50, 56, 62, 68, 74)
@@ -307,9 +315,9 @@ def start_energy(freshness: float) -> float:
     return ENERGY_START_MIN + (1 - ENERGY_START_MIN) * freshness / 20
 
 
-def energy_after(start: float, minutes_played: int) -> float:
-    """Énergie restante après `minutes_played` minutes sur le terrain."""
-    return max(0.0, start - ENERGY_PER_MINUTE * minutes_played)
+def energy_drain(stamina: int) -> float:
+    """Énergie perdue par minute de jeu selon l'endurance (sur 20)."""
+    return ENERGY_DRAIN_BASE - ENERGY_DRAIN_PER_STAMINA * stamina
 
 
 def efficiency(energy: float) -> float:
@@ -566,6 +574,8 @@ class Side:
         self.yellows: dict[int, int] = {}
         self.reds: set[int] = set()
         self.ratings: dict[int, float] = {p.id: RATING_START for p in lineup}
+        # Énergie restante de ceux qui ont joué ; les autres sont à leur énergie de départ.
+        self.energy_left: dict[int, float] = {}
         self.kicker_id = max(lineup, key=lambda p: p.kicking).id if lineup else None
 
     # -- Qui est où -----------------------------------------------------------------
@@ -605,21 +615,33 @@ class Side:
 
     # -- Force du moment ------------------------------------------------------------------
 
-    def energy(self, player: Player, minute: int) -> float:
-        """Énergie du joueur à cette minute : pleine moins ses minutes de jeu
-        (jusqu'à sa sortie s'il est sorti)."""
-        since = self.entered_at.get(player.id)
-        start = start_energy(self.form.player_freshness(player.id))
-        if since is None:
-            return start
-        return energy_after(start, min(minute, self.off.get(player.id, minute)) - since)
+    def energy(self, player: Player) -> float:
+        """Énergie du joueur : celle du coup d'envoi tant qu'il n'a pas joué, puis
+        ce qu'il lui reste (figée à sa sortie)."""
+        if player.id in self.energy_left:
+            return self.energy_left[player.id]
+        return start_energy(self.form.player_freshness(player.id))
+
+    def effort(self, minute: int) -> float:
+        """Multiplicateur de la dépense d'énergie à cette minute : infériorité
+        numérique et agressivité défensive."""
+        short_handed = 1 + SHORT_HANDED_EFFORT * self.missing(minute)
+        return short_handed * DEFENCE_EFFECTS[self.tactics.defence]["effort"]
+
+    def spend_energy(self, minute: int) -> None:
+        """Une minute de jeu : chaque joueur présent dépense selon son endurance."""
+        effort = self.effort(minute)
+        for slot in self.on_field(minute):
+            player = slot.player
+            left = self.energy(player) - energy_drain(player.stamina) * effort
+            self.energy_left[player.id] = max(0.0, left)
 
     def collective(self, minute: int) -> Collective:
         """Notes collectives des joueurs présents : énergie, forme, infériorité, tactique."""
         factor = self.factor * SHORT_HANDED_FACTOR ** self.missing(minute)
         ratings = collective_ratings(
             self.fielded(minute),
-            weight=lambda p: efficiency(self.energy(p, minute)),
+            weight=lambda p: efficiency(self.energy(p)),
             factor=factor,
         )
         ratings.defense *= DEFENCE_EFFECTS[self.tactics.defence]["defense"]
@@ -713,7 +735,7 @@ class Side:
         ]
         if not candidates:
             return None
-        slot = min(candidates, key=lambda s: self.energy(s.player, minute))
+        slot = min(candidates, key=lambda s: self.energy(s.player))
         incoming = max(
             (p for p in bench if p.position == slot.position),
             key=lambda p: RATING_FOR_POSITION[slot.position](p),
@@ -762,6 +784,7 @@ class Side:
             "yellows": {str(k): v for k, v in self.yellows.items()},
             "reds": sorted(self.reds),
             "ratings": {str(k): v for k, v in self.ratings.items()},
+            "energy_left": {str(k): v for k, v in self.energy_left.items()},
             "kicker_id": self.kicker_id,
         }
 
@@ -796,6 +819,7 @@ class Side:
         side.yellows = {int(k): v for k, v in state["yellows"].items()}
         side.reds = set(state["reds"])
         side.ratings = {int(k): v for k, v in state["ratings"].items()}
+        side.energy_left = {int(k): v for k, v in state["energy_left"].items()}
         side.kicker_id = state["kicker_id"]
         return side
 
@@ -939,6 +963,8 @@ class LiveMatch:
             self._injuries(side, minute)
         for side in self.sides:
             self._cards(side, minute)
+        for side in self.sides:
+            side.spend_energy(minute)
         for side in self.sides:
             if side.club.id in self.auto and minute in AI_SUBSTITUTION_MINUTES:
                 event = side.auto_substitution(minute)

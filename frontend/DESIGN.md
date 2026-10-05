@@ -93,9 +93,10 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   de tactique (plan de jeu, défense, pénalités) et accepte les remplacements en pause : on
   clique un joueur du terrain, puis « Faire entrer » sur un remplaçant. Les deux rangées
   défilent dans leur carte ; la page tient dans l'écran.
-- Tableau d'effectif : 8 attributs, gras à partir de 15, gris à 8 et moins.
+- Tableau d'effectif : 9 attributs (dont l'endurance, qui règle la barre d'énergie en match),
+  gras à partir de 15, gris à 8 et moins.
 - Boutons et liens cliquables : 44 px de haut minimum.
-- Fiche joueur (page entière, depuis une ligne de l'effectif) : radar des 8 attributs
+- Fiche joueur (page entière, depuis une ligne de l'effectif) : radar des 9 attributs
   en accent ; sous lui, un essaim par métrique clé du poste (`KEY_ATTRIBUTES`) : lui en
   accent, ses coéquipiers en noir, les autres joueurs du poste en gris, et son percentile ;
   terrain avec sa note à chaque place, son poste naturel en accent.

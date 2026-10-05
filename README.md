@@ -52,7 +52,8 @@ Au premier démarrage, la base `backend/rugby.db` est créée avec les 14 clubs 
 Top 14 (saison 2025-26 ; voir `backend/data/top14.py`), leurs vrais stades, et des
 joueurs (pros et espoirs) et un staff inventés à leur niveau. Supprime ce fichier pour repartir d'un
 monde neuf (obligatoire aussi quand le schéma de la base change : l'API le signale
-au démarrage).
+au démarrage ; les colonnes ajoutées après coup, comme l'endurance des joueurs,
+sont créées et remplies automatiquement par `database.py`).
 
 | Route | Rôle |
 |---|---|
@@ -96,9 +97,13 @@ ses forces et remplace ses joueurs usés entre la 50e et la 74e minute.
 Ce que le moteur ajoute au match :
 
 - l'**énergie** : chaque joueur commence entre 60 % (fraîcheur nulle) et 100 %
-  (tout frais) et perd 1 % par minute de jeu ; son apport aux notes collectives
-  va de 100 % de ses moyens (énergie pleine) à 80 % (vide), d'où l'intérêt des
-  remplaçants frais ;
+  (tout frais) et en perd à chaque minute selon son **endurance** (9e attribut,
+  sur 20 : 1,4 % par minute à 4, 1 % à 12, 0,6 % à 20) ; son apport aux notes
+  collectives va de 100 % de ses moyens (énergie pleine) à 80 % (vide), d'où
+  l'intérêt des remplaçants frais et des joueurs increvables ; les faits de jeu
+  pèsent dessus : à 14 ou 13 après un carton, ceux qui restent s'usent 25 % plus
+  vite par joueur manquant (le puni, lui, souffle), et une défense agressive
+  coûte 10 % d'énergie en plus ;
 - les **cartons** : ~0,3 jaune (10 minutes à 14, 12 % de force en moins par
   joueur manquant) et ~0,03 rouge par équipe et par match, chaque carton donnant
   une pénalité à l'adversaire ; une défense agressive en prend plus ;

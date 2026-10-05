@@ -9,6 +9,7 @@ def make_player(**overrides) -> Player:
     data = dict(
         id=1, first_name="Léo", last_name="Marant", age=24, position=Position.WING,
         pace=10, power=10, handling=10, passing=10, kicking=10, tackling=10, scrum=10, lineout=10,
+        stamina=10,
     )  # fmt: skip
     data.update(overrides)
     return Player(**data)

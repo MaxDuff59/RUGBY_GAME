@@ -23,13 +23,20 @@ from engine.economy import (
     upgrade_cost,
     wage_for,
 )
-from models import AmenityKind, Facilities, Player, Position, StaffMember, StaffRole, StandSide
+from models import (
+    ATTRIBUTE_NAMES,
+    AmenityKind,
+    Facilities,
+    Player,
+    Position,
+    StaffMember,
+    StaffRole,
+    StandSide,
+)
 
 
 def make_player(level: int, age: int = 25) -> Player:
-    attributes = dict.fromkeys(
-        ["pace", "power", "handling", "passing", "kicking", "tackling", "scrum", "lineout"], level
-    )
+    attributes = dict.fromkeys(ATTRIBUTE_NAMES, level)
     return Player(1, "Léo", "Marant", age, Position.WING, **attributes)
 
 

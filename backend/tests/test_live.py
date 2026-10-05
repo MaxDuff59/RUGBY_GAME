@@ -324,3 +324,38 @@ def test_simulating_the_matchday_finishes_the_live_match(manager):
 def test_live_needs_a_career_and_a_match(client):
     assert client.post("/live").status_code == 404
     assert client.get("/live").status_code == 404
+
+
+def test_stamina_keeps_energy_longer(even_clubs):
+    home, away = even_clubs
+    live = LiveMatch(home, away, rng=random.Random(2), auto=set())
+    tough, frail = live.home.slots[0].player, live.home.slots[1].player
+    tough.stamina, frail.stamina = 20, 4
+    bench = live.home.available_bench()[0]
+    at_start = live.home.energy(bench)
+    live.advance(40)
+    assert live.home.energy(tough) > live.home.energy(frail)
+    # Un remplaçant qui n'est pas entré garde son énergie de départ.
+    assert live.home.energy(bench) == at_start
+    live.play_to_end()
+    assert live.home.energy(tough) > live.home.energy(frail)
+    if frail.id not in live.home.off:
+        assert live.home.energy(frail) == 0.0  # vidé avant la fin
+
+
+def test_short_handed_players_tire_faster(even_clubs):
+    home, away = even_clubs
+    live = LiveMatch(home, away, rng=random.Random(0))
+    live.advance(10)
+    side = live.home
+    assert side.effort(10) == 1.0
+    victim = side.slots[3].player
+    side.card(victim, 10, red=False)
+    assert side.missing(11) == 1
+    assert side.effort(11) == 1 + 0.25
+    side.tactics = Tactics(defence=Defence.AGGRESSIVE)
+    assert side.effort(11) > 1.25
+    # Le joueur au banc des pénalités ne dépense rien pendant son absence.
+    before = side.energy(victim)
+    live.advance(5)
+    assert side.energy(victim) == before

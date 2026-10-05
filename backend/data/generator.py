@@ -92,17 +92,17 @@ YOUTH_CONTRACT_YEARS = 3
 
 # Écart au niveau de base selon le poste : un pilier pousse en mêlée mais ne court
 # pas vite, un ailier est rapide mais inutile en mêlée, etc.
-# Ordre : pace, power, handling, passing, kicking, tackling, scrum, lineout
+# Ordre : pace, power, handling, passing, kicking, tackling, scrum, lineout, stamina
 _PROFILE_TABLE = {
-    Position.PROP:       (-4,  3, -2, -3, -6,  1,  4, -2),
-    Position.HOOKER:     (-2,  2,  0, -1, -5,  1,  3,  4),
-    Position.LOCK:       (-3,  3, -1, -2, -6,  1,  2,  4),
-    Position.BACK_ROW:   ( 0,  2,  1, -1, -4,  3,  0,  1),
-    Position.SCRUM_HALF: ( 1, -3,  2,  4,  1, -1, -6, -6),
-    Position.FLY_HALF:   ( 0, -2,  2,  3,  4, -1, -6, -6),
-    Position.CENTRE:     ( 1,  1,  2,  1, -1,  2, -5, -5),
-    Position.WING:       ( 4,  0,  1, -1, -1, -1, -6, -6),
-    Position.FULLBACK:   ( 3, -1,  2,  0,  2,  0, -6, -5),
+    Position.PROP:       (-4,  3, -2, -3, -6,  1,  4, -2, -3),
+    Position.HOOKER:     (-2,  2,  0, -1, -5,  1,  3,  4, -1),
+    Position.LOCK:       (-3,  3, -1, -2, -6,  1,  2,  4, -1),
+    Position.BACK_ROW:   ( 0,  2,  1, -1, -4,  3,  0,  1,  3),
+    Position.SCRUM_HALF: ( 1, -3,  2,  4,  1, -1, -6, -6,  2),
+    Position.FLY_HALF:   ( 0, -2,  2,  3,  4, -1, -6, -6,  0),
+    Position.CENTRE:     ( 1,  1,  2,  1, -1,  2, -5, -5,  1),
+    Position.WING:       ( 4,  0,  1, -1, -1, -1, -6, -6,  1),
+    Position.FULLBACK:   ( 3, -1,  2,  0,  2,  0, -6, -5,  2),
 }  # fmt: skip
 POSITION_PROFILES: dict[Position, dict[str, int]] = {
     position: dict(zip(ATTRIBUTE_NAMES, offsets, strict=True))
@@ -133,10 +133,15 @@ def generate_player(
     # Chaque joueur a son propre niveau, un peu au-dessus ou en dessous de son club.
     player_level = rng.gauss(level, 1.5)
     profile = POSITION_PROFILES[position]
+    skills = [name for name in ATTRIBUTE_NAMES if name != "stamina"]
     attributes = {
-        name: _clamp(rng.gauss(player_level + profile[name], ATTRIBUTE_SPREAD))
-        for name in ATTRIBUTE_NAMES
+        name: _clamp(rng.gauss(player_level + profile[name], ATTRIBUTE_SPREAD)) for name in skills
     }
+    # L'endurance, ajoutée après coup, se tire avec un hasard propre au joueur
+    # (dérivé de ses autres attributs) : un monde généré à partir d'une graine
+    # reste le même qu'avant son ajout.
+    own = random.Random(f"{player_id}:{list(attributes.values())}")
+    attributes["stamina"] = _clamp(own.gauss(player_level + profile["stamina"], ATTRIBUTE_SPREAD))
     player = Player(
         id=player_id,
         first_name=rng.choice(FIRST_NAMES),

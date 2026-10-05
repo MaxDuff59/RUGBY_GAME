@@ -127,7 +127,7 @@ def _player_out(side: Side, index: int, minute: int) -> LivePlayerOut:
         back_at=slot.absent_until if status == "sin_bin" else None,
         overall=round(player.overall, 1),
         kicking=player.kicking,
-        energy=round(side.energy(player, minute), 2),
+        energy=round(side.energy(player), 2),
     )
 
 
