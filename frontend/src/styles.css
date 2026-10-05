@@ -696,6 +696,56 @@ body,
   font-size: 22px;
 }
 
+/* --- Parties sauvegardées ------------------------------------------------------ */
+
+.saves {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  align-content: start;
+}
+
+.save {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 240px;
+}
+
+.save--empty {
+  background: transparent;
+  border-style: dashed;
+}
+
+.save__club {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 32px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.save__details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.save__actions {
+  margin-top: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.eyebrow a,
+.sidebar__footer a {
+  color: inherit;
+}
+
 /* --- Choix du club ----------------------------------------------------------- */
 
 .start {

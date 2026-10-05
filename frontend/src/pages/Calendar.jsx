@@ -57,8 +57,8 @@ export default function Calendar() {
         <div>
           <h1 className="title">Calendrier</h1>
           <p className="muted" style={{ margin: "8px 0 0" }}>
-            Saison {data.year} · {data.regular_matchdays} journées, puis barrages, demi-finales et finale.
-            Trêves en novembre, à Noël et pendant le Six Nations.
+            {data.league.name} {data.year} · {data.regular_matchdays} journées, puis{" "}
+            {data.league.playoff_stages.map((stage) => STAGES[stage].toLowerCase()).join(", ")}.
           </p>
         </div>
         <div className="chips" role="group" aria-label="Vue">

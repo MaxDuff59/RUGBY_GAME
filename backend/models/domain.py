@@ -267,6 +267,7 @@ class Club:
     balance: int = 0  # trésorerie, en euros
     facilities: Facilities = field(default_factory=Facilities)
     youths: list[Player] = field(default_factory=list)  # espoirs du centre de formation
+    league: str = "top14"  # code du championnat (data/leagues.py)
     # Titularisations promises par le manager (engine/affairs.py) : non stocké, posé par l'API.
     forced_starters: set[int] = field(default_factory=set)
 
@@ -361,9 +362,10 @@ class Stage(StrEnum):
     """Étape de la saison à laquelle appartient un match."""
 
     REGULAR = "regular"  # saison régulière
+    QUARTER = "quarter"  # quarts de finale (URC), matchs de qualification (Super Rugby)
     BARRAGE = "barrage"  # barrages (3e-6e, 4e-5e)
     SEMI = "semi"  # demi-finales
-    FINAL = "final"  # finale, sur terrain neutre
+    FINAL = "final"  # finale, sur terrain neutre ou chez le mieux classé selon le championnat
 
     @property
     def is_playoff(self) -> bool:

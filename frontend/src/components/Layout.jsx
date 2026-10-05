@@ -1,8 +1,9 @@
 import { useCallback } from "react";
-import { Navigate, NavLink, Outlet } from "react-router-dom";
+import { Link, Navigate, NavLink, Outlet } from "react-router-dom";
 
 import { api } from "../api.js";
 import { useApi } from "../hooks/useApi.js";
+import { chosenSlot } from "../save.js";
 
 const NAV_ITEMS = [
   { to: "/", label: "Club" },
@@ -22,6 +23,8 @@ const NAV_ITEMS = [
 export default function Layout() {
   const { data: career, error, loading } = useApi(useCallback(api.getCareer, []));
 
+  // Chaque ouverture du jeu passe par l'écran des parties.
+  if (chosenSlot() === null || error?.status === 409) return <Navigate to="/parties" replace />;
   if (loading) return <p className="status">Chargement…</p>;
   // Pas de carrière : on commence par choisir un club.
   if (error?.status === 404) return <Navigate to="/start" replace />;
@@ -43,7 +46,12 @@ export default function Layout() {
             </li>
           ))}
         </ul>
-        <div className="sidebar__footer">Manager : {career.manager_name}</div>
+        <div className="sidebar__footer">
+          <div>Manager : {career.manager_name}</div>
+          <div>
+            Partie {chosenSlot()} · sauvegarde auto · <Link to="/parties">Parties</Link>
+          </div>
+        </div>
       </nav>
 
       <main className="main">
@@ -52,7 +60,7 @@ export default function Layout() {
             <span className="crest">{initials(career.club_name)}</span>
             <div>
               <div className="header__name">{career.club_name}</div>
-              <div className="muted">Championnat</div>
+              <div className="muted">{career.league_name}</div>
             </div>
           </div>
         </header>

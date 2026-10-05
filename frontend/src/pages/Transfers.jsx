@@ -42,6 +42,7 @@ export default function Transfers() {
   const myClub = useApi(useCallback(() => api.getClub(career.club_id), [career.club_id]));
 
   const [position, setPosition] = useState(null); // null = tous les postes
+  const [league, setLeague] = useState(null); // null = tous les championnats
   const location = useLocation();
   const [way, setWay] = useState(location.state?.way ?? null); // l'infirmerie ouvre sur les agents libres
   const [targetId, setTargetId] = useState(null); // joueur approché
@@ -54,7 +55,7 @@ export default function Transfers() {
     confirm.ask({
       eyebrow: "Transferts · Vente",
       title: `Vendre ${player.name}`,
-      text: `${POSITIONS[player.position].label}, ${player.age} ans, note ${formatNote(player.overall)}. Il part tout de suite dans un autre club du championnat, à sa valeur marchande.`,
+      text: `${POSITIONS[player.position].label}, ${player.age} ans, note ${formatNote(player.overall)}. Il part tout de suite dans un autre club, à sa valeur marchande.`,
       rows: [
         { label: "Indemnité perçue", value: formatMoney(player.value) },
         { label: "Salaire libéré", value: formatMoney(player.wage), hint: "par saison" },
@@ -84,7 +85,9 @@ export default function Transfers() {
   const jokerPossible = data.joker_slots.length > 0;
   const listings = listingSort.rows.filter(
     (listing) =>
-      (position === null || listing.player.position === position) && hasWay(listing, way),
+      (position === null || listing.player.position === position) &&
+      (league === null || listing.league === league) &&
+      hasWay(listing, way),
   );
   const listingHeader = (key, label, first = "desc", left = false) => (
     <SortHeader sortKey={key} label={label} sort={listingSort.sort} onToggle={listingSort.toggle} first={first} left={left} />
@@ -209,6 +212,21 @@ export default function Transfers() {
               {item.label}
             </button>
           ))}
+          {data.leagues.length > 1 && (
+            <select
+              className="input tactics__select"
+              aria-label="Filtrer par championnat"
+              value={league ?? ""}
+              onChange={(event) => setLeague(event.target.value || null)}
+            >
+              <option value="">Tous les championnats</option>
+              {data.leagues.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
         <div className="chips" role="group" aria-label="Filtrer par poste">
           <button type="button" className="chip" aria-pressed={position === null} onClick={() => setPosition(null)}>
@@ -255,7 +273,9 @@ export default function Transfers() {
                       ) : (
                         <>
                           <div>{listing.club_name}</div>
-                          <div className="muted">niveau {formatNote(listing.club_level)}</div>
+                          <div className="muted">
+                            {listing.league} · niveau {formatNote(listing.club_level)}
+                          </div>
                         </>
                       )}
                     </td>

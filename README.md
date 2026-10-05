@@ -38,7 +38,7 @@ Toutes les commandes se lancent **depuis `backend/`**.
 ```bash
 uv run python -m scripts.run_season                              # 10 clubs, ton club au hasard
 uv run python -m scripts.run_season --clubs 14 --club 3 --seed 42
-uv run python -m scripts.run_season --top14 --club 1                 # les vrais clubs
+uv run python -m scripts.run_season --league top14 --club 1          # les vrais clubs d'un championnat
 ```
 
 ### Lancer l'API
@@ -48,12 +48,40 @@ uv run uvicorn api.main:app --reload
 ```
 
 Puis ouvrir http://localhost:8000/docs pour tester les routes dans le navigateur.
-Au premier démarrage, la base `backend/rugby.db` est créée avec les 14 clubs du
-Top 14 (saison 2025-26 ; voir `backend/data/top14.py`), leurs vrais stades, et des
-joueurs (pros et espoirs) et un staff inventés à leur niveau. Supprime ce fichier pour repartir d'un
-monde neuf (obligatoire aussi quand le schéma de la base change : l'API le signale
-au démarrage ; les colonnes ajoutées après coup, comme l'endurance des joueurs,
-sont créées et remplies automatiquement par `database.py`).
+
+Le jeu s'ouvre sur l'écran des parties : trois emplacements, chacun avec son
+propre monde dans `backend/saves/partie-N.db` (`database.py`). « Nouvelle
+carrière » crée le monde dans un emplacement libre, puis on choisit le
+championnat et le club ; « Continuer » recharge une partie. Il n'y a pas de
+bouton « Sauvegarder » : chaque action est enregistrée aussitôt dans le fichier
+de la partie chargée. Les routes du jeu répondent 409 tant qu'aucune partie
+n'est chargée ; la partie chargée est retenue dans `backend/saves/active`.
+
+Une nouvelle partie est créée avec les 63 clubs de
+cinq championnats (saison 2025-26 ; voir `backend/data/leagues.py`), leurs vrais
+stades, et des joueurs (pros et espoirs) et un staff inventés à leur niveau :
+
+| Championnat | Clubs | Saison régulière | Phases finales |
+|---|---|---|---|
+| Top 14 | 14 | 26 journées, septembre-avril | barrages 3-6 et 4-5, demies, finale sur terrain neutre |
+| Pro D2 | 16 | 30 journées, dès fin août | même formule ; le champion monte en Top 14, le dernier du Top 14 descend |
+| Premiership (Angleterre) | 10 | 18 journées | demies 1-4 et 2-3, finale sur terrain neutre |
+| URC (Irlande, Écosse, Italie, Afrique du Sud) | 12 | 22 journées | quarts 1-8, 2-7, 3-6, 4-5, demies selon le tableau, finale chez le mieux classé |
+| Super Rugby Pacific | 11 | 22 journées, de février à juillet | qualifications 1-6, 2-5, 3-4, demies avec le meilleur perdant repêché, finale chez le mieux classé |
+
+Chaque championnat se joue en aller-retour avec son propre calendrier
+(`engine/calendar.py`) : jouer la journée joue d'abord, date par date, les
+matchs des autres championnats tombés avant (ou le même jour). Les objectifs de
+la direction, l'affluence et le classement se comptent dans le championnat du
+club. L'intersaison peut se lancer dès la fin du championnat du club dirigé :
+les autres finissent d'abord leur saison, puis la montée et la descente
+s'appliquent. Les plus grands stades (Afrique du Sud, Super Rugby) sont ramenés
+à 35 000 places, le plus grand stade constructible. Quand le schéma de la base
+change, une partie à l'ancien format est signalée sur l'écran des parties et
+doit être supprimée (les colonnes ajoutées après coup, comme l'endurance des
+joueurs, sont créées et remplies automatiquement par `database.py`). L'ancien
+fichier unique `backend/rugby.db` ne sert plus. `RUGBY_SAVES_DIR` range les
+parties ailleurs (ex. pour une instance de test).
 
 | Route | Rôle |
 |---|---|
@@ -62,7 +90,9 @@ sont créées et remplies automatiquement par `database.py`).
 | `GET /career/dismissal` | Dernier limogeage, tant qu'aucune nouvelle carrière n'a commencé |
 | `GET /players/{id}` | Fiche d'un joueur : comparaison à son poste, note à chaque poste, saison, blessures |
 | `POST /career`, `GET /career` | Choisir son club (tire aussi le calendrier de la 1re saison) |
-| `GET /seasons/current` | Calendrier daté, classement, prochaine journée, phases finales |
+| `GET /saves`, `POST /saves/{n}/load`, `POST /saves/{n}/new`, `DELETE /saves/{n}` | Parties sauvegardées : lister, charger, créer un monde neuf, supprimer |
+| `GET /leagues` | Les championnats et leur formule |
+| `GET /seasons/current?league=` | Calendrier daté, classement, prochaine journée, phases finales (du championnat du club dirigé par défaut) |
 | `POST /seasons/current/play` | Joue la journée suivante (matchs, billetterie, sponsors, salaires) |
 | `POST /seasons/next` | Intersaison : âges, retraites, jeunes, nouveau calendrier |
 | `GET /matches/{id}`, `POST /matches/simulate` | Détail d'un match joué ; match amical |
@@ -165,7 +195,7 @@ s'ouvre après la finale, en trois étapes : résultats, vie du club, contrats.
 ## Centre de formation
 
 Chaque club a un effectif espoirs (16 à 21 ans) à côté des pros. Les espoirs
-jouent leur propre championnat, mêmes affiches et mêmes jours que les pros
+jouent le championnat espoirs de leur championnat, mêmes affiches et mêmes jours que les pros
 (saison régulière seulement, sans blessures). Un espoir peut être promu chez
 les pros à tout moment (il signe un salaire de pro) ; un pro de 23 ans ou moins
 peut redescendre chez les espoirs. À l'intersaison : tous les joueurs

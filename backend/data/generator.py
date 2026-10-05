@@ -8,7 +8,7 @@ niveau, avec un profil d'attributs cohérent avec leur poste.
 import itertools
 import random
 
-from data.top14 import TOP14, RealClub
+from data.leagues import DEFAULT_LEAGUE, LEAGUES, League
 from engine.economy import STADIUM_STEPS, staff_wage, wage_for
 from models import (
     ATTRIBUTE_MAX,
@@ -254,16 +254,28 @@ def generate_clubs(
     return clubs
 
 
-def generate_top14(rng: random.Random | None = None, clubs: list[RealClub] = TOP14) -> list[Club]:
-    """Les vrais clubs du Top 14, avec des joueurs et un staff inventés à leur niveau."""
+def generate_real_clubs(
+    rng: random.Random | None = None, leagues: list[League] = LEAGUES
+) -> list[Club]:
+    """Les vrais clubs de chaque championnat, avec des joueurs et un staff inventés à
+    leur niveau. Les plus grands stades sont ramenés au plus grand constructible."""
     rng = rng or random.Random()
     player_ids = itertools.count(1)
     staff_ids = itertools.count(1)
+    reals = [(league.code, real) for league in leagues for real in league.clubs]
     return [
         _make_club(
-            club_id, real.name, real.level, real.wealth, real.capacity, player_ids, staff_ids, rng
+            club_id,
+            real.name,
+            real.level,
+            real.wealth,
+            min(real.capacity, STADIUM_STEPS[-1]),
+            player_ids,
+            staff_ids,
+            rng,
+            league=code,
         )
-        for club_id, real in enumerate(clubs, start=1)
+        for club_id, (code, real) in enumerate(reals, start=1)
     ]
 
 
@@ -276,11 +288,13 @@ def _make_club(
     player_ids: itertools.count,
     staff_ids: itertools.count,
     rng: random.Random,
+    league: str = DEFAULT_LEAGUE,
 ) -> Club:
     """Un club complet : trésorerie et infrastructures selon `wealth`, effectif selon `level`."""
     club = Club(
         id=club_id,
         name=name,
+        league=league,
         balance=_round_to(rng.uniform(2_000_000, 3_000_000) + wealth * 6_000_000, 50_000),
         facilities=Facilities(
             stadium_capacity=stadium_capacity,

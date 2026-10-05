@@ -268,7 +268,12 @@ SPONSOR_BASE = 30_000
 SPONSOR_PER_SEAT = 4
 
 # Primes des phases finales : par match disputé, et pour le champion.
-PLAYOFF_PRIZES = {Stage.BARRAGE: 100_000, Stage.SEMI: 200_000, Stage.FINAL: 400_000}
+PLAYOFF_PRIZES = {
+    Stage.QUARTER: 100_000,
+    Stage.BARRAGE: 100_000,
+    Stage.SEMI: 200_000,
+    Stage.FINAL: 400_000,
+}
 CHAMPION_PRIZE = 600_000
 
 

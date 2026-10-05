@@ -34,9 +34,14 @@ def _overview(session: Session, me: ClubRow) -> AcademyOverview:
     clubs = {row.id: row.to_domain() for row in club_rows}
     names = {row.id: row.name for row in club_rows}
 
+    # Championnat espoirs : celui du championnat pro du club.
     season: SeasonRow | None = current_season(session)
-    rows = sorted(season.youth_matches, key=lambda m: (m.matchday, m.id)) if season else []
-    table = Season(year=season.year if season else 0, clubs=list(clubs.values()))
+    rows = sorted(
+        (m for m in (season.youth_matches if season else []) if m.league == me.league),
+        key=lambda m: (m.matchday, m.id),
+    )
+    league_clubs = [c for c in clubs.values() if c.league == me.league]
+    table = Season(year=season.year if season else 0, clubs=league_clubs)
     for row in rows:
         if row.is_played:
             match = row.to_domain()

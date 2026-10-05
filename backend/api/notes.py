@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from api.ledger import game_date
 from api.schemas import ClubNotesOut, FormOut, NoteOut, ObjectiveOut
+from data.leagues import league_config
 from engine.board import (
     SACK_THRESHOLD,
     SACK_WARNING,
@@ -47,23 +48,34 @@ from models.orm import (
 
 
 def ensure_preseason_ranks(session: Session, season: SeasonRow) -> dict[int, int]:
-    """Rang attendu de chaque club pour la saison, calculé (et figé) au premier besoin."""
+    """Rang attendu de chaque club dans son championnat pour la saison, calculé (et
+    figé) au premier besoin."""
     rows = session.scalars(select(PreseasonRankRow).where(PreseasonRankRow.season_id == season.id))
     ranks = {row.club_id: row.rank for row in rows}
     if ranks:
         return ranks
 
     day = min((m.date for m in season.matches if m.date is not None), default=None)
-    levels = {}
-    for club_row in session.scalars(select(ClubRow)):
-        team = team_strength(club_row.to_domain(), day)
-        levels[club_row.id] = (team.set_piece + team.pack + team.attack + team.defense) / 4
-    ordered = sorted(levels, key=levels.get, reverse=True)
-    for rank, club_id in enumerate(ordered, start=1):
-        session.add(PreseasonRankRow(season_id=season.id, club_id=club_id, rank=rank))
-        ranks[club_id] = rank
+    clubs_by_league: dict[str, dict[int, float]] = {}
+    for club_id, league in season_leagues(season).items():
+        team = team_strength(session.get(ClubRow, club_id).to_domain(), day)
+        level = (team.set_piece + team.pack + team.attack + team.defense) / 4
+        clubs_by_league.setdefault(league, {})[club_id] = level
+    for levels in clubs_by_league.values():
+        ordered = sorted(levels, key=levels.get, reverse=True)
+        for rank, club_id in enumerate(ordered, start=1):
+            session.add(PreseasonRankRow(season_id=season.id, club_id=club_id, rank=rank))
+            ranks[club_id] = rank
     session.commit()
     return ranks
+
+
+def season_leagues(season: SeasonRow) -> dict[int, str]:
+    """Championnat de chaque club pendant la saison, d'après son calendrier."""
+    leagues = {}
+    for m in season.matches:
+        leagues[m.home_club_id] = leagues[m.away_club_id] = m.league
+    return leagues
 
 
 def _played(rows: list[MatchRow]) -> list[Match]:
@@ -111,8 +123,8 @@ class History:
     session: Session
     seasons: list[SeasonRow]
     by_season: list[list[Match]]
-    club_ids: list[int]
-    ranks: list[dict[int, int]]  # rang attendu de chaque club, par saison
+    leagues: list[dict[int, str]]  # championnat de chaque club, par saison
+    ranks: list[dict[int, int]]  # rang attendu de chaque club dans son championnat, par saison
     affair_boosts: AffairBoosts = field(default_factory=dict)
 
     @classmethod
@@ -124,7 +136,7 @@ class History:
             session=session,
             seasons=seasons,
             by_season=[_played(season.matches) for season in seasons],
-            club_ids=sorted(session.scalars(select(ClubRow.id))),
+            leagues=[season_leagues(season) for season in seasons],
             ranks=[ensure_preseason_ranks(session, season) for season in seasons],
             affair_boosts=_affair_boosts(session),
         )
@@ -149,8 +161,23 @@ class History:
             items = [item for item in items if item[0] == current]
         return [boost for _, boost in items]
 
+    def league_clubs(self, club_id: int, season_index: int = -1) -> list[int]:
+        """Les clubs du championnat que jouait `club_id` cette saison-là (lui compris)."""
+        leagues = self.leagues[season_index]
+        return sorted(c for c, code in leagues.items() if code == leagues[club_id])
+
+    def league_matches(self, club_id: int, season_index: int = -1) -> list[Match]:
+        """Les matchs joués du championnat de `club_id` cette saison-là."""
+        clubs = set(self.league_clubs(club_id, season_index))
+        return [m for m in self.by_season[season_index] if m.home_club_id in clubs]
+
     def objective(self, club_id: int, season_index: int = -1) -> Objective:
-        return objective_for(self.ranks[season_index][club_id], len(self.club_ids))
+        code = self.leagues[season_index][club_id]
+        return objective_for(
+            self.ranks[season_index][club_id],
+            len(self.league_clubs(club_id, season_index)),
+            league_config(code).playoffs.qualifiers,
+        )
 
     def morale(self, club_id: int) -> Note:
         return team_morale(club_id, self.this_season, self.boosts(club_id, "morale", True))
@@ -164,9 +191,12 @@ class History:
     def board(self, club_id: int) -> Note:
         seasons = [
             BoardSeason(
-                club_ids=self.club_ids, matches=matches, objective=self.objective(club_id, i)
+                club_ids=self.league_clubs(club_id, i),
+                matches=self.league_matches(club_id, i),
+                objective=self.objective(club_id, i),
             )
-            for i, matches in enumerate(self.by_season)
+            for i in range(len(self.seasons))
+            if club_id in self.leagues[i]
         ]
         return board_confidence(
             club_id,

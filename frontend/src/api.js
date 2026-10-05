@@ -31,8 +31,17 @@ async function request(path, { method = "GET", body } = {}) {
 
 const post = (path, body) => request(path, { method: "POST", body });
 
+const del = (path) => request(path, { method: "DELETE" });
+
 export const api = {
+  // Parties sauvegardées (trois emplacements)
+  listSaves: () => request("/saves"),
+  loadSave: (slot) => post(`/saves/${slot}/load`),
+  newSave: (slot) => post(`/saves/${slot}/new`),
+  deleteSave: (slot) => del(`/saves/${slot}`),
+
   // Clubs et carrière
+  listLeagues: () => request("/leagues"),
   listClubs: () => request("/clubs"),
   getClub: (clubId) => request(`/clubs/${clubId}`),
   getClubNotes: (clubId) => request(`/clubs/${clubId}/notes`),
@@ -43,7 +52,9 @@ export const api = {
     post("/career", { manager_name: managerName, club_id: clubId }),
 
   // Saison : calendrier, journée suivante, saison suivante
-  getCurrentSeason: () => request("/seasons/current"),
+  // Sans championnat : celui du club dirigé.
+  getCurrentSeason: (league = null) =>
+    request(league ? `/seasons/current?league=${encodeURIComponent(league)}` : "/seasons/current"),
   playMatchday: () => post("/seasons/current/play"),
   getSeasonReview: () => request("/seasons/current/review"),
   startNextSeason: () => post("/seasons/next"),

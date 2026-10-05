@@ -5,10 +5,8 @@ Lancement (depuis backend/) :
 Documentation interactive : http://localhost:8000/docs
 """
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
-
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from api.routers import (
     academy,
@@ -18,28 +16,35 @@ from api.routers import (
     contracts,
     facilities,
     finances,
+    leagues,
     live,
     matches,
     medical,
     players,
+    saves,
     seasons,
     staff,
     transfers,
 )
-from database import SessionLocal, init_db, seed_if_empty
+from database import NoSaveLoaded, OutdatedSave
+
+app = FastAPI(title="Rugby Manager API", version="0.1.0")
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    # Au démarrage : tables créées et clubs générés si la base est neuve.
-    init_db()
-    with SessionLocal() as session:
-        seed_if_empty(session)
-    yield
+@app.exception_handler(NoSaveLoaded)
+def no_save_loaded(request: Request, error: NoSaveLoaded) -> JSONResponse:
+    # Les parties se choisissent (ou se créent) par les routes /saves.
+    return JSONResponse(status_code=409, content={"detail": "Aucune partie chargée"})
 
 
-app = FastAPI(title="Rugby Manager API", version="0.1.0", lifespan=lifespan)
+@app.exception_handler(OutdatedSave)
+def outdated_save(request: Request, error: OutdatedSave) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": str(error)})
+
+
+app.include_router(saves.router)
 app.include_router(clubs.router)
+app.include_router(leagues.router)
 app.include_router(matches.router)
 app.include_router(career.router)
 app.include_router(seasons.router)

@@ -12,9 +12,22 @@ from api.deps import SessionDep, load_club
 from api.ledger import current_season
 from api.routers.seasons import FIRST_SEASON_YEAR, create_season
 from api.schemas import CareerIn, CareerOut, DismissalOut
+from data.leagues import league_config
+from models import Club
 from models.orm import CareerRow, DismissalRow
 
 router = APIRouter(prefix="/career", tags=["carrière"])
+
+
+def _career_out(row: CareerRow, club: Club) -> CareerOut:
+    return CareerOut(
+        id=row.id,
+        manager_name=row.manager_name,
+        club_id=club.id,
+        club_name=club.name,
+        league=club.league,
+        league_name=league_config(club.league).name,
+    )
 
 
 @router.post("", response_model=CareerOut, status_code=201)
@@ -30,7 +43,7 @@ def start_career(payload: CareerIn, session: SessionDep) -> CareerOut:
     if current_season(session) is None:
         create_season(session, FIRST_SEASON_YEAR)
 
-    return CareerOut(id=row.id, manager_name=row.manager_name, club_id=club.id, club_name=club.name)
+    return _career_out(row, club)
 
 
 @router.get("", response_model=CareerOut)
@@ -40,7 +53,7 @@ def get_career(session: SessionDep) -> CareerOut:
     if row is None:
         raise HTTPException(status_code=404, detail="Aucune carrière en cours")
     club = load_club(session, row.club_id)
-    return CareerOut(id=row.id, manager_name=row.manager_name, club_id=club.id, club_name=club.name)
+    return _career_out(row, club)
 
 
 @router.get("/dismissal", response_model=DismissalOut | None)

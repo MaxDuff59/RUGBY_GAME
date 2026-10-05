@@ -23,7 +23,11 @@ def list_clubs(session: SessionDep) -> list[ClubSummary]:
         level = (team.set_piece + team.pack + team.attack + team.defense) / 4
         summaries.append(
             ClubSummary(
-                id=row.id, name=row.name, player_count=len(row.players), level=round(level, 1)
+                id=row.id,
+                name=row.name,
+                league=row.league,
+                player_count=len(row.players),
+                level=round(level, 1),
             )
         )
     return summaries

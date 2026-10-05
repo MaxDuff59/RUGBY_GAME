@@ -14,19 +14,19 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
 from api.affairs import forced_starters, ignore_pending
-from api.deps import SessionDep
-from api.live import Live, live_out, load_live, run_training_week
+from api.deps import SessionDep, load_clubs
+from api.live import Live, live_club_ids, live_out, load_live, run_training_week
 from api.notes import History
 from api.routers.seasons import (
-    _club_rows,
     _current_or_404,
     _ensure_next_stage,
+    focus_league,
     play_next_matchday,
 )
 from api.schemas import AdvanceIn, LiveOut, PlayOut, SubstituteIn, TacticsIn
 from engine.match_engine import LiveMatch, Tactics, staff_tactics, team_strength
 from models import Stage
-from models.orm import CareerRow, LiveMatchRow
+from models.orm import CareerRow, ClubRow, LiveMatchRow
 
 router = APIRouter(prefix="/live", tags=["match en direct"])
 
@@ -41,12 +41,14 @@ def _my_club_id(session) -> int:
 def _load(session) -> tuple[Live, dict[int, str], int]:
     """Le match en direct en cours (404 sinon), les noms des clubs et le club dirigé."""
     my_club_id = _my_club_id(session)
-    club_rows = _club_rows(session)
-    clubs = {row.id: row.to_domain() for row in club_rows}
-    live = load_live(session, clubs)
+    live = load_live(session, load_clubs(session, live_club_ids(session)))
     if live is None:
         raise HTTPException(status_code=404, detail="Aucun match en direct")
-    return live, {row.id: row.name for row in club_rows}, my_club_id
+    return live, _names(session), my_club_id
+
+
+def _names(session) -> dict[int, str]:
+    return dict(session.execute(select(ClubRow.id, ClubRow.name)).all())
 
 
 @router.get("", response_model=LiveOut)
@@ -66,18 +68,16 @@ def start_live(session: SessionDep) -> LiveOut:
     """
     my_club_id = _my_club_id(session)
     season = _current_or_404(session)
-    club_rows = _club_rows(session)
-    names = {row.id: row.name for row in club_rows}
-    clubs = {row.id: row.to_domain() for row in club_rows}
+    names = _names(session)
 
-    existing = load_live(session, clubs)
+    existing = load_live(session, load_clubs(session, live_club_ids(session)))
     if existing is not None:
         return live_out(existing, names, my_club_id)
 
     ignore_pending(session)
-    clubs[my_club_id].forced_starters = forced_starters(session, my_club_id)
-    _ensure_next_stage(session, season, clubs)
-    unplayed = [m for m in season.matches if not m.is_played]
+    league = focus_league(session)
+    _ensure_next_stage(session, season, league)
+    unplayed = [m for m in season.matches if not m.is_played and m.league == league]
     if not unplayed:
         raise HTTPException(status_code=400, detail="La saison est terminée")
     matchday = min(m.matchday for m in unplayed)
@@ -87,10 +87,16 @@ def start_live(session: SessionDep) -> LiveOut:
         raise HTTPException(status_code=400, detail="Ton club ne joue pas cette journée")
     stage, day = Stage(match_row.stage), match_row.date
 
+    # Semaine d'entraînement des clubs dont le championnat joue ce jour-là.
+    leagues = {m.league for m in season.matches if m.date == day and not m.is_played}
+    playing_ids = session.scalars(select(ClubRow.id).where(ClubRow.league.in_(leagues)))
+    clubs = load_clubs(session, {*playing_ids, my_club_id})
+    clubs[my_club_id].forced_starters = forced_starters(session, my_club_id)
+    playing = {club_id: club for club_id, club in clubs.items() if club.league in leagues}
     rng = random.Random()
     history = History.load(session)
-    forms = {club_id: history.form(club, day) for club_id, club in clubs.items()}
-    mine = run_training_week(session, clubs, forms, day, rng, my_club_id)
+    forms = {club_id: history.form(club, day) for club_id, club in playing.items()}
+    mine = run_training_week(session, playing, forms, day, rng, my_club_id)
     session.commit()
 
     home, away = clubs[match_row.home_club_id], clubs[match_row.away_club_id]

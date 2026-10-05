@@ -5,9 +5,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Base de données locale
+# Base de données locale et parties sauvegardées
 *.db
 *.sqlite3
+backend/saves/
 
 # Frontend (phase 2)
 node_modules/

@@ -51,12 +51,15 @@ class Objective:
     target_rank: int  # rang à atteindre au plus bas
 
 
-def objective_for(expected_rank: int, club_count: int) -> Objective:
-    """Objectif fixé par la direction d'après le rang attendu en début de saison."""
+def objective_for(
+    expected_rank: int, club_count: int, qualifiers: int = PLAYOFF_QUALIFIERS
+) -> Objective:
+    """Objectif fixé par la direction d'après le rang attendu en début de saison
+    (`qualifiers` : nombre de qualifiés pour les phases finales du championnat)."""
     if expected_rank <= 2:
         return Objective("Jouer le titre", 2)
-    if expected_rank <= PLAYOFF_QUALIFIERS:
-        return Objective("Phases finales", PLAYOFF_QUALIFIERS)
+    if expected_rank <= qualifiers:
+        return Objective("Phases finales", qualifiers)
     if expected_rank <= club_count - 4:
         return Objective("Milieu de tableau", club_count - 4)
     return Objective("Maintien", club_count - 2)

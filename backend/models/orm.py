@@ -40,6 +40,8 @@ class ClubRow(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True)
+    # Championnat (data/leagues.py) ; change à l'intersaison en cas de montée ou de descente.
+    league: Mapped[str] = mapped_column(String(12), default="top14")
     balance: Mapped[int] = mapped_column(default=0)
     stadium_capacity: Mapped[int] = mapped_column(default=4000)
     training_level: Mapped[int] = mapped_column(default=1)
@@ -70,6 +72,7 @@ class ClubRow(Base):
             staff=[s.to_domain() for s in self.staff],
             balance=self.balance,
             facilities=self.facilities(),
+            league=self.league,
         )
 
     def facilities(self) -> Facilities:
@@ -98,6 +101,7 @@ class ClubRow(Base):
         return cls(
             id=club.id,
             name=club.name,
+            league=club.league,
             balance=club.balance,
             stadium_capacity=club.facilities.stadium_capacity,
             training_level=club.facilities.training_level,
@@ -290,6 +294,8 @@ class StaffRow(Base):
 
 
 class SeasonRow(Base):
+    """Une saison : les matchs de tous les championnats, chacun avec son calendrier."""
+
     __tablename__ = "seasons"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -313,6 +319,8 @@ class MatchRow(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     # Pas de saison pour un match amical.
     season_id: Mapped[int | None] = mapped_column(ForeignKey("seasons.id"))
+    # Championnat du match (les clubs peuvent en changer d'une saison à l'autre).
+    league: Mapped[str] = mapped_column(String(12), default="top14")
     matchday: Mapped[int] = mapped_column(default=0)
     home_club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
     away_club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
@@ -496,7 +504,8 @@ class TransactionRow(Base):
 
 
 class PreseasonRankRow(Base):
-    """Rang attendu d'un club avant une saison (niveau de son XV parmi tous les clubs).
+    """Rang attendu d'un club avant une saison (niveau de son XV parmi les clubs de son
+    championnat).
 
     Figé au tirage du calendrier : c'est lui qui fixe l'objectif de la direction
     (engine/board.py), même si l'effectif change en cours de saison.

@@ -40,7 +40,7 @@ def strong_and_weak() -> tuple[Club, Club]:
     return make_club(1, level=15, seed=1), make_club(2, level=9, seed=2)
 
 
-# --- API : base SQLite en mémoire (jamais sur rugby.db) ---------------------------------
+# --- API : base SQLite en mémoire (jamais sur les parties sauvegardées) ---------------------
 
 
 @pytest.fixture
@@ -53,15 +53,13 @@ def client() -> Iterator[TestClient]:
     Base.metadata.create_all(engine)
     TestSession = sessionmaker(bind=engine, expire_on_commit=False)
     with TestSession() as session:
-        seed_if_empty(session, club_count=10, seed=0, top14=False)
+        seed_if_empty(session, club_count=10, seed=0, real=False)
 
     def override_get_session() -> Iterator[Session]:
         with TestSession() as session:
             yield session
 
     app.dependency_overrides[get_session] = override_get_session
-    # Pas de `with TestClient(...)` : on n'exécute pas le démarrage de l'app,
-    # qui créerait le fichier rugby.db.
     yield TestClient(app)
     app.dependency_overrides.clear()
 

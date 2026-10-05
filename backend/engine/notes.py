@@ -17,7 +17,13 @@ from models.domain import Match, Stage
 MIN_NOTE, MAX_NOTE = 0.0, 20.0
 
 # Les matchs à élimination directe pèsent plus.
-STAGE_WEIGHT = {Stage.REGULAR: 1.0, Stage.BARRAGE: 1.5, Stage.SEMI: 1.8, Stage.FINAL: 2.2}
+STAGE_WEIGHT = {
+    Stage.REGULAR: 1.0,
+    Stage.QUARTER: 1.5,
+    Stage.BARRAGE: 1.5,
+    Stage.SEMI: 1.8,
+    Stage.FINAL: 2.2,
+}
 
 
 @dataclass(frozen=True)

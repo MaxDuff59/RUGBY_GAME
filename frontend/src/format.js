@@ -63,6 +63,7 @@ export const FACILITIES = {
 // Étapes de la saison.
 export const STAGES = {
   regular: "Saison régulière",
+  quarter: "Quarts de finale",
   barrage: "Barrages",
   semi: "Demi-finales",
   final: "Finale",
@@ -282,6 +283,14 @@ const numericDay = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-
 
 // "sam. 5 sept."
 export const formatShortDate = (iso) => shortDay.format(parseDate(iso));
+
+// Heure de la dernière sauvegarde (horloge réelle) : « le 5 oct. à 10:39 ».
+const savedDay = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
+const savedTime = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
+export function formatSavedAt(iso) {
+  const date = new Date(iso);
+  return `le ${savedDay.format(date)} à ${savedTime.format(date)}`;
+}
 // "samedi 5 septembre 2026"
 export const formatLongDate = (iso) => longDay.format(parseDate(iso));
 // "septembre 2026"

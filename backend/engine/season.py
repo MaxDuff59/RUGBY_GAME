@@ -1,12 +1,40 @@
 """Calendrier aller-retour, phases finales et simulation d'une saison complète."""
 
 import random
+from enum import StrEnum
 
 from engine.match_engine import simulate_match
-from models import Club, Match, Season
+from models import Club, Match, Season, Stage
 
 # Phases finales façon Top 14 : 6 qualifiés.
 PLAYOFF_QUALIFIERS = 6
+
+
+class PlayoffFormat(StrEnum):
+    """Formule des phases finales d'un championnat (le mieux classé reçoit)."""
+
+    TOP4 = "top4"  # demi-finales 1-4 et 2-3, finale (Premiership)
+    TOP6 = "top6"  # barrages 3-6 et 4-5, demies chez le 1er et le 2e, finale (Top 14, Pro D2)
+    TOP8 = "top8"  # quarts 1-8, 2-7, 3-6, 4-5, demies selon le tableau, finale (URC)
+    # Qualifications 1-6, 2-5, 3-4 ; les vainqueurs et le meilleur perdant (classé
+    # 4e, à l'extérieur) jouent les demies, puis la finale (Super Rugby).
+    SUPER6 = "super6"
+
+    @property
+    def qualifiers(self) -> int:
+        return {"top4": 4, "top6": 6, "top8": 8, "super6": 6}[self.value]
+
+    @property
+    def stages(self) -> list[Stage]:
+        """Les tours, dans l'ordre."""
+        first = {
+            PlayoffFormat.TOP4: [],
+            PlayoffFormat.TOP6: [Stage.BARRAGE],
+            PlayoffFormat.TOP8: [Stage.QUARTER],
+            PlayoffFormat.SUPER6: [Stage.QUARTER],
+        }[self]
+        return [*first, Stage.SEMI, Stage.FINAL]
+
 
 # Une journée = liste de rencontres (id domicile, id extérieur).
 Fixture = tuple[int, int]
@@ -113,3 +141,47 @@ def final_pairing(seeding: list[int], semis: list[Match]) -> Fixture:
     """Finale entre les deux vainqueurs, le mieux classé cité en premier."""
     winners = sorted((m.winner_id(seeding) for m in semis), key=seeding.index)
     return (winners[0], winners[1])
+
+
+def _by_seed(seeding: list[int], *club_ids: int) -> Fixture:
+    first, second = sorted(club_ids, key=seeding.index)
+    return (first, second)
+
+
+def playoff_round(
+    fmt: PlayoffFormat, seeding: list[int], played: dict[Stage, list[Match]]
+) -> tuple[Stage, list[Fixture]] | None:
+    """Le tour suivant des phases finales et ses affiches, d'après les tours déjà
+    joués (`played`, par étape) ; None une fois la finale jouée."""
+    if len(seeding) < fmt.qualifiers:
+        raise ValueError(f"Il faut au moins {fmt.qualifiers} clubs pour ces phases finales")
+    stage = next((s for s in fmt.stages if not played.get(s)), None)
+    if stage is None:
+        return None
+    seeds = seeding[: fmt.qualifiers]
+    if stage == Stage.FINAL:
+        return stage, [final_pairing(seeding, played[Stage.SEMI])]
+    if stage == Stage.BARRAGE:
+        return stage, barrage_pairings(seeding)
+    if stage == Stage.QUARTER:
+        n = len(seeds)
+        return stage, [(seeds[i], seeds[n - 1 - i]) for i in range(n // 2)]
+
+    # Demi-finales.
+    if fmt == PlayoffFormat.TOP4:
+        return stage, [(seeds[0], seeds[3]), (seeds[1], seeds[2])]
+    if fmt == PlayoffFormat.TOP6:
+        return stage, semi_pairings(seeding, played[Stage.BARRAGE])
+    quarters = played[Stage.QUARTER]
+    if fmt == PlayoffFormat.TOP8:
+        # Tableau : vainqueur de 1-8 contre celui de 4-5, de 2-7 contre 3-6.
+        winner = {m.home_club_id: m.winner_id(seeding) for m in quarters}
+        return stage, [
+            _by_seed(seeding, winner[seeds[0]], winner[seeds[3]]),
+            _by_seed(seeding, winner[seeds[1]], winner[seeds[2]]),
+        ]
+    # Super Rugby : le meilleur perdant est repêché comme 4e, et se déplace.
+    winners = sorted((m.winner_id(seeding) for m in quarters), key=seeding.index)
+    losers = {c for m in quarters for c in (m.home_club_id, m.away_club_id)} - set(winners)
+    best_loser = min(losers, key=seeding.index)
+    return stage, [(winners[0], best_loser), (winners[1], winners[2])]

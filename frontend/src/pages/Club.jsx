@@ -243,9 +243,7 @@ export default function Club() {
           </section>
         )}
 
-        {data.phase !== "regular" && <Playoffs season={data} myId={myId} />}
-
-        <Standings season={data} myId={myId} />
+        <Leagues key={data.league.code} season={data} myId={myId} />
       </div>
     </>
   );
@@ -423,14 +421,55 @@ function FormLine({ us, them }) {
   );
 }
 
+// Phases finales et classement : notre championnat, ou un autre au choix.
+function Leagues({ season, myId }) {
+  const [code, setCode] = useState(season.league.code);
+  const other = useApi(
+    // Rechargé à chaque journée jouée (`season` change).
+    useCallback(() => (code === season.league.code ? Promise.resolve(null) : api.getCurrentSeason(code)), [
+      code,
+      season,
+    ]),
+  );
+  const shown = code === season.league.code ? season : other.data;
+  const picker = season.leagues.length > 1 && (
+    <select
+      className="input tactics__select"
+      aria-label="Championnat"
+      value={code}
+      onChange={(event) => setCode(event.target.value)}
+    >
+      {season.leagues.map((league) => (
+        <option key={league.code} value={league.code}>
+          {league.short_name}
+        </option>
+      ))}
+    </select>
+  );
+  if (!shown) {
+    return (
+      <section className="section">
+        {picker}
+        <p className="status">{other.error ? other.error.message : "Chargement…"}</p>
+      </section>
+    );
+  }
+  return (
+    <>
+      {shown.phase !== "regular" && <Playoffs season={shown} myId={myId} />}
+      <Standings season={shown} myId={myId} picker={picker} />
+    </>
+  );
+}
+
 function Playoffs({ season, myId }) {
-  const rounds = ["barrage", "semi", "final"]
+  const rounds = season.league.playoff_stages
     .map((stage) => ({ stage, matches: season.matches.filter((m) => m.stage === stage) }))
     .filter((round) => round.matches.length > 0);
   return (
     <section className="section">
       <div className="section__head">
-        <h2 className="eyebrow">Phases finales</h2>
+        <h2 className="eyebrow">Phases finales · {season.league.short_name}</h2>
         <span className="muted">Égalité : le mieux classé passe</span>
       </div>
       <div className="card">
@@ -445,7 +484,7 @@ function Playoffs({ season, myId }) {
   );
 }
 
-function Standings({ season, myId }) {
+function Standings({ season, myId, picker }) {
   const { rows, sort, toggle } = useSort(season.standings, { key: "rank", dir: "asc" });
   const header = (key, label, first = "desc", left = false) => (
     <SortHeader sortKey={key} label={label} sort={sort} onToggle={toggle} first={first} left={left} />
@@ -454,7 +493,7 @@ function Standings({ season, myId }) {
     <section className="section">
       <div className="section__head">
         <h2 className="eyebrow">Classement</h2>
-        <span className="muted">Les {season.playoff_qualifiers} premiers jouent les phases finales</span>
+        {picker}
       </div>
       <div className="card table-wrap">
         <table className="table">
@@ -497,7 +536,10 @@ function Standings({ season, myId }) {
             ))}
           </tbody>
         </table>
-        <p className="table__note">Diff : différence de points · Ess : essais · BO/BD : bonus offensif/défensif</p>
+        <p className="table__note">
+          Les {season.playoff_qualifiers} premiers jouent les phases finales · Diff : différence de points · Ess :
+          essais · BO/BD : bonus offensif/défensif
+        </p>
       </div>
     </section>
   );

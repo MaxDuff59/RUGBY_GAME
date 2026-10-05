@@ -9,6 +9,7 @@ import Finances from "./pages/Finances.jsx";
 import Match from "./pages/Match.jsx";
 import Medical from "./pages/Medical.jsx";
 import Player from "./pages/Player.jsx";
+import Saves from "./pages/Saves.jsx";
 import Squad from "./pages/Squad.jsx";
 import Staff from "./pages/Staff.jsx";
 import StartCareer from "./pages/StartCareer.jsx";
@@ -17,6 +18,7 @@ import Transfers from "./pages/Transfers.jsx";
 export default function App() {
   return (
     <Routes>
+      <Route path="/parties" element={<Saves />} />
       <Route path="/start" element={<StartCareer />} />
       <Route element={<Layout />}>
         <Route index element={<Club />} />

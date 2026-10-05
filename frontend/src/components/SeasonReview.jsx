@@ -25,6 +25,13 @@ const PLAYOFFS = {
   final: "Finaliste",
   semi: "Demi-finaliste",
   barrage: "Éliminé en barrage",
+  quarter: "Éliminé en quart de finale",
+};
+
+// Montée et descente entre la Pro D2 et le Top 14.
+const MOVEMENTS = {
+  promoted: "Champion de Pro D2 : le club monte en Top 14 la saison prochaine.",
+  relegated: "Dernier du Top 14 : le club descend en Pro D2 la saison prochaine.",
 };
 
 // Bilan de fin de saison, en trois étapes : résultats, notes de vie du club, puis
@@ -112,6 +119,7 @@ function Results({ review }) {
           {formatRank(review.rank)} de la saison régulière · {review.league_points} points
           {review.playoffs !== "champion" && ` · Champion : ${review.champion.name}`}
         </p>
+        {review.movement && <p className="hero__sub">{MOVEMENTS[review.movement]}</p>}
       </div>
 
       <dl className="review__stats">

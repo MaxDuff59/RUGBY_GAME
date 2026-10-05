@@ -46,6 +46,7 @@ from api.schemas import (
     TransfersOverview,
     TransferTargetOut,
 )
+from data.leagues import league_config, sort_codes
 from engine.economy import SQUAD_MAX, SQUAD_MIN, TransactionCategory, sale_price
 from engine.free_agents import free_agent_wage, seasons_without_club
 from engine.transfers import (
@@ -202,6 +203,7 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
                     club_id=club.id,
                     club_name=club.name,
                     club_level=level,
+                    league=league_config(club.league).short_name,
                     years_left=player.years_left(year),
                     playing_time=time_label(playing_time(player, club)),
                     transfer_fee=_fee_opening(player, club, year, grudges),
@@ -222,6 +224,7 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
                 club_id=None,
                 club_name=None,
                 club_level=None,
+                league=None,
                 years_left=0,
                 playing_time="sans club",
                 transfer_fee=None,
@@ -255,6 +258,7 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
         squad_min=SQUAD_MIN,
         squad_max=SQUAD_MAX,
         my_level=round(club_level(me.to_domain()), 1),
+        leagues=[league_config(code).short_name for code in sort_codes({r.league for r in others})],
         listings=listings,
         negotiations=[_negotiation_out(row) for row in negotiations],
         joker_slots=[

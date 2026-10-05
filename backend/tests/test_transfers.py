@@ -4,9 +4,9 @@ import random
 
 import pytest
 
-from data.generator import generate_top14
-from data.top14 import TOP14
-from engine.economy import FacilityKind, next_stadium_step, upgrade_cost
+from data.generator import generate_real_clubs
+from data.leagues import LEAGUES, TOP14, league
+from engine.economy import STADIUM_STEPS, FacilityKind, next_stadium_step, upgrade_cost
 from engine.match_engine import RATING_FOR_POSITION
 from engine.transfers import (
     TIME_BENCH,
@@ -118,11 +118,11 @@ def test_precontract_only_in_the_last_contract_year():
     assert player.years_left(YEAR) == 2
 
 
-# --- Top 14 --------------------------------------------------------------------------
+# --- Vrais clubs ----------------------------------------------------------------------
 
 
 def test_top14_clubs_are_generated_with_their_stadiums():
-    clubs = generate_top14(random.Random(0))
+    clubs = generate_real_clubs(random.Random(0), [league("top14")])
     assert [c.name for c in clubs] == [real.name for real in TOP14]
     assert len(clubs) == 14 and all(len(c.players) == 31 for c in clubs)
     toulouse = next(c for c in clubs if c.name == "Stade Toulousain")
@@ -131,6 +131,20 @@ def test_top14_clubs_are_generated_with_their_stadiums():
     assert club_level(toulouse) > club_level(montauban)
     assert toulouse.balance > montauban.balance
     assert all(c.players[0].contract_until >= YEAR for c in clubs)
+    assert {c.league for c in clubs} == {"top14"}
+
+
+def test_every_league_is_generated_with_unique_ids_and_capped_stadiums():
+    clubs = generate_real_clubs(random.Random(0))
+    assert len(clubs) == sum(len(lg.clubs) for lg in LEAGUES)
+    assert len({c.id for c in clubs}) == len(clubs)
+    assert len({c.name for c in clubs}) == len(clubs)
+    player_ids = [p.id for c in clubs for p in c.players + c.youths]
+    assert len(set(player_ids)) == len(player_ids)
+    by_name = {c.name: c for c in clubs}
+    assert by_name["Leinster Rugby"].league == "urc"
+    assert by_name["Crusaders"].league == "super_rugby"
+    assert by_name["Lions"].facilities.stadium_capacity == STADIUM_STEPS[-1]
 
 
 def test_real_stadium_capacities_fit_between_the_steps():

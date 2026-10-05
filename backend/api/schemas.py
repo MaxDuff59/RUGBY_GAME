@@ -212,6 +212,7 @@ class StrengthOut(BaseModel):
 class ClubSummary(BaseModel):
     id: int
     name: str
+    league: str  # code du championnat (voir LeagueOut)
     player_count: int
     # Moyenne des 4 notes collectives : un indicateur rapide du niveau.
     level: float
@@ -531,6 +532,21 @@ class CareerOut(BaseModel):
     manager_name: str
     club_id: int
     club_name: str
+    league: str
+    league_name: str
+
+
+# --- Championnats ----------------------------------------------------------------------
+
+
+class LeagueOut(BaseModel):
+    code: str
+    name: str
+    short_name: str
+    country: str
+    club_count: int
+    # Tours des phases finales, dans l'ordre (ex. barrage, semi, final).
+    playoff_stages: list[Stage]
 
 
 # --- Saisons -------------------------------------------------------------------------
@@ -555,6 +571,8 @@ class StandingOut(BaseModel):
 
 class SeasonOut(BaseModel):
     year: int
+    league: LeagueOut  # le championnat affiché
+    leagues: list[LeagueOut]  # tous ceux de la saison, pour en changer
     # regular : journées à jouer ; playoffs : phases finales en cours ; finished : finale jouée.
     phase: Literal["regular", "playoffs", "finished"]
     regular_matchdays: int
@@ -564,6 +582,21 @@ class SeasonOut(BaseModel):
     standings: list[StandingOut]  # saison régulière seulement
     matches: list[MatchSummary]  # tout le calendrier, phases finales comprises
     champion: ClubRef | None
+
+
+class SaveOut(BaseModel):
+    """Un emplacement de sauvegarde : vide, ou une partie et où elle en est."""
+
+    slot: int
+    empty: bool
+    active: bool  # la partie chargée
+    outdated: bool = False  # ancien format : ne s'ouvre plus, à supprimer
+    manager_name: str | None = None  # None : carrière à choisir (nouvelle partie, limogeage)
+    club_name: str | None = None
+    league_name: str | None = None
+    season_year: int | None = None
+    game_date: datetime.date | None = None  # date du jour dans le jeu
+    saved_at: datetime.datetime | None = None  # dernière sauvegarde (automatique)
 
 
 class DismissalOut(BaseModel):
@@ -726,6 +759,7 @@ class ListingOut(BaseModel):
     club_id: int | None  # None = agent libre
     club_name: str | None
     club_level: float | None
+    league: str | None  # nom court du championnat du club (None = agent libre)
     years_left: int  # saisons de contrat restantes, celle en cours comprise (0 sans contrat)
     playing_time: str  # titulaire, remplaçant, réserviste (dans son club), sans club
     transfer_fee: int | None  # indemnité demandée à l'ouverture ; None = intransférable
@@ -765,6 +799,7 @@ class TransfersOverview(BaseModel):
     squad_min: int
     squad_max: int
     my_level: float
+    leagues: list[str]  # noms courts des championnats du marché, dans l'ordre
     listings: list[ListingOut]
     negotiations: list[NegotiationOut]  # en cours, et pré-contrats en attente de l'intersaison
     joker_slots: list["JokerSlotOut"]  # blessures qui autorisent un joker médical
@@ -967,8 +1002,11 @@ class SeasonReviewOut(BaseModel):
     points_against: int
     tries_for: int
     league_points: int
-    # none : pas qualifié ; barrage, semi, final : éliminé à ce tour ; champion.
-    playoffs: Literal["none", "barrage", "semi", "final", "champion"]
+    league: LeagueOut
+    # none : pas qualifié ; quarter, barrage, semi, final : éliminé à ce tour ; champion.
+    playoffs: Literal["none", "quarter", "barrage", "semi", "final", "champion"]
+    # Montée en Top 14 (champion de Pro D2) ou descente en Pro D2 (dernier du Top 14).
+    movement: Literal["promoted", "relegated"] | None = None
     objective: ObjectiveOut | None
     objective_met: bool | None
     youth_rank: int | None  # championnat espoirs

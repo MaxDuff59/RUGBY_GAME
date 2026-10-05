@@ -137,11 +137,11 @@ def _player_info(player: Player, starts: dict[int, int], year: int, day: date) -
     )
 
 
-def _standings(history: History) -> list[int]:
-    """Clubs du 1er au dernier de la saison régulière en cours."""
+def _standings(history: History, club_id: int) -> list[int]:
+    """Clubs du championnat de `club_id`, du 1er au dernier de la saison régulière en cours."""
     table = Season(year=0, clubs=[])
-    table.standings = {cid: StandingRow(club_id=cid) for cid in history.club_ids}
-    for match in history.this_season:
+    table.standings = {cid: StandingRow(club_id=cid) for cid in history.league_clubs(club_id)}
+    for match in history.league_matches(club_id):
         if match.stage == Stage.REGULAR:
             record_result(table, match)
     return [row.club_id for row in table.table()]
@@ -172,7 +172,8 @@ def build_situation(session: Session, club_row: ClubRow, season: SeasonRow) -> S
             for player_id in lineup:
                 starts[player_id] = starts.get(player_id, 0) + 1
 
-    seeding = _standings(history)
+    seeding = _standings(history, club.id)
+    league_size = len(seeding)
     rank_of = {club_id: rank for rank, club_id in enumerate(seeding, start=1)}
 
     last = None
@@ -238,10 +239,10 @@ def build_situation(session: Session, club_row: ClubRow, season: SeasonRow) -> S
         club=club.name,
         day=day,
         rank=rank_of.get(club.id),
-        club_count=len(history.club_ids),
+        club_count=league_size,
         target_rank=history.objective(club.id).target_rank if history.seasons else None,
         played=sum(1 for m in mine if m.stage == Stage.REGULAR),
-        regular_rounds=2 * (len(history.club_ids) - 1),
+        regular_rounds=2 * (league_size - 1),
         last=last,
         streak=_streak(club.id, mine),
         next=fixture,

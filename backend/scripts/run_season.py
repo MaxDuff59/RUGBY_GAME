@@ -12,7 +12,8 @@ import argparse
 import random
 from collections import Counter
 
-from data.generator import generate_clubs, generate_top14
+from data.generator import generate_clubs, generate_real_clubs
+from data.leagues import LEAGUES_BY_CODE
 from engine.match_engine import team_strength
 from engine.season import simulate_season
 from models import Career, Club, Season
@@ -91,7 +92,11 @@ def print_my_season(season: Season, clubs_by_id: dict[int, Club], career: Career
 def main() -> None:
     parser = argparse.ArgumentParser(description="Simule une saison complète.")
     parser.add_argument("--clubs", type=int, default=10, help="nombre de clubs (défaut : 10)")
-    parser.add_argument("--top14", action="store_true", help="les vrais clubs du Top 14")
+    parser.add_argument(
+        "--league",
+        choices=sorted(LEAGUES_BY_CODE),
+        help="les vrais clubs d'un championnat (ex. top14, prod2, urc)",
+    )
     parser.add_argument("--seed", type=int, help="graine du hasard, pour rejouer la même saison")
     parser.add_argument("--year", type=int, default=2026, help="année de la saison")
     parser.add_argument("--club", type=int, help="id du club que tu diriges (défaut : au hasard)")
@@ -99,10 +104,13 @@ def main() -> None:
     args = parser.parse_args()
 
     rng = random.Random(args.seed)
-    clubs = generate_top14(rng) if args.top14 else generate_clubs(args.clubs, rng)
+    if args.league:
+        clubs = generate_real_clubs(rng, [LEAGUES_BY_CODE[args.league]])
+    else:
+        clubs = generate_clubs(args.clubs, rng)
     clubs_by_id = {club.id: club for club in clubs}
     if args.club is not None and args.club not in clubs_by_id:
-        parser.error(f"--club doit être compris entre 1 et {args.clubs}")
+        parser.error(f"--club doit être compris entre 1 et {len(clubs)}")
     career = Career(manager_name=args.manager, club_id=args.club or rng.choice(clubs).id)
 
     season = simulate_season(clubs, year=args.year, rng=rng)
