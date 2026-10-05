@@ -1,9 +1,9 @@
 import { useCallback } from "react";
-import { Link, Navigate, NavLink, Outlet } from "react-router-dom";
+import { Navigate, NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { api } from "../api.js";
 import { useApi } from "../hooks/useApi.js";
-import { chosenSlot } from "../save.js";
+import { chosenSlot, leaveSlot } from "../save.js";
 
 const NAV_ITEMS = [
   { to: "/", label: "Club" },
@@ -22,6 +22,7 @@ const NAV_ITEMS = [
 // Les pages reçoivent la carrière via useOutletContext().
 export default function Layout() {
   const { data: career, error, loading } = useApi(useCallback(api.getCareer, []));
+  const navigate = useNavigate();
 
   // Chaque ouverture du jeu passe par l'écran des parties.
   if (chosenSlot() === null || error?.status === 409) return <Navigate to="/parties" replace />;
@@ -48,9 +49,17 @@ export default function Layout() {
         </ul>
         <div className="sidebar__footer">
           <div>Manager : {career.manager_name}</div>
-          <div>
-            Partie {chosenSlot()} · sauvegarde auto · <Link to="/parties">Parties</Link>
-          </div>
+          <div>Partie {chosenSlot()} · sauvegarde auto</div>
+          <button
+            type="button"
+            className="button button--small sidebar__leave"
+            onClick={() => {
+              leaveSlot();
+              navigate("/parties");
+            }}
+          >
+            Quitter la partie
+          </button>
         </div>
       </nav>
 

@@ -842,6 +842,11 @@ body,
   color: inherit;
 }
 
+.sidebar__leave {
+  width: 100%;
+  margin-top: 10px;
+}
+
 /* --- Choix du club ----------------------------------------------------------- */
 
 .start {

@@ -17,3 +17,13 @@ export function chooseSlot(slot) {
     // Stockage indisponible : on repassera par l'écran des parties.
   }
 }
+
+// Quitter la partie : l'onglet repasse par l'écran des parties. Rien à enregistrer,
+// chaque action l'a déjà été ; le serveur la garde comme « dernière jouée ».
+export function leaveSlot() {
+  try {
+    sessionStorage.removeItem(KEY);
+  } catch {
+    // Stockage indisponible : il n'y avait rien de retenu.
+  }
+}
