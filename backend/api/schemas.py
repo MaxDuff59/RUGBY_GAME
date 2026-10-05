@@ -14,6 +14,7 @@ from engine.match_engine import TeamStrength
 from engine.notes import Note
 from engine.transfers import DealKind
 from models import (
+    AmenityKind,
     EventType,
     Injury,
     InjurySeverity,
@@ -25,6 +26,7 @@ from models import (
     Squad,
     StaffRole,
     Stage,
+    StandSide,
 )
 
 # --- Clubs et joueurs ----------------------------------------------------------------
@@ -584,10 +586,39 @@ class UpgradeOut(BaseModel):
     affordable: bool
 
 
+class AmenityOut(BaseModel):
+    """Un aménagement du catalogue des tribunes, et s'il peut être installé."""
+
+    kind: AmenityKind
+    label: str
+    cost: int
+    effect: str
+    installed: int  # déjà installés dans tout le stade
+    stadium_max: int | None
+
+
+class StandOut(BaseModel):
+    side: StandSide
+    label: str
+    slots: int  # emplacements de la tribune (dépend de la taille du stade)
+    amenities: list[AmenityKind]  # installés, dans l'ordre des emplacements
+
+
+class StadiumOut(BaseModel):
+    capacity: int
+    stands: list[StandOut]
+    catalogue: list[AmenityOut]
+
+
 class FacilitiesOverview(BaseModel):
     balance: int
     facilities: FacilitiesOut
     upgrades: list[UpgradeOut]
+    stadium: StadiumOut
+
+
+class AmenityIn(BaseModel):
+    kind: AmenityKind
 
 
 class ListingOut(BaseModel):

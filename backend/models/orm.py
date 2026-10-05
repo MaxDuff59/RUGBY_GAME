@@ -10,6 +10,7 @@ from sqlalchemy import JSON, Date, ForeignKey, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from models.domain import (
+    AmenityKind,
     Career,
     Club,
     EventType,
@@ -26,6 +27,7 @@ from models.domain import (
     StaffMember,
     StaffRole,
     Stage,
+    StandSide,
 )
 
 
@@ -42,6 +44,9 @@ class ClubRow(Base):
     stadium_capacity: Mapped[int] = mapped_column(default=4000)
     training_level: Mapped[int] = mapped_column(default=1)
     academy_level: Mapped[int] = mapped_column(default=1)
+    # Aménagements des tribunes : {"north": ["sponsor", "buvette"], ...}. À réassigner
+    # en entier pour que SQLAlchemy voie le changement.
+    stands: Mapped[dict] = mapped_column(JSON, default=dict)
 
     # Pros et espoirs sont dans la même table, séparés par `squad`.
     players: Mapped[list["PlayerRow"]] = relationship(
@@ -64,12 +69,29 @@ class ClubRow(Base):
             youths=[p.to_domain() for p in self.youths],
             staff=[s.to_domain() for s in self.staff],
             balance=self.balance,
-            facilities=Facilities(
-                stadium_capacity=self.stadium_capacity,
-                training_level=self.training_level,
-                academy_level=self.academy_level,
-            ),
+            facilities=self.facilities(),
         )
+
+    def facilities(self) -> Facilities:
+        return Facilities(
+            stadium_capacity=self.stadium_capacity,
+            training_level=self.training_level,
+            academy_level=self.academy_level,
+            stands={
+                StandSide(side): [AmenityKind(kind) for kind in kinds]
+                for side, kinds in (self.stands or {}).items()
+            },
+        )
+
+    def save_facilities(self, facilities: Facilities) -> None:
+        self.stadium_capacity = facilities.stadium_capacity
+        self.training_level = facilities.training_level
+        self.academy_level = facilities.academy_level
+        self.stands = {
+            side.value: [kind.value for kind in kinds]
+            for side, kinds in facilities.stands.items()
+            if kinds
+        }
 
     @classmethod
     def from_domain(cls, club: Club) -> "ClubRow":
@@ -80,6 +102,11 @@ class ClubRow(Base):
             stadium_capacity=club.facilities.stadium_capacity,
             training_level=club.facilities.training_level,
             academy_level=club.facilities.academy_level,
+            stands={
+                side.value: [kind.value for kind in kinds]
+                for side, kinds in club.facilities.stands.items()
+                if kinds
+            },
             players=[PlayerRow.from_domain(p) for p in club.players],
             youths=[PlayerRow.from_domain(p) for p in club.youths],
             staff=[StaffRow.from_domain(s) for s in club.staff],

@@ -78,6 +78,7 @@ export const CATEGORIES = {
   prize: "Primes",
   medical: "Médical",
   affairs: "Vie du club",
+  hospitality: "Buvettes et loges",
 };
 
 // --- Recrutement --------------------------------------------------------------------

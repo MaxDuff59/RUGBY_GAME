@@ -68,6 +68,7 @@ au démarrage).
 | `GET /finances` | Trésorerie, masse salariale et toutes les opérations |
 | `GET /staff`, `POST /staff/hire/{id}`, `POST /staff/{id}/fire` | Staff : voir, embaucher, licencier |
 | `GET /facilities`, `POST /facilities/{kind}/upgrade` | Stade, centre d'entraînement, formation |
+| `POST /facilities/stadium/stands/{side}/amenities` | Installer un aménagement (panneau sponsor, buvette, boutique, loges, écran géant) dans une tribune ; il rapporte à chaque match |
 | `GET /transfers`, `GET /transfers/{id}`, `POST /transfers/{id}/open` | Marché, approche d'un joueur, ouverture d'une négociation |
 | `POST /transfers/negotiations/{id}/offer`, `DELETE /transfers/negotiations/{id}` | Offre pour l'étape en cours ; quitter la table |
 | `POST /transfers/sell/{id}` | Vendre un de ses joueurs |

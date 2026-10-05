@@ -64,6 +64,18 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   puis une réponse par ligne. Après la réponse : la réaction (filet accent à gauche)
   et les effets, note par note (hausse en noir, baisse en gris). Tant qu'une affaire
   attend, le bouton « Simuler la journée » devient « 1 affaire à régler ».
+- Infrastructures : chaque carte a un bouton « Voir » qui ouvre une grande fenêtre
+  (`Modal`) : à gauche la scène 3D (`Scene3D.jsx`, transformations CSS, pas de
+  bibliothèque ; on glisse pour tourner, « Recentrer » remet la vue), à droite le panneau.
+  Le stade (`StadiumView`) : terrain, quatre tribunes en béton clair dont la profondeur,
+  la hauteur et le nombre de gradins suivent la capacité (toit à partir de 16 000 places,
+  angles fermés à partir de 25 000). Une tribune cliquée se teinte et se borde en accent ;
+  le panneau montre ses emplacements (pleins : bordure noire, libres : pointillés) puis le
+  catalogue (panneau sponsor, buvette, boutique, loges, écran géant) avec effet, coût et
+  « Installer ». Dans la scène : panneaux en accent au bord du terrain, buvettes et
+  boutique derrière la tribune, loges en bandeau sombre, écran noir au sommet. Les centres
+  (`CampusView`) : les installations apparaissent niveau par niveau, et le panneau les
+  liste avec « Améliorer ».
 - Tableau d'effectif : 8 attributs, gras à partir de 15, gris à 8 et moins.
 - Boutons et liens cliquables : 44 px de haut minimum.
 - Fiche joueur (page entière, depuis une ligne de l'effectif) : radar des 8 attributs

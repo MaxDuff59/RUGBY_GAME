@@ -50,6 +50,8 @@ from engine.economy import (
     SQUAD_MIN,
     TransactionCategory,
     attendance,
+    attendance_bonus,
+    hospitality_revenue,
     matchday_wages,
     sponsor_revenue,
     ticketing_revenue,
@@ -361,6 +363,7 @@ def _play_matchday(session: Session, season: SeasonRow) -> tuple[MatchdayOut, li
             stage.is_playoff,
             rng,
             fervour=history.fervour(home.id).value,
+            bonus=attendance_bonus(home.facilities),
         )
         record(
             session,
@@ -371,6 +374,16 @@ def _play_matchday(session: Session, season: SeasonRow) -> tuple[MatchdayOut, li
             day,
             matchday,
         )
+        if hospitality := hospitality_revenue(home.facilities, spectators):
+            record(
+                session,
+                home_row,
+                TransactionCategory.HOSPITALITY,
+                f"Buvettes, boutique et loges · {away.name}",
+                hospitality,
+                day,
+                matchday,
+            )
         for club_row, club in ((home_row, home), (away_row, away)):
             record(
                 session,

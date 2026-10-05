@@ -18,6 +18,7 @@ from models.domain import (
     STAFF_LEVEL_MIN,
     YOUTH_EXIT_AGE,
     YOUTH_MAX_AGE,
+    AmenityKind,
     Career,
     Club,
     EventType,
@@ -36,6 +37,7 @@ from models.domain import (
     StaffRole,
     Stage,
     StandingRow,
+    StandSide,
 )
 
 __all__ = [
@@ -51,6 +53,7 @@ __all__ = [
     "STAFF_LEVEL_MIN",
     "YOUTH_EXIT_AGE",
     "YOUTH_MAX_AGE",
+    "AmenityKind",
     "Career",
     "Club",
     "EventType",
@@ -69,4 +72,5 @@ __all__ = [
     "StaffRole",
     "Stage",
     "StandingRow",
+    "StandSide",
 ]

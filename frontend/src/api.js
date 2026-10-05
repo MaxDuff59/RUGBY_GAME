@@ -56,6 +56,7 @@ export const api = {
   fireStaff: (staffId) => post(`/staff/${staffId}/fire`),
   getFacilities: () => request("/facilities"),
   upgradeFacility: (kind) => post(`/facilities/${kind}/upgrade`),
+  installAmenity: (side, kind) => post(`/facilities/stadium/stands/${side}/amenities`, { kind }),
   getTransfers: () => request("/transfers"),
   approachPlayer: (playerId) => request(`/transfers/${playerId}`),
   openNegotiation: (playerId, kind, injuryId = null) =>

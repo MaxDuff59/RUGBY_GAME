@@ -202,6 +202,41 @@ def test_facility_upgrade_refused_without_money(manager):
     assert response.json()["detail"] in ("Trésorerie insuffisante", "Niveau maximum déjà atteint")
 
 
+def test_install_amenities_in_a_stand(manager):
+    before = manager.get("/facilities").json()
+    stadium = before["stadium"]
+    assert [stand["side"] for stand in stadium["stands"]] == ["north", "south", "east", "west"]
+    assert all(stand["amenities"] == [] for stand in stadium["stands"])
+    buvette = next(a for a in stadium["catalogue"] if a["kind"] == "buvette")
+
+    after = manager.post("/facilities/stadium/stands/north/amenities", json={"kind": "buvette"})
+    assert after.status_code == 200
+    north = next(s for s in after.json()["stadium"]["stands"] if s["side"] == "north")
+    assert north["amenities"] == ["buvette"]
+    assert after.json()["balance"] == before["balance"] - buvette["cost"]
+    labels = [t["label"] for t in manager.get("/finances").json()["transactions"]]
+    assert "Stade · Tribune nord · Buvette" in labels
+
+    # Une boutique seulement dans tout le stade.
+    assert (
+        manager.post(
+            "/facilities/stadium/stands/south/amenities", json={"kind": "shop"}
+        ).status_code
+        == 200
+    )
+    refused = manager.post("/facilities/stadium/stands/east/amenities", json={"kind": "shop"})
+    assert refused.status_code == 400
+    assert refused.json()["detail"] == "Déjà installé"
+
+    # La tribune nord se remplit (2 emplacements dans un petit stade).
+    for _ in range(north["slots"]):
+        response = manager.post(
+            "/facilities/stadium/stands/north/amenities", json={"kind": "sponsor"}
+        )
+    assert response.status_code == 400
+    assert response.json()["detail"].startswith("Tribune complète")
+
+
 def test_sell_a_player(manager):
     market = manager.get("/transfers").json()
     assert market["squad_size"] == 31

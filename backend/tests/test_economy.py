@@ -1,20 +1,29 @@
 """Règles économiques : valeur, salaires, infrastructures."""
 
+import random
+
 import pytest
 
 from engine.economy import (
     STADIUM_STEPS,
     WAGE_MIN,
     FacilityKind,
+    add_amenity,
+    amenity_refusal,
     apply_upgrade,
     asking_price,
+    attendance,
+    attendance_bonus,
+    hospitality_revenue,
     market_value,
     sale_price,
     severance,
+    sponsor_revenue,
+    stand_slots,
     upgrade_cost,
     wage_for,
 )
-from models import Facilities, Player, Position, StaffMember, StaffRole
+from models import AmenityKind, Facilities, Player, Position, StaffMember, StaffRole, StandSide
 
 
 def make_player(level: int, age: int = 25) -> Player:
@@ -73,3 +82,46 @@ def test_training_centre_costs_more_at_each_level_and_stops_at_five():
         apply_upgrade(facilities, FacilityKind.TRAINING)
     assert facilities.training_level == 5
     assert costs == sorted(costs) and len(costs) == 4
+
+
+def test_stands_gain_slots_as_the_stadium_grows():
+    assert stand_slots(4_000) == 2
+    assert stand_slots(12_000) == 3
+    assert stand_slots(35_000) == 5
+
+
+def test_amenities_fill_a_stand_then_are_refused():
+    facilities = Facilities(stadium_capacity=4_000)
+    assert amenity_refusal(facilities, StandSide.NORTH, AmenityKind.BUVETTE) is None
+    add_amenity(facilities, StandSide.NORTH, AmenityKind.BUVETTE)
+    add_amenity(facilities, StandSide.NORTH, AmenityKind.SPONSOR)
+    assert amenity_refusal(facilities, StandSide.NORTH, AmenityKind.BUVETTE) is not None
+    # L'autre tribune reste libre.
+    assert amenity_refusal(facilities, StandSide.SOUTH, AmenityKind.BUVETTE) is None
+
+
+def test_some_amenities_are_unique_in_the_stadium():
+    facilities = Facilities(stadium_capacity=35_000)
+    add_amenity(facilities, StandSide.NORTH, AmenityKind.SHOP)
+    assert amenity_refusal(facilities, StandSide.SOUTH, AmenityKind.SHOP) == "Déjà installé"
+    add_amenity(facilities, StandSide.EAST, AmenityKind.BOXES)
+    add_amenity(facilities, StandSide.WEST, AmenityKind.BOXES)
+    assert amenity_refusal(facilities, StandSide.NORTH, AmenityKind.BOXES) is not None
+
+
+def test_amenities_bring_money_and_fans():
+    bare = Facilities(stadium_capacity=12_000)
+    furnished = Facilities(stadium_capacity=12_000)
+    add_amenity(furnished, StandSide.NORTH, AmenityKind.SPONSOR)
+    add_amenity(furnished, StandSide.NORTH, AmenityKind.BUVETTE)
+    add_amenity(furnished, StandSide.SOUTH, AmenityKind.BOXES)
+    add_amenity(furnished, StandSide.EAST, AmenityKind.SCREEN)
+
+    assert sponsor_revenue(furnished) == sponsor_revenue(bare) + 6_000
+    assert hospitality_revenue(bare, 10_000) == 0
+    assert hospitality_revenue(furnished, 10_000) == 2 * 10_000 + 25_000
+    assert attendance_bonus(bare) == 0
+    rng_a, rng_b = random.Random(1), random.Random(1)
+    assert attendance(12_000, 5, 14, rng=rng_a, bonus=attendance_bonus(furnished)) > attendance(
+        12_000, 5, 14, rng=rng_b
+    )

@@ -39,6 +39,11 @@ src/
     MatchList.jsx     affiches d'une journée avec leur score
     Pitch.jsx         terrain vu de dessus avec des marqueurs placés en %
     Radar.jsx         radar SVG des 8 attributs d'un joueur
+    Scene3D.jsx       scène 3D en CSS pur : Scene (plan incliné qu'on fait tourner à la souris),
+                      Box (pavé : dessus + 4 côtés), Building, Pitch, Floodlights
+    StadiumView.jsx   le stade : terrain, tribunes à la taille de la capacité, aménagements
+    CampusView.jsx    centre d'entraînement / de formation : installations niveau par niveau
+    FacilityViewer.jsx fenêtre « Voir » : scène à gauche, panneau (emplacements, catalogue) à droite
     Swarm.jsx         essaim horizontal : les joueurs du poste sur une échelle 1-20,
                       le joueur en accent, ses coéquipiers en noir, et son percentile
   pages/
@@ -57,7 +62,8 @@ src/
     Staff.jsx         ton staff (8 postes), licencier, embaucher parmi les candidats
     Transfers.jsx     marché (voies de recrutement), approche d'un joueur, négociation par
                       étapes (indemnité, salaire), prêts, pré-contrats, vendre ses joueurs
-    Facilities.jsx    stade, centre d'entraînement, centre de formation
+    Facilities.jsx    stade, centre d'entraînement, centre de formation ; « Voir » ouvre la
+                      fenêtre 3D (FacilityViewer) : tribunes à aménager, installations des centres
     Finances.jsx      trésorerie, masse salariale, et toutes les opérations (grand livre)
 ```
 

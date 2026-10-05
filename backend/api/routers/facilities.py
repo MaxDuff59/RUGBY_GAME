@@ -4,15 +4,29 @@ from fastapi import APIRouter, HTTPException
 
 from api.deps import SessionDep, load_my_club_row
 from api.ledger import game_date, record
-from api.schemas import FacilitiesOut, FacilitiesOverview, UpgradeOut
+from api.schemas import (
+    AmenityIn,
+    AmenityOut,
+    FacilitiesOut,
+    FacilitiesOverview,
+    StadiumOut,
+    StandOut,
+    UpgradeOut,
+)
 from engine.economy import (
+    AMENITIES,
+    STAND_LABELS,
     FacilityKind,
     TransactionCategory,
+    add_amenity,
+    amenity_count,
+    amenity_refusal,
     apply_upgrade,
     next_stadium_step,
+    stand_slots,
     upgrade_cost,
 )
-from models import Facilities
+from models import Facilities, StandSide
 from models.orm import ClubRow
 
 router = APIRouter(prefix="/facilities", tags=["infrastructures"])
@@ -25,10 +39,33 @@ FACILITY_LABELS = {
 
 
 def _facilities(club: ClubRow) -> Facilities:
-    return Facilities(
-        stadium_capacity=club.stadium_capacity,
-        training_level=club.training_level,
-        academy_level=club.academy_level,
+    return club.facilities()
+
+
+def _stadium(facilities: Facilities) -> StadiumOut:
+    slots = stand_slots(facilities.stadium_capacity)
+    return StadiumOut(
+        capacity=facilities.stadium_capacity,
+        stands=[
+            StandOut(
+                side=side,
+                label=STAND_LABELS[side],
+                slots=slots,
+                amenities=list(facilities.stands.get(side, [])),
+            )
+            for side in StandSide
+        ],
+        catalogue=[
+            AmenityOut(
+                kind=amenity.kind,
+                label=amenity.label,
+                cost=amenity.cost,
+                effect=amenity.effect(),
+                installed=amenity_count(facilities, amenity.kind),
+                stadium_max=amenity.stadium_max,
+            )
+            for amenity in AMENITIES.values()
+        ],
     )
 
 
@@ -60,6 +97,7 @@ def _overview(club: ClubRow) -> FacilitiesOverview:
         balance=club.balance,
         facilities=FacilitiesOut.model_validate(facilities),
         upgrades=upgrades,
+        stadium=_stadium(facilities),
     )
 
 
@@ -95,8 +133,32 @@ def upgrade(kind: FacilityKind, session: SessionDep) -> FacilitiesOverview:
         -cost,
         game_date(session),
     )
-    club.stadium_capacity = facilities.stadium_capacity
-    club.training_level = facilities.training_level
-    club.academy_level = facilities.academy_level
+    club.save_facilities(facilities)
+    session.commit()
+    return _overview(club)
+
+
+@router.post("/stadium/stands/{side}/amenities", response_model=FacilitiesOverview)
+def install_amenity(side: StandSide, body: AmenityIn, session: SessionDep) -> FacilitiesOverview:
+    """Installe un aménagement (panneau sponsor, buvette, loges…) dans une tribune."""
+    club = load_my_club_row(session)
+    facilities = _facilities(club)
+    amenity = AMENITIES[body.kind]
+    refusal = amenity_refusal(facilities, side, body.kind)
+    if refusal is not None:
+        raise HTTPException(status_code=400, detail=refusal)
+    if club.balance < amenity.cost:
+        raise HTTPException(status_code=400, detail="Trésorerie insuffisante")
+
+    add_amenity(facilities, side, body.kind)
+    record(
+        session,
+        club,
+        TransactionCategory.FACILITIES,
+        f"Stade · {STAND_LABELS[side]} · {amenity.label}",
+        -amenity.cost,
+        game_date(session),
+    )
+    club.save_facilities(facilities)
     session.commit()
     return _overview(club)

@@ -223,6 +223,25 @@ class StaffMember:
         return f"{self.first_name} {self.last_name}"
 
 
+class StandSide(StrEnum):
+    """Les quatre tribunes du stade."""
+
+    NORTH = "north"
+    SOUTH = "south"
+    EAST = "east"
+    WEST = "west"
+
+
+class AmenityKind(StrEnum):
+    """Ce qu'on peut installer dans une tribune (coûts et effets : engine/economy.py)."""
+
+    SPONSOR = "sponsor"  # panneau publicitaire
+    BUVETTE = "buvette"
+    SHOP = "shop"  # boutique du club
+    BOXES = "boxes"  # loges
+    SCREEN = "screen"  # écran géant
+
+
 @dataclass
 class Facilities:
     """Infrastructures du club. Les paliers et coûts sont dans engine/economy.py."""
@@ -230,6 +249,11 @@ class Facilities:
     stadium_capacity: int = 4000
     training_level: int = 1  # centre d'entraînement, de 1 à 5
     academy_level: int = 1  # centre de formation, de 1 à 5
+    # Aménagements installés, tribune par tribune (une tribune absente = vide).
+    stands: dict[StandSide, list[AmenityKind]] = field(default_factory=dict)
+
+    def amenities(self, side: StandSide) -> list[AmenityKind]:
+        return self.stands.setdefault(side, [])
 
 
 @dataclass

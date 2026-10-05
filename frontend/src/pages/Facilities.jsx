@@ -1,7 +1,8 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
 import { api } from "../api.js";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
+import FacilityViewer from "../components/FacilityViewer.jsx";
 import Level from "../components/Level.jsx";
 import { FACILITIES, formatInteger, formatMoney } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
@@ -16,6 +17,7 @@ const EFFECTS = {
 export default function Facilities() {
   const { data, error, loading, setData } = useApi(useCallback(api.getFacilities, []));
   const confirm = useConfirm();
+  const [viewing, setViewing] = useState(null); // infrastructure ouverte dans la fenêtre « Voir »
 
   function improve(upgrade) {
     const info = FACILITIES[upgrade.kind];
@@ -38,6 +40,23 @@ export default function Facilities() {
     });
   }
 
+  // Installer un aménagement du catalogue dans une tribune (fenêtre « Voir » du stade).
+  function install(stand, amenity) {
+    confirm.ask({
+      eyebrow: `Stade · ${stand.label}`,
+      title: amenity.label,
+      text: `${amenity.effect}, dès le prochain match.`,
+      rows: [
+        { label: "Emplacements", from: stand.amenities.length, to: stand.amenities.length + 1, hint: `sur ${stand.slots}` },
+        { label: "Coût", value: formatMoney(amenity.cost) },
+        { label: "Trésorerie", from: formatMoney(data.balance), to: formatMoney(data.balance - amenity.cost) },
+      ],
+      warning: "L'installation est immédiate et la dépense n'est pas remboursable.",
+      confirmLabel: `Installer pour ${formatMoney(amenity.cost)}`,
+      onConfirm: async () => setData(await api.installAmenity(stand.side, amenity.kind)),
+    });
+  }
+
   if (loading) return <p className="status">Chargement…</p>;
   if (error) return <p className="status status--error">{error.message}</p>;
 
@@ -51,17 +70,20 @@ export default function Facilities() {
         </div>
       </header>
 
-      {confirm.dialog}
-
       <div className="tiles tiles--wide">
         {data.upgrades.map((upgrade) => {
           const info = FACILITIES[upgrade.kind];
           const isStadium = upgrade.kind === "stadium";
           return (
             <section key={upgrade.kind} className="card card--padded facility">
-              <div>
-                <h2 className="eyebrow">{info.label}</h2>
-                <p className="muted" style={{ margin: "4px 0 0" }}>{info.scope}</p>
+              <div className="facility__head">
+                <div>
+                  <h2 className="eyebrow">{info.label}</h2>
+                  <p className="muted" style={{ margin: "4px 0 0" }}>{info.scope}</p>
+                </div>
+                <button type="button" className="button button--small" onClick={() => setViewing(upgrade.kind)}>
+                  Voir
+                </button>
               </div>
 
               {isStadium ? (
@@ -103,10 +125,23 @@ export default function Facilities() {
       </div>
 
       <p className="muted">
-        Le stade fixe la billetterie et les sponsors. Le centre d'entraînement accélère la progression des
-        pros, le centre de formation celle des espoirs et le nombre de jeunes qui entrent chaque
-        intersaison. Les travaux sont immédiats.
+        Le stade fixe la billetterie et les sponsors ; « Voir » ouvre ses tribunes pour y installer
+        panneaux, buvettes ou loges. Le centre d'entraînement accélère la progression des pros, le
+        centre de formation celle des espoirs et le nombre de jeunes qui entrent chaque intersaison.
+        Les travaux sont immédiats.
       </p>
+
+      {viewing && (
+        <FacilityViewer
+          kind={viewing}
+          data={data}
+          onClose={() => setViewing(null)}
+          onInstall={install}
+          onUpgrade={improve}
+        />
+      )}
+      {/* Après la fenêtre « Voir » dans le DOM : la confirmation passe au-dessus. */}
+      {confirm.dialog}
     </>
   );
 }
