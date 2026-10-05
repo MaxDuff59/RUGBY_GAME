@@ -22,6 +22,36 @@ def test_get_club_squad(client):
     assert set(club["strength"]["lineup_ids"]) <= player_ids
 
 
+def test_manager_picks_the_lineup(manager):
+    club = manager.get("/clubs/3").json()
+    assert club["lineup_custom"] is False
+    lineup = club["strength"]["lineup_ids"]
+    bench = [p for p in club["players"] if p["id"] not in lineup and not p["injury"]]
+    # Un remplaçant prend la place 0 (le 1, pilier gauche), même hors poste.
+    wanted = [bench[0]["id"], *lineup[1:]]
+    chosen = manager.put("/clubs/3/lineup", json={"player_ids": wanted}).json()
+    assert chosen["strength"]["lineup_ids"] == wanted
+    assert chosen["lineup_custom"] is True
+    assert manager.get("/clubs/3").json()["strength"]["lineup_ids"] == wanted
+    # Le staff reprend la main.
+    reset = manager.delete("/clubs/3/lineup").json()
+    assert reset["strength"]["lineup_ids"] == lineup
+    assert reset["lineup_custom"] is False
+
+
+def test_lineup_choice_is_checked(manager):
+    lineup = manager.get("/clubs/3").json()["strength"]["lineup_ids"]
+
+    def put(club_id, ids):
+        return manager.put(f"/clubs/{club_id}/lineup", json={"player_ids": ids})
+
+    assert put(3, lineup[:14]).status_code == 400
+    assert put(3, [lineup[1], *lineup[1:]]).status_code == 400
+    other = manager.get("/clubs/1").json()["strength"]["lineup_ids"]
+    assert put(3, [other[0], *lineup[1:]]).status_code == 400
+    assert put(1, other).status_code == 403
+
+
 def test_unknown_club_returns_404(client):
     assert client.get("/clubs/999").status_code == 404
 

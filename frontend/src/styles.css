@@ -654,6 +654,102 @@ body,
   white-space: nowrap;
 }
 
+.squad__compo {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.squad__compo p {
+  margin: 0;
+}
+
+/* Choix du joueur qui prend une place du XV (fenêtre ouverte depuis le terrain) */
+.modal.lineup-picker {
+  max-width: 600px;
+  max-height: 84vh;
+  overflow: hidden;
+  gap: 14px;
+}
+
+.lineup-picker__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.lineup-picker__meta {
+  margin: 6px 0 0;
+}
+
+.lineup-picker__hint {
+  margin: 0;
+}
+
+.lineup-picker__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0 -8px;
+}
+
+.lineup-picker__group {
+  display: flex;
+  flex-direction: column;
+}
+
+.lineup-picker__group .eyebrow {
+  margin: 0 8px 4px;
+}
+
+.lineup-picker__option {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 130px 52px 40px;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.lineup-picker__option:hover,
+.lineup-picker__option:focus-visible {
+  background: var(--line-soft);
+}
+
+.lineup-picker__option:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.lineup-picker__option .note {
+  text-align: right;
+}
+
+.lineup-picker__jersey {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+@media (max-width: 520px) {
+  .lineup-picker__option {
+    grid-template-columns: 24px minmax(0, 1fr) 40px;
+  }
+  .lineup-picker__option > .muted {
+    display: none;
+  }
+}
+
 /* --- Page Club --------------------------------------------------------------- */
 
 .club-grid {

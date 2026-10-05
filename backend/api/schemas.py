@@ -235,6 +235,14 @@ class ClubDetail(BaseModel):
     facilities: FacilitiesOut
     strength: StrengthOut
     players: list[PlayerOut]
+    # XV choisi par le manager (sinon composé par le staff).
+    lineup_custom: bool = False
+
+
+class LineupIn(BaseModel):
+    """XV voulu par le manager : un joueur (ou null) par place, dans l'ordre de lineup_ids."""
+
+    player_ids: list[int | None]
 
 
 class NoteStepOut(BaseModel):

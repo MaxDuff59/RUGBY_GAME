@@ -37,6 +37,8 @@ SLOT_COUNT = 3
 DEFAULT_CLUB_COUNT = 14
 
 _engines: dict[int, Engine] = {}
+# Parties dont le schéma a été vérifié (et migré) depuis le démarrage de l'API.
+_checked: set[int] = set()
 
 
 class NoSaveLoaded(Exception):
@@ -141,6 +143,12 @@ def _migrate(engine: Engine) -> None:
     inspector = inspect(engine)
     if not inspector.has_table("players"):
         return
+    if "lineup_choice" not in {column["name"] for column in inspector.get_columns("clubs")}:
+        # Composition choisie par le manager, ajoutée après coup : le staff compose.
+        with engine.begin() as connection:
+            connection.execute(
+                text("ALTER TABLE clubs ADD COLUMN lineup_choice JSON NOT NULL DEFAULT '[]'")
+            )
     columns = {column["name"] for column in inspector.get_columns("players")}
     if "stamina" not in columns:
         # Endurance ajoutée après coup : chaque joueur en tire une selon son poste
@@ -197,5 +205,10 @@ def get_session() -> Iterator[Session]:
     slot = active_slot()
     if slot is None:
         raise NoSaveLoaded
+    if slot not in _checked:
+        # Partie restée chargée d'un lancement précédent de l'API : on rattrape
+        # son schéma comme à l'ouverture (OutdatedSave s'il est trop ancien).
+        init_db(engine_for(slot))
+        _checked.add(slot)
     with session_for(slot) as session:
         yield session

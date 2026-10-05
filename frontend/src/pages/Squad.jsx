@@ -1,8 +1,9 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
 import InjuryIcon from "../components/InjuryIcon.jsx";
+import LineupPicker from "../components/LineupPicker.jsx";
 import Pitch from "../components/Pitch.jsx";
 import SortHeader from "../components/SortHeader.jsx";
 import {
@@ -16,17 +17,20 @@ import {
 import { useApi } from "../hooks/useApi.js";
 import { usePitchWidth } from "../hooks/usePitchWidth.js";
 import { useSort } from "../hooks/useSort.js";
-import { buildLineup } from "../lineup.js";
+import { buildLineup, lineupChoice } from "../lineup.js";
 
 export default function Squad() {
   const { career } = useOutletContext();
   const navigate = useNavigate();
   const load = useCallback(() => api.getClub(career.club_id), [career.club_id]);
-  const { data: club, error, loading } = useApi(load);
+  const { data: club, error, loading, setData } = useApi(load);
   // Sans tri choisi (null), l'ordre reste celui du staff : titulaires du 1 au 15, puis les autres.
   const squadSort = useSort(club ? squadRows(club) : [], null);
   const pitchRef = useRef(null);
   const pitchWidth = usePitchWidth(pitchRef, Boolean(club));
+  // Place du terrain touchée : on choisit qui la prend.
+  const [picking, setPicking] = useState(null);
+  const [resetting, setResetting] = useState(false);
 
   if (loading) return <p className="status">Chargement de l'effectif…</p>;
   if (error) return <p className="status status--error">{error.message}</p>;
@@ -39,6 +43,28 @@ export default function Squad() {
     <SortHeader sortKey={key} label={label} sort={squadSort.sort} onToggle={squadSort.toggle} first={first} left={left} title={title} />
   );
   const open = (player) => navigate(`/joueurs/${player.id}`);
+  const jerseys = new Map(lineup.map(({ slot, player }) => [player.id, slot.number]));
+
+  // Le joueur choisi prend la place ; s'il était titulaire, il échange avec l'ancien.
+  async function replace({ slot, player }, candidate) {
+    const place = lineup.findIndex((entry) => entry.slot.number === slot.number);
+    const from = lineup.findIndex((entry) => entry.player.id === candidate.id);
+    const next = lineup.map((entry, index) => {
+      if (index === place) return { ...entry, player: candidate };
+      if (index === from) return { ...entry, player };
+      return entry;
+    });
+    setData(await api.setLineup(club.id, lineupChoice(next)));
+  }
+
+  async function resetLineup() {
+    setResetting(true);
+    try {
+      setData(await api.resetLineup(club.id));
+    } finally {
+      setResetting(false);
+    }
+  }
 
   return (
     <>
@@ -49,7 +75,17 @@ export default function Squad() {
           <Stat value={formatNote(average(starters.map((p) => p.overall)))} label="note moyenne du XV" />
           <Stat value={formatNote(average(starters.map((p) => p.age)))} label="âge moyen du XV" />
         </div>
-        <p className="muted">Composition choisie par le staff · clique sur un joueur pour sa fiche</p>
+        <div className="squad__compo">
+          <p className="muted">
+            {club.lineup_custom ? "Ta composition" : "Composition choisie par le staff"} · touche un joueur du
+            terrain pour le remplacer, une ligne du tableau pour sa fiche
+          </p>
+          {club.lineup_custom && (
+            <button type="button" className="button button--small" disabled={resetting} onClick={resetLineup}>
+              Rendre la main au staff
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="squad__body fill">
@@ -67,9 +103,9 @@ export default function Squad() {
               number: slot.number,
               label: player.last_name,
               title: `${player.name} · ${POSITIONS[player.position].label}`,
-              player,
+              entry: { slot, player },
             }))}
-            onPick={(marker) => open(marker.player)}
+            onPick={(marker) => setPicking(marker.entry)}
           />
           <figcaption className="muted">Sens de l'attaque vers le haut. Avants en haut, arrières en bas.</figcaption>
         </figure>
@@ -148,6 +184,17 @@ export default function Squad() {
           </p>
         </div>
       </div>
+
+      {picking && (
+        <LineupPicker
+          entry={picking}
+          players={club.players}
+          jerseys={jerseys}
+          onPick={(candidate) => replace(picking, candidate)}
+          onOpen={open}
+          onClose={() => setPicking(null)}
+        />
+      )}
     </>
   );
 }

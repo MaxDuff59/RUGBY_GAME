@@ -49,6 +49,9 @@ class ClubRow(Base):
     # Aménagements des tribunes : {"north": ["sponsor", "buvette"], ...}. À réassigner
     # en entier pour que SQLAlchemy voie le changement.
     stands: Mapped[dict] = mapped_column(JSON, default=dict)
+    # XV choisi par le manager : un identifiant de joueur (ou null) par place, dans
+    # l'ordre de SLOT_POSITIONS (engine/match_engine.py). Vide : le staff compose.
+    lineup_choice: Mapped[list] = mapped_column(JSON, default=list)
 
     # Pros et espoirs sont dans la même table, séparés par `squad`.
     players: Mapped[list["PlayerRow"]] = relationship(
@@ -73,6 +76,7 @@ class ClubRow(Base):
             balance=self.balance,
             facilities=self.facilities(),
             league=self.league,
+            lineup_choice=list(self.lineup_choice or []),
         )
 
     def facilities(self) -> Facilities:

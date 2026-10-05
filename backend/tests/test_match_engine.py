@@ -74,6 +74,23 @@ def test_lineup_has_fifteen_players_with_the_right_positions(even_clubs):
     assert sum(p.position.is_forward for p in lineup) == 8
 
 
+def test_lineup_keeps_the_manager_choice(even_clubs):
+    club = even_clubs[0]
+    auto = select_lineup(club)
+    bench = next(p for p in club.players if p not in auto)
+    # Le remplaçant prend la place 9 (indice 8), un trou est laissé au staff à l'indice 3.
+    club.lineup_choice = [p.id for p in auto]
+    club.lineup_choice[8] = bench.id
+    club.lineup_choice[3] = None
+    lineup = select_lineup(club)
+    assert lineup[8] == bench
+    assert lineup[3] == auto[3]
+    # Un joueur absent (blessé, parti) laisse sa place au staff.
+    club.lineup_choice[8] = auto[8].id
+    club.lineup_choice[0] = 999_999
+    assert select_lineup(club)[0] == auto[0]
+
+
 def test_incomplete_squad_can_still_play():
     club = make_club(1, level=12)
     # Plus aucun talonneur : le moteur complète avec d'autres joueurs.

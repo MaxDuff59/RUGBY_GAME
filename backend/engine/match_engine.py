@@ -417,25 +417,32 @@ def select_lineup(club: Club, day: datetime.date | None = None) -> list[Player]:
     """Choisit les meilleurs joueurs disponibles à chaque poste selon FORMATION.
 
     Le joueur d'indice i occupe la place SLOT_POSITIONS[i] (numéro SLOT_NUMBERS[i]).
+    Les places choisies par le manager (`club.lineup_choice`) sont gardées telles
+    quelles, même hors poste, tant que le joueur est apte ; le staff pourvoit les autres.
     Les titularisations promises (`club.forced_starters`) passent devant à leur poste.
     Les blessés à la date `day` sont écartés (sans date, tout le monde est apte).
     S'il manque des joueurs à un poste, on complète avec les meilleurs restants
     (un effectif incomplet peut quand même jouer).
     """
     available = club.available_players(day)
-    slots: list[Player | None] = []
-    for position, count in FORMATION.items():
-        candidates = sorted(
-            (p for p in available if p.position == position),
-            key=lambda p, rating=RATING_FOR_POSITION[position]: (
-                p.id in club.forced_starters,
-                rating(p),
-            ),
-            reverse=True,
-        )[:count]
-        slots.extend([*candidates, *[None] * (count - len(candidates))])
+    by_id = {p.id: p for p in available}
+    slots: list[Player | None] = [None] * len(SLOT_POSITIONS)
+    taken: set[int] = set()
+    for index, player_id in enumerate(club.lineup_choice[: len(SLOT_POSITIONS)]):
+        if player_id in by_id and player_id not in taken:
+            slots[index] = by_id[player_id]
+            taken.add(player_id)
 
-    taken = {p.id for p in slots if p is not None}
+    for index, position in enumerate(SLOT_POSITIONS):
+        if slots[index] is not None:
+            continue
+        candidates = [p for p in available if p.position == position and p.id not in taken]
+        if candidates:
+            rating = RATING_FOR_POSITION[position]
+            pick = max(candidates, key=lambda p: (p.id in club.forced_starters, rating(p)))
+            slots[index] = pick
+            taken.add(pick.id)
+
     remaining = sorted(
         (p for p in available if p.id not in taken), key=lambda p: p.overall, reverse=True
     )

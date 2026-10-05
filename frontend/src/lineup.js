@@ -33,11 +33,19 @@ export const PITCH_LINES = [
 // Proportions du terrain (largeur / hauteur).
 export const PITCH_RATIO = 7 / 9;
 
-// Associe à chaque place du terrain un titulaire de ce poste. Si l'effectif est
-// incomplet, le moteur a complété avec d'autres joueurs : on les met où il reste
-// de la place. Renvoie [{ slot, player }] pour les places pourvues.
+// Numéro de chaque place dans l'ordre des XV renvoyés par l'API (lineup_ids) :
+// le moteur range ses places par poste (SLOT_NUMBERS dans engine/match_engine.py).
+export const LINEUP_NUMBERS = [1, 3, 2, 4, 5, 6, 7, 8, 9, 10, 12, 13, 11, 14, 15];
+
+// Associe à chaque place du terrain son titulaire. Un XV complet se lit place par
+// place (un joueur peut y être aligné hors poste). Si l'effectif est incomplet, le
+// moteur a complété avec d'autres joueurs : on les met où il reste de la place.
+// Renvoie [{ slot, player }] pour les places pourvues.
 export function buildLineup(players, lineupIds) {
   const remaining = lineupIds.map((id) => players.find((p) => p.id === id)).filter(Boolean);
+  if (remaining.length === LINEUP_NUMBERS.length) {
+    return SLOTS.map((slot) => ({ slot, player: remaining[LINEUP_NUMBERS.indexOf(slot.number)] }));
+  }
   const lineup = SLOTS.map((slot) => {
     const index = remaining.findIndex((p) => p.position === slot.position);
     return { slot, player: index === -1 ? null : remaining.splice(index, 1)[0] };
@@ -46,6 +54,13 @@ export function buildLineup(players, lineupIds) {
     if (!entry.player && remaining.length) entry.player = remaining.shift();
   }
   return lineup.filter((entry) => entry.player);
+}
+
+// Le XV à envoyer à l'API : un identifiant (ou null) par place, dans l'ordre de lineup_ids.
+export function lineupChoice(lineup) {
+  const ids = LINEUP_NUMBERS.map(() => null);
+  for (const { slot, player } of lineup) ids[LINEUP_NUMBERS.indexOf(slot.number)] = player.id;
+  return ids;
 }
 
 // Numéro de maillot de chaque titulaire : Map(id -> numéro).
