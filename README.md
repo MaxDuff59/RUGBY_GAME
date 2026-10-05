@@ -99,7 +99,7 @@ Ce que le moteur ajoute au match :
 - l'**énergie** : chaque joueur commence entre 60 % (fraîcheur nulle) et 100 %
   (tout frais) et en perd à chaque minute selon son **endurance** (9e attribut,
   sur 20 : 1,4 % par minute à 4, 1 % à 12, 0,6 % à 20) ; son apport aux notes
-  collectives va de 100 % de ses moyens (énergie pleine) à 80 % (vide), d'où
+  collectives va de 100 % de ses moyens (énergie pleine) à 60 % (vide), d'où
   l'intérêt des remplaçants frais et des joueurs increvables ; les faits de jeu
   pèsent dessus : à 14 ou 13 après un carton, ceux qui restent s'usent 25 % plus
   vite par joueur manquant (le puni, lui, souffle), et une défense agressive

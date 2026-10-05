@@ -226,11 +226,11 @@ CARD_WEIGHT_FORWARD, CARD_WEIGHT_BACK = 2.0, 1.0
 # de jeu selon son endurance : 1,6 % moins 0,05 % par point (endurance 4 : 1,4 %,
 # 12 : 1 %, 20 : 0,6 %). À la 80e, un titulaire parti à 100 % garde donc 0 %,
 # 20 % ou 52 % selon qu'il est fragile, moyen ou increvable. Son apport aux
-# notes collectives va de 100 % de ses moyens (énergie pleine) à 80 % (vide).
+# notes collectives va de 100 % de ses moyens (énergie pleine) à 60 % (vide).
 ENERGY_START_MIN = 0.6
 ENERGY_DRAIN_BASE = 0.016
 ENERGY_DRAIN_PER_STAMINA = 0.0005
-EFFICIENCY_MIN = 0.80
+EFFICIENCY_MIN = 0.60
 # Les faits de jeu pèsent sur l'énergie : à 14 ou 13 (carton, blessé sans
 # remplaçant), ceux qui restent couvrent plus de terrain et s'usent 25 % plus
 # vite par joueur manquant. Un joueur au banc des pénalités, lui, souffle.
