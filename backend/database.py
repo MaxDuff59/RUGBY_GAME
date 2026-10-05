@@ -1,5 +1,6 @@
 """Connexion SQLite, création des tables et remplissage initial."""
 
+import itertools
 import os
 import random
 from collections.abc import Iterator
@@ -7,8 +8,14 @@ from collections.abc import Iterator
 from sqlalchemy import create_engine, func, inspect, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from data.generator import generate_clubs, generate_staff_candidates, generate_top14
-from models.orm import Base, ClubRow, StaffRow
+from data.generator import (
+    FIRST_SEASON_YEAR,
+    generate_clubs,
+    generate_staff_candidates,
+    generate_top14,
+)
+from engine.free_agents import newcomers
+from models.orm import Base, ClubRow, PlayerRow, StaffRow
 
 # Surchargeable par variable d'environnement (ex. une autre base pour essayer).
 DATABASE_URL = os.environ.get("RUGBY_DATABASE_URL", "sqlite:///./rugby.db")
@@ -45,7 +52,8 @@ def seed_if_empty(
     top14: bool = True,
 ) -> int:
     """Remplit la base si elle est vide : les vrais clubs du Top 14 (joueurs
-    inventés), ou `club_count` clubs fictifs avec `top14=False`.
+    inventés), ou `club_count` clubs fictifs avec `top14=False`, et un premier
+    vivier d'agents libres.
 
     Renvoie le nombre de clubs créés (0 si la base contenait déjà des clubs).
     """
@@ -58,6 +66,10 @@ def seed_if_empty(
     first_id = sum(len(club.staff) for club in clubs) + 1
     candidates = generate_staff_candidates(3, rng, first_id=first_id)
     session.add_all(StaffRow.from_domain(member) for member in candidates)
+    # Agents libres (joueurs sans club), après les joueurs des clubs.
+    player_ids = itertools.count(sum(len(c.players) + len(c.youths) for c in clubs) + 1)
+    free_agents = newcomers([], player_ids, FIRST_SEASON_YEAR, rng)
+    session.add_all(PlayerRow.from_domain(player) for player in free_agents)
     session.commit()
     return len(clubs)
 

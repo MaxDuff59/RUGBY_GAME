@@ -89,9 +89,10 @@ def test_unextended_players_leave_and_extended_ones_stay(manager):
     mine = {p["id"] for p in manager.get("/clubs/3").json()["players"]}
     assert open_[0]["player"]["id"] not in mine  # parti libre
     assert all(c["player"]["id"] in mine for c in open_[1:])
-    # Il a signé ailleurs, et les clubs IA ont prolongé leurs joueurs.
+    # Il est agent libre (sauf si un club IA l'a déjà repris), et les clubs IA
+    # n'ont gardé que des joueurs sous contrat.
     gone = manager.get(f"/players/{open_[0]['player']['id']}").json()
-    assert gone["club"]["id"] != 3
+    assert gone["club"] is None or gone["club"]["id"] != 3
     for club_id in (1, 2):
         players = manager.get(f"/clubs/{club_id}").json()["players"]
         assert all(p["contract_until"] >= YEAR + 1 for p in players)

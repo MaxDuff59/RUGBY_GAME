@@ -162,7 +162,7 @@ def _find_target(manager, kind):
 def test_market_describes_each_player_situation(manager):
     market = manager.get("/transfers").json()
     assert market["season_year"] == YEAR and market["negotiations"] == []
-    listing = market["listings"][0]
+    listing = next(listing for listing in market["listings"] if not listing["free_agent"])
     assert listing["playing_time"] in ("titulaire", "remplaçant", "réserviste")
     assert listing["years_left"] >= 1
     assert any(listing["precontract"] for listing in market["listings"])

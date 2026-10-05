@@ -23,10 +23,12 @@ const WAYS = [
   { key: "precontract", label: "Pré-contrat" },
   { key: "transfer", label: "Transfert" },
   { key: "loan", label: "Prêt" },
+  { key: "free", label: "Agents libres" },
 ];
 
 const hasWay = (listing, way) =>
   way === null ||
+  (way === "free" && listing.free_agent) ||
   (way === "precontract" && listing.precontract) ||
   (way === "transfer" && listing.transfer_fee !== null) ||
   (way === "loan" && listing.loanable);
@@ -88,7 +90,7 @@ export default function Transfers() {
           <h1 className="title">Transferts</h1>
           <p className="muted" style={{ margin: "8px 0 0" }}>
             Saison {data.season_year}-{String(data.season_year + 1).slice(2)}. Les transferts en cours de contrat
-            sont rares et chers : vise les joueurs en dernière année de contrat, ou un prêt.
+            sont rares et chers : vise les joueurs en dernière année de contrat, un prêt, ou un agent libre.
           </p>
         </div>
         <div className="page-head__stats">
@@ -193,15 +195,24 @@ export default function Transfers() {
                       <div className="muted">{POSITIONS[player.position].label}</div>
                     </td>
                     <td className="left">
-                      <div>{listing.club_name}</div>
-                      <div className="muted">niveau {formatNote(listing.club_level)}</div>
+                      {listing.free_agent ? (
+                        <>
+                          <div>Sans club</div>
+                          <div className="muted">depuis juin {formatContractEnd(player.contract_until)}</div>
+                        </>
+                      ) : (
+                        <>
+                          <div>{listing.club_name}</div>
+                          <div className="muted">niveau {formatNote(listing.club_level)}</div>
+                        </>
+                      )}
                     </td>
                     <td className="muted">{player.age}</td>
                     <td className="note">{formatNote(player.overall)}</td>
                     <td>{formatMoney(player.value)}</td>
                     <td className="muted">{formatMoney(player.wage)}</td>
-                    <td className={listing.precontract ? "cell--strong" : "muted"}>
-                      {formatContractEnd(player.contract_until)}
+                    <td className={listing.precontract || listing.free_agent ? "cell--strong" : "muted"}>
+                      {listing.free_agent ? "Libre" : formatContractEnd(player.contract_until)}
                     </td>
                     <td className="left muted">{listing.playing_time}</td>
                     <td className="left">
@@ -219,7 +230,8 @@ export default function Transfers() {
           </table>
           <p className="table__note">
             Contrat : fin en juin de l'année indiquée, en gras quand il reste une saison (négociable sans
-            indemnité). Statut : sa place dans son club. Salaires par saison.
+            indemnité). Libre : agent libre, sans club ni contrat, il signe tout de suite sans indemnité ; son
+            salaire est le dernier qu'il a touché. Statut : sa place dans son club. Salaires par saison.
           </p>
         </div>
       </section>
@@ -294,6 +306,9 @@ function Stat({ value, label }) {
 function Ways({ listing }) {
   if (listing.talks_closed_until) {
     return <span className="tag tag--injured">Ne discute plus · jusqu'au {formatShortDate(listing.talks_closed_until)}</span>;
+  }
+  if (listing.free_agent) {
+    return <span className="tag tag--light">Agent libre · {formatMoney(listing.wage_demand)} / saison</span>;
   }
   const ways = [];
   if (listing.precontract) ways.push(<span key="p" className="tag tag--severe">Pré-contrat</span>);
@@ -378,6 +393,7 @@ function Negotiation({ playerId, squadFull, onClose, onChange }) {
   if (target.error) return <p className="status status--error">{target.error.message}</p>;
 
   const { player, club } = target.data;
+  const free = club === null; // agent libre
   const [yearsMin, yearsMax] = target.data.preferred_years;
   const openStage = negotiation && (negotiation.stage === "club" || negotiation.stage === "player");
 
@@ -389,7 +405,7 @@ function Negotiation({ playerId, squadFull, onClose, onChange }) {
           <div className="header__name">{player.name}</div>
           <div className="muted">
             {POSITIONS[player.position].label} · {player.age} ans · note {formatNote(player.overall)} ·{" "}
-            {club.name}
+            {free ? "Agent libre" : club.name}
           </div>
         </div>
         <button type="button" className="button button--small" onClick={onClose}>
@@ -398,9 +414,15 @@ function Negotiation({ playerId, squadFull, onClose, onChange }) {
       </div>
 
       <div className="situation">
-        <Fact label="Salaire actuel" value={`${formatMoney(player.wage)} / saison`} />
-        <Fact label="Contrat" value={`jusqu'en juin ${formatContractEnd(player.contract_until)} (${target.data.years_left} saison${target.data.years_left > 1 ? "s" : ""})`} />
-        <Fact label="Dans son club" value={`${target.data.playing_time_now} · niveau ${formatNote(target.data.club_level)}`} />
+        <Fact label={free ? "Dernier salaire" : "Salaire actuel"} value={`${formatMoney(player.wage)} / saison`} />
+        {free ? (
+          <Fact label="Contrat" value={`aucun · libre depuis juin ${formatContractEnd(player.contract_until)}`} />
+        ) : (
+          <>
+            <Fact label="Contrat" value={`jusqu'en juin ${formatContractEnd(player.contract_until)} (${target.data.years_left} saison${target.data.years_left > 1 ? "s" : ""})`} />
+            <Fact label="Dans son club" value={`${target.data.playing_time_now} · niveau ${formatNote(target.data.club_level)}`} />
+          </>
+        )}
         <Fact label="Chez toi" value={`${target.data.playing_time_here} · niveau ${formatNote(target.data.my_level)}`} />
         <Fact label="Il cherche" value={`un contrat de ${yearsMin} à ${yearsMax} saisons`} />
       </div>

@@ -7,7 +7,8 @@ concurrent peut le signer : c'est un pré-contrat à son nom (`NegotiationRow`,
 prolongation laisse une trace (`kind="extension"`, étape `done`) pour que le
 bilan de fin de saison la montre.
 
-Les clubs IA, eux, prolongent d'office leurs joueurs en fin de contrat.
+Les clubs IA, eux, prolongent la plupart de leurs joueurs en fin de contrat ;
+ceux qui partent, comme ceux du club dirigé non prolongés, deviennent agents libres.
 """
 
 import datetime
@@ -19,6 +20,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from api.deps import SessionDep, load_my_club_row
+from api.free_agents import release
 from api.ledger import current_season, game_date
 from api.schemas import ClubRef, ContractOut, ContractsOverview, ExtendIn, PlayerOut
 from engine.contracts import (
@@ -29,7 +31,8 @@ from engine.contracts import (
     renewal_years,
     retires_next_season,
 )
-from engine.economy import SQUAD_MAX, SQUAD_MIN, wage_for
+from engine.economy import SQUAD_MAX, SQUAD_MIN
+from engine.free_agents import ai_releases
 from engine.transfers import DealKind, playing_time, time_label
 from models import Club, Player, Squad
 from models.orm import CareerRow, ClubRow, NegotiationRow, PlayerRow, SeasonRow
@@ -326,28 +329,24 @@ def expire_contracts(
 ) -> None:
     """Intersaison (après les pré-contrats) : contrats arrivés à terme avant `year`.
 
-    Les clubs IA prolongent leurs joueurs. Ceux du club dirigé qui n'ont pas été
-    prolongés partent : un pro signe dans le club IA le moins fourni (s'il en
-    reste un avec de la place), un espoir quitte le centre.
+    Les clubs IA prolongent la plupart de leurs joueurs et laissent partir les
+    autres. Ceux du club dirigé qui n'ont pas été prolongés partent : tous
+    deviennent agents libres (un espoir sort du centre en pro).
     """
     pros_by_club = Counter(
         session.scalars(select(PlayerRow.club_id).where(PlayerRow.squad == Squad.PRO.value))
     )
-    for row in session.scalars(select(PlayerRow).where(PlayerRow.contract_until < year)):
-        if row.club_id != my_club_id:
+    expired = session.scalars(
+        select(PlayerRow).where(PlayerRow.contract_until < year, PlayerRow.club_id.is_not(None))
+    )
+    for row in expired:
+        mine = row.club_id == my_club_id
+        is_pro = row.squad == Squad.PRO.value
+        if not mine and not (
+            is_pro and ai_releases(row.to_domain(), pros_by_club[row.club_id], rng)
+        ):
             row.contract_until = year + rng.randint(*AI_RENEWAL_YEARS) - 1
             continue
-        clubs = [club_id for club_id in pros_by_club if club_id != my_club_id]
-        destination = min(clubs, key=lambda club_id: pros_by_club[club_id], default=None)
-        if (
-            row.squad == Squad.YOUTH.value
-            or destination is None
-            or pros_by_club[destination] >= SQUAD_MAX
-        ):
-            session.delete(row)
-            continue
-        pros_by_club[row.club_id] -= 1
-        pros_by_club[destination] += 1
-        row.club_id = destination
-        row.wage = wage_for(row.to_domain())
-        row.contract_until = year + rng.randint(*AI_RENEWAL_YEARS) - 1
+        if is_pro:
+            pros_by_club[row.club_id] -= 1
+        release(row, year)

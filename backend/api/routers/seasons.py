@@ -21,6 +21,7 @@ from api.affairs import (
     settle_promises,
 )
 from api.deps import SessionDep
+from api.free_agents import age_free_agents, release, renew_pool
 from api.ledger import current_season, record
 from api.notes import History, ensure_preseason_ranks
 from api.routers.contracts import contracts_overview, expire_contracts, rival_signings
@@ -632,7 +633,8 @@ def _board_verdict(session: Session, played: MatchdayOut) -> DismissalRow | None
 def start_next_season(session: SessionDep) -> SeasonOut:
     """Intersaison : fin des prêts, pré-contrats exécutés (les nôtres et ceux des
     concurrents), fins de contrat, puis les joueurs vieillissent, les plus âgés
-    partent, les jeunes arrivent, et un nouveau calendrier est tiré.
+    partent, les jeunes arrivent, les clubs IA complètent leur effectif parmi
+    les agents libres, et un nouveau calendrier est tiré.
 
     Refusée si l'effectif pro du club dirigé passerait sous le minimum."""
     season = _current_or_404(session)
@@ -655,6 +657,7 @@ def start_next_season(session: SessionDep) -> SeasonOut:
     rng = random.Random()
     year = season.year + 1
     _offseason_moves(session, year, rng, my_club_id)
+    age_free_agents(session, year, rng)
     next_id = (session.scalar(select(func.max(PlayerRow.id))) or 0) + 1
     player_ids = itertools.count(next_id)
 
@@ -665,26 +668,31 @@ def start_next_season(session: SessionDep) -> SeasonOut:
         develop_players(club, rng)
 
         # Retraites, et espoirs trop âgés : les clubs IA promeuvent ceux qu'ils
-        # peuvent garder, le manager a dû le faire lui-même avant l'intersaison.
-        gone = {player.id for player in retirees(club)}
+        # peuvent garder, le manager a dû le faire lui-même avant l'intersaison ;
+        # les autres quittent le centre et deviennent agents libres.
+        retired = {player.id for player in retirees(club)}
+        released = set()
         for youth in sorted(youth_exits(club), key=lambda p: p.overall, reverse=True):
-            if club_row.id != my_club_id and len(club.players) - len(gone) < SQUAD_MAX:
+            if club_row.id != my_club_id and len(club.players) - len(retired) < SQUAD_MAX:
                 rows[youth.id].squad = Squad.PRO.value
                 rows[youth.id].wage = wage_for(youth)
                 club.players.append(youth)
             else:
-                gone.add(youth.id)
+                released.add(youth.id)
         for player in [*club.players, *club.youths]:
-            if player.id in gone:
+            if player.id in retired:
                 session.delete(rows[player.id])
-            else:
-                row = rows[player.id]
-                row.age = player.age
-                for name in ATTRIBUTE_NAMES:
-                    setattr(row, name, getattr(player, name))
-        club.youths = [p for p in club.youths if p.id not in gone]
+                continue
+            row = rows[player.id]
+            row.age = player.age
+            for name in ATTRIBUTE_NAMES:
+                setattr(row, name, getattr(player, name))
+            if player.id in released:
+                release(row, year)
+        club.youths = [p for p in club.youths if p.id not in released]
         for youth in youth_intake(club, player_ids, rng, year):
             session.add(PlayerRow.from_domain(youth))
+    renew_pool(session, year, rng, my_club_id, player_ids)
     session.commit()
 
     return _season_out(session, create_season(session, season.year + 1))

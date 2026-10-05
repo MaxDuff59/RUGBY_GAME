@@ -591,18 +591,20 @@ class FacilitiesOverview(BaseModel):
 
 
 class ListingOut(BaseModel):
-    """Un joueur d'un autre club et les voies possibles pour le recruter."""
+    """Un joueur d'un autre club, ou un agent libre, et les voies possibles pour le recruter."""
 
     player: PlayerOut
-    club_id: int
-    club_name: str
-    club_level: float
-    years_left: int  # saisons de contrat restantes, celle en cours comprise
-    playing_time: str  # titulaire, remplaçant, réserviste (dans son club)
+    club_id: int | None  # None = agent libre
+    club_name: str | None
+    club_level: float | None
+    years_left: int  # saisons de contrat restantes, celle en cours comprise (0 sans contrat)
+    playing_time: str  # titulaire, remplaçant, réserviste (dans son club), sans club
     transfer_fee: int | None  # indemnité demandée à l'ouverture ; None = intransférable
     loanable: bool
     precontract: bool  # dernière année de contrat : négociable sans indemnité
     talks_closed_until: datetime.date | None  # il ne veut plus discuter avant cette date
+    free_agent: bool = False  # sans club ni contrat : il signe sans indemnité, tout de suite
+    wage_demand: int | None = None  # agent libre : salaire demandé à l'ouverture
 
 
 class NegotiationOut(BaseModel):
@@ -611,7 +613,7 @@ class NegotiationOut(BaseModel):
     id: int
     player_id: int
     player_name: str
-    club_name: str  # club actuel du joueur
+    club_name: str  # club actuel du joueur (« Agent libre » s'il n'en a pas)
     kind: DealKind
     stage: Literal["club", "player", "agreed", "done", "failed"]
     opened_on: datetime.date
@@ -645,7 +647,7 @@ class DealOption(BaseModel):
     available: bool
     reason: str
     fee_demand: int | None = None  # transfert : indemnité demandée par le club (son ouverture)
-    wage_demand: int | None = None  # transfert, pré-contrat : salaire demandé (son ouverture)
+    wage_demand: int | None = None  # transfert, pré-contrat, agent libre : salaire demandé
     wage: int | None = None  # prêt : salaire actuel, à ta charge
 
 
@@ -653,8 +655,8 @@ class TransferTargetOut(BaseModel):
     """Approche d'un joueur : sa situation et ce qu'il attend."""
 
     player: PlayerOut
-    club: ClubRef
-    club_level: float
+    club: ClubRef | None  # None = agent libre
+    club_level: float | None
     my_level: float
     years_left: int
     playing_time_now: str

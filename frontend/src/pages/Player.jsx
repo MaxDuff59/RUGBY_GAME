@@ -102,16 +102,19 @@ export default function Player() {
           <p className="eyebrow">
             <button type="button" className="link-button" onClick={() => navigate(-1)}>← Retour</button>
             {" · "}
-            {data.club ? <Link to={mine ? "/effectif" : "/transferts"}>{data.club.name}</Link> : "Sans club"}
-            {" · "}
-            {isYouth ? "Espoir" : jersey !== null ? `Titulaire · n° ${jersey}` : "Remplaçant"}
+            {data.club ? <Link to={mine ? "/effectif" : "/transferts"}>{data.club.name}</Link> : <Link to="/transferts">Agent libre</Link>}
+            {data.club && " · "}
+            {data.club && (isYouth ? "Espoir" : jersey !== null ? `Titulaire · n° ${jersey}` : "Remplaçant")}
           </p>
           <h1 className="title player-head__name">
             <span className="player-head__first">{player.first_name}</span>
             {player.last_name}
           </h1>
           <p className="muted player-head__line">
-            {position.label} · {player.age} ans · contrat jusqu'en juin {formatContractEnd(player.contract_until)}
+            {position.label} · {player.age} ans ·{" "}
+            {data.club
+              ? `contrat jusqu'en juin ${formatContractEnd(player.contract_until)}`
+              : `sans contrat depuis juin ${formatContractEnd(player.contract_until)}`}
             {player.loaned_from_name && ` · prêté par ${player.loaned_from_name}`}
             {player.injury?.status === "active" && (
               <>

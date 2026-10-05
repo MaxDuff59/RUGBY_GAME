@@ -87,6 +87,7 @@ export const DEALS = {
   precontract: { label: "Pré-contrat", scope: "Dernière année de contrat : il signe pour la saison prochaine, sans indemnité" },
   transfer: { label: "Transfert", scope: "Indemnité au club, puis salaire au joueur ; il arrive tout de suite" },
   loan: { label: "Prêt", scope: "Jusqu'à la fin de la saison, salaire à ta charge" },
+  free: { label: "Agent libre", scope: "Sans club : salaire au joueur, il arrive tout de suite" },
 };
 
 export const NEGOTIATION_STAGES = {

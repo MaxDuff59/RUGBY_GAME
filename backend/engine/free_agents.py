@@ -11,6 +11,7 @@ sans club : après une saison sans contrat, il peut arrêter. Aucune dépendance
 
 import random
 from collections import Counter
+from collections.abc import Iterator
 
 from data.generator import SQUAD_COMPOSITION, generate_player
 from engine.economy import WAGE_MIN, wage_for
@@ -64,7 +65,7 @@ def trim_pool(pool: list[Player]) -> list[Player]:
 
 
 def newcomers(
-    pool: list[Player], player_ids, season_year: int, rng: random.Random
+    pool: list[Player], player_ids: Iterator[int], season_year: int, rng: random.Random
 ) -> list[Player]:
     """Joueurs qui arrivent dans le vivier pour le ramener à `POOL_MIN`, aux postes
     les moins fournis (sans contrat depuis l'intersaison)."""

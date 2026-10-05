@@ -9,6 +9,9 @@ Trois voies pour recruter un joueur d'un autre club (règles : engine/transfers.
 - prêt : le club prête ses non-titulaires jusqu'à la fin de la saison, le
   joueur accepte s'il y gagne du temps de jeu ; son salaire est à ta charge.
 
+Un agent libre (sans club ni contrat, voir engine/free_agents.py) négocie seul
+son salaire et arrive aussitôt.
+
 Le club et le joueur ouvrent au-dessus de leur objectif (secret) et s'en
 rapprochent à chaque offre refusée, puis consentent un dernier effort si l'offre
 est proche. Leur patience s'use à chaque refus (plus vite si l'offre ne bouge
@@ -38,6 +41,7 @@ from api.schemas import (
     TransferTargetOut,
 )
 from engine.economy import SQUAD_MAX, SQUAD_MIN, TransactionCategory, sale_price
+from engine.free_agents import free_agent_wage, seasons_without_club
 from engine.transfers import (
     CLUB_OPENING_MARKUP,
     COOLDOWN_WEEKS_AFTER_MY_EXIT,
@@ -60,7 +64,7 @@ from engine.transfers import (
     transfer_fee,
     wage_demand,
 )
-from models import Club, Player
+from models import Club, Player, Squad
 from models.orm import ClubRow, NegotiationRow, PlayerRow
 
 router = APIRouter(prefix="/transfers", tags=["transferts"])
@@ -69,6 +73,8 @@ FEE_STEP = 5_000
 WAGE_STEP = 1_000
 
 OPEN_STAGES = ("club", "player")
+
+FREE_AGENT = "Agent libre"
 
 
 def _money(amount: int) -> str:
@@ -82,8 +88,13 @@ def _fee_opening(player: Player, club: Club, year: int, grudges: int = 0) -> int
     return opening_ask(target, grudge_markup(CLUB_OPENING_MARKUP, grudges), FEE_STEP)
 
 
-def _wage_opening(player: Player, origin: Club, me: Club, grudges: int = 0) -> int | None:
-    target = wage_demand(player, origin, me)
+def _wage_target(player: Player, origin: Club | None, me: Club) -> int | None:
+    """Salaire visé par le joueur pour venir (None s'il refuse) ; `origin` None = agent libre."""
+    return free_agent_wage(player, me) if origin is None else wage_demand(player, origin, me)
+
+
+def _wage_opening(player: Player, origin: Club | None, me: Club, grudges: int = 0) -> int | None:
+    target = _wage_target(player, origin, me)
     if target is None:
         return None
     return opening_ask(target, grudge_markup(PLAYER_OPENING_MARKUP, grudges), WAGE_STEP)
@@ -124,7 +135,7 @@ def _negotiation_out(row: NegotiationRow) -> NegotiationOut:
         id=row.id,
         player_id=row.player_id,
         player_name=f"{player.first_name} {player.last_name}",
-        club_name=player.club.name if player.club else "sans club",
+        club_name=player.club.name if player.club else FREE_AGENT,
         kind=DealKind(row.kind),
         stage=row.stage,
         opened_on=row.opened_on,
@@ -193,6 +204,28 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
                     talks_closed_until=closed_until,
                 )
             )
+    mine = me.to_domain()
+    for row in session.scalars(
+        select(PlayerRow).where(PlayerRow.club_id.is_(None), PlayerRow.squad == Squad.PRO.value)
+    ):
+        player = row.to_domain()
+        grudges, closed_until = memory.get(player.id, (0, None))
+        listings.append(
+            ListingOut(
+                player=PlayerOut.from_player(player, day, names),
+                club_id=None,
+                club_name=None,
+                club_level=None,
+                years_left=0,
+                playing_time="sans club",
+                transfer_fee=None,
+                loanable=False,
+                precontract=False,
+                talks_closed_until=closed_until,
+                free_agent=True,
+                wage_demand=_wage_opening(player, None, mine, grudges),
+            )
+        )
     listings.sort(key=lambda listing: listing.player.value, reverse=True)
 
     negotiations = session.scalars(
@@ -214,16 +247,33 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
 
 def _options(
     player: Player,
-    origin: Club,
+    origin: Club | None,
     me: Club,
     year: int,
     grudges: int = 0,
     closed_until: datetime.date | None = None,
 ) -> list[DealOption]:
-    """Les trois voies, avec ce que demandent le club et le joueur à l'ouverture."""
+    """Les voies, avec ce que demandent le club et le joueur à l'ouverture : les trois
+    voies pour un joueur sous contrat, la signature libre pour un agent libre."""
+    kinds = [DealKind.FREE] if origin is None else [k for k in DealKind if k != DealKind.FREE]
     if closed_until is not None:
         reason = f"Il ne veut plus discuter avec vous avant le {closed_until:%d/%m/%Y}."
-        return [DealOption(kind=kind, available=False, reason=reason) for kind in DealKind]
+        return [DealOption(kind=kind, available=False, reason=reason) for kind in kinds]
+    if origin is None:
+        free = seasons_without_club(player, year)
+        reason = (
+            "Sans club depuis l'intersaison : pas d'indemnité, il arrive tout de suite."
+            if free == 0
+            else f"Sans club depuis {free + 1} intersaisons : il a hâte de rejouer."
+        )
+        return [
+            DealOption(
+                kind=DealKind.FREE,
+                available=True,
+                reason=reason,
+                wage_demand=_wage_opening(player, None, me, grudges),
+            )
+        ]
     fee = _fee_opening(player, origin, year, grudges)
     wage = _wage_opening(player, origin, me, grudges)
     refusal = refusal_reason(player, origin, me) if wage is None else ""
@@ -277,10 +327,20 @@ def _options(
     return options
 
 
-def _load_target(session: Session, me: ClubRow, player_id: int) -> tuple[PlayerRow, Club, Player]:
+def _load_target(
+    session: Session, me: ClubRow, player_id: int
+) -> tuple[PlayerRow, Club | None, Player]:
+    """Le joueur visé et son club (None pour un agent libre)."""
     row = session.get(PlayerRow, player_id)
-    if row is None or row.club_id is None or row.club_id == me.id or row.loaned_from is not None:
+    if (
+        row is None
+        or row.squad != Squad.PRO.value
+        or row.club_id == me.id
+        or row.loaned_from is not None
+    ):
         raise HTTPException(status_code=404, detail="Joueur introuvable sur le marché")
+    if row.club_id is None:
+        return row, None, row.to_domain()
     origin = row.club.to_domain()
     player = next(p for p in origin.players if p.id == player_id)
     return row, origin, player
@@ -288,7 +348,7 @@ def _load_target(session: Session, me: ClubRow, player_id: int) -> tuple[PlayerR
 
 @router.get("", response_model=TransfersOverview)
 def get_market(session: SessionDep) -> TransfersOverview:
-    """Joueurs des autres clubs, voies de recrutement, et négociations en cours."""
+    """Joueurs des autres clubs et agents libres, voies de recrutement, négociations en cours."""
     return _overview(session, load_my_club_row(session))
 
 
@@ -303,11 +363,11 @@ def approach(player_id: int, session: SessionDep) -> TransferTargetOut:
     grudges, closed_until = _memory(session, me_row.id, player_id, game_date(session))
     return TransferTargetOut(
         player=PlayerOut.from_player(player, game_date(session)),
-        club=ClubRef(id=origin.id, name=origin.name),
-        club_level=round(club_level(origin), 1),
+        club=ClubRef(id=origin.id, name=origin.name) if origin else None,
+        club_level=round(club_level(origin), 1) if origin else None,
         my_level=round(club_level(me), 1),
-        years_left=player.years_left(year),
-        playing_time_now=time_label(playing_time(player, origin)),
+        years_left=player.years_left(year) if origin else 0,
+        playing_time_now=time_label(playing_time(player, origin)) if origin else "sans club",
         playing_time_here=time_label(playing_time(player, me)),
         preferred_years=preferred_years(player),
         talks_closed_until=closed_until,
@@ -334,7 +394,11 @@ def open_negotiation(
     day = game_date(session)
     grudges, closed_until = _memory(session, me_row.id, player_id, day)
     options = _options(player, origin, me, year, grudges, closed_until)
-    option = next(o for o in options if o.kind == payload.kind)
+    option = next((o for o in options if o.kind == payload.kind), None)
+    if option is None:
+        situation = "Il est sans club" if origin is None else "Il est sous contrat"
+        detail = f"{situation} : cette voie n'est pas possible pour lui."
+        raise HTTPException(status_code=400, detail=detail)
     if not option.available:
         raise HTTPException(status_code=400, detail=option.reason)
 
@@ -347,14 +411,20 @@ def open_negotiation(
         patience=grudge_patience(grudges),
         last_offer=None,
         fee_demand=option.fee_demand,
-        fee_floor=transfer_fee(player, origin, year),
+        fee_floor=transfer_fee(player, origin, year) if origin else None,
         wage_demand=option.wage_demand if payload.kind != DealKind.LOAN else option.wage,
-        wage_floor=wage_demand(player, origin, me) if payload.kind != DealKind.LOAN else None,
+        wage_floor=_wage_target(player, origin, me) if payload.kind != DealKind.LOAN else None,
         fee=None,
         wage=None,
         years=None,
     )
-    if payload.kind == DealKind.TRANSFER:
+    if payload.kind == DealKind.FREE:
+        row.stage = "player"
+        row.message = (
+            f"{player.name}, libre de tout contrat, demande {_money(option.wage_demand)} "
+            f"par saison, sur un contrat de {low} à {high} saisons."
+        )
+    elif payload.kind == DealKind.TRANSFER:
         row.stage = "club"
         row.message = (
             f"{origin.name} ouvre les discussions à {_money(option.fee_demand)} d'indemnité."
@@ -388,6 +458,11 @@ def _execute(session: Session, me: ClubRow, row: NegotiationRow, year: int) -> s
 
     if len(me.players) >= SQUAD_MAX:
         raise HTTPException(status_code=400, detail=f"Effectif complet ({SQUAD_MAX} joueurs)")
+    if kind == DealKind.FREE:
+        player.wage = row.wage
+        player.contract_until = year + row.years - 1
+        player.club_id = me.id
+        return f"{name} s'engage avec le club pour {row.years} saisons."
     seller, day = player.club, game_date(session)
     if kind == DealKind.TRANSFER:
         if me.balance < row.fee:
