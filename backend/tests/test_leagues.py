@@ -98,3 +98,14 @@ def test_pro_d2_champion_goes_up_and_top14_last_goes_down(two_leagues):
     top14 = two_leagues.get("/seasons/current?league=top14").json()
     assert champion in {row["club_id"] for row in top14["standings"]}
     assert top14["year"] == review["year"] + 1
+
+
+def test_player_compared_only_within_his_league(two_leagues):
+    """La fiche joueur ne le compare qu'aux joueurs de son poste du même championnat."""
+    for club_id, league in [(3, "Top 14"), (10, "Pro D2")]:
+        player_id = two_leagues.get(f"/clubs/{club_id}").json()["players"][0]["id"]
+        detail = two_leagues.get(f"/players/{player_id}").json()
+        assert detail["league"] == league
+        clubs = {peer["club_id"] for peer in detail["peers"]}
+        assert clubs <= (set(range(1, 8)) if club_id <= 7 else set(range(8, 15)))
+        assert len(clubs) == 7

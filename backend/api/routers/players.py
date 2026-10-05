@@ -6,6 +6,7 @@ from sqlalchemy import select
 from api.deps import SessionDep
 from api.ledger import current_season, game_date
 from api.schemas import ClubRef, InjuryOut, PeerOut, PlayerDetail, PlayerOut, PlayerSeasonStats
+from data.leagues import league_config
 from engine.match_engine import (
     RATING_FOR_POSITION,
     attacking_rating,
@@ -16,7 +17,7 @@ from engine.match_engine import (
     team_strength,
 )
 from models import ATTRIBUTE_NAMES, EventType, Player, Squad
-from models.orm import ClubRow, PlayerRow
+from models.orm import CareerRow, ClubRow, PlayerRow
 
 router = APIRouter(prefix="/players", tags=["joueurs"])
 
@@ -103,15 +104,22 @@ def get_player(player_id: int, session: SessionDep) -> PlayerDetail:
         team = domain_club.youth_team() if player.squad == Squad.YOUTH else domain_club
         lineup_ids = [p.id for p in team_strength(team, day).lineup]
 
-    # Les joueurs de son poste dans tout le championnat, lui compris.
-    peer_rows = session.scalars(
-        select(PlayerRow).where(
-            PlayerRow.position == row.position,
-            PlayerRow.squad == row.squad,
-            PlayerRow.club_id.is_not(None),
-        )
+    # Les joueurs de son poste dans son championnat, lui compris. Un agent libre
+    # n'en a pas : on le compare à ceux du championnat du club dirigé.
+    league = row.club.league if row.club is not None else None
+    if league is None:
+        career = session.scalars(select(CareerRow)).first()
+        league = session.get(ClubRow, career.club_id).league if career is not None else None
+    query = (
+        select(PlayerRow)
+        .join(ClubRow, PlayerRow.club_id == ClubRow.id)
+        .where(PlayerRow.position == row.position, PlayerRow.squad == row.squad)
     )
-    everyone = [p.to_domain() for p in peer_rows]
+    if league is not None:
+        query = query.where(ClubRow.league == league)
+    everyone = [p.to_domain() for p in session.scalars(query)]
+    if player.id not in {p.id for p in everyone}:
+        everyone.append(player)
     others = [p for p in everyone if p.id != player.id]
 
     return PlayerDetail(
@@ -123,6 +131,7 @@ def get_player(player_id: int, session: SessionDep) -> PlayerDetail:
         position_ratings={
             position: round(rating(player), 1) for position, rating in RATING_FOR_POSITION.items()
         },
+        league=league_config(league).short_name if league is not None else None,
         better_than=_better_than(player, others),
         peers=[_peer_out(p) for p in everyone],
         season=_season_stats(session, player.id),

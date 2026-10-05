@@ -70,6 +70,9 @@ export default function Player() {
   const jersey = jerseys.get(player.id) ?? null;
   const mine = data.club?.id === career.club_id;
   const peerLabel = `${position.label.toLowerCase()}s`;
+  // On ne se compare qu'aux joueurs du même poste du même championnat.
+  const leagueOf = data.league && (/^[AEIOUY]/i.test(data.league) ? `de l'${data.league}` : `du ${data.league}`);
+  const peerScope = leagueOf ? `${peerLabel} ${leagueOf}` : peerLabel;
 
   // Sur le terrain : sa note à chaque place ; son poste naturel en accent, sa place actuelle numérotée.
   const markers = SLOTS.map((slot) => ({
@@ -140,7 +143,7 @@ export default function Player() {
           <Stat value={formatMoney(player.value)} label="valeur" />
           <div className="stat player-head__overall">
             <span className="player-head__note">{formatNote(player.overall)}</span>
-            <span className="muted">note · meilleur que {Math.round(data.better_than.overall * 100)} % des {peerLabel}</span>
+            <span className="muted">note · meilleur que {Math.round(data.better_than.overall * 100)} % des {peerScope}</span>
           </div>
         </div>
       </header>
@@ -148,7 +151,7 @@ export default function Player() {
       <div className="player-grid fill">
         <section className="section">
           <div className="section__head">
-            <h2 className="eyebrow">Comparé aux {peerLabel}</h2>
+            <h2 className="eyebrow">Comparé aux {peerScope}</h2>
             <span className="muted">{data.peers.length - 1} autres {peerLabel}</span>
           </div>
           <div className="card card--padded player-card player-card--graphs">
@@ -164,7 +167,7 @@ export default function Player() {
               <span className="legend legend--player">Lui</span>
               <span className="legend legend--teammate">Coéquipiers</span>
               <span className="legend legend--others">Autres {peerLabel}</span>
-              <span>Percentile : part des {peerLabel} qu'il devance.</span>
+              <span>Percentile : part des {peerScope} qu'il devance.</span>
             </p>
           </div>
         </section>

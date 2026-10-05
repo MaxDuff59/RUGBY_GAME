@@ -148,7 +148,7 @@ class PeerOut(BaseModel):
     """Un joueur du même poste (et du même groupe) dans le championnat, pour les comparaisons."""
 
     id: int
-    club_id: int
+    club_id: int | None
     name: str
     overall: float
     position_rating: float  # note au poste, critère de sélection du moteur
@@ -175,8 +175,10 @@ class PlayerDetail(BaseModel):
     ratings: dict[str, float]
     # Sa note à chaque poste, selon le critère de sélection du moteur.
     position_ratings: dict[Position, float]
+    # Championnat de la comparaison (celui de son club, ou du club dirigé pour un agent libre).
+    league: str | None
     # Comparaison aux joueurs du même poste (et du même groupe : pros ou espoirs)
-    # dans tous les clubs : part de ceux qu'il devance, par attribut et en note générale.
+    # de ce championnat : part de ceux qu'il devance, par attribut et en note générale.
     better_than: dict[str, float]
     # Ces joueurs, lui compris, avec leurs attributs et leur note au poste.
     peers: list[PeerOut]
