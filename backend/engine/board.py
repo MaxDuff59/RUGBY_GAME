@@ -114,7 +114,7 @@ def board_confidence(
                 value = toward(value, target, RATE * progress)
                 value += WIN if scored > conceded else LOSS if scored < conceded else DRAW
             else:
-                # Égalité en phase finale : le mieux classé passe.
+                # Vainqueur au score, sinon aux tirs au but.
                 seeding = [row.club_id for row in table.table()]
                 if ours.winner_id(seeding) == club_id:
                     value += PLAYOFF_WIN * STAGE_WEIGHT[ours.stage]

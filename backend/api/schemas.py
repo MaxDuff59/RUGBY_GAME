@@ -270,7 +270,7 @@ class NoteOut(BaseModel):
                     stage=m.stage,
                     date=m.date,
                     opponent=ClubRef(id=opponent_id, name=names[opponent_id]),
-                    result="V" if scored > conceded else "D" if scored < conceded else "N",
+                    result={1: "V", 0: "N", -1: "D"}[m.result_for(club_id)],
                     scored=scored,
                     conceded=conceded,
                     change=round(step.change, 1),
@@ -344,6 +344,10 @@ class MatchOut(BaseModel):
     away_score: int
     home_tries: int
     away_tries: int
+    extra_time: bool  # prolongation jouée (phases finales)
+    # Tirs au but réussis, si la prolongation n'a pas suffi.
+    home_shootout: int | None
+    away_shootout: int | None
     events: list[MatchEventOut]
 
     @classmethod
@@ -360,6 +364,9 @@ class MatchOut(BaseModel):
             away_score=match.away_score,
             home_tries=match.tries_for(match.home_club_id),
             away_tries=match.tries_for(match.away_club_id),
+            extra_time=match.went_to_extra_time,
+            home_shootout=shootout_score(match, match.home_club_id),
+            away_shootout=shootout_score(match, match.away_club_id),
             events=[MatchEventOut.model_validate(e) for e in match.events],
         )
 
@@ -376,6 +383,32 @@ class MatchSummary(BaseModel):
     away: ClubRef
     home_score: int | None
     away_score: int | None
+    extra_time: bool = False  # prolongation jouée (phases finales)
+    # Tirs au but réussis, si la prolongation n'a pas suffi.
+    home_shootout: int | None = None
+    away_shootout: int | None = None
+
+    @classmethod
+    def from_match(cls, match: Match, names: dict[int, str]) -> "MatchSummary":
+        return cls(
+            id=match.id,
+            matchday=match.matchday,
+            stage=match.stage,
+            date=match.date,
+            neutral=match.neutral,
+            home=ClubRef(id=match.home_club_id, name=names[match.home_club_id]),
+            away=ClubRef(id=match.away_club_id, name=names[match.away_club_id]),
+            home_score=match.home_score,
+            away_score=match.away_score,
+            extra_time=match.went_to_extra_time,
+            home_shootout=shootout_score(match, match.home_club_id),
+            away_shootout=shootout_score(match, match.away_club_id),
+        )
+
+
+def shootout_score(match: Match, club_id: int) -> int | None:
+    """Tirs au but réussis par un club, ou None s'il n'y a pas eu de séance."""
+    return match.shootout_for(club_id) if match.went_to_shootout else None
 
 
 class MatchdayOut(BaseModel):

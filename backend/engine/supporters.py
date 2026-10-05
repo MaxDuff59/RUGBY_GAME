@@ -26,10 +26,14 @@ CLEAR_BONUS = 0.5
 QUALIFIED = 1.5  # premier match de phases finales de la saison
 
 
-def result_change(scored: int, conceded: int, at_home: bool, stage: Stage = Stage.REGULAR) -> float:
+def result_change(
+    scored: int, conceded: int, at_home: bool, stage: Stage = Stage.REGULAR, shootout: int = 0
+) -> float:
+    """`shootout` : 1 ou -1 si les tirs au but ont départagé un nul de phase finale."""
     win, draw, loss = HOME if at_home else AWAY
     margin = scored - conceded
-    change = win if margin > 0 else loss if margin < 0 else draw
+    outcome = margin or shootout
+    change = win if outcome > 0 else loss if outcome < 0 else draw
     if abs(margin) >= CLEAR_MARGIN:
         change += CLEAR_BONUS if margin > 0 else -CLEAR_BONUS
     return change * STAGE_WEIGHT[stage]
@@ -52,7 +56,9 @@ def fan_fervour(club_id: int, seasons: list[list[Match]], boosts: Iterable[Boost
             # Terrain neutre : personne n'est à domicile.
             at_home = match.home_club_id == club_id and not match.neutral
             value = toward(fervour.value, NEUTRAL, REVERSION)
-            value += result_change(scored, conceded, at_home, match.stage)
+            value += result_change(
+                scored, conceded, at_home, match.stage, match.result_for(club_id)
+            )
             if match.stage != Stage.REGULAR and not qualified:
                 value += QUALIFIED
                 qualified = True

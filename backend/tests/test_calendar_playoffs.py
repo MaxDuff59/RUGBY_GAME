@@ -10,7 +10,7 @@ from engine.calendar import PLAYOFF_ROUNDS, season_dates
 from engine.economy import attendance, matchday_wages
 from engine.offseason import age_players, retirees, youth_intake
 from engine.season import barrage_pairings, final_pairing, semi_pairings
-from models import Facilities, Match, Stage
+from models import EventType, Facilities, Match, MatchEvent, Stage
 from tests.conftest import make_club
 
 # --- Calendrier ----------------------------------------------------------------------
@@ -55,7 +55,22 @@ def test_semis_and_final_follow_the_winners():
     assert final_pairing(SEEDING, semis) == (1, 3)
 
 
-def test_draw_in_playoffs_goes_to_the_better_seed():
+def test_shootout_decides_a_drawn_playoff():
+    match = played(4, 5, 20, 20, Stage.BARRAGE)
+    match.events = [
+        MatchEvent(100, EventType.SHOOTOUT_GOAL, 4, None),
+        MatchEvent(100, EventType.SHOOTOUT_GOAL, 5, None),
+        MatchEvent(100, EventType.SHOOTOUT_MISSED, 4, None),
+        MatchEvent(100, EventType.SHOOTOUT_GOAL, 5, None),
+    ]
+    # Le 5e passe aux tirs au but, même si le 4e était mieux classé.
+    assert match.winner_id(SEEDING) == 5
+    assert match.went_to_extra_time and match.went_to_shootout
+    assert match.result_for(5) == 1 and match.result_for(4) == -1
+
+
+def test_draw_without_shootout_goes_to_the_better_seed():
+    # Match joué avant l'arrivée des prolongations : le mieux classé passe.
     match = played(4, 5, 20, 20, Stage.BARRAGE)
     assert match.winner_id(SEEDING) == 4
     reversed_hosting = played(5, 4, 20, 20, Stage.BARRAGE)

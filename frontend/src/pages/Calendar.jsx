@@ -9,7 +9,9 @@ import {
   formatLongDate,
   formatMonthYear,
   formatShortDate,
+  matchResult,
   matchdayLabel,
+  scoreNote,
   parseDate,
   startOfWeek,
   toIso,
@@ -169,11 +171,12 @@ function MyMatchLine({ match, myId }) {
   const opponent = home ? match.away : match.home;
   const played = match.home_score !== null;
   const score = played ? `${home ? match.home_score : match.away_score}-${home ? match.away_score : match.home_score}` : null;
+  const note = played ? scoreNote(match, myId) : null;
   return (
     <span className="calendar__event-text">
       {opponent.name}
       <span className="muted"> · {match.neutral ? "neutre" : home ? "dom." : "ext."}</span>
-      {score && <span className="num"> · {score}</span>}
+      {score && <span className="num"> · {score}{note && ` ${note}`}</span>}
     </span>
   );
 }
@@ -211,14 +214,18 @@ function SeasonView({ matchdays, myId }) {
             const played = match.home_score !== null;
             const mine = home ? match.home_score : match.away_score;
             const theirs = home ? match.away_score : match.home_score;
-            const result = !played ? "" : mine > theirs ? "Victoire" : mine === theirs ? "Nul" : "Défaite";
+            const result = played ? RESULTS[matchResult(match, myId)] : "";
+            const note = played ? scoreNote(match, myId) : null;
             return (
               <tr key={md.matchday}>
                 <td className="left jersey">{matchdayLabel(md)}</td>
                 <td className="left muted">{formatShortDate(md.date)}</td>
                 <td className="left" style={{ fontWeight: 600 }}>{opponent.name}</td>
                 <td className="left muted">{match.neutral ? "Terrain neutre" : home ? "Domicile" : "Extérieur"}</td>
-                <td>{played ? `${mine} – ${theirs}` : "–"}</td>
+                <td>
+                  {played ? `${mine} – ${theirs}` : "–"}
+                  {note && <span className="muted"> {note}</span>}
+                </td>
                 <td className="left">{result}</td>
               </tr>
             );
@@ -230,6 +237,8 @@ function SeasonView({ matchdays, myId }) {
 }
 
 // --- Utilitaires --------------------------------------------------------------------
+
+const RESULTS = { V: "Victoire", N: "Nul", D: "Défaite" };
 
 // Regroupe les matchs par journée : [{ matchday, stage, date, matches }], dans l'ordre.
 function groupByMatchday(matches) {

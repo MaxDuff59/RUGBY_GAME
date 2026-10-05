@@ -24,12 +24,18 @@ CLOSE_LOSS_MARGIN = 7
 CLOSE_LOSS_RELIEF = 0.6
 
 
-def result_change(scored: int, conceded: int, stage: Stage = Stage.REGULAR) -> float:
-    """Variation de moral due à un résultat, avant le retour vers la note neutre."""
+def result_change(
+    scored: int, conceded: int, stage: Stage = Stage.REGULAR, shootout: int = 0
+) -> float:
+    """Variation de moral due à un résultat, avant le retour vers la note neutre.
+
+    `shootout` : 1 ou -1 si les tirs au but ont départagé un nul de phase finale.
+    """
     margin = scored - conceded
-    if margin > 0:
+    outcome = margin or shootout
+    if outcome > 0:
         change = WIN + (CLEAR_BONUS if margin >= CLEAR_MARGIN else 0.0)
-    elif margin < 0:
+    elif outcome < 0:
         change = LOSS
         if -margin >= CLEAR_MARGIN:
             change -= CLEAR_BONUS
@@ -51,6 +57,7 @@ def team_morale(club_id: int, matches: list[Match], boosts: Iterable[Boost] = ()
         morale.nudge(pending.before(match.date))
         scored, conceded = scores(match, club_id)
         reverted = toward(morale.value, NEUTRAL, REVERSION)
-        morale.step(match, reverted + result_change(scored, conceded, match.stage))
+        change = result_change(scored, conceded, match.stage, match.result_for(club_id))
+        morale.step(match, reverted + change)
     morale.nudge(pending.rest())
     return morale

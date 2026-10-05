@@ -19,6 +19,7 @@ class DealKind(StrEnum):
         "precontract"  # dernière année de contrat : salaire au joueur, arrivée à l'intersaison
     )
     LOAN = "loan"  # jusqu'à la fin de la saison, salaire à la charge de l'emprunteur
+    FREE = "free"  # agent libre : salaire au joueur, il arrive tout de suite
 
 
 # --- Situation d'un joueur -------------------------------------------------------------

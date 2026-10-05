@@ -1,3 +1,5 @@
+import { matchResult } from "../format.js";
+
 // Les derniers résultats d'un club, en pastilles V / N / D (plein, gris, contour).
 export default function FormPills({ results }) {
   if (results.length === 0) return <span className="muted">Aucun match joué</span>;
@@ -20,9 +22,5 @@ export function recentForm(matches, clubId, count = 5) {
   return matches
     .filter((m) => m.home_score !== null && (m.home.id === clubId || m.away.id === clubId))
     .slice(-count)
-    .map((m) => {
-      const mine = m.home.id === clubId ? m.home_score : m.away_score;
-      const theirs = m.home.id === clubId ? m.away_score : m.home_score;
-      return mine > theirs ? "V" : mine === theirs ? "N" : "D";
-    });
+    .map((m) => matchResult(m, clubId));
 }

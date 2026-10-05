@@ -284,6 +284,10 @@ class EventType(StrEnum):
     PENALTY_MISSED = "penalty_missed"
     DROP_GOAL = "drop_goal"  # drop réussi
     INJURY = "injury"  # un joueur se blesse et quitte le terrain
+    # Tirs au but d'une phase finale restée à égalité après prolongation : ils
+    # départagent les deux clubs sans changer le score.
+    SHOOTOUT_GOAL = "shootout_goal"
+    SHOOTOUT_MISSED = "shootout_missed"
 
 
 # Points rapportés par chaque type d'événement (0 pour les tentatives manquées).
@@ -295,7 +299,15 @@ EVENT_POINTS = {
     EventType.PENALTY_MISSED: 0,
     EventType.DROP_GOAL: 3,
     EventType.INJURY: 0,
+    EventType.SHOOTOUT_GOAL: 0,
+    EventType.SHOOTOUT_MISSED: 0,
 }
+
+# Temps réglementaire, puis prolongation (2 x 10 minutes) en phase finale.
+REGULATION_MINUTES = 80
+EXTRA_TIME_MINUTES = 20
+
+_SHOOTOUT = {EventType.SHOOTOUT_GOAL, EventType.SHOOTOUT_MISSED}
 
 
 @dataclass
@@ -347,16 +359,41 @@ class Match:
     def is_played(self) -> bool:
         return self.home_score is not None and self.away_score is not None
 
-    def winner_id(self, seeding: list[int]) -> int:
-        """Vainqueur d'un match de phase finale.
+    @property
+    def went_to_extra_time(self) -> bool:
+        """Une prolongation a été jouée (des points marqués, ou des tirs au but)."""
+        return any(e.minute > REGULATION_MINUTES or e.type in _SHOOTOUT for e in self.events)
 
-        En cas d'égalité, le mieux classé en saison régulière (`seeding`, du 1er
-        au dernier) se qualifie.
+    @property
+    def went_to_shootout(self) -> bool:
+        return any(e.type in _SHOOTOUT for e in self.events)
+
+    def shootout_for(self, club_id: int) -> int:
+        """Tirs au but réussis par un club (0 sans séance)."""
+        return sum(
+            1 for e in self.events if e.club_id == club_id and e.type == EventType.SHOOTOUT_GOAL
+        )
+
+    def result_for(self, club_id: int) -> int:
+        """1 victoire, 0 nul, -1 défaite : les tirs au but départagent un nul."""
+        home = club_id == self.home_club_id
+        other = self.away_club_id if home else self.home_club_id
+        diff = (self.home_score - self.away_score) * (1 if home else -1)
+        if diff == 0:
+            diff = self.shootout_for(club_id) - self.shootout_for(other)
+        return (diff > 0) - (diff < 0)
+
+    def winner_id(self, seeding: list[int]) -> int:
+        """Vainqueur d'un match de phase finale : au score, sinon aux tirs au but.
+
+        Un match sans séance resté à égalité (joué avant les prolongations) revient
+        au mieux classé en saison régulière (`seeding`, du 1er au dernier).
         """
         if not self.is_played:
             raise ValueError("Le match n'a pas encore été joué")
-        if self.home_score != self.away_score:
-            return self.home_club_id if self.home_score > self.away_score else self.away_club_id
+        result = self.result_for(self.home_club_id)
+        if result != 0:
+            return self.home_club_id if result > 0 else self.away_club_id
         return min(self.home_club_id, self.away_club_id, key=seeding.index)
 
     def points_for(self, club_id: int) -> int:

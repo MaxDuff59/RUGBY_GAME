@@ -130,6 +130,32 @@ export const formatWeeks = (weeks) => `${weeks} semaine${weeks > 1 ? "s" : ""}`;
 export const matchdayLabel = (match) =>
   match.stage === "regular" ? `J${match.matchday}` : STAGES[match.stage];
 
+// --- Résultats ----------------------------------------------------------------------
+
+// Résultat d'un match joué pour un club : "V", "N" ou "D". En phase finale, les
+// tirs au but départagent un nul.
+export function matchResult(match, clubId) {
+  const home = match.home.id === clubId;
+  let diff = (match.home_score - match.away_score) * (home ? 1 : -1);
+  if (diff === 0 && match.home_shootout !== null) {
+    diff = (match.home_shootout - match.away_shootout) * (home ? 1 : -1);
+  }
+  return diff > 0 ? "V" : diff < 0 ? "D" : "N";
+}
+
+// Mention après le score d'une phase finale : "a.p." après prolongation,
+// "t.a.b. 4-3" après tirs au but (vu du club `clubId`, sinon du club qui reçoit).
+export function scoreNote(match, clubId = match.home.id) {
+  if (match.home_shootout !== null) {
+    const home = match.home.id === clubId;
+    const [mine, theirs] = home
+      ? [match.home_shootout, match.away_shootout]
+      : [match.away_shootout, match.home_shootout];
+    return `t.a.b. ${mine}-${theirs}`;
+  }
+  return match.extra_time ? "a.p." : null;
+}
+
 const oneDecimal = new Intl.NumberFormat("fr-FR", {
   minimumFractionDigits: 1,
   maximumFractionDigits: 1,

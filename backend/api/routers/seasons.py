@@ -130,17 +130,7 @@ def _phase(season: SeasonRow) -> str:
 
 
 def _summary(row: MatchRow, names: dict[int, str]) -> MatchSummary:
-    return MatchSummary(
-        id=row.id,
-        matchday=row.matchday,
-        stage=Stage(row.stage),
-        date=row.date,
-        neutral=row.neutral,
-        home=ClubRef(id=row.home_club_id, name=names[row.home_club_id]),
-        away=ClubRef(id=row.away_club_id, name=names[row.away_club_id]),
-        home_score=row.home_score,
-        away_score=row.away_score,
-    )
+    return MatchSummary.from_match(row.to_domain(), names)
 
 
 def _matchday_out(rows: list[MatchRow], names: dict[int, str]) -> MatchdayOut:
@@ -343,6 +333,7 @@ def _play_matchday(session: Session, season: SeasonRow) -> tuple[MatchdayOut, li
             day=day,
             home_form=forms[home.id],
             away_form=forms[away.id],
+            knockout=stage.is_playoff,
         )
         row.home_score, row.away_score = result.home_score, result.away_score
         row.events = MatchRow.from_domain(result).events

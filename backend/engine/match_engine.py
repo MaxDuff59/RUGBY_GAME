@@ -15,6 +15,8 @@ Principe :
    La blessure elle-même (gravité, durée) est tirée par `engine/medical.py`.
 5. La forme du jour (`engine/form.py` : moral, cohésion, fraîcheur) multiplie
    les notes collectives, et la fatigue augmente le risque de blessure.
+6. En phase finale, une égalité après 80 minutes mène à une prolongation
+   (2 x 10 minutes), puis si besoin à une séance de tirs au but.
 
 Quand le match a une date, les joueurs blessés à cette date ne sont pas
 alignés. Le moteur ne travaille que sur les objets de `models` : aucune
@@ -27,7 +29,16 @@ from dataclasses import dataclass
 
 from engine.form import NEUTRAL_FORM, Form
 from engine.medical import MATCH_INJURY_CHANCE_PER_MINUTE
-from models import Club, EventType, Match, MatchEvent, Player, Position
+from models import (
+    EXTRA_TIME_MINUTES,
+    REGULATION_MINUTES,
+    Club,
+    EventType,
+    Match,
+    MatchEvent,
+    Player,
+    Position,
+)
 
 # Composition du XV de départ (à rendre configurable plus tard).
 FORMATION = {
@@ -42,7 +53,7 @@ FORMATION = {
     Position.FULLBACK: 1,
 }
 
-MATCH_MINUTES = 80
+MATCH_MINUTES = REGULATION_MINUTES
 
 # Probabilité qu'une action dangereuse survienne à une minute donnée.
 CHANCE_PER_MINUTE = 0.28
@@ -70,6 +81,12 @@ KICK_BASE = 0.35
 KICK_PER_POINT = 0.03
 # Une transformation se tente là où l'essai a été marqué, souvent excentrée.
 CONVERSION_PENALTY = 0.05
+
+# Tirs au but (règlement du Top 14) : 5 buteurs par équipe en alternance, depuis
+# la ligne des 22 mètres, puis mort subite tant que l'égalité persiste.
+SHOOTOUT_KICKERS = 5
+# La pression de la séance coûte un peu de réussite par rapport à une pénalité.
+SHOOTOUT_PRESSURE = 0.05
 
 # Probabilité de marquer l'essai selon le poste (les ailiers finissent les actions).
 TRY_SCORER_WEIGHT = {
@@ -315,6 +332,40 @@ def _draw_injury_minutes(
     return minutes
 
 
+def _shootout(
+    first: TeamStrength, second: TeamStrength, unavailable: set[int], rng: random.Random
+) -> list[MatchEvent]:
+    """Séance de tirs au but, `first` tirant le premier.
+
+    Chaque équipe aligne ses meilleurs buteurs, sauf les blessés du match
+    (`unavailable`). La séance s'arrête dès qu'une équipe ne peut plus être
+    rattrapée ; après 5 tirs chacun, c'est la mort subite, tir par tir.
+    """
+    minute = MATCH_MINUTES + EXTRA_TIME_MINUTES
+    teams = (first, second)
+    kickers = []
+    for team in teams:
+        fit = [p for p in team.lineup if p.id not in unavailable] or team.lineup
+        kickers.append(sorted(fit, key=lambda p: p.kicking, reverse=True))
+    goals = [0, 0]
+    events: list[MatchEvent] = []
+    kicks = 0
+    while True:
+        side, turn = kicks % 2, kicks // 2
+        kicker = kickers[side][turn % len(kickers[side])]
+        scored = rng.random() < kick_success_probability(kicker.kicking) - SHOOTOUT_PRESSURE
+        goals[side] += scored
+        event_type = EventType.SHOOTOUT_GOAL if scored else EventType.SHOOTOUT_MISSED
+        events.append(MatchEvent(minute, event_type, teams[side].club.id, kicker.id))
+        kicks += 1
+        if kicks < 2 * SHOOTOUT_KICKERS:
+            left = [SHOOTOUT_KICKERS - (kicks + 1) // 2, SHOOTOUT_KICKERS - kicks // 2]
+            if goals[0] > goals[1] + left[1] or goals[1] > goals[0] + left[0]:
+                return events
+        elif kicks % 2 == 0 and goals[0] != goals[1]:
+            return events
+
+
 def simulate_match(
     home: Club,
     away: Club,
@@ -324,6 +375,7 @@ def simulate_match(
     day: datetime.date | None = None,
     home_form: Form = NEUTRAL_FORM,
     away_form: Form = NEUTRAL_FORM,
+    knockout: bool = False,
 ) -> Match:
     """Simule un match complet et renvoie un `Match` joué (score + événements).
 
@@ -332,6 +384,8 @@ def simulate_match(
     terrain (finale). `day` est la date du match : les blessés ce jour-là ne
     jouent pas, et les blessures du match sont signalées en événements.
     `home_form` / `away_form` : forme du jour de chaque club (neutre par défaut).
+    `knockout` : match à élimination directe, qui ne peut pas finir sur un nul
+    (prolongation, puis tirs au but).
     """
     rng = rng or random.Random()
     home_team = team_strength(home, day, home_form)
@@ -358,18 +412,32 @@ def simulate_match(
         home_lineup=[p.id for p in home_team.lineup],
         away_lineup=[p.id for p in away_team.lineup],
     )
-    for minute in range(1, MATCH_MINUTES + 1):
-        for club_id, minutes in injuries.items():
-            if minute in minutes:
-                match.events.append(
-                    MatchEvent(minute, EventType.INJURY, club_id, minutes[minute].id)
-                )
-        if rng.random() >= CHANCE_PER_MINUTE:
-            continue
-        if rng.random() < home_share:
-            match.events.extend(_play_chance(home_team, away_team, minute, rng))
-        else:
-            match.events.extend(_play_chance(away_team, home_team, minute, rng))
+
+    def play(first: int, last: int) -> None:
+        for minute in range(first, last + 1):
+            for club_id, minutes in injuries.items():
+                if minute in minutes:
+                    match.events.append(
+                        MatchEvent(minute, EventType.INJURY, club_id, minutes[minute].id)
+                    )
+            if rng.random() >= CHANCE_PER_MINUTE:
+                continue
+            if rng.random() < home_share:
+                match.events.extend(_play_chance(home_team, away_team, minute, rng))
+            else:
+                match.events.extend(_play_chance(away_team, home_team, minute, rng))
+
+    def level() -> bool:
+        return match.points_for(home.id) == match.points_for(away.id)
+
+    play(1, MATCH_MINUTES)
+    if knockout and level():
+        play(MATCH_MINUTES + 1, MATCH_MINUTES + EXTRA_TIME_MINUTES)
+    if knockout and level():
+        injured = {p.id for minutes in injuries.values() for p in minutes.values()}
+        # Tirage au sort de l'équipe qui tire la première.
+        first, second = (home_team, away_team) if rng.random() < 0.5 else (away_team, home_team)
+        match.events.extend(_shootout(first, second, injured, rng))
 
     # Le score se déduit des événements : une seule source de vérité.
     match.home_score = match.points_for(home.id)

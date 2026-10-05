@@ -151,8 +151,7 @@ def _streak(club_id: int, matches: list[Match]) -> int:
     """+n victoires de suite, −n défaites de suite (0 après un nul)."""
     streak = 0
     for match in reversed(matches):
-        scored, conceded = scores(match, club_id)
-        sign = 1 if scored > conceded else -1 if scored < conceded else 0
+        sign = match.result_for(club_id)
         if sign == 0 or (streak and (streak > 0) != (sign > 0)):
             break
         streak += sign
@@ -359,7 +358,10 @@ def settle_promises(session: Session, season: SeasonRow, day: date) -> list[Affa
         row.promise_settled = True
         option = next(o for o in CATALOGUE[row.scenario].options if o.key == row.choice)
         kept = promise_kept(
-            PromiseKind(row.promise), row.context.get("player_id"), lineup, scored > conceded
+            PromiseKind(row.promise),
+            row.context.get("player_id"),
+            lineup,
+            domain.result_for(club_id) > 0,
         )
         key = option.promise.kept if kept else option.promise.broken
         if key is not None:

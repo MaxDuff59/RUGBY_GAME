@@ -125,7 +125,7 @@ def generate_player(
     player_id: int,
     position: Position,
     level: float,
-    club_id: int,
+    club_id: int | None,
     rng: random.Random,
     season_year: int = FIRST_SEASON_YEAR,
 ) -> Player:
