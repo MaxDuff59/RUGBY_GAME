@@ -22,6 +22,7 @@ from api.affairs import (
 )
 from api.deps import SessionDep
 from api.free_agents import age_free_agents, release, renew_pool
+from api.jokers import close_jokers, end_piges
 from api.ledger import current_season, record
 from api.notes import History, ensure_preseason_ranks
 from api.routers.contracts import contracts_overview, expire_contracts, rival_signings
@@ -562,6 +563,7 @@ def play_next_matchday(session: SessionDep) -> PlayOut:
     Une affaire restée sans réponse est d'abord réglée d'office ; après la journée,
     les promesses sont tranchées et une nouvelle affaire peut tomber. Pendant la
     phase retour, des concurrents peuvent signer nos joueurs en fin de contrat.
+    Les piges des jokers médicaux terminées donnent lieu à un avis.
     """
     season = _current_or_404(session)
     ignore_pending(session)
@@ -576,6 +578,7 @@ def play_next_matchday(session: SessionDep) -> PlayOut:
         second_half = played.matchday > _regular_matchday_count(season) // 2
         if played.stage != Stage.REGULAR or second_half:
             signings = rival_signings(session, season, played.date, rng)
+        affairs += end_piges(session, _phase(season) == "finished")
     return PlayOut(
         played=played,
         season=_season_out(session, season),
@@ -656,6 +659,7 @@ def start_next_season(session: SessionDep) -> SeasonOut:
 
     rng = random.Random()
     year = season.year + 1
+    close_jokers(session, year)
     _offseason_moves(session, year, rng, my_club_id)
     age_free_agents(session, year, rng)
     next_id = (session.scalar(select(func.max(PlayerRow.id))) or 0) + 1

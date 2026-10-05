@@ -58,7 +58,8 @@ export const api = {
   upgradeFacility: (kind) => post(`/facilities/${kind}/upgrade`),
   getTransfers: () => request("/transfers"),
   approachPlayer: (playerId) => request(`/transfers/${playerId}`),
-  openNegotiation: (playerId, kind) => post(`/transfers/${playerId}/open`, { kind }),
+  openNegotiation: (playerId, kind, injuryId = null) =>
+    post(`/transfers/${playerId}/open`, { kind, injury_id: injuryId }),
   makeOffer: (negotiationId, offer) => post(`/transfers/negotiations/${negotiationId}/offer`, offer),
   abandonNegotiation: (negotiationId) =>
     request(`/transfers/negotiations/${negotiationId}`, { method: "DELETE" }),

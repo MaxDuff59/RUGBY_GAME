@@ -227,8 +227,11 @@ def build_situation(session: Session, club_row: ClubRow, season: SeasonRow) -> S
         )
         for row in session.scalars(select(AffairRow).where(AffairRow.club_id == club.id))
     ]
-    # Matchs joués depuis la dernière affaire de la saison (datée du jour du match suivant).
-    last_affair = max((p.day for p in past if p.this_season), default=None)
+    # Matchs joués depuis la dernière affaire de la saison (datée du jour du match
+    # suivant), sans compter les avis d'événements.
+    last_affair = max(
+        (p.day for p in past if p.this_season and CATALOGUE[p.scenario].scheduled), default=None
+    )
     since = sum(1 for m in mine if last_affair is None or m.date >= last_affair)
 
     return Situation(
@@ -268,6 +271,35 @@ def _save(session: Session, club_id: int, season: SeasonRow, draft: Draft) -> Af
     return row
 
 
+def notify(
+    session: Session, club_id: int, season: SeasonRow, scenario: str, context: dict
+) -> AffairRow:
+    """Avis d'événement (fin de pige...) : une affaire sans tirage au sort."""
+    return _save(session, club_id, season, Draft(CATALOGUE[scenario], context))
+
+
+def settle_unanswered(session: Session, club_row: ClubRow, row: AffairRow) -> None:
+    """Règle d'office une affaire restée sans réponse.
+
+    Une affaire avec une réponse par défaut (ou une seule réponse, comme une
+    suite de promesse) la prend, action comprise ; les autres prennent la
+    réaction « sans réponse » de leur catégorie.
+    """
+    scenario = CATALOGUE[row.scenario]
+    key = scenario.default or (scenario.options[0].key if len(scenario.options) == 1 else None)
+    option = next((o for o in scenario.options if o.key == key), None)
+    if option is None:
+        effects, outcome = IGNORED[scenario.category]
+        _settle(session, club_row, row, effects, 0, outcome)
+        return
+    if option.action is not None:
+        _act(session, club_row, option.action, row.context)
+    _settle(
+        session, club_row, row, option.effects, option.money, render(option.outcome, row.context)
+    )
+    row.choice = option.key
+
+
 def _settle(
     session: Session, club_row: ClubRow, row: AffairRow, effects: dict, money: int, outcome: str
 ) -> None:
@@ -289,31 +321,13 @@ def _settle(
 
 
 def ignore_pending(session: Session) -> None:
-    """Avant de jouer : les affaires sans réponse sont réglées d'office.
-
-    Une affaire à une seule réponse (une suite de promesse) la prend ; les autres
-    prennent la réaction « sans réponse » de leur catégorie.
-    """
+    """Avant de jouer : les affaires sans réponse sont réglées d'office."""
     career = session.scalars(select(CareerRow)).first()
     if career is None:
         return
     club_row = session.get(ClubRow, career.club_id)
     for row in pending_affairs(session, career.club_id):
-        scenario = CATALOGUE[row.scenario]
-        if len(scenario.options) == 1:
-            option = scenario.options[0]
-            _settle(
-                session,
-                club_row,
-                row,
-                option.effects,
-                option.money,
-                render(option.outcome, row.context),
-            )
-            row.choice = option.key
-        else:
-            effects, outcome = IGNORED[scenario.category]
-            _settle(session, club_row, row, effects, 0, outcome)
+        settle_unanswered(session, club_row, row)
     session.commit()
 
 
@@ -396,7 +410,8 @@ def _my_player(session: Session, club_row: ClubRow, player_id: int | None) -> Pl
 
 def _act(session: Session, club_row: ClubRow, action: Action, ctx: dict) -> None:
     """Exécute l'action d'une réponse (lève une HTTPException si elle est impossible)."""
-    # Imports locaux : ces routeurs importent eux-mêmes beaucoup de modules de l'API.
+    # Imports locaux : ces modules importent eux-mêmes beaucoup de modules de l'API.
+    from api.jokers import keep_joker, release_joker
     from api.routers.academy import promote
     from api.routers.transfers import sell
 
@@ -414,6 +429,10 @@ def _act(session: Session, club_row: ClubRow, action: Action, ctx: dict) -> None
     elif action == Action.PROMOTE:
         _my_player(session, club_row, player_id)
         promote(player_id, session)
+    elif action == Action.KEEP_JOKER:
+        keep_joker(session, club_row, ctx)
+    elif action == Action.RELEASE_JOKER:
+        release_joker(session, club_row, ctx)
     elif action in (Action.STAFF_RAISE, Action.STAFF_LEAVE):
         member = session.get(StaffRow, ctx.get("staff_id"))
         if member is None or member.club_id != club_row.id:

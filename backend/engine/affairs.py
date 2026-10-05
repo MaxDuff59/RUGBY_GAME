@@ -55,6 +55,8 @@ class Action(StrEnum):
     PROMOTE = "promote"  # l'espoir passe chez les pros
     STAFF_RAISE = "staff_raise"  # +25 % au membre du staff
     STAFF_LEAVE = "staff_leave"  # le membre du staff quitte le club
+    KEEP_JOKER = "keep_joker"  # le joker médical signe un vrai contrat
+    RELEASE_JOKER = "release_joker"  # le joker médical repart, agent libre
 
 
 class PromiseKind(StrEnum):
@@ -274,6 +276,11 @@ class Scenario:
     trigger: Trigger | None = None
     weight: float | Callable[[Situation], float] = 1.0
     urgent: bool = False  # passe avant le tirage au sort quand son trigger s'applique
+    # Sans réponse avant le match suivant : cette réponse est prise d'office (sinon
+    # la réaction « sans réponse » de la catégorie).
+    default: str | None = None
+    # Un avis d'événement (fin de pige...) ne compte pas dans le rythme des affaires.
+    scheduled: bool = True
 
     def weight_for(self, s: Situation) -> float:
         return self.weight(s) if callable(self.weight) else self.weight
@@ -1499,6 +1506,30 @@ SCENARIOS: list[Scenario] = [
                 fx(su=-1.0),
             ),
             Option("deflect", "Botter en touche.", "La polémique enfle.", fx(di=-0.3, su=-1.2)),
+        ),
+    ),
+    # --- Avis : fin de pige d'un joker médical (api/jokers.py) -------------------------
+    Scenario(
+        key="joker_end",
+        category=Category.PLAYER,
+        title="Fin de pige",
+        text="{reason} : la pige de {player}, ton joker médical, se termine. Il aimerait rester et demande {wage} par saison sur {years_label}. Lui proposer un vrai contrat ?",
+        default="release",
+        scheduled=False,
+        options=(
+            Option(
+                "sign",
+                "Lui proposer un contrat ({wage} par saison, {years_label}).",
+                "{player} signe avec le club. Le vestiaire apprécie la fidélité.",
+                fx(mo=0.2, co=0.3),
+                action=Action.KEEP_JOKER,
+            ),
+            Option(
+                "release",
+                "Le remercier et le laisser partir.",
+                "{player} quitte le club et redevient agent libre.",
+                action=Action.RELEASE_JOKER,
+            ),
         ),
     ),
 ]

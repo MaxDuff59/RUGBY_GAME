@@ -88,6 +88,7 @@ export const DEALS = {
   transfer: { label: "Transfert", scope: "Indemnité au club, puis salaire au joueur ; il arrive tout de suite" },
   loan: { label: "Prêt", scope: "Jusqu'à la fin de la saison, salaire à ta charge" },
   free: { label: "Agent libre", scope: "Sans club : salaire au joueur, il arrive tout de suite" },
+  joker: { label: "Joker médical", scope: "Pige jusqu'au retour d'un blessé de longue durée, en plus de l'effectif" },
 };
 
 export const NEGOTIATION_STAGES = {
@@ -100,6 +101,9 @@ export const NEGOTIATION_STAGES = {
 
 // 2026 -> "2027" : un contrat qui couvre la saison 2026-27 se termine en juin 2027.
 export const formatContractEnd = (contractUntil) => String(contractUntil + 1);
+
+// Dernière saison sous contrat d'un joueur sans club : 2025 -> "2025-26".
+export const formatLastSeason = (contractUntil) => `${contractUntil}-${String(contractUntil + 1).slice(2)}`;
 
 // --- Médical ------------------------------------------------------------------------
 

@@ -20,6 +20,7 @@ class DealKind(StrEnum):
     )
     LOAN = "loan"  # jusqu'à la fin de la saison, salaire à la charge de l'emprunteur
     FREE = "free"  # agent libre : salaire au joueur, il arrive tout de suite
+    JOKER = "joker"  # agent libre en pige, le temps d'une longue blessure, hors effectif
 
 
 # --- Situation d'un joueur -------------------------------------------------------------

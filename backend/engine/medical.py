@@ -188,3 +188,15 @@ def training_injuries(
             occurred = day - timedelta(days=rng.randint(2, 5))
             injuries.append(new_injury(player, club, InjurySource.TRAINING, occurred, rng, decided))
     return injuries
+
+
+# --- Joker médical ------------------------------------------------------------------------
+
+# Une absence de plus de trois mois (de la blessure au retour prévu) autorise
+# le club à recruter un joker, en plus de son effectif, jusqu'au retour du blessé.
+JOKER_MIN_ABSENCE = timedelta(weeks=13)
+
+
+def allows_joker(injury: Injury, day: date) -> bool:
+    """Blessure en cours, assez longue pour recruter un joker médical."""
+    return injury.is_active(day) and injury.return_date - injury.occurred_on > JOKER_MIN_ABSENCE

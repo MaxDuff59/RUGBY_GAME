@@ -12,6 +12,7 @@ import {
   POSITIONS,
   SEVERITIES,
   formatContractEnd,
+  formatLastSeason,
   formatMoney,
   formatNote,
   formatPercent,
@@ -114,7 +115,7 @@ export default function Player() {
             {position.label} · {player.age} ans ·{" "}
             {data.club
               ? `contrat jusqu'en juin ${formatContractEnd(player.contract_until)}`
-              : `sans contrat depuis juin ${formatContractEnd(player.contract_until)}`}
+              : `sans contrat (dernier en ${formatLastSeason(player.contract_until)})`}
             {player.loaned_from_name && ` · prêté par ${player.loaned_from_name}`}
             {player.injury?.status === "active" && (
               <>

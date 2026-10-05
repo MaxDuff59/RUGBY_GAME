@@ -10,7 +10,8 @@ Trois voies pour recruter un joueur d'un autre club (règles : engine/transfers.
   joueur accepte s'il y gagne du temps de jeu ; son salaire est à ta charge.
 
 Un agent libre (sans club ni contrat, voir engine/free_agents.py) négocie seul
-son salaire et arrive aussitôt.
+son salaire et arrive aussitôt. Pendant une longue blessure, il peut aussi venir
+en joker médical, en plus de l'effectif, jusqu'au retour du blessé (api/jokers.py).
 
 Le club et le joueur ouvrent au-dessus de leur objectif (secret) et s'en
 rapprochent à chaque offre refusée, puis consentent un dernier effort si l'offre
@@ -27,16 +28,21 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api.deps import SessionDep, load_my_club_row
+from api.jokers import joker_ids, joker_slots, live_jokers, squad_count, start_talks
+from api.jokers import sign as sign_joker
 from api.ledger import current_season, game_date, record
 from api.schemas import (
     ClubRef,
     DealOption,
+    JokerOut,
+    JokerSlotOut,
     ListingOut,
     NegotiationOut,
     OfferIn,
     OfferOut,
     OpenNegotiationIn,
     PlayerOut,
+    PlayerRef,
     TransfersOverview,
     TransferTargetOut,
 )
@@ -65,7 +71,7 @@ from engine.transfers import (
     wage_demand,
 )
 from models import Club, Player, Squad
-from models.orm import ClubRow, NegotiationRow, PlayerRow
+from models.orm import ClubRow, InjuryRow, NegotiationRow, PlayerRow
 
 router = APIRouter(prefix="/transfers", tags=["transferts"])
 
@@ -233,15 +239,45 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
         .where(NegotiationRow.club_id == me.id, NegotiationRow.stage.in_([*OPEN_STAGES, "agreed"]))
         .order_by(NegotiationRow.id.desc())
     )
+    jokers = [
+        JokerOut(
+            player=_player_ref(joker.player),
+            injured=_player_ref(joker.injury.player),
+            until=joker.injury.return_date,
+            status=joker.status,
+        )
+        for joker in live_jokers(session, me.id)
+    ]
     return TransfersOverview(
         balance=me.balance,
         season_year=year,
-        squad_size=len(me.players),
+        squad_size=squad_count(session, me),
         squad_min=SQUAD_MIN,
         squad_max=SQUAD_MAX,
         my_level=round(club_level(me.to_domain()), 1),
         listings=listings,
         negotiations=[_negotiation_out(row) for row in negotiations],
+        joker_slots=[
+            JokerSlotOut(
+                injury_id=slot.id,
+                player=_player_ref(slot.player),
+                kind=slot.kind,
+                return_date=slot.return_date,
+            )
+            for slot in joker_slots(session, me, day)
+        ],
+        jokers=jokers,
+    )
+
+
+def _player_ref(row: PlayerRow) -> PlayerRef:
+    player = row.to_domain()
+    return PlayerRef(
+        id=player.id,
+        name=player.name,
+        position=player.position,
+        age=player.age,
+        overall=player.overall,
     )
 
 
@@ -252,13 +288,11 @@ def _options(
     year: int,
     grudges: int = 0,
     closed_until: datetime.date | None = None,
+    slots: list[InjuryRow] = (),
 ) -> list[DealOption]:
     """Les voies, avec ce que demandent le club et le joueur à l'ouverture : les trois
-    voies pour un joueur sous contrat, la signature libre pour un agent libre."""
-    kinds = [DealKind.FREE] if origin is None else [k for k in DealKind if k != DealKind.FREE]
-    if closed_until is not None:
-        reason = f"Il ne veut plus discuter avec vous avant le {closed_until:%d/%m/%Y}."
-        return [DealOption(kind=kind, available=False, reason=reason) for kind in kinds]
+    voies pour un joueur sous contrat ; pour un agent libre, la signature libre et
+    un joker médical par longue blessure (`slots`)."""
     if origin is None:
         free = seasons_without_club(player, year)
         reason = (
@@ -266,14 +300,36 @@ def _options(
             if free == 0
             else f"Sans club depuis {free + 1} intersaisons : il a hâte de rejouer."
         )
-        return [
-            DealOption(
-                kind=DealKind.FREE,
-                available=True,
-                reason=reason,
-                wage_demand=_wage_opening(player, None, me, grudges),
+        wage = _wage_opening(player, None, me, grudges)
+        options = [DealOption(kind=DealKind.FREE, available=True, reason=reason, wage_demand=wage)]
+        for slot in slots:
+            injured = f"{slot.player.first_name} {slot.player.last_name}"
+            options.append(
+                DealOption(
+                    kind=DealKind.JOKER,
+                    available=True,
+                    reason=(
+                        f"Pige jusqu'au retour de {injured}, prévu le "
+                        f"{slot.return_date:%d/%m/%Y}, en plus de ton effectif."
+                    ),
+                    wage_demand=wage,
+                    injury_id=slot.id,
+                    injured_name=injured,
+                    until=slot.return_date,
+                )
             )
-        ]
+    else:
+        options = None
+    if closed_until is not None:
+        reason = f"Il ne veut plus discuter avec vous avant le {closed_until:%d/%m/%Y}."
+        kinds = (
+            [o.kind for o in options]
+            if options
+            else [DealKind.TRANSFER, DealKind.PRECONTRACT, DealKind.LOAN]
+        )
+        return [DealOption(kind=kind, available=False, reason=reason) for kind in kinds]
+    if options is not None:
+        return options
     fee = _fee_opening(player, origin, year, grudges)
     wage = _wage_opening(player, origin, me, grudges)
     refusal = refusal_reason(player, origin, me) if wage is None else ""
@@ -361,6 +417,7 @@ def approach(player_id: int, session: SessionDep) -> TransferTargetOut:
     year = _season_year(session)
     active = _active_negotiation(session, me_row.id, player_id)
     grudges, closed_until = _memory(session, me_row.id, player_id, game_date(session))
+    slots = joker_slots(session, me_row, game_date(session)) if origin is None else []
     return TransferTargetOut(
         player=PlayerOut.from_player(player, game_date(session)),
         club=ClubRef(id=origin.id, name=origin.name) if origin else None,
@@ -372,7 +429,7 @@ def approach(player_id: int, session: SessionDep) -> TransferTargetOut:
         preferred_years=preferred_years(player),
         talks_closed_until=closed_until,
         grudges=grudges,
-        options=_options(player, origin, me, year, grudges, closed_until),
+        options=_options(player, origin, me, year, grudges, closed_until, slots),
         negotiation=_negotiation_out(active) if active else None,
     )
 
@@ -393,8 +450,21 @@ def open_negotiation(
     year = _season_year(session)
     day = game_date(session)
     grudges, closed_until = _memory(session, me_row.id, player_id, day)
-    options = _options(player, origin, me, year, grudges, closed_until)
-    option = next((o for o in options if o.kind == payload.kind), None)
+    slots = joker_slots(session, me_row, day) if origin is None else []
+    options = _options(player, origin, me, year, grudges, closed_until, slots)
+    option = next(
+        (
+            o
+            for o in options
+            if o.kind == payload.kind
+            and (o.kind != DealKind.JOKER or o.injury_id == payload.injury_id)
+        ),
+        None,
+    )
+    if option is None and payload.kind == DealKind.JOKER and origin is None:
+        raise HTTPException(
+            status_code=400, detail="Pas de joker médical possible pour cette blessure"
+        )
     if option is None:
         situation = "Il est sans club" if origin is None else "Il est sous contrat"
         detail = f"{situation} : cette voie n'est pas possible pour lui."
@@ -424,6 +494,12 @@ def open_negotiation(
             f"{player.name}, libre de tout contrat, demande {_money(option.wage_demand)} "
             f"par saison, sur un contrat de {low} à {high} saisons."
         )
+    elif payload.kind == DealKind.JOKER:
+        row.stage = "player"
+        row.message = (
+            f"{player.name} est partant pour une pige jusqu'au retour de {option.injured_name}. "
+            f"Il demande {_money(option.wage_demand)} par saison, au prorata de sa présence."
+        )
     elif payload.kind == DealKind.TRANSFER:
         row.stage = "club"
         row.message = (
@@ -444,6 +520,9 @@ def open_negotiation(
     if grudges and payload.kind != DealKind.LOAN:
         row.message += " Il n'a pas oublié vos dernières discussions : il sera moins patient."
     session.add(row)
+    if payload.kind == DealKind.JOKER:
+        session.flush()
+        start_talks(session, me_row.id, row, option.injury_id)
     session.commit()
     return _negotiation_out(row)
 
@@ -456,7 +535,9 @@ def _execute(session: Session, me: ClubRow, row: NegotiationRow, year: int) -> s
     if kind == DealKind.PRECONTRACT:
         return f"{name} a signé : il arrivera à l'intersaison pour {row.years} saisons."
 
-    if len(me.players) >= SQUAD_MAX:
+    if kind == DealKind.JOKER:
+        return sign_joker(session, row, year)  # en plus de l'effectif
+    if squad_count(session, me) >= SQUAD_MAX:
         raise HTTPException(status_code=400, detail=f"Effectif complet ({SQUAD_MAX} joueurs)")
     if kind == DealKind.FREE:
         player.wage = row.wage
@@ -569,7 +650,7 @@ def make_offer(negotiation_id: int, payload: OfferIn, session: SessionDep) -> Of
                 raise HTTPException(status_code=400, detail="Indique le salaire proposé")
             wage = payload.wage
             low, high = preferred_years(player.to_domain())
-            if not low <= payload.years <= high:
+            if kind != DealKind.JOKER and not low <= payload.years <= high:
                 # La durée ne lui convient pas : il ne discute même pas le salaire.
                 row.rounds += 1
                 row.patience -= 1
@@ -590,7 +671,8 @@ def make_offer(negotiation_id: int, payload: OfferIn, session: SessionDep) -> Of
             verdict, ask = bargain(row.wage_demand, row.wage_floor, wage, row.last_offer, WAGE_STEP)
             row.last_offer = wage
         if verdict == "accepted":
-            row.wage, row.years, row.rounds, accepted = wage, payload.years, 0, True
+            years = None if kind == DealKind.JOKER else payload.years
+            row.wage, row.years, row.rounds, accepted = wage, years, 0, True
             row.stage = "agreed"
             row.message = _execute(session, me, row, year)
             concluded = True
@@ -640,7 +722,9 @@ def sell(player_id: int, session: SessionDep) -> TransfersOverview:
         raise HTTPException(status_code=404, detail="Ce joueur n'est pas dans ton effectif")
     if row.loaned_from is not None:
         raise HTTPException(status_code=400, detail="Un joueur prêté ne se vend pas")
-    if len(club.players) <= SQUAD_MIN:
+    if player_id in joker_ids(session, club.id):
+        raise HTTPException(status_code=400, detail="Un joker médical ne se vend pas")
+    if squad_count(session, club) <= SQUAD_MIN:
         raise HTTPException(
             status_code=400, detail=f"Effectif minimum atteint ({SQUAD_MIN} joueurs)"
         )

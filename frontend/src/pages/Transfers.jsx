@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { Link, useLocation, useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
 import Level from "../components/Level.jsx";
@@ -10,6 +10,7 @@ import {
   NEGOTIATION_STAGES,
   POSITIONS,
   formatContractEnd,
+  formatLastSeason,
   formatMoney,
   formatNote,
   formatShortDate,
@@ -40,7 +41,8 @@ export default function Transfers() {
   const myClub = useApi(useCallback(() => api.getClub(career.club_id), [career.club_id]));
 
   const [position, setPosition] = useState(null); // null = tous les postes
-  const [way, setWay] = useState(null);
+  const location = useLocation();
+  const [way, setWay] = useState(location.state?.way ?? null); // l'infirmerie ouvre sur les agents libres
   const [targetId, setTargetId] = useState(null); // joueur approché
   const [actionError, setActionError] = useState(null);
   const listingSort = useSort(market.data?.listings ?? [], { key: "player.value", dir: "desc" });
@@ -72,6 +74,8 @@ export default function Transfers() {
   const data = market.data;
   const squadFull = data.squad_size >= data.squad_max;
   const squadAtMinimum = data.squad_size <= data.squad_min;
+  const jokerIds = new Set(data.jokers.map((joker) => joker.player.id));
+  const jokerPossible = data.joker_slots.length > 0;
   const listings = listingSort.rows.filter(
     (listing) =>
       (position === null || listing.player.position === position) && hasWay(listing, way),
@@ -95,7 +99,10 @@ export default function Transfers() {
         </div>
         <div className="page-head__stats">
           <Stat value={formatMoney(data.balance)} label="trésorerie" />
-          <Stat value={data.squad_size} label={`joueurs (de ${data.squad_min} à ${data.squad_max})`} />
+          <Stat
+            value={data.squad_size}
+            label={`joueurs (de ${data.squad_min} à ${data.squad_max})${data.jokers.length ? ` + ${data.jokers.length} joker${data.jokers.length > 1 ? "s" : ""}` : ""}`}
+          />
           <Stat value={formatNote(data.my_level)} label="niveau de ton XV" />
         </div>
       </header>
@@ -138,6 +145,45 @@ export default function Transfers() {
                       Reprendre
                     </button>
                   )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
+
+      {(jokerPossible || data.jokers.length > 0) && (
+        <section className="section">
+          <div className="section__head">
+            <h2 className="eyebrow">Joker médical</h2>
+            <span className="muted">Un agent libre en plus de l'effectif, le temps d'une absence de plus de 3 mois</span>
+          </div>
+          <div className="card">
+            <ul className="injury-list">
+              {data.joker_slots.map((slot) => (
+                <li key={slot.injury_id}>
+                  <span className="tag tag--severe">Possible</span>
+                  <span style={{ fontWeight: 600 }}>{slot.player.name}</span>
+                  <span className="muted">
+                    {POSITIONS[slot.player.position].label} · {slot.kind} · retour le {formatShortDate(slot.return_date)}
+                  </span>
+                  {way !== "free" && (
+                    <button type="button" className="button button--small" onClick={() => setWay("free")}>
+                      Voir les agents libres
+                    </button>
+                  )}
+                </li>
+              ))}
+              {data.jokers.map((joker) => (
+                <li key={joker.player.id}>
+                  <span className="tag tag--light">{joker.status === "ending" ? "Fin de pige" : "En pige"}</span>
+                  <Link to={`/joueurs/${joker.player.id}`} style={{ fontWeight: 600 }}>{joker.player.name}</Link>
+                  <span className="muted">
+                    {POSITIONS[joker.player.position].label} · remplace {joker.injured.name}
+                    {joker.status === "ending"
+                      ? " · à toi de décider : vrai contrat ou départ"
+                      : ` jusqu'à son retour, prévu le ${formatShortDate(joker.until)}`}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -198,7 +244,7 @@ export default function Transfers() {
                       {listing.free_agent ? (
                         <>
                           <div>Sans club</div>
-                          <div className="muted">depuis juin {formatContractEnd(player.contract_until)}</div>
+                          <div className="muted">dernier contrat {formatLastSeason(player.contract_until)}</div>
                         </>
                       ) : (
                         <>
@@ -216,7 +262,7 @@ export default function Transfers() {
                     </td>
                     <td className="left muted">{listing.playing_time}</td>
                     <td className="left">
-                      <Ways listing={listing} />
+                      <Ways listing={listing} jokerPossible={jokerPossible} />
                     </td>
                     <td>
                       <button type="button" className="button button--small" onClick={() => setTargetId(player.id)}>
@@ -262,18 +308,24 @@ export default function Transfers() {
                   <td className="note">{formatNote(player.overall)}</td>
                   <td className="muted">{formatMoney(player.wage)}</td>
                   <td className="muted">
-                    {player.loaned_from ? `Prêt · ${player.loaned_from_name}` : formatContractEnd(player.contract_until)}
+                    {player.loaned_from
+                      ? `Prêt · ${player.loaned_from_name}`
+                      : jokerIds.has(player.id)
+                        ? "Joker · pige"
+                        : formatContractEnd(player.contract_until)}
                   </td>
                   <td style={{ fontWeight: 600 }}>{formatMoney(player.value)}</td>
                   <td>
                     <button
                       type="button"
                       className="button button--small"
-                      disabled={squadAtMinimum || player.loaned_from !== null}
+                      disabled={squadAtMinimum || player.loaned_from !== null || jokerIds.has(player.id)}
                       title={
                         player.loaned_from !== null
                           ? "Un joueur prêté ne se vend pas"
-                          : squadAtMinimum
+                          : jokerIds.has(player.id)
+                            ? "Un joker médical ne se vend pas"
+                            : squadAtMinimum
                             ? `Effectif minimum (${data.squad_min})`
                             : undefined
                       }
@@ -303,12 +355,17 @@ function Stat({ value, label }) {
 }
 
 // Les voies ouvertes pour un joueur du marché, en étiquettes.
-function Ways({ listing }) {
+function Ways({ listing, jokerPossible }) {
   if (listing.talks_closed_until) {
     return <span className="tag tag--injured">Ne discute plus · jusqu'au {formatShortDate(listing.talks_closed_until)}</span>;
   }
   if (listing.free_agent) {
-    return <span className="tag tag--light">Agent libre · {formatMoney(listing.wage_demand)} / saison</span>;
+    return (
+      <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 4 }}>
+        <span className="tag tag--light">Agent libre · {formatMoney(listing.wage_demand)} / saison</span>
+        {jokerPossible && <span className="tag tag--severe">Joker</span>}
+      </span>
+    );
   }
   const ways = [];
   if (listing.precontract) ways.push(<span key="p" className="tag tag--severe">Pré-contrat</span>);
@@ -357,9 +414,9 @@ function Negotiation({ playerId, squadFull, onClose, onChange }) {
     }
   }
 
-  const open = (kind) =>
+  const open = (kind, injuryId) =>
     run(
-      () => api.openNegotiation(playerId, kind),
+      () => api.openNegotiation(playerId, kind, injuryId),
       (opened) => {
         setNegotiation(opened);
         setTalk([{ who: "them", text: opened.message, ok: false }]);
@@ -416,7 +473,7 @@ function Negotiation({ playerId, squadFull, onClose, onChange }) {
       <div className="situation">
         <Fact label={free ? "Dernier salaire" : "Salaire actuel"} value={`${formatMoney(player.wage)} / saison`} />
         {free ? (
-          <Fact label="Contrat" value={`aucun · libre depuis juin ${formatContractEnd(player.contract_until)}`} />
+          <Fact label="Contrat" value={`aucun · dernier en ${formatLastSeason(player.contract_until)}`} />
         ) : (
           <>
             <Fact label="Contrat" value={`jusqu'en juin ${formatContractEnd(player.contract_until)} (${target.data.years_left} saison${target.data.years_left > 1 ? "s" : ""})`} />
@@ -443,28 +500,35 @@ function Negotiation({ playerId, squadFull, onClose, onChange }) {
 
       {!negotiation && (
         <div className="deal-options">
-          {target.data.options.map((option) => (
-            <button
-              key={option.kind}
-              type="button"
-              className="protocol"
-              disabled={busy || !option.available || (option.kind !== "precontract" && squadFull)}
-              title={option.kind !== "precontract" && squadFull ? "Effectif complet" : undefined}
-              onClick={() => open(option.kind)}
-            >
-              <span className="protocol__name">{DEALS[option.kind].label}</span>
-              {option.fee_demand !== null && option.fee_demand !== undefined && (
-                <span className="protocol__line">Le club en espère <strong>{formatMoney(option.fee_demand)}</strong></span>
-              )}
-              {option.wage_demand !== null && option.wage_demand !== undefined && (
-                <span className="protocol__line">Il espère <strong>{formatMoney(option.wage_demand)}</strong> / saison</span>
-              )}
-              {option.kind === "loan" && option.available && (
-                <span className="protocol__line">Salaire à ta charge : <strong>{formatMoney(option.wage)}</strong> / saison</span>
-              )}
-              <span className="protocol__line">{option.reason}</span>
-            </button>
-          ))}
+          {target.data.options.map((option) => {
+            // Un pré-contrat attend l'intersaison, un joker vient en plus de l'effectif.
+            const blocked = squadFull && option.kind !== "precontract" && option.kind !== "joker";
+            return (
+              <button
+                key={`${option.kind}-${option.injury_id ?? ""}`}
+                type="button"
+                className="protocol"
+                disabled={busy || !option.available || blocked}
+                title={blocked ? "Effectif complet" : undefined}
+                onClick={() => open(option.kind, option.injury_id)}
+              >
+                <span className="protocol__name">
+                  {DEALS[option.kind].label}
+                  {option.injured_name && ` · remplace ${option.injured_name}`}
+                </span>
+                {option.fee_demand !== null && option.fee_demand !== undefined && (
+                  <span className="protocol__line">Le club en espère <strong>{formatMoney(option.fee_demand)}</strong></span>
+                )}
+                {option.wage_demand !== null && option.wage_demand !== undefined && (
+                  <span className="protocol__line">Il espère <strong>{formatMoney(option.wage_demand)}</strong> / saison</span>
+                )}
+                {option.kind === "loan" && option.available && (
+                  <span className="protocol__line">Salaire à ta charge : <strong>{formatMoney(option.wage)}</strong> / saison</span>
+                )}
+                <span className="protocol__line">{option.reason}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -529,6 +593,7 @@ function Fact({ label, value }) {
 function OfferForm({ negotiation, player, years: [yearsMin, yearsMax], busy, onOffer, onAbandon }) {
   const clubStage = negotiation.stage === "club";
   const isLoan = negotiation.kind === "loan";
+  const isJoker = negotiation.kind === "joker"; // une pige : pas de durée à négocier
   const [fee, setFee] = useState(player.value);
   const [wage, setWage] = useState(player.wage);
   const [years, setYears] = useState(Math.min(yearsMax, Math.max(yearsMin, 2)));
@@ -537,6 +602,7 @@ function OfferForm({ negotiation, player, years: [yearsMin, yearsMax], busy, onO
     event.preventDefault();
     if (clubStage) onOffer({ fee: Number(fee) }, `Tu proposes ${formatMoney(Number(fee))} d'indemnité.`);
     else if (isLoan) onOffer({}, "Tu confirmes le prêt.");
+    else if (isJoker) onOffer({ wage: Number(wage) }, `Tu proposes ${formatMoney(Number(wage))} par saison pour la pige.`);
     else {
       const n = Number(years);
       onOffer(
@@ -560,14 +626,16 @@ function OfferForm({ negotiation, player, years: [yearsMin, yearsMax], busy, onO
             <label htmlFor="offer-wage">Salaire (€ / saison) · demande : {formatMoney(negotiation.wage_demand)}</label>
             <input id="offer-wage" className="input" type="number" min="0" step="1000" value={wage} onChange={(e) => setWage(e.target.value)} />
           </div>
-          <div className="field">
-            <label htmlFor="offer-years">Durée (saisons)</label>
-            <select id="offer-years" className="input" value={years} onChange={(e) => setYears(e.target.value)}>
-              {[1, 2, 3, 4, 5].map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
-          </div>
+          {!isJoker && (
+            <div className="field">
+              <label htmlFor="offer-years">Durée (saisons)</label>
+              <select id="offer-years" className="input" value={years} onChange={(e) => setYears(e.target.value)}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </>
       )}
       <button type="submit" className="button button--primary" disabled={busy}>

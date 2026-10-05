@@ -165,6 +165,17 @@ function InjuredPlayer({ injuryCase, busy, onChoose }) {
             {injury.weeks_left !== injury.weeks_total ? ` sur ${injury.weeks_total}` : ""})
             {injury.protocol_chosen && ` · rechute ${formatPercent(injury.relapse_risk)} par match`}
           </span>
+          {injuryCase.joker && (
+            <span>
+              <span className="tag tag--light">Joker</span>{" "}
+              <Link to={`/joueurs/${injuryCase.joker.id}`}>{injuryCase.joker.name}</Link>
+            </span>
+          )}
+          {injuryCase.joker_allowed && (
+            <Link to="/transferts" state={{ way: "free" }} className="button button--small">
+              Recruter un joker médical
+            </Link>
+          )}
         </li>
       </ul>
       {options.length > 0 && (

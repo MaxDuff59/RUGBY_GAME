@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from api.deps import SessionDep, load_my_club_row
 from api.free_agents import release
+from api.jokers import joker_ids
 from api.ledger import current_season, game_date
 from api.schemas import ClubRef, ContractOut, ContractsOverview, ExtendIn, PlayerOut
 from engine.contracts import (
@@ -146,10 +147,11 @@ def contracts_overview(session: Session, me: ClubRow) -> ContractsOverview:
     signed = _signed_elsewhere(session, me.id)
     extended = _extensions(session, me.id, season)
 
+    jokers = joker_ids(session, me.id)
     pros, youths = [], []
     for player in [*club.players, *club.youths]:
-        if player.loaned_from is not None:
-            continue  # son contrat est celui de son club propriétaire
+        if player.loaned_from is not None or player.id in jokers:
+            continue  # contrat de son club propriétaire, ou pige d'un joker médical
         out = _situation(player, club, year, signed, extended, day, names)
         if out is not None:
             (youths if player.squad == Squad.YOUTH else pros).append(out)
@@ -198,6 +200,11 @@ def extend(player_id: int, payload: ExtendIn, session: SessionDep) -> ContractsO
     club = me.to_domain()
     player = next(p for p in [*club.players, *club.youths] if p.id == player_id)
 
+    if player_id in joker_ids(session, me.id):
+        raise HTTPException(
+            status_code=400,
+            detail="Joker médical : tu pourras lui proposer un contrat à la fin de sa pige",
+        )
     signed = _signed_elsewhere(session, me.id).get(player_id)
     if signed is not None:
         rival = session.get(ClubRow, signed.club_id)
@@ -262,6 +269,7 @@ def rival_signings(
     me = next(row for row in club_rows if row.id == career.club_id).to_domain()
     rivals = [row.to_domain() for row in club_rows if row.id != me.id]
     signed = _signed_elsewhere(session, me.id)
+    jokers = joker_ids(session, me.id)
     # Place chez chaque concurrent, en comptant les joueurs qui doivent déjà le rejoindre.
     incoming = Counter(
         session.scalars(select(NegotiationRow.club_id).where(NegotiationRow.stage == "agreed"))
@@ -271,6 +279,7 @@ def rival_signings(
     for player in [*me.players, *me.youths]:
         if (
             player.loaned_from is not None
+            or player.id in jokers
             or player.contract_until != season.year
             or player.id in signed
             or retires_next_season(player)

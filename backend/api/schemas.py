@@ -638,6 +638,8 @@ class TransfersOverview(BaseModel):
     my_level: float
     listings: list[ListingOut]
     negotiations: list[NegotiationOut]  # en cours, et pré-contrats en attente de l'intersaison
+    joker_slots: list["JokerSlotOut"]  # blessures qui autorisent un joker médical
+    jokers: list["JokerOut"]  # jokers en pige (hors effectif, non compris dans squad_size)
 
 
 class DealOption(BaseModel):
@@ -649,6 +651,10 @@ class DealOption(BaseModel):
     fee_demand: int | None = None  # transfert : indemnité demandée par le club (son ouverture)
     wage_demand: int | None = None  # transfert, pré-contrat, agent libre : salaire demandé
     wage: int | None = None  # prêt : salaire actuel, à ta charge
+    # Joker médical : la blessure qu'il compense, le blessé et son retour prévu.
+    injury_id: int | None = None
+    injured_name: str | None = None
+    until: datetime.date | None = None
 
 
 class TransferTargetOut(BaseModel):
@@ -670,12 +676,14 @@ class TransferTargetOut(BaseModel):
 
 class OpenNegotiationIn(BaseModel):
     kind: DealKind
+    injury_id: int | None = None  # joker médical : la blessure qu'il compense
 
 
 class OfferIn(BaseModel):
     fee: int | None = Field(default=None, ge=0)  # étape club
     wage: int | None = Field(default=None, ge=0)  # étape joueur
-    years: int = Field(default=2, ge=1, le=5)  # durée de contrat proposée (transfert, pré-contrat)
+    # Durée de contrat proposée (transfert, pré-contrat, agent libre ; ignorée pour un joker).
+    years: int = Field(default=2, ge=1, le=5)
 
 
 class OfferOut(BaseModel):
@@ -717,6 +725,24 @@ class PlayerRef(BaseModel):
     overall: float
 
 
+class JokerSlotOut(BaseModel):
+    """Une longue blessure qui autorise un joker médical, en plus de l'effectif."""
+
+    injury_id: int
+    player: PlayerRef  # le blessé
+    kind: str
+    return_date: datetime.date
+
+
+class JokerOut(BaseModel):
+    """Un joker médical en pige : jusqu'au retour du blessé, au plus tard la fin de saison."""
+
+    player: PlayerRef
+    injured: PlayerRef
+    until: datetime.date
+    status: str  # active (en pige), ending (pige finie, décision attendue)
+
+
 class ProtocolOption(BaseModel):
     """Ce que donnerait un protocole pour une blessure dont le protocole reste à choisir."""
 
@@ -732,6 +758,8 @@ class InjuryCase(BaseModel):
     player: PlayerRef
     injury: InjuryOut
     options: list[ProtocolOption]  # vide une fois le protocole fixé
+    joker_allowed: bool = False  # absence de plus de 3 mois, pas encore de joker
+    joker: PlayerRef | None = None  # le joker médical recruté pour cette blessure
 
 
 class MedicalOverview(BaseModel):

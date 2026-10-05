@@ -407,6 +407,30 @@ class NegotiationRow(Base):
     player: Mapped[PlayerRow] = relationship()
 
 
+class JokerRow(Base):
+    """Joker médical du club dirigé : un agent libre recruté pour la durée d'une
+    longue blessure (voir api/jokers.py).
+
+    Statuts : `talks` (négociation en cours, voir `negotiation_id`), `active`
+    (pige en cours), `ending` (pige terminée, le manager doit décider), `kept`
+    (il a signé un vrai contrat), `left` (il est reparti).
+    """
+
+    __tablename__ = "jokers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id"))
+    injury_id: Mapped[int] = mapped_column(ForeignKey("injuries.id"))
+    negotiation_id: Mapped[int | None] = mapped_column(ForeignKey("negotiations.id"))
+    status: Mapped[str] = mapped_column(String(8))
+    signed_on: Mapped[datetime.date | None] = mapped_column(Date)
+
+    player: Mapped[PlayerRow] = relationship()
+    injury: Mapped[InjuryRow] = relationship()
+    negotiation: Mapped["NegotiationRow | None"] = relationship()
+
+
 class TransactionRow(Base):
     """Une opération financière d'un club (voir api/ledger.py)."""
 

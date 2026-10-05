@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy.orm import Session
 
 from api.deps import SessionDep, load_my_club_row
+from api.jokers import joker_ids, squad_count
 from api.ledger import current_season, game_date
 from api.schemas import AcademyOverview, PlayerOut, StandingOut, StrengthOut
 from engine.economy import SQUAD_MAX, SQUAD_MIN, wage_for
@@ -76,7 +77,7 @@ def _overview(session: Session, me: ClubRow) -> AcademyOverview:
         intake_per_year=youth_intake_size(club.facilities.academy_level),
         youth_max_age=YOUTH_MAX_AGE,
         youth_exit_age=YOUTH_EXIT_AGE,
-        squad_size=len(club.players),
+        squad_size=squad_count(session, me),
         squad_min=SQUAD_MIN,
         squad_max=SQUAD_MAX,
         youths=[PlayerOut.from_player(p, day) for p in club.youths],
@@ -112,7 +113,7 @@ def promote(player_id: int, session: SessionDep) -> AcademyOverview:
     """Fait passer un espoir chez les pros, avec un salaire de pro."""
     me = load_my_club_row(session)
     row = _my_player(session, me, player_id, Squad.YOUTH)
-    if len(me.players) >= SQUAD_MAX:
+    if squad_count(session, me) >= SQUAD_MAX:
         raise HTTPException(status_code=400, detail=f"Effectif pro complet ({SQUAD_MAX} joueurs)")
     row.squad = Squad.PRO.value
     row.wage = wage_for(row.to_domain())
@@ -131,7 +132,9 @@ def demote(player_id: int, session: SessionDep) -> AcademyOverview:
         )
     if row.loaned_from is not None:
         raise HTTPException(status_code=400, detail="Un joueur prêté reste chez les pros")
-    if len(me.players) <= SQUAD_MIN:
+    if row.id in joker_ids(session, me.id):
+        raise HTTPException(status_code=400, detail="Un joker médical reste chez les pros")
+    if squad_count(session, me) <= SQUAD_MIN:
         raise HTTPException(
             status_code=400, detail=f"Effectif pro minimum atteint ({SQUAD_MIN} joueurs)"
         )
