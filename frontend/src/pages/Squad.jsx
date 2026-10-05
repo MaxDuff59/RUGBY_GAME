@@ -2,6 +2,7 @@ import { useCallback, useRef } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
+import InjuryIcon from "../components/InjuryIcon.jsx";
 import Pitch from "../components/Pitch.jsx";
 import SortHeader from "../components/SortHeader.jsx";
 import {
@@ -11,7 +12,6 @@ import {
   formatContractEnd,
   formatMoney,
   formatNote,
-  formatShortDate,
 } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { usePitchWidth } from "../hooks/usePitchWidth.js";
@@ -115,8 +115,10 @@ export default function Squad() {
                 >
                   <td className="left jersey">{player.jersey ?? ""}</td>
                   <td className="left">
-                    <div style={{ fontWeight: 600 }}>{player.name}</div>
-                    <InjuryTag injury={player.injury} />
+                    <div className="squad__name">
+                      <InjuryIcon injury={player.injury} />
+                      {player.name}
+                    </div>
                   </td>
                   <td className="left">{POSITIONS[player.position].label}</td>
                   <td className="muted">{player.age}</td>
@@ -173,26 +175,6 @@ function sortSquad(rows) {
     if (a.positionRank !== b.positionRank) return a.positionRank - b.positionRank;
     return b.overall - a.overall;
   });
-}
-
-// « Blessé » jusqu'à la date de retour, « Fragile » pendant la reprise, rien sinon.
-function InjuryTag({ injury }) {
-  if (!injury) return null;
-  if (injury.status === "active") {
-    return (
-      <div className="muted">
-        <span className="tag tag--injured">Blessé</span> retour le {formatShortDate(injury.return_date)}
-      </div>
-    );
-  }
-  if (injury.status === "fragile") {
-    return (
-      <div className="muted">
-        <span className="tag tag--fragile">Fragile</span>
-      </div>
-    );
-  }
-  return null;
 }
 
 function Stat({ value, label }) {

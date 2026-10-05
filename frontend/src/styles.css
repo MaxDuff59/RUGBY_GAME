@@ -1423,6 +1423,56 @@ body,
   color: var(--ink);
 }
 
+/* Croix médicale devant le nom dans l'effectif : rouge si blessé, grise si fragile */
+.squad__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.medical-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.medical-icon--injured {
+  color: #c8283a;
+}
+
+.medical-icon--fragile {
+  color: var(--neutral);
+}
+
+/* Fiche de la blessure au survol de la croix (position fixe, posée par InjuryIcon) */
+.injury-card {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 20px rgba(22, 24, 27, 0.12);
+  font-size: 13px;
+  font-weight: 400;
+  pointer-events: none;
+}
+
+.injury-card__tags {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.injury-card__kind {
+  font-weight: 600;
+  font-size: 14px;
+}
+
 .tag--healed {
   background: var(--neutral-soft);
   color: var(--ink);
