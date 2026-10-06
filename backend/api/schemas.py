@@ -5,13 +5,14 @@ sans contraindre le moteur.
 """
 
 import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from engine.economy import FacilityKind, TransactionCategory, market_value
 from engine.match_engine import Defence, GamePlan, PenaltyChoice, TeamStrength
 from engine.notes import Note
+from engine.sponsors import Placement
 from engine.transfers import DealKind
 from models import (
     AmenityKind,
@@ -752,11 +753,83 @@ class StadiumOut(BaseModel):
     catalogue: list[AmenityOut]
 
 
+# Motifs de maillot proposés (dessinés par frontend/src/jersey.js).
+JerseyPattern = Literal[
+    "plain", "hoops", "stripes", "halves", "quarters", "sash", "chevron", "band", "yoke"
+]
+HexColor = Annotated[str, Field(pattern=r"^#[0-9A-Fa-f]{6}$")]
+
+
+class Jersey(BaseModel):
+    """Maillot dessiné par le manager : un motif et trois couleurs (les sponsors sont
+    communs aux trois tenues, voir SponsorsOut)."""
+
+    pattern: JerseyPattern
+    base: HexColor  # fond du maillot
+    motif: HexColor  # bandes, rayures, écharpe…
+    trim: HexColor  # col et bords des manches
+
+
+class SponsorOut(BaseModel):
+    """Une marque de la bibliothèque (engine/sponsors.py)."""
+
+    id: str
+    name: str
+    sector: str
+    budget: int  # par match, sur la poitrine
+    image: int  # 1 (mal vu) à 5 (adoré)
+    image_label: str
+    mood: float  # effet sur la ferveur des supporters
+    logo: dict
+
+
+class DealIn(BaseModel):
+    sponsor: str
+    placement: Placement
+
+
+class DealOut(DealIn):
+    revenue: int  # par match
+
+
+class DealsIn(BaseModel):
+    deals: list[DealIn]
+
+
+class SponsorsOut(BaseModel):
+    """Les contrats en cours, la bibliothèque, et ce qu'en pensent les supporters."""
+
+    deals: list[DealOut]
+    library: list[SponsorOut]
+    placements: dict[Placement, str]  # libellés
+    shares: dict[Placement, float]  # part du budget versée selon l'emplacement
+    max_deals: int
+    revenue: int  # par match, en tout
+    mood: float  # effet sur la ferveur des supporters
+    crowded_mood: float  # malus quand le maillot est couvert de logos
+
+
+JerseyKind = Literal["home", "away", "third"]
+
+
+class JerseysOut(BaseModel):
+    """Les trois tenues (None : maillot aux couleurs du club) et l'achat du third."""
+
+    home: Jersey | None = None
+    away: Jersey | None = None
+    third: Jersey | None = None
+    third_kit: bool  # third acheté : on peut le dessiner
+    third_kit_cost: int
+    third_kit_affordable: bool
+
+
 class FacilitiesOverview(BaseModel):
     balance: int
     facilities: FacilitiesOut
     upgrades: list[UpgradeOut]
     stadium: StadiumOut
+    jerseys: JerseysOut
+    sponsors: SponsorsOut
 
 
 class AmenityIn(BaseModel):

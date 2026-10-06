@@ -2,6 +2,8 @@
 
 from datetime import date
 
+import pytest
+
 
 def test_list_clubs(client):
     response = client.get("/clubs")
@@ -265,6 +267,91 @@ def test_install_amenities_in_a_stand(manager):
         )
     assert response.status_code == 400
     assert response.json()["detail"].startswith("Tribune complète")
+
+
+def test_design_the_jerseys(manager):
+    kits = manager.get("/facilities").json()["jerseys"]
+    assert [kits[k] for k in ("home", "away", "third")] == [None, None, None]
+    assert kits["third_kit"] is False
+    jersey = {"pattern": "hoops", "base": "#0B3D91", "motif": "#FFFFFF", "trim": "#C8102E"}
+    before = manager.get("/facilities").json()["balance"]
+    saved = manager.put("/facilities/jerseys/away", json=jersey).json()
+    assert saved["jerseys"]["away"] == jersey
+    assert saved["jerseys"]["home"] is None
+    assert saved["balance"] == before  # dessiner est gratuit
+    assert manager.get("/facilities").json()["jerseys"]["away"] == jersey
+
+    # Motif inconnu, couleur mal écrite, sponsor trop long ou tenue inconnue : refusés.
+    for wrong in ({"pattern": "spots"}, {"base": "bleu"}):
+        assert manager.put("/facilities/jerseys/home", json={**jersey, **wrong}).status_code == 422
+    assert manager.put("/facilities/jerseys/fourth", json=jersey).status_code == 422
+
+    # Le third se dessine une fois acheté.
+    refused = manager.put("/facilities/jerseys/third", json=jersey)
+    assert refused.status_code == 400
+    assert "pas encore acheté" in refused.json()["detail"]
+    bought = manager.post("/facilities/jerseys/third/buy").json()
+    assert bought["jerseys"]["third_kit"] is True
+    assert bought["balance"] == before - kits["third_kit_cost"]
+    labels = [t["label"] for t in manager.get("/finances").json()["transactions"]]
+    assert "Maillot third" in labels
+    assert manager.post("/facilities/jerseys/third/buy").status_code == 400
+    designed = manager.put("/facilities/jerseys/third", json=jersey).json()
+    assert designed["jerseys"]["third"] == jersey
+
+    assert manager.delete("/facilities/jerseys/away").json()["jerseys"]["away"] is None
+
+
+def test_jersey_sponsors(manager):
+    sponsors = manager.get("/facilities").json()["sponsors"]
+    assert sponsors["deals"] == [] and sponsors["revenue"] == 0 and sponsors["mood"] == 0
+    by_id = {s["id"]: s for s in sponsors["library"]}
+    assert by_id["fastbet"]["image"] == 1 and by_id["fastbet"]["mood"] < 0
+    fervour_before = manager.get("/clubs/3/notes").json()["supporters"]["value"]
+
+    # Un sponsor mal vu sur la poitrine, un apprécié sur la manche.
+    deals = [
+        {"sponsor": "fastbet", "placement": "chest"},
+        {"sponsor": "garonne", "placement": "sleeve"},
+    ]
+    after = manager.put("/facilities/sponsors", json={"deals": deals}).json()["sponsors"]
+    assert [d["sponsor"] for d in after["deals"]] == ["fastbet", "garonne"]
+    assert after["revenue"] == by_id["fastbet"]["budget"] + round(by_id["garonne"]["budget"] * 0.4)
+    assert after["mood"] == round(by_id["fastbet"]["mood"] + by_id["garonne"]["mood"], 2)
+    fervour_after = manager.get("/clubs/3/notes").json()["supporters"]["value"]
+    assert fervour_after == pytest.approx(fervour_before + after["mood"], abs=0.01)
+
+    # Quatre logos, deux fois le même, deux à la même place, ou une marque inconnue : refusés.
+    for wrong in (
+        deals
+        + [{"sponsor": "volt", "placement": "back"}, {"sponsor": "pic", "placement": "belly"}],
+        deals + [{"sponsor": "fastbet", "placement": "back"}],
+        deals + [{"sponsor": "volt", "placement": "chest"}],
+        [{"sponsor": "nike", "placement": "chest"}],
+    ):
+        assert manager.put("/facilities/sponsors", json={"deals": wrong}).status_code == 400
+    assert (
+        manager.put(
+            "/facilities/sponsors", json={"deals": [{"sponsor": "volt", "placement": "hat"}]}
+        ).status_code
+        == 422
+    )
+
+    # Trois logos : le malus « sapin de Noël » s'ajoute.
+    three = deals + [{"sponsor": "volt", "placement": "back"}]
+    crowded = manager.put("/facilities/sponsors", json={"deals": three}).json()["sponsors"]
+    assert crowded["mood"] == pytest.approx(after["mood"] + crowded["crowded_mood"], abs=0.01)
+
+    # Les sponsors paient à chaque match.
+    manager.post("/seasons/current/play")
+    labels = [t["label"] for t in manager.get("/finances").json()["transactions"]]
+    assert any(label.startswith("Sponsors du maillot") for label in labels)
+    shirt = next(
+        t
+        for t in manager.get("/finances").json()["transactions"]
+        if t["label"].startswith("Sponsors du maillot")
+    )
+    assert shirt["amount"] == crowded["revenue"]
 
 
 def test_sell_a_player(manager):

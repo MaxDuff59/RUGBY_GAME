@@ -52,6 +52,15 @@ class ClubRow(Base):
     # XV choisi par le manager : un identifiant de joueur (ou null) par place, dans
     # l'ordre de SLOT_POSITIONS (engine/match_engine.py). Vide : le staff compose.
     lineup_choice: Mapped[list] = mapped_column(JSON, default=list)
+    # Maillots dessinés par le manager, par tenue : {"home": {...}, "away": {...},
+    # "third": {...}} (motif, trois couleurs, sponsor). Une tenue absente prend le maillot
+    # aux couleurs du club, que l'interface compose elle-même. À réassigner en entier.
+    jerseys: Mapped[dict] = mapped_column(JSON, default=dict)
+    # Le maillot third s'achète (engine/economy.py) avant de pouvoir être dessiné.
+    third_kit: Mapped[bool] = mapped_column(default=False)
+    # Sponsors du maillot (engine/sponsors.py) : [{"sponsor": "volt", "placement": "chest"}].
+    # À réassigner en entier.
+    sponsors: Mapped[list] = mapped_column(JSON, default=list)
 
     # Pros et espoirs sont dans la même table, séparés par `squad`.
     players: Mapped[list["PlayerRow"]] = relationship(

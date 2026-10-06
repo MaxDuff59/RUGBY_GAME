@@ -239,6 +239,10 @@ def squad_value(club: Club) -> int:
 # --- Recettes et dépenses d'une journée ---------------------------------------------
 
 
+# Le maillot third : une tenue de plus à dessiner, qu'il faut d'abord acheter.
+THIRD_KIT_COST = 150_000
+
+
 class TransactionCategory(StrEnum):
     """Domaine d'une opération financière."""
 

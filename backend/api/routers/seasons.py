@@ -66,6 +66,7 @@ from engine.match_engine import simulate_match
 from engine.medical import new_injury
 from engine.offseason import age_players, develop_players, retirees, youth_exits, youth_intake
 from engine.season import generate_fixtures, playoff_round, record_result
+from engine.sponsors import deals_from, jersey_revenue
 from models import (
     ATTRIBUTE_NAMES,
     Club,
@@ -479,6 +480,16 @@ def _play_day(
                 day,
                 matchday,
             )
+            if shirt := jersey_revenue(deals_from(club_row.sponsors)):
+                record(
+                    session,
+                    club_row,
+                    TransactionCategory.SPONSORS,
+                    f"Sponsors du maillot · {label}",
+                    shirt,
+                    day,
+                    matchday,
+                )
             if stage.is_playoff:
                 record(
                     session,

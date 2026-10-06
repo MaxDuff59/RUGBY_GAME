@@ -80,6 +80,13 @@ export const api = {
   getFacilities: () => request("/facilities"),
   upgradeFacility: (kind) => post(`/facilities/${kind}/upgrade`),
   installAmenity: (side, kind) => post(`/facilities/stadium/stands/${side}/amenities`, { kind }),
+  // Maillots dessinés par le manager, par tenue (home, away, third) ; resetJersey revient
+  // aux couleurs du club. Le third s'achète d'abord.
+  saveJersey: (kind, jersey) => request(`/facilities/jerseys/${kind}`, { method: "PUT", body: jersey }),
+  resetJersey: (kind) => del(`/facilities/jerseys/${kind}`),
+  buyThirdKit: () => post("/facilities/jerseys/third/buy"),
+  // Sponsors du maillot : [{ sponsor, placement }], trois au plus, un par emplacement.
+  setSponsors: (deals) => request("/facilities/sponsors", { method: "PUT", body: { deals } }),
   getTransfers: () => request("/transfers"),
   approachPlayer: (playerId) => request(`/transfers/${playerId}`),
   openNegotiation: (playerId, kind, injuryId = null) =>

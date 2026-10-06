@@ -98,6 +98,36 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   boutique derrière la tribune, loges en bandeau sombre, écran noir au sommet. Les centres
   (`CampusView`) : les installations apparaissent niveau par niveau, et le panneau les
   liste avec « Améliorer ».
+- Maillots (carte sous les infrastructures) : les trois tenues côte à côte, domicile,
+  extérieur et third, chacune de face et de dos à plat (`JerseyFlat`) avec son motif et
+  « Personnaliser ». Par défaut, domicile uni dans la première couleur du club, extérieur
+  dans la seconde, third sur fond neutre (noir, ou blanc si le club joue en sombre) avec
+  le col aux couleurs du club. Le third est verrouillé au départ : maillot en filigrane,
+  prix, bouton « Déverrouiller » (accent) qui passe par la fenêtre de confirmation
+  (`THIRD_KIT_COST`, `engine/economy.py`, opération « Maillot third » dans les finances).
+  Sous les tenues, la ligne « Sponsors » : les logos en place avec leur emplacement, le
+  total par match et l'effet sur la ferveur.
+  « Personnaliser » ouvre l'éditeur (`JerseyEditor`, même fenêtre que « Voir », titre
+  « Maillot domicile / extérieur / third ») : à gauche le maillot en 3D (`JerseyStudio`, three.js chargé seulement
+  à l'ouverture ; on glisse pour tourner, « Face » / « Dos »), à droite les neuf motifs en
+  vignettes, les couleurs (Fond, Motif, Col : une pastille par pièce, puis une palette
+  commune — couleurs du club d'abord — et « + » pour une couleur libre) et les sponsors :
+  quatre emplacements (poitrine ×1, dos ×0,6, manche ×0,4, ventre ×0,5 du budget),
+  trois logos au plus, « Choisir » ouvre la bibliothèque (`engine/sponsors.py` : seize
+  marques inventées, logo dessiné par `src/sponsors.js` — forme, pictogramme, nom — en
+  vignette sur fond clair, en patch sur fond plein sur le maillot ; chaque ligne est le
+  bouton de choix, avec secteur, image — Mal vu… Adoré — et gain par match). Sous la liste :
+  total par match et effet sur la ferveur des supporters (image des marques, malus
+  « sapin de Noël » à trois logos), qui règle l'affluence. Les sponsors sont les mêmes
+  sur les trois tenues et paient à chaque match (ligne « Sponsors du maillot » dans les
+  finances). Blason sur le cœur, numéro 10 dans le dos. Les motifs se
+  dessinent dans `src/jersey.js` sur un canevas déroulé (devant, puis dos), qui sert de
+  texture en 3D et d'image à plat. Gratuit ; « Couleurs du club » revient au maillot uni.
+  En 3D : torse à plis, manches rapportées, col côtelé à encolure ouverte, patte de
+  boutonnage à deux boutons (couleur du col), coutures et ourlet ; tissu en maille
+  (relief procédural, voile textile léger), impressions plus brillantes que le tissu ;
+  lumière d'une pièce virtuelle plus une lampe (ombre des manches sur le torse), halo
+  d'ombre au sol, tone mapping Neutral pour garder les couleurs exactes.
 - Match en direct (page `/match`, ouverte par « Jouer le match » ; pas d'entrée dans le menu) :
   en haut le tableau d'affichage (une carte) : nom de chaque club en capitales (le nôtre en
   accent) et ses essais, score en très grand, au centre le chrono `MM:SS` dont les secondes

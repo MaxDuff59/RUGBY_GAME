@@ -35,6 +35,7 @@ from engine.freshness import appearances_by_player, squad_freshness, team_freshn
 from engine.match_engine import team_strength
 from engine.morale import team_morale
 from engine.notes import Boost, Note
+from engine.sponsors import deals_from, sponsor_mood
 from engine.supporters import fan_fervour
 from models import Club, Match, StaffRole
 from models.orm import (
@@ -126,6 +127,8 @@ class History:
     leagues: list[dict[int, str]]  # championnat de chaque club, par saison
     ranks: list[dict[int, int]]  # rang attendu de chaque club dans son championnat, par saison
     affair_boosts: AffairBoosts = field(default_factory=dict)
+    # Ce que les supporters pensent des sponsors du maillot (engine/sponsors.py), par club.
+    sponsor_moods: dict[int, float] = field(default_factory=dict)
 
     @classmethod
     def load(cls, session: Session) -> "History":
@@ -139,6 +142,11 @@ class History:
             leagues=[season_leagues(season) for season in seasons],
             ranks=[ensure_preseason_ranks(session, season) for season in seasons],
             affair_boosts=_affair_boosts(session),
+            sponsor_moods={
+                row.id: sponsor_mood(deals_from(row.sponsors))
+                for row in session.scalars(select(ClubRow))
+                if row.sponsors
+            },
         )
 
     @property
@@ -186,7 +194,10 @@ class History:
         return team_cohesion(club_id, self.everything, self.boosts(club_id, "cohesion"))
 
     def fervour(self, club_id: int) -> Note:
-        return fan_fervour(club_id, self.by_season, self.boosts(club_id, "supporters"))
+        fervour = fan_fervour(club_id, self.by_season, self.boosts(club_id, "supporters"))
+        # Les sponsors du maillot pèsent tant qu'ils y sont : on retire le logo, ça passe.
+        fervour.nudge(self.sponsor_moods.get(club_id, 0.0))
+        return fervour
 
     def board(self, club_id: int) -> Note:
         seasons = [

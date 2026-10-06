@@ -3176,3 +3176,377 @@ body,
     grid-template-rows: auto;
   }
 }
+
+/* --- Infrastructures : maillot (carte et éditeur) ---------------------------------- */
+
+.jersey-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Les trois tenues côte à côte, séparées par un trait */
+.jersey-kits {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+/* Une tenue : ses deux vues, puis le libellé et le bouton sur une ligne */
+.jersey-kit {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.jersey-kit .jersey-card__views {
+  grid-column: 1 / -1;
+}
+
+.jersey-kit + .jersey-kit {
+  padding-left: 20px;
+  border-left: 1px solid var(--line-soft);
+}
+
+/* Third pas encore acheté : le maillot en filigrane */
+.jersey-kit--locked .jersey-card__views {
+  opacity: 0.3;
+}
+
+.jersey-card__views {
+  display: flex;
+  gap: 4px;
+}
+
+.jersey-card__text {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.jersey-flat {
+  display: block;
+  flex: none;
+}
+
+.jersey-studio {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  cursor: grab;
+  touch-action: none;
+}
+
+.jersey-studio:active {
+  cursor: grabbing;
+}
+
+.jersey-studio canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.jersey-studio__turn {
+  display: flex;
+  gap: 8px;
+}
+
+.jersey-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.jersey-panel .eyebrow {
+  margin: 0 0 8px;
+}
+
+.jersey-patterns {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: -10px;
+}
+
+.jersey-pattern {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.jersey-pattern:hover {
+  border-color: var(--ink-muted);
+}
+
+.jersey-pattern[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  font-weight: 600;
+}
+
+.jersey-colors {
+  display: flex;
+  flex-direction: column;
+}
+
+.jersey-colors__note {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.jersey-roles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.jersey-role {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.jersey-role[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  font-weight: 600;
+}
+
+.jersey-role__dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid rgba(22, 24, 27, 0.2);
+  flex: none;
+}
+
+.jersey-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.jersey-swatch {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(22, 24, 27, 0.2);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.jersey-swatch[aria-pressed="true"] {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* « Autre couleur » : le sélecteur natif, caché sous une pastille à croix. */
+.jersey-swatch--custom {
+  background: var(--surface);
+  border-style: dashed;
+  border-color: var(--neutral);
+}
+
+.jersey-swatch--custom::before,
+.jersey-swatch--custom::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 1.5px;
+  background: var(--ink-muted);
+  transform: translate(-50%, -50%);
+}
+
+.jersey-swatch--custom::after {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.jersey-swatch--custom[aria-pressed="true"]::before,
+.jersey-swatch--custom[aria-pressed="true"]::after {
+  display: none;
+}
+
+.jersey-swatch--custom input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.jersey-sponsor {
+  width: 100%;
+}
+
+.jersey-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+}
+
+@media (max-width: 720px) {
+  .jersey-kit + .jersey-kit {
+    padding-left: 0;
+    border-left: 0;
+    padding-top: 16px;
+    border-top: 1px solid var(--line-soft);
+  }
+}
+
+/* --- Sponsors du maillot ---------------------------------------------------------- */
+
+.sponsor-logo {
+  display: inline-block;
+  object-fit: contain;
+  flex: none;
+}
+
+.jersey-sponsors {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.jersey-sponsors__deal {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.deals {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.deal {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 4px 10px;
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+}
+
+.deal--empty {
+  border-style: dashed;
+  border-color: var(--line);
+}
+
+.deal__place {
+  font-weight: 500;
+}
+
+.deal__who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.deals__facts {
+  margin-top: 10px;
+}
+
+.deals__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.deals__head .eyebrow {
+  margin: 0;
+}
+
+.sponsor-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Une marque de la bibliothèque : toute la ligne est le bouton de choix */
+.sponsor-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sponsor-row:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.sponsor-row:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.sponsor-row[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  opacity: 1;
+}
+
+.sponsor-row__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.sponsor-row__name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.sponsor-row__money {
+  font-weight: 600;
+  white-space: nowrap;
+}

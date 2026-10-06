@@ -149,6 +149,21 @@ def _migrate(engine: Engine) -> None:
             connection.execute(
                 text("ALTER TABLE clubs ADD COLUMN lineup_choice JSON NOT NULL DEFAULT '[]'")
             )
+    if "jerseys" not in {column["name"] for column in inspector.get_columns("clubs")}:
+        # Maillots personnalisés, ajoutés après coup : chaque club garde ses couleurs.
+        with engine.begin() as connection:
+            connection.execute(
+                text("ALTER TABLE clubs ADD COLUMN jerseys JSON NOT NULL DEFAULT '{}'")
+            )
+            connection.execute(
+                text("ALTER TABLE clubs ADD COLUMN third_kit BOOLEAN NOT NULL DEFAULT 0")
+            )
+    if "sponsors" not in {column["name"] for column in inspector.get_columns("clubs")}:
+        # Sponsors du maillot, ajoutés après coup : aucun contrat au départ.
+        with engine.begin() as connection:
+            connection.execute(
+                text("ALTER TABLE clubs ADD COLUMN sponsors JSON NOT NULL DEFAULT '[]'")
+            )
     columns = {column["name"] for column in inspector.get_columns("players")}
     if "photo" not in columns:
         # Photo des vrais joueurs, ajoutée après coup : les parties existantes n'en ont pas.
