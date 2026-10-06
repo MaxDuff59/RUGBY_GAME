@@ -41,6 +41,16 @@ uv run python -m scripts.run_season --clubs 14 --club 3 --seed 42
 uv run python -m scripts.run_season --league top14 --club 1          # les vrais clubs d'un championnat
 ```
 
+### Blasons et couleurs des clubs
+
+```bash
+uv run python -m scripts.fetch_club_logos          # blasons manquants (TheSportsDB) et couleurs
+uv run python -m scripts.fetch_club_logos --force  # retélécharge tous les blasons
+```
+
+Les blasons vont dans `frontend/public/clubs/`, la table nom → blason et couleurs dans
+`frontend/src/clubLogos.json`. Les couleurs se corrigent dans `COLORS`, en tête du script.
+
 ### Lancer l'API
 
 ```bash

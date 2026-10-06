@@ -21,7 +21,14 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
 | Accent club (un seul usage fort : bouton principal, barre « nous ») | `#7A1F2B` |
 | Terrain | `#2E4A38` |
 
-- Un seul accent à la fois ; il deviendra la couleur du club choisi.
+- Un seul accent à la fois : la couleur du club choisi. Chaque club a une couleur
+  primaire et une secondaire (`src/clubLogos.json` pour les vrais clubs, tirées du nom
+  pour les inventés, `src/clubs.js`). L'accent (`--accent`) prend la première assez
+  foncée pour un bouton à texte blanc (contraste 4,5:1), sinon la primaire foncée ;
+  l'autre devient `--accent-2`, visible seulement dans le liseré sous l'en-tête.
+  L'accent bordeaux `#7A1F2B` reste celui des écrans sans club (parties) ; au choix du
+  club, l'interface prend ses couleurs dès qu'on le sélectionne, et chaque partie montre
+  son bouton « Continuer » à la couleur de son club.
 - Victoire / nul / défaite se distinguent par la forme (plein noir, gris, contour),
   pas par le rouge et le vert.
 
@@ -34,8 +41,22 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
 
 ## Composants
 
+- Blason (`ClubCrest`) : l'image du club téléchargée depuis TheSportsDB
+  (`backend/scripts/fetch_club_logos.py`, dans `public/clubs/`) ; un blason blanc
+  est posé sur une pastille ronde de la couleur du club ; sans blason (club inventé ou
+  introuvable), un écusson à initiales aux couleurs du club. Partout où un club est
+  nommé : en-tête, choix du club, parties, prochain match, rapport de force,
+  classements, affiches, calendrier, match en direct, marché des transferts.
+- Photo de joueur (`PlayerAvatar`) : rond, silhouette grise sur fond clair tant que les
+  joueurs (inventés) n'ont pas de photo ; le composant accepte déjà une `src`. Devant le
+  nom dans l'effectif, la formation, le médical et les transferts ; en grand (96 px) sur
+  la fiche joueur.
 - Navigation latérale (Club, Effectif, Match, Calendrier, Classement, Recrutement),
-  élément actif sur fond noir.
+  élément actif à la couleur du club.
+- Tout ce qui est sélectionné ou « à nous » prend la couleur du club (`--accent`, texte
+  blanc) : onglet actif du menu, pastilles choisies (vues du calendrier, filtres), club
+  choisi à l'écran de départ, ligne de notre club dans les classements, nos matchs dans
+  le calendrier.
 - En-tête : club + classement à gauche, prochain match + « Simuler » (contour)
   + « Jouer le match » (accent) à droite.
 - Cartes : fond surface, bordure 1 px, rayon 10 px, pas d'ombre.

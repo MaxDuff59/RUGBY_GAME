@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
+import ClubCrest from "../components/ClubCrest.jsx";
 import MatchList from "../components/MatchList.jsx";
 import {
   STAGES,
@@ -174,6 +175,7 @@ function MyMatchLine({ match, myId }) {
   const note = played ? scoreNote(match, myId) : null;
   return (
     <span className="calendar__event-text">
+      <ClubCrest name={opponent.name} size={16} className="calendar__crest" />
       {opponent.name}
       <span className="muted"> · {match.neutral ? "neutre" : home ? "dom." : "ext."}</span>
       {score && <span className="num"> · {score}{note && ` ${note}`}</span>}
@@ -220,7 +222,12 @@ function SeasonView({ matchdays, myId }) {
               <tr key={md.matchday}>
                 <td className="left jersey">{matchdayLabel(md)}</td>
                 <td className="left muted">{formatShortDate(md.date)}</td>
-                <td className="left" style={{ fontWeight: 600 }}>{opponent.name}</td>
+                <td className="left" style={{ fontWeight: 600 }}>
+                  <span className="with-crest">
+                    <ClubCrest name={opponent.name} size={20} />
+                    {opponent.name}
+                  </span>
+                </td>
                 <td className="left muted">{match.neutral ? "Terrain neutre" : home ? "Domicile" : "Extérieur"}</td>
                 <td>
                   {played ? `${mine} – ${theirs}` : "–"}

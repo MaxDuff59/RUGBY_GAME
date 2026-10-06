@@ -10,6 +10,8 @@
   --neutral: #8a8d93;
   --neutral-soft: #a9abb0;
   --accent: #7a1f2b;
+  /* Seconde couleur du club (liseré sous l'en-tête) ; accent et elle suivent le club choisi. */
+  --accent-2: #ffffff;
   --pitch: #2e4a38;
 
   --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
@@ -196,7 +198,7 @@ body,
 }
 
 .nav__link.active {
-  background: var(--ink);
+  background: var(--accent);
   color: var(--surface);
   font-weight: 600;
 }
@@ -225,6 +227,19 @@ body,
   gap: 16px;
   padding-bottom: 20px;
   border-bottom: 1px solid var(--line);
+  position: relative;
+}
+
+/* Liseré aux deux couleurs du club, posé sur le trait de l'en-tête */
+.header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 120px;
+  height: 4px;
+  background: linear-gradient(to right, var(--accent) 0 64%, var(--accent-2) 64% 100%);
+  box-shadow: 0 0 0 1px var(--line);
 }
 
 .header__club {
@@ -240,20 +255,69 @@ body,
   line-height: 1.1;
 }
 
-.crest {
-  width: 44px;
-  height: 50px;
-  background: var(--accent);
-  color: #fff;
-  clip-path: polygon(0 0, 100% 0, 100% 68%, 50% 100%, 0 68%);
+/* Blason d'un club (ClubCrest) : l'image du vrai club, sinon un écusson à initiales
+   aux couleurs du club (fond et texte posés par le composant). */
+.club-crest {
+  flex: none;
+  display: inline-block;
+  object-fit: contain;
+  vertical-align: middle;
+}
+
+.club-crest--disc {
   display: inline-flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding-top: 10px;
+  border-radius: 50%;
+}
+
+.club-crest--disc img {
+  width: 76%;
+  height: 76%;
+  object-fit: contain;
+}
+
+.club-crest--blank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 14%;
+  clip-path: polygon(8% 0, 92% 0, 92% 66%, 50% 100%, 8% 66%);
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 16px;
-  letter-spacing: 0.04em;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+/* Nom précédé de son blason (tableaux, listes) */
+.with-crest {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Joueur précédé de sa photo, nom et poste empilés à droite (tableaux) */
+.person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Photo de profil d'un joueur (PlayerAvatar) : silhouette vide tant qu'il n'y a pas de photo */
+.player-avatar {
+  flex: none;
+  display: inline-block;
+  border-radius: 50%;
+  object-fit: cover;
+  vertical-align: middle;
+}
+
+.player-avatar--blank {
+  overflow: hidden;
+  background: var(--line-soft);
+  border: 1px solid var(--line);
+  fill: var(--neutral-soft);
 }
 
 /* --- Éléments communs -------------------------------------------------------- */
@@ -440,14 +504,20 @@ body,
   border-bottom: 1px solid var(--line);
 }
 
+/* Notre club, à sa couleur (comme l'onglet actif du menu) */
 .table__row--mine {
-  background: var(--ink);
-  color: var(--surface);
+  background: var(--accent);
+  color: #fff;
   font-weight: 600;
 }
 
 .table__row--mine td {
-  border-bottom-color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+.table__row--mine .muted,
+.calendar__event--mine .muted {
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .table__note {
@@ -903,9 +973,9 @@ body,
 }
 
 .club-option[aria-pressed="true"] {
-  background: var(--ink);
-  color: var(--surface);
-  border-color: var(--ink);
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
 }
 
 .club-option__name {
@@ -1030,9 +1100,9 @@ body,
 }
 
 .chip[aria-pressed="true"] {
-  background: var(--ink);
-  color: var(--surface);
-  border-color: var(--ink);
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
 }
 
 .button--small {
@@ -1089,6 +1159,12 @@ body,
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.hero__club {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .hero__title {
@@ -1355,8 +1431,22 @@ body,
   border-bottom: 0;
 }
 
+.match__home,
+.match__away {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .match__home {
+  justify-content: flex-end;
   text-align: right;
+}
+
+.calendar__crest {
+  margin-right: 5px;
+  vertical-align: -3px;
 }
 
 .match__score {
@@ -1473,12 +1563,8 @@ body,
 }
 
 .calendar__event--mine {
-  background: var(--ink);
-  color: var(--surface);
-}
-
-.calendar__event--mine .muted {
-  color: var(--neutral-soft);
+  background: var(--accent);
+  color: #fff;
 }
 
 .calendar__event-label {
@@ -1893,9 +1979,26 @@ body,
 }
 
 .player-head__identity {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: end;
+  gap: 8px 20px;
+}
+
+/* Photo à gauche, sur toute la hauteur de l'identité */
+.player-head__identity > .player-avatar {
+  grid-row: 1 / span 3;
+  align-self: center;
+}
+
+.player-head__identity > :not(.player-avatar) {
+  grid-column: 2;
+  margin: 0;
+}
+
+.eyebrow__crest {
+  margin-right: 6px;
+  vertical-align: -3px;
 }
 
 .player-head__name {
@@ -2153,7 +2256,7 @@ body,
 }
 
 .radar__area--player {
-  fill: rgba(122, 31, 43, 0.18);
+  fill: color-mix(in srgb, var(--accent) 18%, transparent);
   stroke: var(--accent);
   stroke-width: 2;
   stroke-linejoin: round;

@@ -1,3 +1,4 @@
+import ClubCrest from "./ClubCrest.jsx";
 import { scoreNote } from "../format.js";
 
 // Liste d'affiches d'une journée : domicile, score (ou « – »), extérieur.
@@ -11,12 +12,18 @@ export default function MatchList({ matches, myClubId }) {
         const note = played ? scoreNote(match) : null;
         return (
           <li key={match.id} className={`match${mine ? " match--mine" : ""}`}>
-            <span className="match__home">{match.home.name}</span>
+            <span className="match__home">
+              {match.home.name}
+              <ClubCrest name={match.home.name} size={20} />
+            </span>
             <span className="match__score num">
               {played ? `${match.home_score} – ${match.away_score}` : "–"}
               {note && <small className="match__note">{note}</small>}
             </span>
-            <span className="match__away">{match.away.name}</span>
+            <span className="match__away">
+              <ClubCrest name={match.away.name} size={20} />
+              {match.away.name}
+            </span>
           </li>
         );
       })}

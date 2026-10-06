@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useOutletContext } from "react-router-d
 
 import { api } from "../api.js";
 import Affairs from "../components/Affairs.jsx";
+import ClubCrest from "../components/ClubCrest.jsx";
 import FormPills, { recentForm } from "../components/FormPills.jsx";
 import MatchList from "../components/MatchList.jsx";
 import { NOTE_LINES, NoteLine } from "../components/NoteLine.jsx";
@@ -167,7 +168,10 @@ export default function Club() {
         {data.phase === "finished" ? (
           <section className="hero">
             <p className="eyebrow">Saison {data.year} terminée</p>
-            <h1 className="hero__title">{data.champion.name}</h1>
+            <div className="hero__club">
+              <ClubCrest name={data.champion.name} size={56} />
+              <h1 className="hero__title">{data.champion.name}</h1>
+            </div>
             <p className="hero__sub">Champion {data.year}</p>
             <div className="hero__actions">
               <button type="button" className="button" onClick={() => setShowReview(true)}>
@@ -298,7 +302,10 @@ function NextMatch({ match, myId, rankOf, matches }) {
   const venue = match.neutral ? "Terrain neutre" : home ? "À domicile" : "À l'extérieur";
   return (
     <>
-      <h1 className="hero__title">{opponent.name}</h1>
+      <div className="hero__club">
+        <ClubCrest name={opponent.name} size={56} />
+        <h1 className="hero__title">{opponent.name}</h1>
+      </div>
       <p className="hero__sub">
         {venue} · {rankOf(opponent.id) ? `${formatRank(rankOf(opponent.id))} du championnat` : ""}
       </p>
@@ -334,8 +341,14 @@ function Strength({ myId, opponentId }) {
       </div>
       <div className="card card--padded">
         <div className="versus__names">
-          <span>{mine.data.name}</span>
-          <span>{theirs.data.name}</span>
+          <span className="with-crest">
+            <ClubCrest name={mine.data.name} size={18} />
+            {mine.data.name}
+          </span>
+          <span className="with-crest">
+            {theirs.data.name}
+            <ClubCrest name={theirs.data.name} size={18} />
+          </span>
         </div>
         {STRENGTH_LINES.map((line) => {
           const us = mine.data.strength[line.key];
@@ -522,7 +535,12 @@ function Standings({ season, myId, picker }) {
                 ].join(" ")}
               >
                 <td className="left muted">{row.rank}</td>
-                <td className="left">{row.club_name}</td>
+                <td className="left">
+                  <span className="with-crest">
+                    <ClubCrest name={row.club_name} size={20} />
+                    {row.club_name}
+                  </span>
+                </td>
                 <td>{row.played}</td>
                 <td>{row.won}</td>
                 <td>{row.drawn}</td>

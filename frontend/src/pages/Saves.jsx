@@ -2,6 +2,8 @@ import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { api } from "../api.js";
+import { clubTheme } from "../clubs.js";
+import ClubCrest from "../components/ClubCrest.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import { formatLongDate, formatSavedAt } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
@@ -79,7 +81,12 @@ export default function Saves() {
 
       <ul className="saves">
         {saves.data.map((save) => (
-          <li key={save.slot} className={`card card--padded save${save.empty ? " save--empty" : ""}`}>
+          <li
+            key={save.slot}
+            className={`card card--padded save${save.empty ? " save--empty" : ""}`}
+            // Chaque partie à l'accent de son club (bouton « Continuer »).
+            style={save.club_name && !save.outdated ? { "--accent": clubTheme(save.club_name).accent } : undefined}
+          >
             <p className="eyebrow">
               Partie {save.slot}
               {save.active && !save.empty && " · dernière jouée"}
@@ -95,7 +102,10 @@ export default function Saves() {
               </>
             ) : (
               <>
-                <p className="save__club">{save.outdated ? "Ancien format" : (save.club_name ?? "Carrière à choisir")}</p>
+                <p className="save__club with-crest">
+                  {save.club_name && !save.outdated && <ClubCrest name={save.club_name} size={36} />}
+                  {save.outdated ? "Ancien format" : (save.club_name ?? "Carrière à choisir")}
+                </p>
                 <div className="save__details">
                   {save.outdated ? (
                     <span className="muted">Cette partie ne s'ouvre plus avec cette version du jeu.</span>

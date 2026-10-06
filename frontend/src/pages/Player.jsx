@@ -2,7 +2,9 @@ import { useCallback, useRef } from "react";
 import { Link, useNavigate, useOutletContext, useParams } from "react-router-dom";
 
 import { api } from "../api.js";
+import ClubCrest from "../components/ClubCrest.jsx";
 import Pitch from "../components/Pitch.jsx";
+import PlayerAvatar from "../components/PlayerAvatar.jsx";
 import Radar from "../components/Radar.jsx";
 import Swarm from "../components/Swarm.jsx";
 import {
@@ -103,9 +105,11 @@ export default function Player() {
     <>
       <header className="player-head">
         <div className="player-head__identity">
+          <PlayerAvatar size={96} />
           <p className="eyebrow">
             <button type="button" className="link-button" onClick={() => navigate(-1)}>← Retour</button>
             {" · "}
+            {data.club && <ClubCrest name={data.club.name} size={16} className="eyebrow__crest" />}
             {data.club ? <Link to={mine ? "/effectif" : "/transferts"}>{data.club.name}</Link> : <Link to="/transferts">Agent libre</Link>}
             {data.club && " · "}
             {data.club && (isYouth ? "Espoir" : jersey !== null ? `Titulaire · n° ${jersey}` : "Remplaçant")}

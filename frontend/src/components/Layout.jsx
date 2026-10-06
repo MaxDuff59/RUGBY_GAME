@@ -2,8 +2,10 @@ import { useCallback } from "react";
 import { Navigate, NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { api } from "../api.js";
+import { useClubTheme } from "../clubs.js";
 import { useApi } from "../hooks/useApi.js";
 import { chosenSlot, leaveSlot } from "../save.js";
+import ClubCrest from "./ClubCrest.jsx";
 
 const NAV_ITEMS = [
   { to: "/", label: "Club" },
@@ -22,6 +24,7 @@ const NAV_ITEMS = [
 // Les pages reçoivent la carrière via useOutletContext().
 export default function Layout() {
   const { data: career, error, loading } = useApi(useCallback(api.getCareer, []));
+  useClubTheme(career?.club_name);
   const navigate = useNavigate();
 
   // Chaque ouverture du jeu passe par l'écran des parties.
@@ -66,7 +69,7 @@ export default function Layout() {
       <main className="main">
         <header className="header">
           <div className="header__club">
-            <span className="crest">{initials(career.club_name)}</span>
+            <ClubCrest name={career.club_name} size={50} />
             <div>
               <div className="header__name">{career.club_name}</div>
               <div className="muted">{career.league_name}</div>
@@ -77,14 +80,4 @@ export default function Layout() {
       </main>
     </div>
   );
-}
-
-// "Entente Port-Miremire" -> "EPM" (pour l'écusson)
-function initials(name) {
-  return name
-    .split(/[\s-]+/)
-    .map((word) => word[0])
-    .join("")
-    .slice(0, 3)
-    .toUpperCase();
 }

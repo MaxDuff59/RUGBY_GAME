@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { Link } from "react-router-dom";
 
 import { api } from "../api.js";
+import PlayerAvatar from "../components/PlayerAvatar.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import Level from "../components/Level.jsx";
 import {
@@ -235,8 +236,13 @@ function History({ cases }) {
             {cases.map(({ player, injury }) => (
               <tr key={injury.id}>
                 <td className="left">
-                  <div style={{ fontWeight: 600 }}>{player.name}</div>
-                  <div className="muted">{POSITIONS[player.position].label}</div>
+                  <div className="person">
+                    <PlayerAvatar size={32} />
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{player.name}</div>
+                      <div className="muted">{POSITIONS[player.position].label}</div>
+                    </div>
+                  </div>
                 </td>
                 <td className="left">
                   {injury.kind}

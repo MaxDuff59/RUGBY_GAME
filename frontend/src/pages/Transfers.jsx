@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
+import ClubCrest from "../components/ClubCrest.jsx";
+import PlayerAvatar from "../components/PlayerAvatar.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import Level from "../components/Level.jsx";
 import Modal from "../components/Modal.jsx";
@@ -261,8 +263,13 @@ export default function Transfers() {
                 return (
                   <tr key={player.id} className={player.id === targetId ? "table__row--selected" : undefined}>
                     <td className="left">
-                      <div style={{ fontWeight: 600 }}>{player.name}</div>
-                      <div className="muted">{POSITIONS[player.position].label}</div>
+                      <div className="person">
+                        <PlayerAvatar size={32} />
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{player.name}</div>
+                          <div className="muted">{POSITIONS[player.position].label}</div>
+                        </div>
+                      </div>
                     </td>
                     <td className="left">
                       {listing.free_agent ? (
@@ -272,7 +279,10 @@ export default function Transfers() {
                         </>
                       ) : (
                         <>
-                          <div>{listing.club_name}</div>
+                          <div className="with-crest">
+                            <ClubCrest name={listing.club_name} size={18} />
+                            {listing.club_name}
+                          </div>
                           <div className="muted">
                             {listing.league} · niveau {formatNote(listing.club_level)}
                           </div>
@@ -327,8 +337,13 @@ export default function Transfers() {
               {squadSort.rows.map((player) => (
                 <tr key={player.id}>
                   <td className="left">
-                    <div style={{ fontWeight: 600 }}>{player.name}</div>
-                    <div className="muted">{POSITIONS[player.position].label}</div>
+                    <div className="person">
+                      <PlayerAvatar size={32} />
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{player.name}</div>
+                        <div className="muted">{POSITIONS[player.position].label}</div>
+                      </div>
+                    </div>
                   </td>
                   <td className="muted">{player.age}</td>
                   <td className="note">{formatNote(player.overall)}</td>
@@ -483,12 +498,15 @@ function Negotiation({ playerId, squadFull, onClose, onChange }) {
   return (
     <>
       <div className="section__head">
-        <div>
-          <h2 className="eyebrow">Approche</h2>
-          <div className="header__name">{player.name}</div>
-          <div className="muted">
-            {POSITIONS[player.position].label} · {player.age} ans · note {formatNote(player.overall)} ·{" "}
-            {free ? "Agent libre" : club.name}
+        <div className="person">
+          <PlayerAvatar size={56} />
+          <div>
+            <h2 className="eyebrow">Approche</h2>
+            <div className="header__name">{player.name}</div>
+            <div className="muted">
+              {POSITIONS[player.position].label} · {player.age} ans · note {formatNote(player.overall)} ·{" "}
+              {free ? "Agent libre" : club.name}
+            </div>
           </div>
         </div>
         <button type="button" className="button button--small" onClick={onClose}>

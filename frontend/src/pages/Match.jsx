@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
+import ClubCrest from "../components/ClubCrest.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import {
   EVENTS,
@@ -191,9 +192,13 @@ function NoLiveMatch({ career, onStarted }) {
       <p className="eyebrow">Match en direct</p>
       {myMatch ? (
         <>
-          <h1 className="hero__title">
-            {myMatch.home.name} – {myMatch.away.name}
-          </h1>
+          <div className="hero__club">
+            <ClubCrest name={myMatch.home.name} size={56} />
+            <h1 className="hero__title">
+              {myMatch.home.name} – {myMatch.away.name}
+            </h1>
+            <ClubCrest name={myMatch.away.name} size={56} />
+          </div>
           <p className="hero__sub">
             {next.stage === "regular" ? `Journée ${next.matchday}` : STAGES[next.stage]} · {formatLongDate(next.date)}
           </p>
@@ -297,6 +302,7 @@ function Scoreboard({ live, playing, speed, setSpeed, notice, error, busy, finis
 function Team({ side, mine, away = false }) {
   return (
     <div className={`scoreboard__team${away ? " scoreboard__team--away" : ""}`}>
+      <ClubCrest name={side.club.name} size={44} />
       <span className={`scoreboard__name${mine ? " scoreboard__name--mine" : ""}`}>{side.club.name}</span>
       <span className="muted">
         {side.tries} essai{side.tries > 1 ? "s" : ""}
@@ -347,7 +353,10 @@ function Events({ side, events, mine }) {
   return (
     <section className={`card live-events${mine ? " live-events--mine" : ""}`}>
       <div className="live-card__head">
-        <span className="eyebrow">{side.club.name}</span>
+        <span className="eyebrow with-crest">
+          <ClubCrest name={side.club.name} size={18} />
+          {side.club.name}
+        </span>
         <span className="muted">{ours.length ? `${ours.length} fait${ours.length > 1 ? "s" : ""} de jeu` : "Rien à signaler"}</span>
       </div>
       <ul className="live-events__list">

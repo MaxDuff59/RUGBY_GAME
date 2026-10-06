@@ -2,6 +2,8 @@ import { useCallback, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
+import ClubCrest from "../components/ClubCrest.jsx";
+import PlayerAvatar from "../components/PlayerAvatar.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import Level from "../components/Level.jsx";
 import MatchList from "../components/MatchList.jsx";
@@ -219,14 +221,19 @@ function PlayerTable({ players, sort, starters, exitAge, action }) {
           {players.map((player) => (
             <tr key={player.id}>
               <td className="left">
-                <div style={{ fontWeight: 600 }}>
-                  {player.name}
-                  {starters.has(player.id) && <span className="jersey"> · XV</span>}
-                </div>
-                <div className="muted">
-                  {POSITIONS[player.position].label}
-                  {exitAge && player.age >= exitAge - 1 && <span className="tag tag--fragile" style={{ marginLeft: 6 }}>Dernière année</span>}
-                  {player.injury?.status === "active" && <span className="tag tag--injured" style={{ marginLeft: 6 }}>Blessé</span>}
+                <div className="person">
+                  <PlayerAvatar size={32} />
+                  <div>
+                    <div style={{ fontWeight: 600 }}>
+                      {player.name}
+                      {starters.has(player.id) && <span className="jersey"> · XV</span>}
+                    </div>
+                    <div className="muted">
+                      {POSITIONS[player.position].label}
+                      {exitAge && player.age >= exitAge - 1 && <span className="tag tag--fragile" style={{ marginLeft: 6 }}>Dernière année</span>}
+                      {player.injury?.status === "active" && <span className="tag tag--injured" style={{ marginLeft: 6 }}>Blessé</span>}
+                    </div>
+                  </div>
                 </div>
               </td>
               <td className="muted">{player.age}</td>
@@ -289,7 +296,12 @@ function Standings({ standings, myId }) {
             {rows.map((row) => (
               <tr key={row.club_id} className={row.club_id === myId ? "table__row--mine" : undefined}>
                 <td className="left">{row.rank}</td>
-                <td className="left">{row.club_name}</td>
+                <td className="left">
+                  <span className="with-crest">
+                    <ClubCrest name={row.club_name} size={20} />
+                    {row.club_name}
+                  </span>
+                </td>
                 <td>{row.played}</td>
                 <td>{row.won}</td>
                 <td>{row.drawn}</td>

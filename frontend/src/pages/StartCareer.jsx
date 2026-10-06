@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 
 import { api } from "../api.js";
+import { useClubTheme } from "../clubs.js";
+import ClubCrest from "../components/ClubCrest.jsx";
 import { formatLongDate, formatNote } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { chosenSlot } from "../save.js";
@@ -19,6 +21,8 @@ export default function StartCareer() {
     if (dismissal) setManagerName(dismissal.manager_name);
   }, [dismissal]);
   const [clubId, setClubId] = useState(null);
+  // Aperçu : l'interface prend les couleurs du club dès qu'on le sélectionne.
+  useClubTheme(clubs?.find((club) => club.id === clubId)?.name);
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -112,7 +116,10 @@ export default function StartCareer() {
                     disabled={club.id === dismissal?.club_id}
                     onClick={() => setClubId(club.id)}
                   >
-                    <span className="club-option__name">{club.name}</span>
+                    <span className="club-option__name with-crest">
+                      <ClubCrest name={club.name} size={32} />
+                      {club.name}
+                    </span>
                     <span className="num">Niveau {formatNote(club.level)} / 20</span>
                   </button>
                 </li>

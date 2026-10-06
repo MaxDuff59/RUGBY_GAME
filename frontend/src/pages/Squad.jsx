@@ -5,6 +5,7 @@ import { api } from "../api.js";
 import InjuryIcon from "../components/InjuryIcon.jsx";
 import LineupPicker from "../components/LineupPicker.jsx";
 import Pitch from "../components/Pitch.jsx";
+import PlayerAvatar from "../components/PlayerAvatar.jsx";
 import SortHeader from "../components/SortHeader.jsx";
 import {
   ATTRIBUTES,
@@ -152,6 +153,7 @@ export default function Squad() {
                   <td className="left jersey">{player.jersey ?? ""}</td>
                   <td className="left">
                     <div className="squad__name">
+                      <PlayerAvatar size={26} />
                       <InjuryIcon injury={player.injury} />
                       {player.name}
                     </div>
