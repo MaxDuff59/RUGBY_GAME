@@ -1,9 +1,22 @@
-// Photo de profil d'un joueur. Les joueurs sont inventés : pas encore de photo,
-// on montre une silhouette vide. `src` prendra la photo le jour où il y en aura.
+import { useState } from "react";
+
+// Photo de profil d'un joueur : celle du vrai joueur (Wikimedia Commons) quand on
+// l'a, sinon (joueur inventé, photo introuvable ou hors ligne) une silhouette vide.
 export default function PlayerAvatar({ src, size = 28, className = "" }) {
+  // Adresse dont le chargement a échoué (un autre joueur, une autre adresse, on réessaie).
+  const [broken, setBroken] = useState(null);
   const style = { width: size, height: size };
-  if (src) {
-    return <img className={`player-avatar ${className}`} src={src} alt="" style={style} />;
+  if (src && src !== broken) {
+    return (
+      <img
+        className={`player-avatar ${className}`}
+        src={src}
+        alt=""
+        style={style}
+        loading="lazy"
+        onError={() => setBroken(src)}
+      />
+    );
   }
   return (
     <span className={`player-avatar player-avatar--blank ${className}`} style={style} aria-hidden="true">

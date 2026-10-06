@@ -5,19 +5,20 @@ import { clubInfo, clubTheme, inkOn } from "../clubs.js";
 // clubs, sinon un écusson à initiales aux couleurs du club (clubs inventés, blason
 // manquant ou cassé).
 export default function ClubCrest({ name, size = 24, className = "" }) {
-  const [broken, setBroken] = useState(false);
+  // Blason dont le chargement a échoué (un autre club, on réessaie).
+  const [broken, setBroken] = useState(null);
   const { logo, light, colors } = clubInfo(name);
   const style = { width: size, height: size };
-  if (logo && !broken && light) {
+  if (logo && logo !== broken && light) {
     // Blason blanc : posé sur une pastille de la couleur du club, sinon invisible sur le fond clair.
     return (
       <span className={`club-crest club-crest--disc ${className}`} style={{ ...style, background: clubTheme(name).accent }}>
-        <img src={logo} alt="" onError={() => setBroken(true)} />
+        <img src={logo} alt="" onError={() => setBroken(logo)} />
       </span>
     );
   }
-  if (logo && !broken) {
-    return <img className={`club-crest ${className}`} src={logo} alt="" style={style} onError={() => setBroken(true)} />;
+  if (logo && logo !== broken) {
+    return <img className={`club-crest ${className}`} src={logo} alt="" style={style} onError={() => setBroken(logo)} />;
   }
   return (
     <span

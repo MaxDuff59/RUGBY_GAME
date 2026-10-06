@@ -41,6 +41,20 @@ uv run python -m scripts.run_season --clubs 14 --club 3 --seed 42
 uv run python -m scripts.run_season --league top14 --club 1          # les vrais clubs d'un championnat
 ```
 
+### Vrais effectifs
+
+```bash
+uv run python -m scripts.fetch_rosters            # pros et espoirs de chaque club (Wikipédia)
+uv run python -m scripts.fetch_rosters --missing  # seulement les clubs pas encore récupérés
+uv run python -m scripts.fetch_rosters --club "Stade Toulousain"
+```
+
+Le résultat va dans `backend/data/rosters.json` (nom, poste, international, date de
+naissance et photo via Wikidata). Une nouvelle partie le lit pour créer les joueurs des
+vrais clubs ; un club absent du fichier, ou un poste vide, reçoit des joueurs inventés.
+Les notes restent calculées par le jeu (niveau du club, international, âge). Les parties
+déjà commencées gardent leurs joueurs.
+
 ### Blasons et couleurs des clubs
 
 ```bash

@@ -143,6 +143,7 @@ class PlayerRow(Base):
     club_id: Mapped[int | None] = mapped_column(ForeignKey("clubs.id"))
     loaned_from: Mapped[int | None] = mapped_column(ForeignKey("clubs.id"))
     squad: Mapped[str] = mapped_column(String(5), default=Squad.PRO.value)
+    photo: Mapped[str | None] = mapped_column(String(300))
 
     club: Mapped[ClubRow | None] = relationship(
         foreign_keys=[club_id], overlaps="players,youths", viewonly=True
@@ -179,6 +180,7 @@ class PlayerRow(Base):
             contract_until=self.contract_until,
             loaned_from=self.loaned_from,
             squad=Squad(self.squad),
+            photo=self.photo,
         )
 
     @classmethod
@@ -194,6 +196,7 @@ class PlayerRow(Base):
             contract_until=player.contract_until,
             loaned_from=player.loaned_from,
             squad=player.squad.value,
+            photo=player.photo,
             **player.attributes,
         )
 

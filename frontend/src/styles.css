@@ -310,6 +310,9 @@ body,
   display: inline-block;
   border-radius: 50%;
   object-fit: cover;
+  /* Portraits : le visage est dans le haut de la photo */
+  object-position: 50% 20%;
+  background: var(--line-soft);
   vertical-align: middle;
 }
 

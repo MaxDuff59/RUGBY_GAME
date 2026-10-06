@@ -264,7 +264,7 @@ export default function Transfers() {
                   <tr key={player.id} className={player.id === targetId ? "table__row--selected" : undefined}>
                     <td className="left">
                       <div className="person">
-                        <PlayerAvatar size={32} />
+                        <PlayerAvatar src={player.photo} size={32} />
                         <div>
                           <div style={{ fontWeight: 600 }}>{player.name}</div>
                           <div className="muted">{POSITIONS[player.position].label}</div>
@@ -338,7 +338,7 @@ export default function Transfers() {
                 <tr key={player.id}>
                   <td className="left">
                     <div className="person">
-                      <PlayerAvatar size={32} />
+                      <PlayerAvatar src={player.photo} size={32} />
                       <div>
                         <div style={{ fontWeight: 600 }}>{player.name}</div>
                         <div className="muted">{POSITIONS[player.position].label}</div>
@@ -499,7 +499,7 @@ function Negotiation({ playerId, squadFull, onClose, onChange }) {
     <>
       <div className="section__head">
         <div className="person">
-          <PlayerAvatar size={56} />
+          <PlayerAvatar src={player.photo} size={56} />
           <div>
             <h2 className="eyebrow">Approche</h2>
             <div className="header__name">{player.name}</div>

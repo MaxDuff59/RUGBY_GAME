@@ -153,7 +153,7 @@ export default function Squad() {
                   <td className="left jersey">{player.jersey ?? ""}</td>
                   <td className="left">
                     <div className="squad__name">
-                      <PlayerAvatar size={26} />
+                      <PlayerAvatar src={player.photo} size={26} />
                       <InjuryIcon injury={player.injury} />
                       {player.name}
                     </div>

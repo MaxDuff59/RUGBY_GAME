@@ -237,7 +237,7 @@ function History({ cases }) {
               <tr key={injury.id}>
                 <td className="left">
                   <div className="person">
-                    <PlayerAvatar size={32} />
+                    <PlayerAvatar src={player.photo} size={32} />
                     <div>
                       <div style={{ fontWeight: 600 }}>{player.name}</div>
                       <div className="muted">{POSITIONS[player.position].label}</div>

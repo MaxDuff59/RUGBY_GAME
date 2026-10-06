@@ -111,6 +111,7 @@ class PlayerOut(BaseModel):
     contract_until: int  # dernière saison sous contrat (2026 = jusqu'à la fin de 2026-27)
     loaned_from: int | None  # club propriétaire si le joueur est prêté
     squad: Squad
+    photo: str | None = None  # URL de la photo (vrais joueurs), None sinon
     loaned_from_name: str | None = None
     # Blessure en cours ou période de fragilité ; None si le joueur est apte.
     injury: InjuryOut | None = None

@@ -150,6 +150,8 @@ class Player:
     # Club propriétaire quand le joueur est prêté (None sinon) ; il y retourne à l'intersaison.
     loaned_from: int | None = None
     squad: Squad = Squad.PRO
+    # Photo du vrai joueur (URL Wikimedia Commons), None pour un joueur inventé.
+    photo: str | None = None
 
     def __post_init__(self) -> None:
         # On refuse tout attribut hors de l'échelle 1-20 dès la création.

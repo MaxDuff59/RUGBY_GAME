@@ -47,10 +47,11 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   introuvable), un écusson à initiales aux couleurs du club. Partout où un club est
   nommé : en-tête, choix du club, parties, prochain match, rapport de force,
   classements, affiches, calendrier, match en direct, marché des transferts.
-- Photo de joueur (`PlayerAvatar`) : rond, silhouette grise sur fond clair tant que les
-  joueurs (inventés) n'ont pas de photo ; le composant accepte déjà une `src`. Devant le
-  nom dans l'effectif, la formation, le médical et les transferts ; en grand (96 px) sur
-  la fiche joueur.
+- Photo de joueur (`PlayerAvatar`) : ronde, cadrée sur le haut (le visage). La photo
+  du vrai joueur quand Wikimedia Commons en a une (`player.photo`), sinon (joueur
+  inventé, pas de photo, hors ligne) une silhouette grise sur fond clair. Devant le nom
+  dans l'effectif, la formation, le médical et les transferts ; en grand (96 px) sur la
+  fiche joueur.
 - Navigation latérale (Club, Effectif, Match, Calendrier, Classement, Recrutement),
   élément actif à la couleur du club.
 - Tout ce qui est sélectionné ou « à nous » prend la couleur du club (`--accent`, texte

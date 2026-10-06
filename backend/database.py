@@ -150,6 +150,10 @@ def _migrate(engine: Engine) -> None:
                 text("ALTER TABLE clubs ADD COLUMN lineup_choice JSON NOT NULL DEFAULT '[]'")
             )
     columns = {column["name"] for column in inspector.get_columns("players")}
+    if "photo" not in columns:
+        # Photo des vrais joueurs, ajoutée après coup : les parties existantes n'en ont pas.
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE players ADD COLUMN photo VARCHAR(300)"))
     if "stamina" not in columns:
         # Endurance ajoutée après coup : chaque joueur en tire une selon son poste
         # et son niveau, comme à la génération.
@@ -177,23 +181,26 @@ def seed_if_empty(
     real: bool = True,
 ) -> int:
     """Remplit la base si elle est vide : les vrais clubs des cinq championnats
-    (joueurs inventés, voir data/leagues.py), ou `club_count` clubs fictifs dans un
-    seul championnat avec `real=False`, et un premier vivier d'agents libres.
+    (avec leurs vrais joueurs quand data/rosters.json les connaît, voir
+    data/generator.py), ou `club_count` clubs fictifs dans un seul championnat avec
+    `real=False`, et un premier vivier d'agents libres.
 
     Renvoie le nombre de clubs créés (0 si la base contenait déjà des clubs).
     """
     if session.scalar(select(func.count()).select_from(ClubRow)):
         return 0
     rng = random.Random(seed)
-    clubs = generate_real_clubs(rng) if real else generate_clubs(club_count, rng)
+    released: list = []  # vrais joueurs en surnombre dans leur club : agents libres
+    clubs = generate_real_clubs(rng, released=released) if real else generate_clubs(club_count, rng)
     session.add_all(ClubRow.from_domain(club) for club in clubs)
     # Staff disponible à l'embauche (3 candidats par poste), après ceux des clubs.
     first_id = sum(len(club.staff) for club in clubs) + 1
     candidates = generate_staff_candidates(3, rng, first_id=first_id)
     session.add_all(StaffRow.from_domain(member) for member in candidates)
     # Agents libres (joueurs sans club), après les joueurs des clubs.
-    player_ids = itertools.count(sum(len(c.players) + len(c.youths) for c in clubs) + 1)
-    free_agents = newcomers([], player_ids, FIRST_SEASON_YEAR, rng)
+    last_id = max((p.id for c in clubs for p in c.players + c.youths + released), default=0)
+    player_ids = itertools.count(last_id + 1)
+    free_agents = released + newcomers(released, player_ids, FIRST_SEASON_YEAR, rng)
     session.add_all(PlayerRow.from_domain(player) for player in free_agents)
     session.commit()
     return len(clubs)

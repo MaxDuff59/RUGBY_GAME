@@ -6,7 +6,14 @@ import pytest
 
 from data.generator import generate_real_clubs
 from data.leagues import LEAGUES, TOP14, league
-from engine.economy import STADIUM_STEPS, FacilityKind, next_stadium_step, upgrade_cost
+from engine.economy import (
+    SQUAD_MAX,
+    SQUAD_MIN,
+    STADIUM_STEPS,
+    FacilityKind,
+    next_stadium_step,
+    upgrade_cost,
+)
 from engine.match_engine import RATING_FOR_POSITION
 from engine.transfers import (
     TIME_BENCH,
@@ -124,7 +131,7 @@ def test_precontract_only_in_the_last_contract_year():
 def test_top14_clubs_are_generated_with_their_stadiums():
     clubs = generate_real_clubs(random.Random(0), [league("top14")])
     assert [c.name for c in clubs] == [real.name for real in TOP14]
-    assert len(clubs) == 14 and all(len(c.players) == 31 for c in clubs)
+    assert len(clubs) == 14 and all(SQUAD_MIN <= len(c.players) <= SQUAD_MAX for c in clubs)
     toulouse = next(c for c in clubs if c.name == "Stade Toulousain")
     montauban = next(c for c in clubs if c.name == "US Montauban")
     assert toulouse.facilities.stadium_capacity == 19_000

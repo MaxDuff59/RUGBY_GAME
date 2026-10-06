@@ -105,7 +105,7 @@ export default function Player() {
     <>
       <header className="player-head">
         <div className="player-head__identity">
-          <PlayerAvatar size={96} />
+          <PlayerAvatar src={player.photo} size={96} />
           <p className="eyebrow">
             <button type="button" className="link-button" onClick={() => navigate(-1)}>← Retour</button>
             {" · "}

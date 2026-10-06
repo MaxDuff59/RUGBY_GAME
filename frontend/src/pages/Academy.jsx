@@ -222,7 +222,7 @@ function PlayerTable({ players, sort, starters, exitAge, action }) {
             <tr key={player.id}>
               <td className="left">
                 <div className="person">
-                  <PlayerAvatar size={32} />
+                  <PlayerAvatar src={player.photo} size={32} />
                   <div>
                     <div style={{ fontWeight: 600 }}>
                       {player.name}
