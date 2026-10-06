@@ -27,6 +27,7 @@ from models import (
     ATTRIBUTE_NAMES,
     STAFF_LEVEL_MAX,
     STAFF_LEVEL_MIN,
+    YOUTH_EXIT_AGE,
     Club,
     Facilities,
     Player,
@@ -314,6 +315,16 @@ def _real_player(
     return player
 
 
+def _fullbacks_from_wings(entries: list[dict]) -> None:
+    """Certains effectifs rangent ailiers et arrières ensemble (« Outside backs ») : sans
+    arrière, le dernier tiers de ces ailiers passe arrière."""
+    if any(e["position"] == Position.FULLBACK for e in entries):
+        return
+    wings = [e for e in entries if e["position"] == Position.WING]
+    for entry in wings[len(wings) - len(wings) // 3 :]:
+        entry["position"] = Position.FULLBACK
+
+
 def _real_squads(
     club: Club,
     roster: dict,
@@ -323,10 +334,12 @@ def _real_squads(
     released: list[Player],
 ) -> None:
     """Remplit pros et espoirs d'un club depuis son vrai effectif, en comblant les manques."""
-    pros, overflow = _trim(
-        _entries(roster["pros"], (21, 32), rng), REAL_SQUAD_CAP, SQUAD_COMPOSITION
-    )
+    entries = _entries(roster["pros"], (21, 32), rng)
+    _fullbacks_from_wings(entries)
+    pros, overflow = _trim(entries, REAL_SQUAD_CAP, SQUAD_COMPOSITION)
+    # Espoirs : sans les trop âgés (une réserve compte aussi des pros confirmés).
     youths = _entries(roster.get("youths", []), YOUTH_AGES, rng)
+    youths = [e for e in youths if e["age"] < YOUTH_EXIT_AGE]
     youths += [e for e in overflow if e["age"] <= YOUTH_OVERFLOW_AGE]
     youths, _ = _trim(youths, REAL_YOUTH_CAP, YOUTH_COMPOSITION)
 

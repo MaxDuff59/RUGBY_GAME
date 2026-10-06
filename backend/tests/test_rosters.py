@@ -71,3 +71,21 @@ def test_internationals_are_rated_above_their_teammates_on_average():
     caps = [by_name[f"Joueur Réel{i}"] for i in range(0, 32, 2)]
     others = [by_name[f"Joueur Réel{i}"] for i in range(1, 32, 2)]
     assert sum(caps) / len(caps) > sum(others) / len(others) + 0.5
+
+
+def test_outside_backs_without_fullback_give_some_fullbacks():
+    positions = [p if p != "fullback" else "wing" for p in POSITIONS]  # 6 « ailiers »
+    pros = [pro(i, pos) for i, pos in enumerate(positions)]
+    club, _ = toulouse(roster(pros))
+    real_fullbacks = [
+        p for p in club.players if p.position == Position.FULLBACK and "Réel" in p.name
+    ]
+    assert len(real_fullbacks) == 2  # le dernier tiers des ailiers
+
+
+def test_reserve_players_too_old_for_the_academy_are_left_out():
+    pros = [pro(i, pos) for i, pos in enumerate(POSITIONS[:31])]
+    youths = [pro(300, "wing", born="2006-01-01"), pro(301, "wing", born="1998-01-01")]
+    club, _ = toulouse(roster(pros, youths))
+    names = {p.name for p in club.youths}
+    assert "Joueur Réel300" in names and "Joueur Réel301" not in names

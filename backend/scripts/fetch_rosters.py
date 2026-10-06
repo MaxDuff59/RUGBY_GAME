@@ -39,7 +39,6 @@ ARTICLES = {
     "LOU Rugby": "Lyon OU",
     "Colomiers Rugby": "US Colomiers",
     "Stade Aurillacois": "Stade Aurillacois Cantal Auvergne",
-    "USON Nevers": "USON Nevers Rugby",
     "Soyaux Angoulême XV": "Soyaux Angoulême XV Charente",
     "Saracens": "Saracens F.C.",
     "Harlequins": "Harlequin F.C.",
@@ -59,8 +58,11 @@ ARTICLES = {
 
 # Intitulés de section : effectif pro, puis espoirs.
 SENIOR_SECTIONS = re.compile(
-    r"^(current|senior|first[- ]team)?\s*squad$|^current (playing )?squad", re.I
+    r"^(current|senior|first[- ]team)?\s*squad$|^current (playing )?squad|^players$", re.I
 )
+# Début d'une table d'effectif ; une table de féminines ou de rugby à 7 est ignorée.
+SQUAD_START = re.compile(r"\{\{\s*(?:Template:)?Rugby union squad start", re.I)
+OTHER_TEAMS = re.compile(r"women|féminine|sevens|\b7s\b", re.I)
 YOUTH_SECTIONS = re.compile(r"academy|espoirs|development|youth|\bu-?2[01]\b|reserves?", re.I)
 # Sous-section espoirs glissée dans la section de l'effectif pro.
 YOUTH_SUBSECTION = re.compile(r"^={3,4}.*(academy|espoirs|development).*=+\s*$", re.I | re.M)
@@ -260,15 +262,23 @@ def club_squads(title: str) -> tuple[list[dict], list[dict], str]:
         is_youth = bool(YOUTH_SECTIONS.search(heading))
         if not is_youth and not SENIOR_SECTIONS.search(heading.strip()):
             continue
-        # La section pro contient parfois les espoirs en sous-section : on les écarte.
-        if not is_youth:
-            body = YOUTH_SUBSECTION.split(body)[0]
-        squad = parse_squad(body)
         if is_youth:
-            youths.extend(p for p in squad if p["name"] not in {y["name"] for y in youths})
-        elif not seniors:
-            seniors = squad
-    return seniors, youths, title
+            youths += parse_squad(body)
+            continue
+        if seniors:
+            continue
+        # La section pro contient parfois les espoirs en sous-section : à part.
+        body, *rest = YOUTH_SUBSECTION.split(body, maxsplit=1)
+        youths += parse_squad("".join(rest))
+        # Première table : les pros ; les suivantes (espoirs mal titrés, équipe réserve
+        # de Currie Cup…) vont chez les espoirs, le générateur écarte les trop âgés.
+        tables = [t for t in SQUAD_START.split(body)[1:] if not OTHER_TEAMS.search(t[:200])]
+        seniors = parse_squad(tables[0] if tables else body)
+        for table in tables[1:]:
+            youths += parse_squad(table)
+    pro_names = {p["name"] for p in seniors}
+    unique = {p["name"]: p for p in youths if p["name"] not in pro_names}
+    return seniors, list(unique.values()), title
 
 
 # --- Date de naissance et photo (Wikidata) ----------------------------------------------
