@@ -1,0 +1,37 @@
+# Déploiement sur Fly.io (https://fly.io/docs/) :
+#   fly launch --copy-config --no-deploy   # crée l'application (change `app` ci-dessous)
+#   fly volumes create rugby_data --size 1 --region cdg
+#   fly deploy
+# Une seule machine : les parties sont des fichiers SQLite sur le volume.
+app = "rugby-manager"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8000"
+  RUGBY_SAVES_DIR = "/data/saves"
+  RUGBY_COOKIE_SECURE = "1"
+
+[[mounts]]
+  source = "rugby_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/api/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

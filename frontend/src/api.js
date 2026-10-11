@@ -1,7 +1,11 @@
 // Accès à l'API. Toutes les fonctions renvoient le JSON de la réponse,
 // ou lèvent une ApiError (avec le statut HTTP et le message du backend).
 
-const BASE_URL = "/api";
+export const BASE_URL = "/api";
+
+// Levé quand l'API répond 401 (session expirée ou absente) : l'application
+// repasse par l'écran de connexion, d'où que l'on soit.
+export const UNAUTHORIZED_EVENT = "rugby:unauthorized";
 
 export class ApiError extends Error {
   constructor(status, detail) {
@@ -24,8 +28,10 @@ async function request(path, { method = "GET", body } = {}) {
     } catch {
       // Réponse sans JSON : on garde le message générique.
     }
+    if (response.status === 401) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
     throw new ApiError(response.status, detail);
   }
+  if (response.status === 204) return null;
   return response.json();
 }
 
@@ -34,7 +40,13 @@ const post = (path, body) => request(path, { method: "POST", body });
 const del = (path) => request(path, { method: "DELETE" });
 
 export const api = {
-  // Parties sauvegardées (trois emplacements)
+  // Compte (cookie de session posé par l'API)
+  me: () => request("/auth/me"),
+  register: (email, password) => post("/auth/register", { email, password }),
+  login: (email, password) => post("/auth/login", { email, password }),
+  logout: () => post("/auth/logout"),
+
+  // Parties sauvegardées (trois emplacements par compte)
   listSaves: () => request("/saves"),
   loadSave: (slot) => post(`/saves/${slot}/load`),
   newSave: (slot) => post(`/saves/${slot}/new`),

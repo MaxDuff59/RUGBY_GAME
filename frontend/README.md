@@ -47,6 +47,9 @@ src/
     Swarm.jsx         essaim horizontal : les joueurs du poste sur une échelle 1-20,
                       le joueur en accent, ses coéquipiers en noir, et son percentile
   pages/
+    Login.jsx         se connecter ou créer son compte (e-mail, mot de passe) ; toute réponse 401
+                      de l'API y ramène (App.jsx)
+    Saves.jsx         les trois parties du compte : continuer, nouvelle carrière, supprimer, se déconnecter
     StartCareer.jsx   choisir son nom et son club (première visite)
     Club.jsx          tableau de bord : prochain match, simuler la journée, rapport de
                       force, classement, derniers résultats, phases finales

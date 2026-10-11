@@ -40,6 +40,7 @@ export default function StartCareer() {
   }
 
   // Le club se choisit dans une partie : on passe d'abord par l'écran des parties.
+  if (error?.status === 401) return <Navigate to="/connexion" replace />;
   if (chosenSlot() === null || error?.status === 409) return <Navigate to="/parties" replace />;
   if (loading || leagues.loading) return <p className="status">Chargement des clubs…</p>;
   if (error || leagues.error) {

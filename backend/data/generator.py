@@ -224,8 +224,9 @@ POSITION_MINIMUM = {
     Position.WING: 3,
     Position.FULLBACK: 1,
 }
-# Photo Wikimedia Commons, servie à la taille demandée.
-PHOTO_URL = "https://commons.wikimedia.org/wiki/Special:FilePath/{}?width=240"
+# Photo d'un vrai joueur : chemin dans l'API, qui la sert depuis sa propre copie
+# (voir api/routers/photos.py). Le nom est celui du fichier sur Wikimedia Commons.
+PHOTO_PATH = "/photos/{}"
 # Niveau d'un vrai joueur par rapport à son club : international, puis âge.
 INTERNATIONAL_BONUS = 1.6
 REAL_PLAYER_SPREAD = 1.0
@@ -311,7 +312,7 @@ def _real_player(
     player.wage = wage_for(player, noise=rng.uniform(0.9, 1.15))
     player.contract_until = FIRST_SEASON_YEAR + rng.randint(0, CONTRACT_MAX_YEARS - 1)
     if entry["photo"]:
-        player.photo = PHOTO_URL.format(urllib.parse.quote(entry["photo"].replace(" ", "_")))
+        player.photo = PHOTO_PATH.format(urllib.parse.quote(entry["photo"].replace(" ", "_")))
     return player
 
 

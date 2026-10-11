@@ -1,0 +1,17 @@
+# Essai de la production en local : http://localhost:8000
+#   docker compose up --build
+# Les parties et les comptes restent dans le volume `rugby-data`.
+services:
+  rugby:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - rugby-data:/data
+    environment:
+      # Pas de HTTPS en local : le cookie de session ne doit pas être marqué Secure.
+      RUGBY_COOKIE_SECURE: "0"
+    restart: unless-stopped
+
+volumes:
+  rugby-data:

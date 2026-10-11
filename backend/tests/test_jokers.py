@@ -4,9 +4,9 @@ from datetime import date, timedelta
 
 from sqlalchemy import select
 
+from api.deps import get_session
 from api.ledger import game_date
 from api.main import app
-from database import get_session
 from engine.medical import allows_joker
 from models import Injury, InjurySeverity, InjurySource
 from models.orm import InjuryRow, PlayerRow

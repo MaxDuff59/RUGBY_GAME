@@ -8,8 +8,9 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from api.deps import get_session
 from api.main import app
-from database import get_session, seed_if_empty
+from database import seed_if_empty
 from engine.economy import SQUAD_MIN
 from models.orm import Base, ClubRow
 

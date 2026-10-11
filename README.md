@@ -1,8 +1,8 @@
 # Rugby Manager (prototype)
 
 Jeu de gestion de rugby à XV, dans l'esprit de Football Manager : on incarne
-le manager d'un club et on le mène à travers les saisons. Pas d'interface
-graphique pour l'instant.
+le manager d'un club et on le mène à travers les saisons. Interface web
+dans `frontend/`.
 
 ## Organisation
 
@@ -73,13 +73,22 @@ uv run uvicorn api.main:app --reload
 
 Puis ouvrir http://localhost:8000/docs pour tester les routes dans le navigateur.
 
-Le jeu s'ouvre sur l'écran des parties : trois emplacements, chacun avec son
-propre monde dans `backend/saves/partie-N.db` (`database.py`). « Nouvelle
-carrière » crée le monde dans un emplacement libre, puis on choisit le
-championnat et le club ; « Continuer » recharge une partie. Il n'y a pas de
-bouton « Sauvegarder » : chaque action est enregistrée aussitôt dans le fichier
-de la partie chargée. Les routes du jeu répondent 409 tant qu'aucune partie
-n'est chargée ; la partie chargée est retenue dans `backend/saves/active`.
+Le jeu s'ouvre sur la connexion (`backend/accounts.py`, routes `/auth`) : un
+compte par joueur, e-mail et mot de passe (scrypt), session par cookie. Les
+comptes vivent dans `backend/saves/users.db` (`RUGBY_USERS_DB_URL` pour la
+mettre ailleurs, Postgres compris). Puis l'écran des parties : trois
+emplacements par compte, chacun avec son propre monde dans
+`backend/saves/u<compte>/partie-N.db` (`database.py`). « Nouvelle carrière »
+crée le monde dans un emplacement libre, puis on choisit le championnat et le
+club ; « Continuer » recharge une partie. Il n'y a pas de bouton
+« Sauvegarder » : chaque action est enregistrée aussitôt dans le fichier de la
+partie chargée. Les routes du jeu répondent 401 sans compte connecté et 409 tant
+qu'aucune partie n'est chargée ; la partie chargée est retenue sur le compte,
+d'un navigateur à l'autre.
+
+Les photos des vrais joueurs (`GET /photos/{nom}`) viennent de Wikimedia
+Commons mais passent par l'API : récupérées une fois, gardées dans
+`backend/saves/photos/`, puis servies de là.
 
 Une nouvelle partie est créée avec les 63 clubs de
 cinq championnats (saison 2025-26 ; voir `backend/data/leagues.py`), leurs vrais
@@ -114,7 +123,9 @@ parties ailleurs (ex. pour une instance de test).
 | `GET /career/dismissal` | Dernier limogeage, tant qu'aucune nouvelle carrière n'a commencé |
 | `GET /players/{id}` | Fiche d'un joueur : comparaison à son poste, note à chaque poste, saison, blessures |
 | `POST /career`, `GET /career` | Choisir son club (tire aussi le calendrier de la 1re saison) |
-| `GET /saves`, `POST /saves/{n}/load`, `POST /saves/{n}/new`, `DELETE /saves/{n}` | Parties sauvegardées : lister, charger, créer un monde neuf, supprimer |
+| `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | Compte : s'inscrire, se connecter (cookie de session), se déconnecter, qui suis-je |
+| `GET /saves`, `POST /saves/{n}/load`, `POST /saves/{n}/new`, `DELETE /saves/{n}` | Parties sauvegardées du compte : lister, charger, créer un monde neuf, supprimer |
+| `GET /photos/{nom}` | Photo d'un vrai joueur, depuis notre copie |
 | `GET /leagues` | Les championnats et leur formule |
 | `GET /seasons/current?league=` | Calendrier daté, classement, prochaine journée, phases finales (du championnat du club dirigé par défaut) |
 | `POST /seasons/current/play` | Joue la journée suivante (matchs, billetterie, sponsors, salaires) |
@@ -265,6 +276,31 @@ titularisation promise impose le joueur dans le XV, une victoire annoncée doit
 arriver. Tenue ou non, la promesse revient sous forme d'une nouvelle affaire.
 Une affaire restée sans réponse est réglée d'office avant la journée suivante,
 avec une petite pénalité. Le catalogue est dans `backend/engine/affairs.py`.
+
+## Mise en production
+
+Un seul conteneur sert l'API et l'interface construite (`Dockerfile`) : l'API sous
+`/api`, l'interface partout ailleurs (`api.main:site`). Les parties, les comptes et
+les photos vivent dans `/data`, à monter sur un volume persistant.
+
+```bash
+docker compose up --build          # essai en local : http://localhost:8000
+fly launch --copy-config --no-deploy && fly volumes create rugby_data --size 1 --region cdg && fly deploy
+```
+
+Variables d'environnement :
+
+| Variable | Rôle | Dans l'image |
+|---|---|---|
+| `RUGBY_SAVES_DIR` | Dossier des parties, des comptes et des photos | `/data/saves` |
+| `RUGBY_USERS_DB_URL` | Base des comptes (SQLAlchemy ; par défaut `users.db` dans le dossier des parties) | — |
+| `RUGBY_STATIC_DIR` | Le `dist/` de Vite servi par l'API | `/app/static` |
+| `RUGBY_COOKIE_SECURE` | `1` derrière HTTPS (cookie de session marqué Secure) | `1` |
+| `PORT` | Port d'écoute | `8000` |
+
+Une seule machine à la fois : les parties sont des fichiers SQLite. Pour en
+avoir plusieurs, il faudrait un stockage partagé. Pas de réinitialisation de
+mot de passe (il faudrait un envoi d'e-mail).
 
 ## Principe d'architecture
 

@@ -28,6 +28,7 @@ export default function Layout() {
   const navigate = useNavigate();
 
   // Chaque ouverture du jeu passe par l'écran des parties.
+  if (error?.status === 401) return <Navigate to="/connexion" replace />;
   if (chosenSlot() === null || error?.status === 409) return <Navigate to="/parties" replace />;
   if (loading) return <p className="status">Chargement…</p>;
   // Pas de carrière : on commence par choisir un club.

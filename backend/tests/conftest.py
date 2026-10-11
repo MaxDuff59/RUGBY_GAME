@@ -9,9 +9,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from api.deps import get_session
 from api.main import app
 from data.generator import SQUAD_COMPOSITION, generate_player
-from database import get_session, seed_if_empty
+from database import seed_if_empty
 from models import Club
 from models.orm import Base
 

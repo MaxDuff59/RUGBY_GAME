@@ -1,15 +1,27 @@
 """Dépendances partagées par les routes."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from typing import Annotated
 
 from fastapi import Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from database import get_session
+from api.auth import UserDep
+from database import NoSaveLoaded, open_slot, slot_exists
 from models import Club
 from models.orm import CareerRow, ClubRow, PlayerRow
+
+
+def get_session(user: UserDep) -> Iterator[Session]:
+    """Fournit une session sur la partie chargée du joueur connecté et la ferme après
+    usage (dépendance FastAPI). NoSaveLoaded si aucune partie n'est chargée."""
+    slot = user.active_slot
+    if slot is None or not slot_exists(user.id, slot):
+        raise NoSaveLoaded
+    with open_slot(user.id, slot) as session:
+        yield session
+
 
 # Raccourci : `session: SessionDep` dans une route injecte une session SQLAlchemy.
 SessionDep = Annotated[Session, Depends(get_session)]

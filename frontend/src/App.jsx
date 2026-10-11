@@ -1,11 +1,14 @@
-import { Route, Routes } from "react-router-dom";
+import { useEffect } from "react";
+import { Route, Routes, useNavigate } from "react-router-dom";
 
+import { UNAUTHORIZED_EVENT } from "./api.js";
 import Layout from "./components/Layout.jsx";
 import Academy from "./pages/Academy.jsx";
 import Calendar from "./pages/Calendar.jsx";
 import Club from "./pages/Club.jsx";
 import Facilities from "./pages/Facilities.jsx";
 import Finances from "./pages/Finances.jsx";
+import Login from "./pages/Login.jsx";
 import Match from "./pages/Match.jsx";
 import Medical from "./pages/Medical.jsx";
 import Player from "./pages/Player.jsx";
@@ -14,10 +17,23 @@ import Squad from "./pages/Squad.jsx";
 import Staff from "./pages/Staff.jsx";
 import StartCareer from "./pages/StartCareer.jsx";
 import Transfers from "./pages/Transfers.jsx";
+import { leaveSlot } from "./save.js";
 
 export default function App() {
+  const navigate = useNavigate();
+  // Session absente ou expirée (l'API a répondu 401) : retour à la connexion.
+  useEffect(() => {
+    const toLogin = () => {
+      leaveSlot();
+      navigate("/connexion", { replace: true });
+    };
+    window.addEventListener(UNAUTHORIZED_EVENT, toLogin);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, toLogin);
+  }, [navigate]);
+
   return (
     <Routes>
+      <Route path="/connexion" element={<Login />} />
       <Route path="/parties" element={<Saves />} />
       <Route path="/start" element={<StartCareer />} />
       <Route element={<Layout />}>

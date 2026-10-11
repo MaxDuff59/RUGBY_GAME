@@ -920,6 +920,36 @@ body,
   margin-top: 10px;
 }
 
+.saves__account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* --- Connexion --------------------------------------------------------------- */
+
+.login__form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: min(100%, 420px);
+}
+
+.login__form .field {
+  max-width: none;
+}
+
+.login__error {
+  margin: 0;
+}
+
+.login__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 /* --- Choix du club ----------------------------------------------------------- */
 
 .start {

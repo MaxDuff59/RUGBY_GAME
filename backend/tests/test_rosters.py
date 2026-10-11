@@ -32,7 +32,7 @@ def test_a_known_club_gets_its_real_players_with_their_age():
     assert {f"Joueur Réel{i}" for i in range(31)} <= names
     first = next(p for p in club.players if p.name == "Joueur Réel0")
     assert (first.first_name, first.last_name, first.age) == ("Joueur", "Réel0", 29)
-    assert first.photo.endswith("/Special:FilePath/Joueur_R%C3%A9el.jpg?width=240")
+    assert first.photo == "/photos/Joueur_R%C3%A9el.jpg"
     youth = next(p for p in club.youths if p.name == "Joueur Réel100")
     assert youth.squad == Squad.YOUTH and youth.age == 20
     # Les autres clubs, absents du fichier, restent inventés.

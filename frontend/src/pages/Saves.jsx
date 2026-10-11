@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 
 import { api } from "../api.js";
 import { clubTheme } from "../clubs.js";
@@ -7,12 +7,13 @@ import ClubCrest from "../components/ClubCrest.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import { formatLongDate, formatSavedAt } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
-import { chooseSlot } from "../save.js";
+import { chooseSlot, leaveSlot } from "../save.js";
 
 // Écran d'accueil : reprendre une des trois parties, ou en commencer une nouvelle
 // dans un emplacement libre. Une partie se sauvegarde toute seule pendant le jeu.
 export default function Saves() {
   const navigate = useNavigate();
+  const me = useApi(useCallback(api.me, []));
   const saves = useApi(useCallback(api.listSaves, []));
   const confirm = useConfirm();
   const [busy, setBusy] = useState(null); // emplacement en cours d'ouverture
@@ -43,6 +44,13 @@ export default function Saves() {
       onConfirm: async () => saves.setData(await api.deleteSave(save.slot)),
     });
 
+  async function logout() {
+    await api.logout();
+    leaveSlot();
+    navigate("/connexion", { replace: true });
+  }
+
+  if (saves.error?.status === 401) return <Navigate to="/connexion" replace />;
   if (saves.loading) return <p className="status">Chargement des parties…</p>;
   if (saves.error) {
     return (
@@ -66,15 +74,21 @@ export default function Saves() {
             Trois emplacements. Une partie se sauvegarde automatiquement à chaque action.
           </p>
         </div>
-        <button
-          type="button"
-          className="button button--primary"
-          disabled={!free || busy !== null}
-          title={free ? undefined : "Supprime une partie pour en commencer une nouvelle"}
-          onClick={() => create(free.slot)}
-        >
-          Nouvelle carrière
-        </button>
+        <div className="saves__account">
+          {me.data && <span className="muted">{me.data.email}</span>}
+          <button type="button" className="button" disabled={busy !== null} onClick={logout}>
+            Se déconnecter
+          </button>
+          <button
+            type="button"
+            className="button button--primary"
+            disabled={!free || busy !== null}
+            title={free ? undefined : "Supprime une partie pour en commencer une nouvelle"}
+            onClick={() => create(free.slot)}
+          >
+            Nouvelle carrière
+          </button>
+        </div>
       </header>
 
       {error && <p className="status--error">{error.message}</p>}

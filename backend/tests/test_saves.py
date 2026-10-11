@@ -1,23 +1,38 @@
-"""Parties sauvegardées : trois emplacements, chacun son monde, sauvegarde au fil du jeu."""
+"""Parties sauvegardées : trois emplacements par joueur, chacun son monde, sauvegarde
+au fil du jeu, et chaque compte ne voit que les siennes."""
 
 from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
 
+import accounts
 import database
 from api.main import app
 
 
 @pytest.fixture
-def saves(tmp_path, monkeypatch) -> Iterator[TestClient]:
-    """Client sur de vraies parties, rangées dans un dossier temporaire."""
+def world(tmp_path, monkeypatch) -> Iterator[None]:
+    """De vraies parties et de vrais comptes, rangés dans un dossier temporaire."""
     monkeypatch.setattr(database, "SAVES_DIR", tmp_path)
-    monkeypatch.setattr(database, "_engines", {})
+    monkeypatch.delenv("RUGBY_USERS_DB_URL", raising=False)
+    accounts.reset()
     app.dependency_overrides.clear()
-    yield TestClient(app)
-    for engine in database._engines.values():
-        engine.dispose()
+    yield
+    database.forget_engines()
+    accounts.reset()
+
+
+def sign_up(email: str) -> TestClient:
+    client = TestClient(app)
+    created = client.post("/auth/register", json={"email": email, "password": "ballon-ovale"})
+    assert created.status_code == 201, created.text
+    return client
+
+
+@pytest.fixture
+def saves(world) -> TestClient:
+    return sign_up("maxence@example.com")
 
 
 def start(client: TestClient, slot: int, manager: str, club_name: str) -> None:
@@ -57,4 +72,40 @@ def test_a_deleted_save_is_gone(saves):
     listed = saves.delete("/saves/3").json()
     assert listed[2]["empty"]
     assert saves.get("/career").status_code == 409
-    assert not (database.SAVES_DIR / "partie-3.db").exists()
+    assert not list(database.SAVES_DIR.glob("u*/partie-3.db"))
+
+
+def test_each_player_has_their_own_saves(world):
+    maxence = sign_up("maxence@example.com")
+    alex = sign_up("alex@example.com")
+    start(maxence, 1, "Maxence", "Stade Toulousain")
+    start(alex, 1, "Alex", "Leinster Rugby")
+
+    # Même emplacement, deux mondes : chacun retrouve le sien.
+    assert maxence.get("/career").json()["club_name"] == "Stade Toulousain"
+    assert alex.get("/career").json()["club_name"] == "Leinster Rugby"
+    assert [s["empty"] for s in alex.get("/saves").json()] == [False, True, True]
+
+    # Alex quitte sa partie : Maxence n'est pas touché.
+    alex.delete("/saves/1")
+    assert alex.get("/career").status_code == 409
+    assert maxence.get("/career").json()["manager_name"] == "Maxence"
+    assert (database.SAVES_DIR / "u1" / "partie-1.db").exists()
+    assert not (database.SAVES_DIR / "u2" / "partie-1.db").exists()
+
+
+def test_the_loaded_save_follows_the_account(world):
+    maxence = sign_up("maxence@example.com")
+    start(maxence, 2, "Maxence", "Bath Rugby")
+    # Un autre navigateur : nouvelle session, même compte, même partie chargée.
+    other = TestClient(app)
+    other.post("/auth/login", json={"email": "Maxence@Example.com", "password": "ballon-ovale"})
+    assert other.get("/auth/me").json()["active_slot"] == 2
+    assert other.get("/career").json()["club_name"] == "Bath Rugby"
+
+
+def test_the_game_needs_an_account(world):
+    anonymous = TestClient(app)
+    assert anonymous.get("/saves").status_code == 401
+    assert anonymous.get("/career").status_code == 401
+    assert anonymous.post("/saves/1/new").status_code == 401

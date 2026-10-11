@@ -1,17 +1,17 @@
-"""Parties sauvegardées : une base SQLite par emplacement, création des tables et
-remplissage initial.
+"""Parties sauvegardées : une base SQLite par emplacement et par joueur, création des
+tables et remplissage initial.
 
-Chaque partie vit dans son propre fichier (`saves/partie-1.db` à `partie-3.db`).
-Toutes les routes travaillent sur la partie chargée ; chaque action est
-enregistrée aussitôt dans son fichier : la partie se sauvegarde au fur et à
-mesure. La partie chargée est retenue dans `saves/active`, pour la retrouver
-après un redémarrage de l'API.
+Chaque partie vit dans son propre fichier (`saves/u<id>/partie-1.db` à `partie-3.db`,
+`<id>` étant le compte du joueur, voir accounts.py). Chaque action est enregistrée
+aussitôt dans son fichier : la partie se sauvegarde au fur et à mesure. La partie
+chargée est retenue sur le compte (`active_slot`), pour la retrouver d'un
+navigateur à l'autre.
 """
 
 import itertools
 import os
 import random
-from collections.abc import Iterator
+from collections import OrderedDict
 from pathlib import Path
 
 from sqlalchemy import Engine, create_engine, func, inspect, select, text
@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from data.generator import (
     ATTRIBUTE_SPREAD,
     FIRST_SEASON_YEAR,
+    PHOTO_PATH,
     POSITION_PROFILES,
     generate_clubs,
     generate_real_clubs,
@@ -29,16 +30,20 @@ from engine.free_agents import newcomers
 from models import ATTRIBUTE_MAX, ATTRIBUTE_MIN, Position
 from models.orm import Base, ClubRow, PlayerRow, StaffRow
 
-# Dossier des parties (surchargeable, ex. pour une instance de test).
+# Dossier des parties (surchargeable, ex. pour une instance de test ou un volume en prod).
 SAVES_DIR = Path(os.environ.get("RUGBY_SAVES_DIR", "./saves"))
 SLOT_COUNT = 3
+# Connexions SQLite gardées ouvertes : au-delà, la plus ancienne est fermée.
+ENGINE_CACHE_SIZE = 64
 
 # Nombre de clubs inventés (un seul championnat) quand on ne prend pas les vrais clubs.
 DEFAULT_CLUB_COUNT = 14
 
-_engines: dict[int, Engine] = {}
+SlotKey = tuple[int, int]  # (compte, emplacement)
+
+_engines: OrderedDict[SlotKey, Engine] = OrderedDict()
 # Parties dont le schéma a été vérifié (et migré) depuis le démarrage de l'API.
-_checked: set[int] = set()
+_checked: set[SlotKey] = set()
 
 
 class NoSaveLoaded(Exception):
@@ -49,75 +54,80 @@ class OutdatedSave(Exception):
     """Une partie à un ancien format, que le jeu ne sait plus ouvrir."""
 
 
-def slot_path(slot: int) -> Path:
+def slot_path(user_id: int, slot: int) -> Path:
     if not 1 <= slot <= SLOT_COUNT:
         raise ValueError(f"Emplacement {slot} : il y en a {SLOT_COUNT}")
-    return SAVES_DIR / f"partie-{slot}.db"
+    return SAVES_DIR / f"u{user_id}" / f"partie-{slot}.db"
 
 
-def slot_exists(slot: int) -> bool:
-    return slot_path(slot).exists()
+def slot_exists(user_id: int, slot: int) -> bool:
+    return slot_path(user_id, slot).exists()
 
 
-def engine_for(slot: int) -> Engine:
+def engine_for(user_id: int, slot: int) -> Engine:
     """Connexion à la base d'une partie (créée au premier appel, puis réutilisée)."""
-    if slot not in _engines:
-        # check_same_thread=False : nécessaire pour utiliser SQLite depuis FastAPI
-        # (plusieurs threads).
-        _engines[slot] = create_engine(
-            f"sqlite:///{slot_path(slot)}", connect_args={"check_same_thread": False}
-        )
-    return _engines[slot]
+    key = (user_id, slot)
+    if key in _engines:
+        _engines.move_to_end(key)
+        return _engines[key]
+    while len(_engines) >= ENGINE_CACHE_SIZE:
+        _, oldest = _engines.popitem(last=False)
+        oldest.dispose()
+    # check_same_thread=False : nécessaire pour utiliser SQLite depuis FastAPI
+    # (plusieurs threads).
+    _engines[key] = create_engine(
+        f"sqlite:///{slot_path(user_id, slot)}", connect_args={"check_same_thread": False}
+    )
+    return _engines[key]
 
 
-def session_for(slot: int) -> Session:
-    return sessionmaker(bind=engine_for(slot), expire_on_commit=False)()
+def session_for(user_id: int, slot: int) -> Session:
+    return sessionmaker(bind=engine_for(user_id, slot), expire_on_commit=False)()
 
 
-def active_slot() -> int | None:
-    """La partie chargée (None si aucune, ou si son fichier a disparu)."""
-    try:
-        slot = int((SAVES_DIR / "active").read_text())
-    except (OSError, ValueError):
-        return None
-    return slot if 1 <= slot <= SLOT_COUNT and slot_exists(slot) else None
+def open_slot(user_id: int, slot: int) -> Session:
+    """Session sur une partie existante, son schéma vérifié une fois par lancement
+    (OutdatedSave s'il est trop ancien)."""
+    key = (user_id, slot)
+    if key not in _checked:
+        init_db(engine_for(user_id, slot))
+        _checked.add(key)
+    return session_for(user_id, slot)
 
 
-def set_active_slot(slot: int | None) -> None:
-    marker = SAVES_DIR / "active"
-    if slot is None:
-        marker.unlink(missing_ok=True)
-        return
-    SAVES_DIR.mkdir(parents=True, exist_ok=True)
-    marker.write_text(str(slot))
+def load_slot(user_id: int, slot: int) -> None:
+    """Vérifie qu'une partie existante s'ouvre (OutdatedSave si son format est trop ancien)."""
+    init_db(engine_for(user_id, slot))
+    _checked.add((user_id, slot))
 
 
-def load_slot(slot: int) -> None:
-    """Charge une partie existante (OutdatedSave si son format est trop ancien)."""
-    init_db(engine_for(slot))
-    set_active_slot(slot)
-
-
-def new_slot(slot: int, seed: int | None = None) -> None:
-    """Remplace l'emplacement par un monde neuf et le charge (la carrière reste à choisir)."""
-    delete_slot(slot)
-    SAVES_DIR.mkdir(parents=True, exist_ok=True)
-    engine = engine_for(slot)
+def new_slot(user_id: int, slot: int, seed: int | None = None) -> None:
+    """Remplace l'emplacement par un monde neuf (la carrière reste à choisir)."""
+    delete_slot(user_id, slot)
+    slot_path(user_id, slot).parent.mkdir(parents=True, exist_ok=True)
+    engine = engine_for(user_id, slot)
     init_db(engine)
-    with session_for(slot) as session:
+    _checked.add((user_id, slot))
+    with session_for(user_id, slot) as session:
         seed_if_empty(session, seed=seed)
-    set_active_slot(slot)
 
 
-def delete_slot(slot: int) -> None:
-    """Efface une partie (son fichier) ; elle n'est plus chargée."""
-    path = slot_path(slot)
-    engine = _engines.pop(slot, None)
+def delete_slot(user_id: int, slot: int) -> None:
+    """Efface une partie (son fichier)."""
+    key = (user_id, slot)
+    engine = _engines.pop(key, None)
     if engine is not None:
         engine.dispose()
-    path.unlink(missing_ok=True)
-    if active_slot() is None:
-        set_active_slot(None)
+    _checked.discard(key)
+    slot_path(user_id, slot).unlink(missing_ok=True)
+
+
+def forget_engines() -> None:
+    """Ferme toutes les connexions ouvertes (tests : changer de dossier entre deux cas)."""
+    for engine in _engines.values():
+        engine.dispose()
+    _engines.clear()
+    _checked.clear()
 
 
 def init_db(engine: Engine) -> None:
@@ -169,6 +179,17 @@ def _migrate(engine: Engine) -> None:
         # Photo des vrais joueurs, ajoutée après coup : les parties existantes n'en ont pas.
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE players ADD COLUMN photo VARCHAR(300)"))
+    with sessionmaker(bind=engine)() as session:
+        # Photos : les parties d'avant pointaient directement sur Wikimedia Commons ;
+        # elles passent maintenant par l'API (voir api/routers/photos.py).
+        legacy = session.scalars(
+            select(PlayerRow).where(PlayerRow.photo.like("https://commons.wikimedia.org/%"))
+        ).all()
+        for row in legacy:
+            name = row.photo.rsplit("/", 1)[-1].split("?", 1)[0]
+            row.photo = PHOTO_PATH.format(name)
+        if legacy:
+            session.commit()
     if "stamina" not in columns:
         # Endurance ajoutée après coup : chaque joueur en tire une selon son poste
         # et son niveau, comme à la génération.
@@ -219,18 +240,3 @@ def seed_if_empty(
     session.add_all(PlayerRow.from_domain(player) for player in free_agents)
     session.commit()
     return len(clubs)
-
-
-def get_session() -> Iterator[Session]:
-    """Fournit une session sur la partie chargée et la ferme après usage (dépendance
-    FastAPI). NoSaveLoaded si aucune partie n'est chargée."""
-    slot = active_slot()
-    if slot is None:
-        raise NoSaveLoaded
-    if slot not in _checked:
-        # Partie restée chargée d'un lancement précédent de l'API : on rattrape
-        # son schéma comme à l'ouverture (OutdatedSave s'il est trop ancien).
-        init_db(engine_for(slot))
-        _checked.add(slot)
-    with session_for(slot) as session:
-        yield session
