@@ -63,19 +63,25 @@ class ClubRow(Base):
     sponsors: Mapped[list] = mapped_column(JSON, default=list)
 
     # Pros et espoirs sont dans la même table, séparés par `squad`.
+    # lazy="selectin" : les listes se chargent en une requête par lot, pas une par
+    # ligne ; indispensable quand la base est sur un serveur distant (Postgres).
     players: Mapped[list["PlayerRow"]] = relationship(
         primaryjoin="and_(PlayerRow.club_id == ClubRow.id, PlayerRow.squad == 'pro')",
         foreign_keys="PlayerRow.club_id",
         overlaps="youths,club",
         order_by="PlayerRow.id",
+        lazy="selectin",
     )
     youths: Mapped[list["PlayerRow"]] = relationship(
         primaryjoin="and_(PlayerRow.club_id == ClubRow.id, PlayerRow.squad == 'youth')",
         foreign_keys="PlayerRow.club_id",
         overlaps="players,club",
         order_by="PlayerRow.id",
+        lazy="selectin",
     )
-    staff: Mapped[list["StaffRow"]] = relationship(back_populates="club", order_by="StaffRow.id")
+    staff: Mapped[list["StaffRow"]] = relationship(
+        back_populates="club", order_by="StaffRow.id", lazy="selectin"
+    )
 
     def to_domain(self) -> Club:
         return Club(
@@ -161,7 +167,10 @@ class PlayerRow(Base):
     )
     # Dossier médical complet ; le domaine ne garde que la blessure la plus récente.
     injuries: Mapped[list["InjuryRow"]] = relationship(
-        back_populates="player", cascade="all, delete-orphan", order_by="InjuryRow.id"
+        back_populates="player",
+        cascade="all, delete-orphan",
+        order_by="InjuryRow.id",
+        lazy="selectin",
     )
 
     @property
@@ -325,11 +334,13 @@ class SeasonRow(Base):
         primaryjoin="and_(MatchRow.season_id == SeasonRow.id, MatchRow.squad == 'pro')",
         overlaps="youth_matches,season",
         order_by="MatchRow.id",
+        lazy="selectin",
     )
     youth_matches: Mapped[list["MatchRow"]] = relationship(
         primaryjoin="and_(MatchRow.season_id == SeasonRow.id, MatchRow.squad == 'youth')",
         overlaps="matches,season",
         order_by="MatchRow.id",
+        lazy="selectin",
     )
 
 

@@ -19,12 +19,10 @@ from database import (
     SLOT_COUNT,
     OutdatedSave,
     delete_slot,
-    engine_for,
-    init_db,
     load_slot,
     new_slot,
+    open_slot,
     saved_at,
-    session_for,
     slot_exists,
 )
 from models.orm import CareerRow, ClubRow
@@ -41,11 +39,11 @@ def _save_out(user: accounts.User, slot: int) -> SaveOut:
         slot=slot, empty=False, active=slot == user.active_slot, saved_at=saved_at(user.id, slot)
     )
     try:
-        init_db(engine_for(user.id, slot))
+        session = open_slot(user.id, slot)
     except OutdatedSave:
         out.outdated = True
         return out
-    with session_for(user.id, slot) as session:
+    with session:
         season = current_season(session)
         out.season_year = season.year if season else None
         out.game_date = game_date(session) if season else None
