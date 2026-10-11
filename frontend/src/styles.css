@@ -42,7 +42,8 @@ a {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -131,24 +132,192 @@ body,
   overflow: auto;
 }
 
-@media (max-width: 720px) {
-  .app {
+/* --- Version mobile (≤ 720 px, `.app--phone` posé par Layout) ---------------------
+   Plus de colonne de navigation : l'en-tête compact reste collé en haut, le contenu
+   défile dessous, et la barre d'onglets occupe le bas de l'écran. */
+
+:root {
+  /* Hauteur de la barre d'onglets, zone sûre du téléphone comprise (encoche, barre d'accueil). */
+  --tabbar-h: calc(60px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 960px) {
+  .app--phone {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
   }
-  .sidebar {
-    overflow: visible;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-  /* Sur téléphone, le cadre reste à la hauteur de l'écran mais le contenu défile. */
-  .main {
+  /* Le cadre reste à la hauteur de l'écran, le contenu défile sous l'en-tête. */
+  .app--phone .main {
     overflow-y: auto;
-    padding: 20px 16px 40px;
+    overscroll-behavior: contain;
+    padding: 0 16px 24px;
+    gap: 20px;
   }
-  .fill {
+  .app--phone .header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--bg);
+    padding: 12px 0;
+  }
+  .app--phone .header__name {
+    font-size: 20px;
+  }
+  .app--phone .header::after {
+    width: 88px;
+    height: 3px;
+  }
+  .app--phone .fill {
     flex: 0 0 auto;
   }
+  /* Les grilles reprennent des rangées à hauteur naturelle : sinon chaque carte prend
+     la hauteur de la plus haute, d'où de grands vides entre elles. */
+  .app--phone .fill.club-grid,
+  .app--phone .fill.two-col,
+  .app--phone .fill.player-grid {
+    grid-auto-rows: auto;
+  }
+  /* Les longues listes (marché des transferts, opérations…) défilent dans leur carte,
+     bornée aux deux tiers de l'écran, plutôt que d'allonger la page. */
+  .app--phone .section.fill > .card,
+  .app--phone .main > .card.fill {
+    max-height: 70dvh;
+  }
+  .app--phone .title,
+  .app--phone .hero__title {
+    font-size: 40px;
+  }
+}
+
+.tabbar {
+  display: flex;
+  align-items: stretch;
+  height: var(--tabbar-h);
+  padding: 0 4px env(safe-area-inset-bottom, 0px);
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  position: relative;
+  z-index: 30;
+}
+
+.tabbar__link {
+  all: unset;
+  box-sizing: border-box;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 6px 2px 4px;
+  color: var(--ink-muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Pastille derrière le pictogramme : à la couleur du club quand l'onglet est actif,
+   comme l'élément actif du menu sur ordinateur. */
+.tabbar__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 28px;
+  border-radius: 14px;
+  color: var(--ink);
+}
+
+.tabbar__label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.tabbar__link.active {
+  color: var(--accent);
+}
+
+.tabbar__link.active .tabbar__icon {
+  background: var(--accent);
+  color: var(--surface);
+}
+
+.tabbar__link.active .tabbar__label {
+  font-weight: 600;
+}
+
+.tabbar__link:focus-visible .tabbar__icon {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Volet « Plus » : posé au-dessus de la barre d'onglets, le reste de l'écran s'assombrit. */
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: rgba(22, 24, 27, 0.35);
+}
+
+.sheet__panel {
+  margin: 0 8px var(--tabbar-h);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: calc(100% - var(--tabbar-h) - 24px);
+  overflow-y: auto;
+}
+
+.sheet__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sheet__link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 76px;
+  padding: 10px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--line-soft);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.sheet__link.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--surface);
+  font-weight: 600;
+}
+
+.sheet__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
 }
 
 .brand {
@@ -285,7 +454,7 @@ body,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding-bottom: 14%;
+  padding-bottom: 0.41em; /* 14 % de la taille (la police vaut 34 % de la taille) */
   clip-path: polygon(8% 0, 92% 0, 92% 66%, 50% 100%, 8% 66%);
   font-family: var(--font-display);
   font-weight: 700;
@@ -423,6 +592,52 @@ body,
 .input:focus {
   outline: 2px solid var(--ink);
   outline-offset: 1px;
+}
+
+/* Listes déroulantes : même dessin partout, chevron maison à droite, texte coupé par
+   des points de suspension plutôt que débordant. */
+select.input {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%2316181b' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+select.input:hover {
+  border-color: var(--neutral);
+}
+
+select.input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+select.input:disabled {
+  color: var(--neutral);
+  cursor: default;
+  opacity: 1;
+}
+
+/* Variante compacte (filtres, tactique) : en pilule, comme les pastilles de filtre. */
+select.tactics__select {
+  border-radius: 18px;
+  padding-left: 14px;
+}
+
+/* Trois listes côte à côte dans la tactique : chevron plus près du bord. */
+.tactics select.tactics__select {
+  padding-left: 12px;
+  padding-right: 28px;
+  background-position: right 9px center;
 }
 
 .num {
@@ -714,9 +929,13 @@ body,
   overflow: auto;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 960px) {
   .squad__body {
     flex-wrap: wrap;
+  }
+  .squad__pitch {
+    flex: 1 1 100%;
+    max-width: 100%;
   }
   .squad__table {
     overflow: visible;
@@ -834,6 +1053,103 @@ body,
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 28px;
   align-items: start;
+}
+
+/* Classement : toutes les équipes visibles, sans défilement, quel que soit leur nombre.
+   La section (pleine hauteur) sert de conteneur : la taille du texte se déduit de sa
+   hauteur et du nombre de lignes (`--rows`, posé par Standings). Une ligne mesure
+   2,4 em + 1 px (comptée 2,6 em) ; les 115 px couvrent titre et en-tête. Si la place manque
+   malgré tout (phases finales au-dessus), la carte défile. */
+.standings {
+  container-type: size;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.standings > .card {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Les trois cartes du bas : le classement plus large que les deux autres. */
+.club-grid--three {
+  grid-template-columns: minmax(480px, 1.3fr) repeat(2, minmax(0, 1fr));
+}
+
+/* Phases finales puis classement, dans une seule cellule. */
+.club-grid__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (max-width: 1280px) {
+  .club-grid--three {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .club-grid--three > .club-grid__stack {
+    grid-column: 1 / -1;
+  }
+}
+
+.standings .table {
+  font-size: clamp(9px, calc((100cqh - 115px - var(--rows, 14) * 1px) / var(--rows, 14) / 2.6), 13px);
+}
+
+.standings .table td {
+  padding: 0.5em 6px;
+  font-size: inherit;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* La colonne du club prend la largeur qui reste ; le nom se coupe plutôt que de
+   passer à la ligne (le nom complet en info-bulle). */
+.standings .table th:nth-child(2) {
+  width: 100%;
+}
+
+.standings .table td:nth-child(2) {
+  max-width: 0;
+}
+
+.standings .with-crest {
+  display: flex;
+}
+
+.standings__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.standings .table td:first-child {
+  padding-left: 16px;
+}
+
+.standings .table td:last-child {
+  padding-right: 16px;
+}
+
+/* Le blason suit la taille du texte (ClubCrest fixe sa taille en ligne). */
+.standings .with-crest .club-crest {
+  width: 1.45em !important;
+  height: 1.45em !important;
+}
+
+@media (max-width: 960px) {
+  /* Sur téléphone la page défile : hauteur naturelle, texte normal. */
+  .club-grid--three {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .standings {
+    container-type: normal;
+  }
+  .standings .table {
+    font-size: 14px;
+  }
 }
 
 .strength {
@@ -1371,15 +1687,52 @@ body,
 }
 
 /* En-tête de la page Club : le prochain match, et le moral de l'effectif à côté */
+/* Le prochain match sur toute la largeur, la vie du club en discret à sa droite :
+   une seule carte, séparée par un filet. */
 .hero-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
-  gap: 28px;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.hero-row > .hero {
+  border: 0;
+  background: none;
+  border-radius: 0;
+}
+
+.hero-row > .club-notes {
+  border: 0;
+  background: none;
+  border-radius: 0;
+  border-left: 1px solid var(--line-soft);
+  padding: 24px 28px;
+  color: var(--ink-muted);
+  justify-content: center;
+}
+
+.hero-row > .club-notes .club-note {
+  padding: 6px 0;
+  border-bottom: 0;
+}
+
+.hero-row > .club-notes .club-note__chart {
+  height: 28px;
+}
+
+.hero-row > .club-notes .club-note__value {
+  font-size: 18px;
 }
 
 @media (max-width: 960px) {
   .hero-row {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .hero-row > .club-notes {
+    border-left: 0;
+    border-top: 1px solid var(--line-soft);
   }
 }
 
@@ -1844,6 +2197,175 @@ body,
   gap: 12px 24px;
 }
 
+/* Situation d'un joueur (StatusBadge) : pictogramme et libellé sur fond teinté. */
+.badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.badge {
+  --badge: var(--ink-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  padding: 0 7px 0 5px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--badge) 12%, transparent);
+  color: var(--badge);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.badge svg {
+  flex: none;
+}
+
+.badge--free {
+  --badge: var(--win);
+}
+
+.badge--ending,
+.badge--joker {
+  --badge: var(--accent);
+}
+
+.badge--transfer {
+  --badge: var(--ink);
+}
+
+.badge--loan {
+  --badge: #2b5c8a;
+}
+
+.badge--closed {
+  --badge: var(--loss);
+}
+
+.badge--bench,
+.badge--locked {
+  --badge: var(--neutral);
+}
+
+/* Transferts sur téléphone : marché et effectif en listes, un joueur par ligne. */
+.chips--scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  margin: 0 -16px;
+  padding: 0 16px 2px;
+  scrollbar-width: none;
+}
+
+.chips--scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.chips--scroll .chip {
+  flex: none;
+}
+
+.filter-row {
+  display: flex;
+  gap: 8px;
+}
+
+.filter-row .input {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.market-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.market-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 12px;
+}
+
+.market-item + .market-item {
+  border-top: 1px solid var(--line-soft);
+}
+
+.market-item__main {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 4px;
+}
+
+button.market-item__main {
+  cursor: pointer;
+}
+
+button.market-item__main:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+.market-item__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.market-item__name {
+  font-weight: 600;
+}
+
+.market-item__meta {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.market-item__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.market-item__price {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.market-more {
+  align-self: center;
+}
+
+@media (max-width: 960px) {
+  .app--phone .page-head__stats {
+    gap: 20px;
+  }
+  .app--phone .big-num {
+    font-size: 22px;
+  }
+  .app--phone .market-item__body {
+    gap: 3px;
+  }
+  .app--phone .market-item__body .badges {
+    margin-top: 2px;
+  }
+}
+
 /* --- Fenêtre modale ---------------------------------------------------------------- */
 
 .modal-backdrop {
@@ -1873,7 +2395,7 @@ body,
   gap: 22px;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 960px) {
   .modal {
     padding: 20px 16px;
   }
@@ -2470,7 +2992,7 @@ body,
   font-size: 22px;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 960px) {
   .review__note {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
@@ -3009,7 +3531,7 @@ body,
 
 .live-event {
   display: grid;
-  grid-template-columns: 36px 16px minmax(0, 1fr) auto;
+  grid-template-columns: 36px 16px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   padding: 7px 16px;
@@ -3230,6 +3752,57 @@ body,
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto;
   }
+}
+
+/* Téléphone : un seul fil des faits de jeu (Feed). Les lignes de l'équipe à domicile
+   partent de la gauche, celles de l'extérieur de la droite ; la liste montre une dizaine
+   de lignes, calée en bas, et l'on remonte pour les précédentes. */
+.live-feed__away {
+  text-align: right;
+}
+
+.live-feed__list {
+  max-height: 340px;
+}
+
+.live-event {
+  grid-template-areas: "minute mark text";
+}
+
+.live-event__minute {
+  grid-area: minute;
+}
+
+.live-event > .live-mark {
+  grid-area: mark;
+}
+
+.live-event__text {
+  grid-area: text;
+}
+
+/* Les points marqués suivent le nom du joueur */
+.live-event__points {
+  margin-left: 8px;
+}
+
+.live-event--away {
+  grid-template-columns: minmax(0, 1fr) 16px 36px;
+  grid-template-areas: "text mark minute";
+  text-align: right;
+}
+
+.live-event--none {
+  display: block;
+}
+
+/* Choix de l'équipe dont on voit la composition, centré */
+.live__teams {
+  justify-content: center;
+}
+
+.live__teams .chip {
+  gap: 8px;
 }
 
 /* --- Infrastructures : maillot (carte et éditeur) ---------------------------------- */
@@ -3465,7 +4038,7 @@ body,
   border-top: 1px solid var(--line-soft);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 960px) {
   .jersey-kit + .jersey-kit {
     padding-left: 0;
     border-left: 0;

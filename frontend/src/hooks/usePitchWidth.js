@@ -1,6 +1,7 @@
 import { useLayoutEffect, useState } from "react";
 
 import { PITCH_RATIO } from "../lineup.js";
+import { PHONE_QUERY } from "./useMediaQuery.js";
 
 // Largeur à donner au terrain (élément `.pitch`) pour qu'il remplisse la hauteur
 // restante de son conteneur (colonne flex), proportions conservées. `ready`
@@ -12,7 +13,7 @@ export function usePitchWidth(ref, ready = true) {
     const container = ref.current;
     if (!ready || !container) return undefined;
     const measure = () => {
-      if (window.matchMedia("(max-width: 720px)").matches) {
+      if (window.matchMedia(PHONE_QUERY).matches) {
         setWidth(null);
         return;
       }

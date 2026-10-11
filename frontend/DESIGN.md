@@ -65,6 +65,13 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
 - Cartes : fond surface, bordure 1 px, rayon 10 px, pas d'ombre.
 - Rapport de force : 5 lignes (conquête, paquet, attaque, défense, buteur), notes
   sur 20 issues directement du moteur (`TeamStrength`).
+- Page Club (ordinateur) : le prochain match sur toute la largeur, avec la vie du club
+  en discret dans sa partie droite (même carte, séparée par un filet) ; en dessous,
+  trois cartes : classement (plus large), rapport de force, dernière journée.
+- Classement de la page Club : toutes les équipes visibles sans défilement, quel que
+  soit leur nombre. La taille du texte se calcule d'après la hauteur de la carte et le
+  nombre de lignes (`.standings`, unités `cqh`), entre 9 et 13 px ; les noms de clubs
+  se coupent plutôt que de passer à la ligne. Pas de note sous le tableau.
 - Vie du club (page Club, à droite du prochain match) : 5 lignes (moral, cohésion,
   fraîcheur, direction, supporters), chacune avec son libellé et son palier, une barre
   par match joué de la saison (gris, la dernière en accent, pointillé à la note de
@@ -140,7 +147,7 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   commandes). En dessous, deux colonnes, domicile à gauche, extérieur à droite : les faits de
   jeu de chaque équipe (les plus récents en haut ; minute, repère — rond accent pour un
   essai, noir pour un coup de pied réussi, contour pour un raté, carton jaune ou rouge —,
-  libellé, joueur, points), puis sa composition : les 15 places dans l'ordre des numéros
+  libellé, joueur, puis les points marqués à sa suite), puis sa composition : les 15 places dans l'ordre des numéros
   avec le joueur qui l'occupe, son poste, son énergie (barre verticale qui se vide au fil
   du match, noire, en accent sous 30 %, grise pour un joueur hors du terrain, le pourcentage
   à côté) et sa note sur 10 (gras à partir de 7,5), puis le banc (sortis en gris avec la minute). Notre carte porte en tête trois listes déroulantes
@@ -161,6 +168,7 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   de la page vers le bas.
 - Ce qui ne tient pas (listing de l'effectif, calendrier, opérations financières…)
   défile **à l'intérieur de sa carte**, dont la hauteur est bornée par celle de la fenêtre.
+  Exception : le classement de la page Club réduit ses lignes pour tout montrer.
 - L'en-tête, la navigation et le titre de page restent toujours visibles.
 - Mise en œuvre (`styles.css`, section « Structure ») : `.app` est une grille à la
   hauteur de la fenêtre, `.main` une colonne flex sans débordement. Dans chaque page,
@@ -168,5 +176,51 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   `two-col` ou carte) ; sa carte reçoit `overflow: auto` et les en-têtes de tableau
   restent collés en haut. Deux blocs `fill` se partagent la place ; `fill--main` en
   donne deux tiers à l'un.
-- Sur téléphone (≤ 720 px), le cadre reste à la hauteur de l'écran mais le contenu
-  principal défile sous la navigation.
+- Sur téléphone (voir « Version mobile »), le cadre reste à la hauteur de l'écran mais
+  le contenu principal défile sous l'en-tête ; les cartes `fill` sont bornées à 70 % de
+  la hauteur de l'écran et défilent dedans.
+
+## Version mobile
+
+- Seuil : 960 px de large ou moins (`PHONE_QUERY`, `src/hooks/useMediaQuery.js`, le
+  même que les règles `@media` « téléphone » de `styles.css`). Une fenêtre d'ordinateur
+  réduite y passe donc aussi : avec la colonne de 232 px, le contenu n'a plus la place
+  en dessous. `Layout` pose alors `.app--phone`.
+- Plus de colonne de navigation ni de marque « XV Rugby Manager » : l'en-tête compact
+  (blason 40 px, nom du club, championnat, liseré) reste collé en haut, le contenu
+  défile dessous.
+- Barre d'onglets en bas de l'écran (`.tabbar`, hauteur `--tabbar-h`, zone sûre du
+  téléphone comprise) : cinq onglets, pictogramme au trait (`NavIcon`) et libellé en
+  capitales de 10 px. Club, Calendrier, Effectif, Transferts (`primary` dans
+  `NAV_ITEMS`), puis « Plus ». L'onglet actif : pastille de la couleur du club derrière
+  le pictogramme, libellé en accent.
+- « Plus » ouvre un volet (`.sheet`) posé sur la barre, le reste de l'écran assombri :
+  les autres pages en vignettes (Médical, Formation, Staff, Infrastructures, Finances ;
+  la page courante en accent), puis manager, numéro de partie et « Quitter la partie ».
+  Il se ferme au changement de page, par Échap ou en touchant le fond ; « Plus » reste
+  marqué actif tant que l'on est sur l'une de ses pages.
+- Titres de page et affiches (`.title`, `.hero__title`) à 40 px.
+- Match en direct sur téléphone : le tableau d'affichage inchangé ; puis une seule carte
+  de faits de jeu pour les deux équipes, dans l'ordre du match, ceux du club à domicile
+  calés à gauche et ceux de l'extérieur à droite (minute et repère vers le bord), une
+  dizaine de lignes visibles, la liste calée sur les derniers et l'on remonte pour les
+  précédents ; puis deux pastilles centrées (blason + « Notre XV » / nom de l'adversaire)
+  qui choisissent la composition affichée, la nôtre par défaut.
+- Situation d'un joueur (`StatusBadge`, sur le marché et dans l'effectif, ordinateur et
+  téléphone) : pastille à pictogramme au trait, fond teinté à 12 %, libellé court.
+  Libre (cadenas ouvert, vert), fin de contrat (sablier, accent), transfert et son
+  indemnité (flèche de sortie, noir), prêt (aller-retour, bleu), réserviste (banc, gris),
+  ne discute plus (bulle barrée, rouge), intransférable (cadenas fermé, gris), joker
+  médical (croix, accent).
+- Transferts sur téléphone : sans le paragraphe d'introduction, les trois chiffres en
+  ligne, puis deux pastilles « Recruter » / « Vendre ». Recruter : négociations et joker
+  s'il y en a, puis le marché avec un tri (liste déroulante), les voies en pastilles
+  qui défilent sur une ligne, poste et championnat en deux listes déroulantes, et les
+  joueurs en liste (`.market-list`) : photo, nom, poste · âge · club, puis ses pastilles de
+  situation, note et valeur à droite ; on touche la ligne pour approcher. Trente joueurs
+  à la fois, « Voir 30 joueurs de plus ». Vendre : l'effectif dans la même liste, valeur
+  et bouton « Vendre » à droite.
+- Page Club sur téléphone : quatre pastilles en tête. « Club » : le prochain match et le
+  classement seulement. « Vie du club », « Dernière journée » et « Rapport de force » :
+  chacune sa carte, seule dans son onglet (avec un mot si rien à montrer : aucune journée
+  jouée, club qui ne joue pas).

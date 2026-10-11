@@ -14,6 +14,7 @@ import {
   formatNote,
 } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
+import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
 
 // Vitesse du chrono : durée réelle d'une minute de jeu.
 const SPEEDS = [
@@ -39,6 +40,8 @@ export default function Match() {
   const [busy, setBusy] = useState(false); // une requête est en cours
   const [error, setError] = useState(null);
   const [finishing, setFinishing] = useState(false);
+  const phone = useMediaQuery(PHONE_QUERY);
+  const [lineupClub, setLineupClub] = useState(null); // téléphone : la composition montrée (la nôtre par défaut)
   const confirm = useConfirm();
   const live = current.data;
   const { setData } = current;
@@ -124,6 +127,7 @@ export default function Match() {
 
   const myId = live.my_club_id;
   const sides = [live.home, live.away];
+  const shownSide = sides.find((side) => side.club.id === lineupClub) ?? sides.find((side) => side.club.id === myId) ?? live.home;
 
   return (
     <div className="live">
@@ -143,20 +147,52 @@ export default function Match() {
         onFinish={finish}
       />
       <div className="live__grid fill">
-        {sides.map((side) => (
-          <Events key={side.club.id} side={side} events={live.events} mine={side.club.id === myId} />
-        ))}
-        {sides.map((side) => (
-          <Lineup
-            key={side.club.id}
-            side={side}
-            mine={side.club.id === myId}
-            paused={!playing && !live.finished}
-            busy={busy}
-            onTactics={(tactics) => act(() => api.setLiveTactics(tactics))}
-            onSubstitute={(out, into) => act(() => api.substituteLive(out, into))}
-          />
-        ))}
+        {phone ? (
+          // Téléphone : un seul fil des faits de jeu, puis la composition d'une équipe au choix.
+          <>
+            <Feed sides={sides} events={live.events} />
+            <div className="chips live__teams" role="group" aria-label="Composition">
+              {sides.map((side) => (
+                <button
+                  key={side.club.id}
+                  type="button"
+                  className="chip with-crest"
+                  aria-pressed={shownSide.club.id === side.club.id}
+                  onClick={() => setLineupClub(side.club.id)}
+                >
+                  <ClubCrest name={side.club.name} size={18} />
+                  {side.club.id === myId ? "Notre XV" : side.club.name}
+                </button>
+              ))}
+            </div>
+            <Lineup
+              key={shownSide.club.id}
+              side={shownSide}
+              mine={shownSide.club.id === myId}
+              paused={!playing && !live.finished}
+              busy={busy}
+              onTactics={(tactics) => act(() => api.setLiveTactics(tactics))}
+              onSubstitute={(out, into) => act(() => api.substituteLive(out, into))}
+            />
+          </>
+        ) : (
+          <>
+            {sides.map((side) => (
+              <Events key={side.club.id} side={side} events={live.events} mine={side.club.id === myId} />
+            ))}
+            {sides.map((side) => (
+              <Lineup
+                key={side.club.id}
+                side={side}
+                mine={side.club.id === myId}
+                paused={!playing && !live.finished}
+                busy={busy}
+                onTactics={(tactics) => act(() => api.setLiveTactics(tactics))}
+                onSubstitute={(out, into) => act(() => api.substituteLive(out, into))}
+              />
+            ))}
+          </>
+        )}
       </div>
     </div>
   );
@@ -361,25 +397,64 @@ function Events({ side, events, mine }) {
       </div>
       <ul className="live-events__list">
         {ours.map((e, index) => (
-          <li key={`${e.minute}-${e.type}-${e.player_id}-${index}`} className={`live-event live-event--${e.type}`}>
-            <span className="live-event__minute num">{e.minute}'</span>
-            <Mark type={e.type} />
-            <span className="live-event__text">
-              <span className="live-event__label">{EVENTS[e.type]}</span>
-              {e.type === "substitution" ? (
-                <span className="muted">
-                  {" "}
-                  {e.other_player_name} entre, {e.player_name} sort
-                </span>
-              ) : (
-                e.player_name && <span className="muted"> · {e.player_name}</span>
-              )}
-            </span>
-            {e.points > 0 && <span className="live-event__points num">+{e.points}</span>}
-          </li>
+          <EventRow key={`${e.minute}-${e.type}-${e.player_id}-${index}`} event={e} />
         ))}
       </ul>
     </section>
+  );
+}
+
+// Téléphone : les faits de jeu des deux équipes dans une seule carte, dans l'ordre du
+// match, ceux de l'équipe à domicile calés à gauche, ceux de l'extérieur à droite. La
+// liste montre les dix derniers et reste calée en bas ; on remonte pour les précédents.
+function Feed({ sides, events }) {
+  const [home, away] = sides;
+  const listRef = useRef(null);
+  useEffect(() => {
+    const list = listRef.current;
+    if (list) list.scrollTop = list.scrollHeight;
+  }, [events.length]);
+  return (
+    <section className="card live-events live-feed">
+      <div className="live-card__head">
+        <span className="eyebrow with-crest">
+          <ClubCrest name={home.club.name} size={18} />
+          {home.club.name}
+        </span>
+        <span className="eyebrow with-crest live-feed__away">
+          {away.club.name}
+          <ClubCrest name={away.club.name} size={18} />
+        </span>
+      </div>
+      <ul className="live-events__list live-feed__list" ref={listRef}>
+        {events.length === 0 && <li className="live-event live-event--none muted">Rien à signaler</li>}
+        {events.map((e, index) => (
+          <EventRow key={`${e.minute}-${e.type}-${e.player_id}-${index}`} event={e} away={e.club_id === away.club.id} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+// Une ligne de fait de jeu : minute, repère, libellé et joueur, points marqués.
+function EventRow({ event: e, away = false }) {
+  return (
+    <li className={`live-event live-event--${e.type}${away ? " live-event--away" : ""}`}>
+      <span className="live-event__minute num">{e.minute}'</span>
+      <Mark type={e.type} />
+      <span className="live-event__text">
+        <span className="live-event__label">{EVENTS[e.type]}</span>
+        {e.type === "substitution" ? (
+          <span className="muted">
+            {" "}
+            {e.other_player_name} entre, {e.player_name} sort
+          </span>
+        ) : (
+          e.player_name && <span className="muted"> · {e.player_name}</span>
+        )}
+        {e.points > 0 && <span className="live-event__points num">+{e.points}</span>}
+      </span>
+    </li>
   );
 }
 

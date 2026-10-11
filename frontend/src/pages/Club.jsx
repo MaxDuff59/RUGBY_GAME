@@ -21,6 +21,7 @@ import {
   matchdayLabel,
 } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
+import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
 import { useSort } from "../hooks/useSort.js";
 
 // Les 5 notes collectives calculées par le moteur sur le XV de départ.
@@ -32,11 +33,25 @@ const STRENGTH_LINES = [
   { key: "kicking", label: "Buteur" },
 ];
 
-// Tableau de bord : prochain match, rapport de force, classement, derniers résultats.
+// Onglets de la page sur téléphone : prochain match et classement, puis le reste à part.
+const PHONE_TABS = [
+  { key: "board", label: "Club" },
+  { key: "notes", label: "Vie du club" },
+  { key: "last", label: "Dernière journée" },
+  { key: "strength", label: "Rapport de force" },
+];
+
+// Tableau de bord : prochain match (avec la vie du club), puis classement, rapport de
+// force et derniers résultats. Sur téléphone, la vue de base garde le prochain match et
+// le classement ; vie du club, dernière journée et rapport de force ont chacun leur onglet.
 export default function Club() {
   const { career } = useOutletContext();
   const navigate = useNavigate();
   const location = useLocation();
+  const phone = useMediaQuery(PHONE_QUERY);
+  const [phoneTab, setPhoneTab] = useState("board");
+  // Sur ordinateur tout se voit ; sur téléphone, seulement l'onglet choisi.
+  const shown = (tab) => !phone || phoneTab === tab;
   const myId = career.club_id;
   const season = useApi(useCallback(api.getCurrentSeason, []));
   // Match en direct en cours (404 sinon) : « Jouer le match » le reprend.
@@ -164,91 +179,117 @@ export default function Club() {
         <Affairs affairs={pending} onAnswered={affairAnswered} onClose={() => setShowAffairs(false)} />
       )}
 
-      <div className="hero-row">
-        {data.phase === "finished" ? (
-          <section className="hero">
-            <p className="eyebrow">Saison {data.year} terminée</p>
-            <div className="hero__club">
-              <ClubCrest name={data.champion.name} size={56} />
-              <h1 className="hero__title">{data.champion.name}</h1>
-            </div>
-            <p className="hero__sub">Champion {data.year}</p>
-            <div className="hero__actions">
-              <button type="button" className="button" onClick={() => setShowReview(true)}>
-                Bilan de la saison
-              </button>
-              <button type="button" className="button button--primary" disabled={busy} onClick={nextSeason}>
-                {busy ? "Intersaison…" : `Lancer la saison ${data.year + 1}`}
-              </button>
-            </div>
-            <p className="muted" style={{ margin: 0 }}>
-              Les joueurs en fin de contrat non prolongés partent libres, ceux de 36 ans et plus arrêtent, le centre de
-              formation apporte des jeunes, et un nouveau calendrier est tiré.
-            </p>
-          </section>
-        ) : (
-          <section className="hero">
-            <p className="eyebrow">
-              {next.stage === "regular" ? `Journée ${next.matchday} sur ${data.regular_matchdays}` : STAGES[next.stage]}{" "}
-              · {formatLongDate(next.date)}
-            </p>
-            {myNextMatch ? (
-              <NextMatch match={myNextMatch} myId={myId} rankOf={rankOf} matches={data.matches} />
+      {phone && (
+        <div className="chips" role="group" aria-label="Onglet">
+          {PHONE_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              className="chip"
+              aria-pressed={phoneTab === tab.key}
+              onClick={() => setPhoneTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {phone && shown("notes") && <ClubNotes clubId={myId} season={data} version={notesVersion} />}
+
+      {shown("board") && (
+        <div className="hero-row">
+          {data.phase === "finished" ? (
+            <section className="hero">
+              <p className="eyebrow">Saison {data.year} terminée</p>
+              <div className="hero__club">
+                <ClubCrest name={data.champion.name} size={56} />
+                <h1 className="hero__title">{data.champion.name}</h1>
+              </div>
+              <p className="hero__sub">Champion {data.year}</p>
+              <div className="hero__actions">
+                <button type="button" className="button" onClick={() => setShowReview(true)}>
+                  Bilan de la saison
+                </button>
+                <button type="button" className="button button--primary" disabled={busy} onClick={nextSeason}>
+                  {busy ? "Intersaison…" : `Lancer la saison ${data.year + 1}`}
+                </button>
+              </div>
+              <p className="muted" style={{ margin: 0 }}>
+                Les joueurs en fin de contrat non prolongés partent libres, ceux de 36 ans et plus arrêtent, le centre de
+                formation apporte des jeunes, et un nouveau calendrier est tiré.
+              </p>
+            </section>
+          ) : (
+            <section className="hero">
+              <p className="eyebrow">
+                {next.stage === "regular" ? `Journée ${next.matchday} sur ${data.regular_matchdays}` : STAGES[next.stage]} ·{" "}
+                {formatLongDate(next.date)}
+              </p>
+              {myNextMatch ? (
+                <NextMatch match={myNextMatch} myId={myId} rankOf={rankOf} matches={data.matches} />
+              ) : (
+                <>
+                  <h1 className="hero__title">Tu ne joues pas</h1>
+                  <p className="hero__sub">Ton club n'est pas concerné par cette journée.</p>
+                </>
+              )}
+              <div className="hero__actions">
+                <button type="button" className="button" disabled={busy} onClick={simulate}>
+                  {busy
+                    ? "Simulation…"
+                    : pending.length > 0
+                      ? `${pending.length} affaire${pending.length > 1 ? "s" : ""} à régler`
+                      : "Simuler la journée"}
+                </button>
+                <button
+                  type="button"
+                  className="button button--primary"
+                  disabled={busy || !myNextMatch}
+                  title={myNextMatch ? "Le match en direct, minute par minute" : "Ton club ne joue pas cette journée"}
+                  onClick={playLive}
+                >
+                  {liveMatch.data ? `Reprendre le match (${liveMatch.data.minute}')` : "Jouer le match"}
+                </button>
+                <Link to="/calendrier" className="muted">
+                  Voir le calendrier
+                </Link>
+              </div>
+            </section>
+          )}
+          {!phone && <ClubNotes clubId={myId} season={data} version={notesVersion} />}
+        </div>
+      )}
+
+      {(shown("board") || shown("strength") || shown("last")) && (
+        <div className="club-grid club-grid--three fill">
+          {shown("board") && <Leagues key={data.league.code} season={data} myId={myId} />}
+
+          {shown("strength") &&
+            (myNextMatch ? (
+              <Strength myId={myId} opponentId={myNextMatch.home.id === myId ? myNextMatch.away.id : myNextMatch.home.id} />
             ) : (
-              <>
-                <h1 className="hero__title">Tu ne joues pas</h1>
-                <p className="hero__sub">Ton club n'est pas concerné par cette journée.</p>
-              </>
-            )}
-            <div className="hero__actions">
-              <button type="button" className="button" disabled={busy} onClick={simulate}>
-                {busy
-                  ? "Simulation…"
-                  : pending.length > 0
-                    ? `${pending.length} affaire${pending.length > 1 ? "s" : ""} à régler`
-                    : "Simuler la journée"}
-              </button>
-              <button
-                type="button"
-                className="button button--primary"
-                disabled={busy || !myNextMatch}
-                title={myNextMatch ? "Le match en direct, minute par minute" : "Ton club ne joue pas cette journée"}
-                onClick={playLive}
-              >
-                {liveMatch.data ? `Reprendre le match (${liveMatch.data.minute}')` : "Jouer le match"}
-              </button>
-              <Link to="/calendrier" className="muted">
-                Voir le calendrier
-              </Link>
-            </div>
-          </section>
-        )}
-        <ClubNotes clubId={myId} season={data} version={notesVersion} />
-      </div>
+              phone && <p className="muted">Ton club ne joue pas la prochaine journée.</p>
+            ))}
 
-      <div className="club-grid fill">
-        {myNextMatch && (
-          <Strength myId={myId} opponentId={myNextMatch.home.id === myId ? myNextMatch.away.id : myNextMatch.home.id} />
-        )}
-
-        {lastMatchday && (
-          <section className="section">
-            <div className="section__head">
-              <h2 className="eyebrow">
-                {lastPlayed ? "Journée simulée" : "Dernière journée"} · {matchdayLabel(lastMatchday)}
-              </h2>
-              <span className="muted">{formatLongDate(lastMatchday.date)}</span>
-            </div>
-            <div className="card">
-              <MatchList matches={lastMatchday.matches} myClubId={myId} />
-              {lastPlayed && newInjuries.length > 0 && <NewInjuries cases={newInjuries} />}
-              {lastPlayed && signings.length > 0 && <NewSignings signings={signings} />}
-            </div>
-          </section>
-        )}
-
-        <Leagues key={data.league.code} season={data} myId={myId} />
-      </div>
+          {shown("last") && !lastMatchday && phone && <p className="muted">Aucune journée jouée cette saison.</p>}
+          {shown("last") && lastMatchday && (
+            <section className="section">
+              <div className="section__head">
+                <h2 className="eyebrow">
+                  {lastPlayed ? "Journée simulée" : "Dernière journée"} · {matchdayLabel(lastMatchday)}
+                </h2>
+                <span className="muted">{formatLongDate(lastMatchday.date)}</span>
+              </div>
+              <div className="card">
+                <MatchList matches={lastMatchday.matches} myClubId={myId} />
+                {lastPlayed && newInjuries.length > 0 && <NewInjuries cases={newInjuries} />}
+                {lastPlayed && signings.length > 0 && <NewSignings signings={signings} />}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
     </>
   );
 }
@@ -434,7 +475,8 @@ function FormLine({ us, them }) {
   );
 }
 
-// Phases finales et classement : notre championnat, ou un autre au choix.
+// Une cellule de la grille : phases finales (le cas échéant) puis classement de notre
+// championnat, ou d'un autre au choix.
 function Leagues({ season, myId }) {
   const [code, setCode] = useState(season.league.code);
   const other = useApi(
@@ -461,17 +503,19 @@ function Leagues({ season, myId }) {
   );
   if (!shown) {
     return (
-      <section className="section">
-        {picker}
-        <p className="status">{other.error ? other.error.message : "Chargement…"}</p>
-      </section>
+      <div className="club-grid__stack">
+        <section className="section">
+          {picker}
+          <p className="status">{other.error ? other.error.message : "Chargement…"}</p>
+        </section>
+      </div>
     );
   }
   return (
-    <>
+    <div className="club-grid__stack">
       {shown.phase !== "regular" && <Playoffs season={shown} myId={myId} />}
       <Standings season={shown} myId={myId} picker={picker} />
-    </>
+    </div>
   );
 }
 
@@ -503,7 +547,9 @@ function Standings({ season, myId, picker }) {
     <SortHeader sortKey={key} label={label} sort={sort} onToggle={toggle} first={first} left={left} />
   );
   return (
-    <section className="section">
+    // Toutes les équipes tiennent dans la carte, quel que soit leur nombre : la taille
+    // des lignes suit la hauteur disponible (`--rows`, voir `.standings` dans styles.css).
+    <section className="section standings" style={{ "--rows": rows.length }}>
       <div className="section__head">
         <h2 className="eyebrow">Classement</h2>
         {picker}
@@ -536,9 +582,9 @@ function Standings({ season, myId, picker }) {
               >
                 <td className="left muted">{row.rank}</td>
                 <td className="left">
-                  <span className="with-crest">
+                  <span className="with-crest" title={row.club_name}>
                     <ClubCrest name={row.club_name} size={20} />
-                    {row.club_name}
+                    <span className="standings__name">{row.club_name}</span>
                   </span>
                 </td>
                 <td>{row.played}</td>
@@ -554,10 +600,6 @@ function Standings({ season, myId, picker }) {
             ))}
           </tbody>
         </table>
-        <p className="table__note">
-          Les {season.playoff_qualifiers} premiers jouent les phases finales · Diff : différence de points · Ess :
-          essais · BO/BD : bonus offensif/défensif
-        </p>
       </div>
     </section>
   );

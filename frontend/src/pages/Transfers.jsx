@@ -8,6 +8,7 @@ import { useConfirm } from "../components/ConfirmDialog.jsx";
 import Level from "../components/Level.jsx";
 import Modal from "../components/Modal.jsx";
 import SortHeader from "../components/SortHeader.jsx";
+import StatusBadge from "../components/StatusBadge.jsx";
 import {
   DEALS,
   NEGOTIATION_STAGES,
@@ -19,6 +20,7 @@ import {
   formatShortDate,
 } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
+import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
 import { useSort } from "../hooks/useSort.js";
 
 // Filtres par voie de recrutement.
@@ -29,6 +31,15 @@ const WAYS = [
   { key: "loan", label: "Prêt" },
   { key: "free", label: "Agents libres" },
 ];
+
+// Téléphone : tris du marché proposés dans une liste déroulante.
+const PHONE_SORTS = [
+  { key: "player.value", dir: "desc", label: "Valeur" },
+  { key: "player.overall", dir: "desc", label: "Note" },
+  { key: "player.age", dir: "asc", label: "Âge" },
+  { key: "player.wage", dir: "asc", label: "Salaire" },
+];
+const PHONE_PAGE = 30; // joueurs affichés par « Voir plus »
 
 const hasWay = (listing, way) =>
   way === null ||
@@ -49,6 +60,9 @@ export default function Transfers() {
   const [way, setWay] = useState(location.state?.way ?? null); // l'infirmerie ouvre sur les agents libres
   const [targetId, setTargetId] = useState(null); // joueur approché
   const confirm = useConfirm();
+  const phone = useMediaQuery(PHONE_QUERY);
+  const [tab, setTab] = useState("buy"); // téléphone : « Recruter » ou « Vendre »
+  const [shown, setShown] = useState(PHONE_PAGE); // téléphone : joueurs du marché affichés
   const listingSort = useSort(market.data?.listings ?? [], { key: "player.value", dir: "desc" });
   const squadSort = useSort(myClub.data?.players ?? [], { key: "value", dir: "desc" });
 
@@ -98,45 +112,8 @@ export default function Transfers() {
     <SortHeader sortKey={key} label={label} sort={squadSort.sort} onToggle={squadSort.toggle} first={first} left={left} />
   );
 
-  return (
-    <>
-      <header className="page-head">
-        <div>
-          <h1 className="title">Transferts</h1>
-          <p className="muted" style={{ margin: "8px 0 0" }}>
-            Saison {data.season_year}-{String(data.season_year + 1).slice(2)}. Les transferts en cours de contrat
-            sont rares et chers : vise les joueurs en dernière année de contrat, un prêt, ou un agent libre.
-          </p>
-        </div>
-        <div className="page-head__stats">
-          <Stat value={formatMoney(data.balance)} label="trésorerie" />
-          <Stat
-            value={data.squad_size}
-            label={`joueurs (de ${data.squad_min} à ${data.squad_max})${data.jokers.length ? ` + ${data.jokers.length} joker${data.jokers.length > 1 ? "s" : ""}` : ""}`}
-          />
-          <Stat value={formatNote(data.my_level)} label="niveau de ton XV" />
-        </div>
-      </header>
-
-      {confirm.dialog}
-
-      {targetId !== null && (
-        <Modal onClose={() => setTargetId(null)}>
-          <Negotiation
-            playerId={targetId}
-            squadFull={squadFull}
-            onClose={() => setTargetId(null)}
-            onChange={(overview, concluded) => {
-              if (overview) market.setData(overview);
-              else market.reload();
-              if (concluded) myClub.reload();
-            }}
-          />
-        </Modal>
-      )}
-
-      {data.negotiations.length > 0 && (
-        <section className="section">
+  const negotiationsSection = data.negotiations.length > 0 && (
+    <section className="section">
           <div className="section__head">
             <h2 className="eyebrow">Négociations · {data.negotiations.length}</h2>
             <span className="muted">En cours, et accords qui attendent l'intersaison</span>
@@ -161,10 +138,10 @@ export default function Transfers() {
             </ul>
           </div>
         </section>
-      )}
+  );
 
-      {(jokerPossible || data.jokers.length > 0) && (
-        <section className="section">
+  const jokerSection = (jokerPossible || data.jokers.length > 0) && (
+    <section className="section">
           <div className="section__head">
             <h2 className="eyebrow">Joker médical</h2>
             <span className="muted">Un agent libre en plus de l'effectif, le temps d'une absence de plus de 3 mois</span>
@@ -200,8 +177,81 @@ export default function Transfers() {
             </ul>
           </div>
         </section>
+  );
+
+  return (
+    <>
+      <header className="page-head">
+        <div>
+          <h1 className="title">Transferts</h1>
+          {!phone && (
+            <p className="muted" style={{ margin: "8px 0 0" }}>
+              Saison {data.season_year}-{String(data.season_year + 1).slice(2)}. Les transferts en cours de contrat
+              sont rares et chers : vise les joueurs en dernière année de contrat, un prêt, ou un agent libre.
+            </p>
+          )}
+        </div>
+        <div className="page-head__stats">
+          <Stat value={formatMoney(data.balance)} label="trésorerie" />
+          <Stat
+            value={data.squad_size}
+            label={
+              phone
+                ? `joueurs (${data.squad_min}-${data.squad_max})`
+                : `joueurs (de ${data.squad_min} à ${data.squad_max})${data.jokers.length ? ` + ${data.jokers.length} joker${data.jokers.length > 1 ? "s" : ""}` : ""}`
+            }
+          />
+          <Stat value={formatNote(data.my_level)} label={phone ? "niveau du XV" : "niveau de ton XV"} />
+        </div>
+      </header>
+
+      {confirm.dialog}
+
+      {targetId !== null && (
+        <Modal onClose={() => setTargetId(null)}>
+          <Negotiation
+            playerId={targetId}
+            squadFull={squadFull}
+            onClose={() => setTargetId(null)}
+            onChange={(overview, concluded) => {
+              if (overview) market.setData(overview);
+              else market.reload();
+              if (concluded) myClub.reload();
+            }}
+          />
+        </Modal>
       )}
 
+      {phone && (
+        <PhoneTransfers
+          tab={tab}
+          setTab={setTab}
+          data={data}
+          listings={listings}
+          shown={shown}
+          setShown={setShown}
+          sort={listingSort}
+          way={way}
+          setWay={setWay}
+          position={position}
+          setPosition={setPosition}
+          league={league}
+          setLeague={setLeague}
+          squad={squadSort.rows}
+          jokerIds={jokerIds}
+          squadAtMinimum={squadAtMinimum}
+          jokerPossible={jokerPossible}
+          onApproach={setTargetId}
+          onSell={sell}
+          negotiationsSection={negotiationsSection}
+          jokerSection={jokerSection}
+        />
+      )}
+
+      {!phone && negotiationsSection}
+      {!phone && jokerSection}
+
+      {!phone && (
       <section className="section fill fill--main">
         <div className="section__head">
           <h2 className="eyebrow">Marché · {listings.length} joueurs</h2>
@@ -317,7 +367,9 @@ export default function Transfers() {
           </p>
         </div>
       </section>
+      )}
 
+      {!phone && (
       <section className="section fill">
         <h2 className="eyebrow">Vendre · ton effectif</h2>
         <div className="card table-wrap">
@@ -382,9 +434,211 @@ export default function Transfers() {
           <p className="table__note">Un joueur se vend à sa valeur, à un club du championnat.</p>
         </div>
       </section>
+      )}
     </>
   );
 }
+
+// Téléphone : deux onglets, « Recruter » (négociations, joker, marché en liste) et
+// « Vendre » (l'effectif en liste). Chaque joueur tient sur deux ou trois lignes ; on
+// touche une ligne du marché pour l'approcher.
+function PhoneTransfers({
+  tab,
+  setTab,
+  data,
+  listings,
+  shown,
+  setShown,
+  sort,
+  way,
+  setWay,
+  position,
+  setPosition,
+  league,
+  setLeague,
+  squad,
+  jokerIds,
+  squadAtMinimum,
+  jokerPossible,
+  onApproach,
+  onSell,
+  negotiationsSection,
+  jokerSection,
+}) {
+  const sortValue = PHONE_SORTS.find((item) => item.key === sort.sort?.key) ?? PHONE_SORTS[0];
+  return (
+    <>
+      <div className="chips" role="group" aria-label="Onglet">
+        <button type="button" className="chip" aria-pressed={tab === "buy"} onClick={() => setTab("buy")}>
+          Recruter
+        </button>
+        <button type="button" className="chip" aria-pressed={tab === "sell"} onClick={() => setTab("sell")}>
+          Vendre
+        </button>
+      </div>
+
+      {tab === "buy" && negotiationsSection}
+      {tab === "buy" && jokerSection}
+
+      {tab === "buy" && (
+        <section className="section">
+          <div className="section__head">
+            <h2 className="eyebrow">Marché · {listings.length} joueurs</h2>
+            <label className="muted market-sort">
+              Trier par{" "}
+              <select
+                className="input tactics__select"
+                value={sortValue.key}
+                onChange={(event) => {
+                  const item = PHONE_SORTS.find((candidate) => candidate.key === event.target.value);
+                  sort.toggle(item.key, item.dir);
+                }}
+              >
+                {PHONE_SORTS.map((item) => (
+                  <option key={item.key} value={item.key}>
+                    {item.label.toLowerCase()}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="chips chips--scroll" role="group" aria-label="Filtrer par voie">
+            {WAYS.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                className="chip"
+                aria-pressed={way === item.key}
+                onClick={() => {
+                  setWay(item.key);
+                  setShown(PHONE_PAGE);
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div className="filter-row">
+            <select
+              className="input tactics__select"
+              aria-label="Filtrer par poste"
+              value={position ?? ""}
+              onChange={(event) => {
+                setPosition(event.target.value || null);
+                setShown(PHONE_PAGE);
+              }}
+            >
+              <option value="">Tous les postes</option>
+              {Object.entries(POSITIONS).map(([key, info]) => (
+                <option key={key} value={key}>
+                  {info.label}
+                </option>
+              ))}
+            </select>
+            {data.leagues.length > 1 && (
+              <select
+                className="input tactics__select"
+                aria-label="Filtrer par championnat"
+                value={league ?? ""}
+                onChange={(event) => {
+                  setLeague(event.target.value || null);
+                  setShown(PHONE_PAGE);
+                }}
+              >
+                <option value="">Tous championnats</option>
+                {data.leagues.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {listings.length === 0 ? (
+            <p className="status">Aucun joueur ne correspond à ces filtres.</p>
+          ) : (
+            <ul className="card market-list">
+              {listings.slice(0, shown).map((listing) => (
+                <ListingItem key={listing.player.id} listing={listing} jokerPossible={jokerPossible} onApproach={onApproach} />
+              ))}
+            </ul>
+          )}
+          {listings.length > shown && (
+            <button type="button" className="button market-more" onClick={() => setShown(shown + PHONE_PAGE)}>
+              Voir {Math.min(PHONE_PAGE, listings.length - shown)} joueurs de plus
+            </button>
+          )}
+        </section>
+      )}
+
+      {tab === "sell" && (
+        <section className="section">
+          <div className="section__head">
+            <h2 className="eyebrow">Ton effectif · {squad.length} joueurs</h2>
+            <span className="muted">Vente à la valeur, définitive</span>
+          </div>
+          <ul className="card market-list">
+            {squad.map((player) => (
+              <li key={player.id} className="market-item">
+                <div className="market-item__main">
+                  <PlayerAvatar src={player.photo} size={40} />
+                  <span className="market-item__body">
+                    <span className="market-item__name">{player.name}</span>
+                    <span className="muted market-item__meta">
+                      {POSITIONS[player.position].label} · {player.age} ans · note {formatNote(player.overall)}
+                    </span>
+                    <span className="muted market-item__meta">
+                      {formatMoney(player.wage)} / saison · contrat {formatContractEnd(player.contract_until)}
+                    </span>
+                    {squadBadges(player, jokerIds.has(player.id), data.season_year).length > 0 && (
+                      <span className="badges">{squadBadges(player, jokerIds.has(player.id), data.season_year)}</span>
+                    )}
+                  </span>
+                  <span className="market-item__side">
+                    <span className="market-item__price">{formatMoney(player.value)}</span>
+                    <button
+                      type="button"
+                      className="button button--small"
+                      disabled={squadAtMinimum || player.loaned_from !== null || jokerIds.has(player.id)}
+                      onClick={() => onSell(player)}
+                    >
+                      Vendre
+                    </button>
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </>
+  );
+}
+
+// Une ligne du marché sur téléphone : touche-la pour approcher le joueur.
+function ListingItem({ listing, jokerPossible, onApproach }) {
+  const { player } = listing;
+  return (
+    <li className="market-item">
+      <button type="button" className="market-item__main" onClick={() => onApproach(player.id)}>
+        <PlayerAvatar src={player.photo} size={40} />
+        <span className="market-item__body">
+          <span className="market-item__name">{player.name}</span>
+          <span className="muted market-item__meta">
+            {POSITIONS[player.position].label} · {player.age} ans · {listing.free_agent ? "sans club" : listing.club_name}
+          </span>
+          <span className="badges">{listingBadges(listing, jokerPossible)}</span>
+        </span>
+        <span className="market-item__side">
+          <span className="note">{formatNote(player.overall)}</span>
+          <span className="market-item__price">{formatMoney(player.value)}</span>
+        </span>
+      </button>
+    </li>
+  );
+}
+
 
 function Stat({ value, label }) {
   return (
@@ -397,25 +651,77 @@ function Stat({ value, label }) {
 
 // Les voies ouvertes pour un joueur du marché, en étiquettes.
 function Ways({ listing, jokerPossible }) {
+  return <span className="badges">{listingBadges(listing, jokerPossible)}</span>;
+}
+
+// Les pastilles d'un joueur du marché : comment le recruter, et ce qui le rend abordable.
+function listingBadges(listing, jokerPossible) {
   if (listing.talks_closed_until) {
-    return <span className="tag tag--injured">Ne discute plus · jusqu'au {formatShortDate(listing.talks_closed_until)}</span>;
+    return [
+      <StatusBadge
+        key="closed"
+        kind="closed"
+        label="Ne discute plus"
+        title={`Il ne veut plus discuter avant le ${formatShortDate(listing.talks_closed_until)}`}
+      />,
+    ];
   }
   if (listing.free_agent) {
-    return (
-      <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 4 }}>
-        <span className="tag tag--light">Agent libre · {formatMoney(listing.wage_demand)} / saison</span>
-        {jokerPossible && <span className="tag tag--severe">Joker</span>}
-      </span>
+    const badges = [
+      <StatusBadge
+        key="free"
+        kind="free"
+        label={`Libre · ${formatMoney(listing.wage_demand)}`}
+        title={`Agent libre : il signe tout de suite, sans indemnité, pour ${formatMoney(listing.wage_demand)} par saison`}
+      />,
+    ];
+    if (jokerPossible) badges.push(<StatusBadge key="joker" kind="joker" label="Joker" title="Peut venir en joker médical" />);
+    return badges;
+  }
+  const badges = [];
+  if (listing.precontract) {
+    badges.push(
+      <StatusBadge
+        key="ending"
+        kind="ending"
+        label={`Fin de contrat ${formatContractEnd(listing.player.contract_until)}`}
+        title="Dernière année de contrat : négociable sans indemnité"
+      />,
     );
   }
-  const ways = [];
-  if (listing.precontract) ways.push(<span key="p" className="tag tag--severe">Pré-contrat</span>);
   if (listing.transfer_fee !== null) {
-    ways.push(<span key="t" className="tag tag--moderate">Transfert · {formatMoney(listing.transfer_fee)}</span>);
+    badges.push(
+      <StatusBadge
+        key="transfer"
+        kind="transfer"
+        label={`Transfert ${formatMoney(listing.transfer_fee)}`}
+        title={`Son club demande ${formatMoney(listing.transfer_fee)}`}
+      />,
+    );
   }
-  if (listing.loanable) ways.push(<span key="l" className="tag tag--light">Prêt</span>);
-  if (ways.length === 0) return <span className="muted">Intransférable</span>;
-  return <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 4 }}>{ways}</span>;
+  if (listing.loanable) badges.push(<StatusBadge key="loan" kind="loan" label="Prêt" title="Son club accepte un prêt" />);
+  if (badges.length === 0) {
+    badges.push(<StatusBadge key="locked" kind="locked" label="Intransférable" title="Son club ne le laisse pas partir" />);
+  }
+  if (listing.playing_time === "réserviste") {
+    badges.push(<StatusBadge key="bench" kind="bench" label="Réserviste" title="Peu utilisé dans son club" />);
+  }
+  return badges;
+}
+
+// Les pastilles d'un joueur de l'effectif : ce qui empêche ou précipite sa vente.
+function squadBadges(player, isJoker, seasonYear) {
+  const badges = [];
+  if (player.loaned_from) {
+    badges.push(<StatusBadge key="loan" kind="loan" label={`Prêté par ${player.loaned_from_name}`} />);
+  } else if (isJoker) {
+    badges.push(<StatusBadge key="joker" kind="joker" label="Joker médical" />);
+  } else if (player.contract_until <= seasonYear) {
+    badges.push(
+      <StatusBadge key="ending" kind="ending" label="Fin de contrat" title="Part libre en fin de saison s'il n'est pas prolongé" />,
+    );
+  }
+  return badges;
 }
 
 // Approche d'un joueur : sa situation, choix de la voie, puis le fil de la négociation.
