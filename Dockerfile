@@ -4,7 +4,8 @@
 #   docker build -t rugby-api .
 #   docker run -p 8000:8000 -v rugby-data:/data rugby-api
 #
-# Les parties, les comptes et les photos vivent dans /data : à monter sur un volume.
+# Les parties, les comptes et les photos vivent dans /data : à monter sur un volume
+# (pas d'instruction VOLUME ici : Railway la refuse et monte le sien).
 
 FROM python:3.12-slim
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -20,7 +21,6 @@ ENV PATH="/app/.venv/bin:$PATH" \
     RUGBY_COOKIE_SECURE=1 \
     PORT=8000
 RUN mkdir -p /data/saves
-VOLUME ["/data"]
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
   CMD python -c "import urllib.request,os;urllib.request.urlopen(f'http://127.0.0.1:{os.environ[\"PORT\"]}/health')" || exit 1
