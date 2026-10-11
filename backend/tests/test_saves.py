@@ -1,26 +1,11 @@
 """Parties sauvegardées : trois emplacements par joueur, chacun son monde, sauvegarde
 au fil du jeu, et chaque compte ne voit que les siennes."""
 
-from collections.abc import Iterator
-
 import pytest
 from fastapi.testclient import TestClient
 
-import accounts
 import database
 from api.main import app
-
-
-@pytest.fixture
-def world(tmp_path, monkeypatch) -> Iterator[None]:
-    """De vraies parties et de vrais comptes, rangés dans un dossier temporaire."""
-    monkeypatch.setattr(database, "SAVES_DIR", tmp_path)
-    monkeypatch.delenv("RUGBY_USERS_DB_URL", raising=False)
-    accounts.reset()
-    app.dependency_overrides.clear()
-    yield
-    database.forget_engines()
-    accounts.reset()
 
 
 def sign_up(email: str) -> TestClient:
@@ -72,7 +57,7 @@ def test_a_deleted_save_is_gone(saves):
     listed = saves.delete("/saves/3").json()
     assert listed[2]["empty"]
     assert saves.get("/career").status_code == 409
-    assert not list(database.SAVES_DIR.glob("u*/partie-3.db"))
+    assert not database.slot_exists(1, 3)
 
 
 def test_each_player_has_their_own_saves(world):
@@ -90,8 +75,7 @@ def test_each_player_has_their_own_saves(world):
     alex.delete("/saves/1")
     assert alex.get("/career").status_code == 409
     assert maxence.get("/career").json()["manager_name"] == "Maxence"
-    assert (database.SAVES_DIR / "u1" / "partie-1.db").exists()
-    assert not (database.SAVES_DIR / "u2" / "partie-1.db").exists()
+    assert database.slot_exists(1, 1) and not database.slot_exists(2, 1)
 
 
 def test_the_loaded_save_follows_the_account(world):

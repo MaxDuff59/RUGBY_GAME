@@ -1,20 +1,25 @@
-"""Parties sauvegardées : une base SQLite par emplacement et par joueur, création des
-tables et remplissage initial.
+"""Parties sauvegardées : création des tables, remplissage initial, et où elles vivent.
 
-Chaque partie vit dans son propre fichier (`saves/u<id>/partie-1.db` à `partie-3.db`,
-`<id>` étant le compte du joueur, voir accounts.py). Chaque action est enregistrée
-aussitôt dans son fichier : la partie se sauvegarde au fur et à mesure. La partie
-chargée est retenue sur le compte (`active_slot`), pour la retrouver d'un
-navigateur à l'autre.
+Deux rangements possibles, choisis par l'environnement :
+
+- `RUGBY_DATABASE_URL` absent : une base SQLite par emplacement et par joueur
+  (`saves/u<id>/partie-1.db` à `partie-3.db`, `<id>` étant le compte, voir accounts.py).
+- `RUGBY_DATABASE_URL` présent (Postgres, par exemple Supabase) : un seul serveur,
+  un schéma par partie (`save_u<id>_s<n>`) avec exactement les mêmes tables ; les
+  comptes et le registre des parties (`saves`) sont dans le schéma `public`.
+
+Dans les deux cas, chaque action est enregistrée aussitôt : la partie se sauvegarde
+au fur et à mesure. La partie chargée est retenue sur le compte (`active_slot`).
 """
 
+import datetime
 import itertools
 import os
 import random
 from collections import OrderedDict
 from pathlib import Path
 
-from sqlalchemy import Engine, create_engine, func, inspect, select, text
+from sqlalchemy import Engine, create_engine, event, func, inspect, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from data.generator import (
@@ -30,8 +35,10 @@ from engine.free_agents import newcomers
 from models import ATTRIBUTE_MAX, ATTRIBUTE_MIN, Position
 from models.orm import Base, ClubRow, PlayerRow, StaffRow
 
-# Dossier des parties (surchargeable, ex. pour une instance de test ou un volume en prod).
+# Dossier des parties SQLite et des photos (surchargeable : instance de test, volume en prod).
 SAVES_DIR = Path(os.environ.get("RUGBY_SAVES_DIR", "./saves"))
+# Serveur Postgres (SQLAlchemy, ex. postgresql+psycopg://...) ; None : SQLite par fichier.
+DATABASE_URL = os.environ.get("RUGBY_DATABASE_URL") or None
 SLOT_COUNT = 3
 # Connexions SQLite gardées ouvertes : au-delà, la plus ancienne est fermée.
 ENGINE_CACHE_SIZE = 64
@@ -44,6 +51,7 @@ SlotKey = tuple[int, int]  # (compte, emplacement)
 _engines: OrderedDict[SlotKey, Engine] = OrderedDict()
 # Parties dont le schéma a été vérifié (et migré) depuis le démarrage de l'API.
 _checked: set[SlotKey] = set()
+_shared: Engine | None = None
 
 
 class NoSaveLoaded(Exception):
@@ -54,6 +62,69 @@ class OutdatedSave(Exception):
     """Une partie à un ancien format, que le jeu ne sait plus ouvrir."""
 
 
+def uses_postgres() -> bool:
+    return DATABASE_URL is not None
+
+
+# --- Postgres : un serveur, un schéma par partie -----------------------------------------
+
+
+def shared_engine() -> Engine:
+    """La connexion au serveur Postgres, partagée par les parties et les comptes
+    (créée au premier appel, avec le registre des parties)."""
+    global _shared
+    if _shared is None:
+        _shared = create_engine(
+            DATABASE_URL,
+            pool_size=5,
+            max_overflow=5,
+            pool_pre_ping=True,
+            pool_recycle=1800,
+            # Pas de requêtes préparées côté serveur : le pooler de Supabase ne les suit pas.
+            connect_args={"prepare_threshold": None},
+        )
+        with _shared.begin() as connection:
+            connection.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS saves ("
+                    "user_id INTEGER NOT NULL, slot INTEGER NOT NULL, "
+                    "updated_at TIMESTAMP NOT NULL, PRIMARY KEY (user_id, slot))"
+                )
+            )
+    return _shared
+
+
+def schema_name(user_id: int, slot: int) -> str:
+    if not 1 <= slot <= SLOT_COUNT:
+        raise ValueError(f"Emplacement {slot} : il y en a {SLOT_COUNT}")
+    return f"save_u{user_id}_s{slot}"
+
+
+def _schema_of(engine: Engine) -> str | None:
+    """Le schéma Postgres vers lequel un moteur de partie est dirigé (None en SQLite)."""
+    return engine.get_execution_options().get("schema_translate_map", {}).get(None)
+
+
+def _touch_on_commit(session: Session, user_id: int, slot: int) -> None:
+    """Bascule `saves.updated_at` à chaque commit qui a changé quelque chose."""
+
+    @event.listens_for(session, "after_flush")
+    def flushed(session: Session, _context) -> None:
+        session.info["touched"] = True
+
+    @event.listens_for(session, "before_commit")
+    def committing(session: Session) -> None:
+        session.flush()
+        if session.info.pop("touched", False):
+            session.execute(
+                text("UPDATE saves SET updated_at = :now WHERE user_id = :u AND slot = :s"),
+                {"now": datetime.datetime.now(), "u": user_id, "s": slot},
+            )
+
+
+# --- Une partie = un fichier SQLite, ou un schéma Postgres --------------------------------
+
+
 def slot_path(user_id: int, slot: int) -> Path:
     if not 1 <= slot <= SLOT_COUNT:
         raise ValueError(f"Emplacement {slot} : il y en a {SLOT_COUNT}")
@@ -61,11 +132,35 @@ def slot_path(user_id: int, slot: int) -> Path:
 
 
 def slot_exists(user_id: int, slot: int) -> bool:
+    if uses_postgres():
+        with shared_engine().connect() as connection:
+            found = connection.execute(
+                text("SELECT 1 FROM saves WHERE user_id = :u AND slot = :s"),
+                {"u": user_id, "s": slot},
+            ).first()
+        return found is not None
     return slot_path(user_id, slot).exists()
+
+
+def saved_at(user_id: int, slot: int) -> datetime.datetime:
+    """Dernière sauvegarde (automatique) d'une partie existante."""
+    if uses_postgres():
+        with shared_engine().connect() as connection:
+            value = connection.execute(
+                text("SELECT updated_at FROM saves WHERE user_id = :u AND slot = :s"),
+                {"u": user_id, "s": slot},
+            ).scalar_one()
+        return value
+    return datetime.datetime.fromtimestamp(slot_path(user_id, slot).stat().st_mtime)
 
 
 def engine_for(user_id: int, slot: int) -> Engine:
     """Connexion à la base d'une partie (créée au premier appel, puis réutilisée)."""
+    if uses_postgres():
+        # Même serveur, même réservoir de connexions : seules les tables visées changent.
+        return shared_engine().execution_options(
+            schema_translate_map={None: schema_name(user_id, slot)}
+        )
     key = (user_id, slot)
     if key in _engines:
         _engines.move_to_end(key)
@@ -82,7 +177,10 @@ def engine_for(user_id: int, slot: int) -> Engine:
 
 
 def session_for(user_id: int, slot: int) -> Session:
-    return sessionmaker(bind=engine_for(user_id, slot), expire_on_commit=False)()
+    session = sessionmaker(bind=engine_for(user_id, slot), expire_on_commit=False)()
+    if uses_postgres():
+        _touch_on_commit(session, user_id, slot)
+    return session
 
 
 def open_slot(user_id: int, slot: int) -> Session:
@@ -104,30 +202,72 @@ def load_slot(user_id: int, slot: int) -> None:
 def new_slot(user_id: int, slot: int, seed: int | None = None) -> None:
     """Remplace l'emplacement par un monde neuf (la carrière reste à choisir)."""
     delete_slot(user_id, slot)
-    slot_path(user_id, slot).parent.mkdir(parents=True, exist_ok=True)
+    if uses_postgres():
+        schema = schema_name(user_id, slot)
+        with shared_engine().begin() as connection:
+            connection.execute(text(f'CREATE SCHEMA "{schema}"'))
+            connection.execute(
+                text("INSERT INTO saves (user_id, slot, updated_at) VALUES (:u, :s, :now)"),
+                {"u": user_id, "s": slot, "now": datetime.datetime.now()},
+            )
+    else:
+        slot_path(user_id, slot).parent.mkdir(parents=True, exist_ok=True)
     engine = engine_for(user_id, slot)
     init_db(engine)
     _checked.add((user_id, slot))
     with session_for(user_id, slot) as session:
         seed_if_empty(session, seed=seed)
+    if uses_postgres():
+        _resync_sequences(engine)
+
+
+def _resync_sequences(engine: Engine) -> None:
+    """Après un remplissage avec des identifiants choisis (clubs, joueurs, staff), les
+    compteurs de Postgres repartent après le plus grand identifiant de chaque table."""
+    schema = _schema_of(engine)
+    with engine.begin() as connection:
+        for table in Base.metadata.sorted_tables:
+            if "id" not in table.columns:
+                continue
+            qualified = f'"{schema}"."{table.name}"'
+            connection.execute(
+                text(
+                    f"SELECT setval(pg_get_serial_sequence('{qualified}', 'id'), "
+                    f"COALESCE((SELECT MAX(id) FROM {qualified}), 0) + 1, false)"
+                )
+            )
 
 
 def delete_slot(user_id: int, slot: int) -> None:
-    """Efface une partie (son fichier)."""
+    """Efface une partie (son fichier, ou son schéma)."""
     key = (user_id, slot)
+    _checked.discard(key)
+    if uses_postgres():
+        with shared_engine().begin() as connection:
+            connection.execute(
+                text(f'DROP SCHEMA IF EXISTS "{schema_name(user_id, slot)}" CASCADE')
+            )
+            connection.execute(
+                text("DELETE FROM saves WHERE user_id = :u AND slot = :s"),
+                {"u": user_id, "s": slot},
+            )
+        return
     engine = _engines.pop(key, None)
     if engine is not None:
         engine.dispose()
-    _checked.discard(key)
     slot_path(user_id, slot).unlink(missing_ok=True)
 
 
 def forget_engines() -> None:
-    """Ferme toutes les connexions ouvertes (tests : changer de dossier entre deux cas)."""
+    """Ferme toutes les connexions ouvertes (tests : changer de base entre deux cas)."""
+    global _shared
     for engine in _engines.values():
         engine.dispose()
     _engines.clear()
     _checked.clear()
+    if _shared is not None:
+        _shared.dispose()
+        _shared = None
 
 
 def init_db(engine: Engine) -> None:
@@ -138,8 +278,9 @@ def init_db(engine: Engine) -> None:
     # pas les colonnes. Hors des cas traités par `_migrate`, une partie à l'ancien
     # schéma ne s'ouvre plus : il faut la supprimer.
     inspector = inspect(engine)
+    schema = _schema_of(engine)
     for table in Base.metadata.sorted_tables:
-        actual = {column["name"] for column in inspector.get_columns(table.name)}
+        actual = {column["name"] for column in inspector.get_columns(table.name, schema=schema)}
         expected = {column.name for column in table.columns}
         if not expected <= actual:
             raise OutdatedSave(
@@ -149,7 +290,10 @@ def init_db(engine: Engine) -> None:
 
 
 def _migrate(engine: Engine) -> None:
-    """Les quelques changements de schéma qu'on sait rattraper sans repartir de zéro."""
+    """Les quelques changements de schéma qu'on sait rattraper sans repartir de zéro
+    (parties SQLite d'avant ces changements ; en Postgres les schémas naissent à jour)."""
+    if engine.dialect.name != "sqlite":
+        return
     inspector = inspect(engine)
     if not inspector.has_table("players"):
         return

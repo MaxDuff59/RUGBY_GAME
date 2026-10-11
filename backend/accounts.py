@@ -65,32 +65,33 @@ class AccountError(Exception):
 _engine: Engine | None = None
 
 
-def users_db_url() -> str:
-    from database import SAVES_DIR  # import tardif : SAVES_DIR est surchargé par les tests
-
-    return os.environ.get("RUGBY_USERS_DB_URL") or f"sqlite:///{SAVES_DIR / 'users.db'}"
-
-
 def engine() -> Engine:
-    """Connexion à la base des comptes (créée au premier appel, tables comprises)."""
+    """Connexion à la base des comptes (créée au premier appel, tables comprises) :
+    le serveur Postgres du jeu s'il y en a un, sinon `RUGBY_USERS_DB_URL`, sinon un
+    fichier SQLite à côté des parties."""
     global _engine
     if _engine is None:
-        url = users_db_url()
-        if url.startswith("sqlite"):
-            from database import SAVES_DIR
+        import database  # import tardif : le dossier et l'URL sont surchargés par les tests
 
-            SAVES_DIR.mkdir(parents=True, exist_ok=True)
-            _engine = create_engine(url, connect_args={"check_same_thread": False})
-        else:
+        url = os.environ.get("RUGBY_USERS_DB_URL")
+        if database.uses_postgres() and not url:
+            _engine = database.shared_engine()
+        elif url and not url.startswith("sqlite"):
             _engine = create_engine(url, pool_pre_ping=True)
+        else:
+            database.SAVES_DIR.mkdir(parents=True, exist_ok=True)
+            url = url or f"sqlite:///{database.SAVES_DIR / 'users.db'}"
+            _engine = create_engine(url, connect_args={"check_same_thread": False})
         AccountsBase.metadata.create_all(_engine)
     return _engine
 
 
 def reset() -> None:
-    """Oublie la connexion (tests : changer de dossier entre deux cas)."""
+    """Oublie la connexion (tests : changer de base entre deux cas)."""
     global _engine
-    if _engine is not None:
+    import database
+
+    if _engine is not None and _engine is not database._shared:
         _engine.dispose()
     _engine = None
 

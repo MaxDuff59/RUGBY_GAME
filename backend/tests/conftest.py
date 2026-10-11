@@ -1,20 +1,73 @@
 """Fixtures pytest partagées : clubs du moteur, et client de l'API sur une base en mémoire."""
 
+import os
 import random
 from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import accounts
+import database
 from api.deps import get_session
 from api.main import app
 from data.generator import SQUAD_COMPOSITION, generate_player
 from database import seed_if_empty
 from models import Club
 from models.orm import Base
+
+# Les tests tournent sur SQLite en mémoire ; avec RUGBY_TEST_DATABASE_URL (un Postgres
+# jetable), ils tournent sur Postgres, vidé avant chaque cas.
+TEST_DB_URL = os.environ.get("RUGBY_TEST_DATABASE_URL")
+
+
+def wipe_postgres(engine: Engine) -> None:
+    """Repart d'une base vide : schémas des parties et schéma public."""
+    with engine.begin() as connection:
+        schemas = connection.execute(
+            text(
+                "SELECT schema_name FROM information_schema.schemata "
+                r"WHERE schema_name LIKE 'save\_%'"
+            )
+        ).scalars()
+        for name in list(schemas):
+            connection.execute(text(f'DROP SCHEMA "{name}" CASCADE'))
+        connection.execute(text("DROP SCHEMA public CASCADE"))
+        connection.execute(text("CREATE SCHEMA public"))
+
+
+def test_engine() -> Engine:
+    """Une base vide pour un test : SQLite en mémoire, ou le Postgres de test."""
+    if TEST_DB_URL:
+        engine = create_engine(TEST_DB_URL, connect_args={"prepare_threshold": None})
+        wipe_postgres(engine)
+        return engine
+    # StaticPool : une seule connexion partagée, sinon chaque session verrait
+    # une base en mémoire différente (et vide).
+    return create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+
+
+@pytest.fixture
+def world(tmp_path, monkeypatch) -> Iterator[None]:
+    """De vrais comptes et de vraies parties (fichiers dans un dossier temporaire, ou
+    schémas du Postgres de test), au lieu de la base de test injectée."""
+    monkeypatch.setattr(database, "SAVES_DIR", tmp_path)
+    monkeypatch.setattr(database, "DATABASE_URL", TEST_DB_URL)
+    monkeypatch.delenv("RUGBY_USERS_DB_URL", raising=False)
+    if TEST_DB_URL:
+        wipe_postgres(create_engine(TEST_DB_URL, connect_args={"prepare_threshold": None}))
+    # Connexions neuves : le registre des parties et les tables des comptes se recréent.
+    database.forget_engines()
+    accounts.reset()
+    app.dependency_overrides.clear()
+    yield
+    database.forget_engines()
+    accounts.reset()
 
 
 def make_club(club_id: int, level: float, seed: int = 0) -> Club:
@@ -46,11 +99,7 @@ def strong_and_weak() -> tuple[Club, Club]:
 
 @pytest.fixture
 def client() -> Iterator[TestClient]:
-    # StaticPool : une seule connexion partagée, sinon chaque session verrait
-    # une base en mémoire différente (et vide).
-    engine = create_engine(
-        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
-    )
+    engine = test_engine()
     Base.metadata.create_all(engine)
     TestSession = sessionmaker(bind=engine, expire_on_commit=False)
     with TestSession() as session:

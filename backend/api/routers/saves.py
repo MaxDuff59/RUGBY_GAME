@@ -5,7 +5,6 @@ La partie chargée se sauvegarde toute seule : chaque action est enregistrée
 aussitôt dans son fichier. L'emplacement chargé est retenu sur le compte.
 """
 
-import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path
@@ -24,9 +23,9 @@ from database import (
     init_db,
     load_slot,
     new_slot,
+    saved_at,
     session_for,
     slot_exists,
-    slot_path,
 )
 from models.orm import CareerRow, ClubRow
 
@@ -38,8 +37,9 @@ Slot = Annotated[int, Path(ge=1, le=SLOT_COUNT)]
 def _save_out(user: accounts.User, slot: int) -> SaveOut:
     if not slot_exists(user.id, slot):
         return SaveOut(slot=slot, empty=True, active=False)
-    saved_at = datetime.datetime.fromtimestamp(slot_path(user.id, slot).stat().st_mtime)
-    out = SaveOut(slot=slot, empty=False, active=slot == user.active_slot, saved_at=saved_at)
+    out = SaveOut(
+        slot=slot, empty=False, active=slot == user.active_slot, saved_at=saved_at(user.id, slot)
+    )
     try:
         init_db(engine_for(user.id, slot))
     except OutdatedSave:

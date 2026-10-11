@@ -4,23 +4,21 @@ from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from api.deps import get_session
 from api.main import app
 from database import seed_if_empty
 from engine.economy import SQUAD_MIN
 from models.orm import Base, ClubRow
+from tests.conftest import test_engine
 
 
 @pytest.fixture
 def two_leagues() -> Iterator[TestClient]:
     """14 clubs inventés : les 7 premiers en Top 14, les 7 autres en Pro D2 ; on dirige le 3."""
-    engine = create_engine(
-        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
-    )
+    engine = test_engine()
     Base.metadata.create_all(engine)
     TestSession = sessionmaker(bind=engine, expire_on_commit=False)
     with TestSession() as session:

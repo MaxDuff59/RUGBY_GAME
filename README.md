@@ -75,10 +75,10 @@ Puis ouvrir http://localhost:8000/docs pour tester les routes dans le navigateur
 
 Le jeu s'ouvre sur la connexion (`backend/accounts.py`, routes `/auth`) : un
 compte par joueur, e-mail et mot de passe (scrypt), session par cookie. Les
-comptes vivent dans `backend/saves/users.db` (`RUGBY_USERS_DB_URL` pour la
-mettre ailleurs, Postgres compris). Puis l'écran des parties : trois
+comptes vivent dans `backend/saves/users.db`. Puis l'écran des parties : trois
 emplacements par compte, chacun avec son propre monde dans
-`backend/saves/u<compte>/partie-N.db` (`database.py`). « Nouvelle carrière »
+`backend/saves/u<compte>/partie-N.db` (`database.py` ; ou un schéma Postgres
+par partie avec `RUGBY_DATABASE_URL`, voir « Mise en production »). « Nouvelle carrière »
 crée le monde dans un emplacement libre, puis on choisit le championnat et le
 club ; « Continuer » recharge une partie. Il n'y a pas de bouton
 « Sauvegarder » : chaque action est enregistrée aussitôt dans le fichier de la
@@ -292,18 +292,43 @@ cd frontend && vercel --prod        # l'interface (Root Directory : frontend)
 
 Si le domaine Railway change, le reporter dans `frontend/vercel.json`.
 
+### Données sur Supabase (Postgres)
+
+Sans réglage, les parties sont des fichiers SQLite sur le disque de l'API. Avec
+`RUGBY_DATABASE_URL`, tout va dans un serveur Postgres, par exemple Supabase : les
+comptes et le registre des parties dans le schéma `public`, et chaque partie dans
+son propre schéma (`save_u<compte>_s<n>`) avec les mêmes tables qu'en SQLite. Le
+moteur et les routes ne voient pas la différence (`database.py`).
+
+Dans Supabase : *Project Settings → Database → Connection string*, prendre la
+version **Session pooler** (le port 5432 du `pooler.supabase.com`, joignable en
+IPv4), et l'écrire avec le pilote psycopg :
+
+```
+RUGBY_DATABASE_URL=postgresql+psycopg://postgres.<ref>:<mot de passe>@aws-0-<région>.pooler.supabase.com:5432/postgres
+```
+
+Le disque de l'API ne garde alors que les photos (`RUGBY_SAVES_DIR/photos`), qui
+se retéléchargent si on le perd. Les tests peuvent tourner sur un Postgres
+jetable, vidé avant chaque cas :
+
+```bash
+RUGBY_TEST_DATABASE_URL=postgresql+psycopg://rugby@127.0.0.1:5499/rugby_test uv run pytest
+```
+
 Variables d'environnement de l'API :
 
 | Variable | Rôle | Dans l'image |
 |---|---|---|
-| `RUGBY_SAVES_DIR` | Dossier des parties, des comptes et des photos | `/data/saves` |
-| `RUGBY_USERS_DB_URL` | Base des comptes (SQLAlchemy ; par défaut `users.db` dans le dossier des parties) | — |
+| `RUGBY_DATABASE_URL` | Serveur Postgres pour les comptes et les parties (sinon SQLite par fichier) | — |
+| `RUGBY_SAVES_DIR` | Dossier des parties SQLite, des comptes (sans Postgres) et des photos | `/data/saves` |
+| `RUGBY_USERS_DB_URL` | Base des comptes à part (sinon celle des parties, ou `users.db` dans le dossier des parties) | — |
 | `RUGBY_COOKIE_SECURE` | `1` derrière HTTPS (cookie de session marqué Secure) | `1` |
 | `RUGBY_STATIC_DIR` | Optionnel : un `dist/` de Vite servi par l'API elle-même (`api.main:site`, tout sur un seul port) | — |
 | `PORT` | Port d'écoute | `8000` |
 
-Une seule machine d'API à la fois : les parties sont des fichiers SQLite. Pour
-en avoir plusieurs, il faudrait un stockage partagé. Pas de réinitialisation de
+En SQLite, une seule machine d'API à la fois (les parties sont des fichiers) ;
+avec Postgres, plusieurs instances peuvent tourner. Pas de réinitialisation de
 mot de passe (il faudrait un envoi d'e-mail).
 
 ## Principe d'architecture

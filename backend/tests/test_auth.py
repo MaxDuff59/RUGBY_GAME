@@ -1,25 +1,17 @@
 """Comptes : inscription, connexion, session par cookie, déconnexion."""
 
-from collections.abc import Iterator
-
 import pytest
 from fastapi.testclient import TestClient
 
 import accounts
-import database
 from api import auth
 from api.main import app
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch) -> Iterator[TestClient]:
-    monkeypatch.setattr(database, "SAVES_DIR", tmp_path)
-    monkeypatch.delenv("RUGBY_USERS_DB_URL", raising=False)
-    accounts.reset()
+def client(world) -> TestClient:
     auth._attempts.clear()
-    app.dependency_overrides.clear()
-    yield TestClient(app)
-    accounts.reset()
+    return TestClient(app)
 
 
 def test_register_then_login(client):

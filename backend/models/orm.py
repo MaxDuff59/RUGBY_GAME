@@ -67,13 +67,15 @@ class ClubRow(Base):
         primaryjoin="and_(PlayerRow.club_id == ClubRow.id, PlayerRow.squad == 'pro')",
         foreign_keys="PlayerRow.club_id",
         overlaps="youths,club",
+        order_by="PlayerRow.id",
     )
     youths: Mapped[list["PlayerRow"]] = relationship(
         primaryjoin="and_(PlayerRow.club_id == ClubRow.id, PlayerRow.squad == 'youth')",
         foreign_keys="PlayerRow.club_id",
         overlaps="players,club",
+        order_by="PlayerRow.id",
     )
-    staff: Mapped[list["StaffRow"]] = relationship(back_populates="club")
+    staff: Mapped[list["StaffRow"]] = relationship(back_populates="club", order_by="StaffRow.id")
 
     def to_domain(self) -> Club:
         return Club(
@@ -159,7 +161,7 @@ class PlayerRow(Base):
     )
     # Dossier médical complet ; le domaine ne garde que la blessure la plus récente.
     injuries: Mapped[list["InjuryRow"]] = relationship(
-        back_populates="player", cascade="all, delete-orphan"
+        back_populates="player", cascade="all, delete-orphan", order_by="InjuryRow.id"
     )
 
     @property
@@ -322,10 +324,12 @@ class SeasonRow(Base):
     matches: Mapped[list["MatchRow"]] = relationship(
         primaryjoin="and_(MatchRow.season_id == SeasonRow.id, MatchRow.squad == 'pro')",
         overlaps="youth_matches,season",
+        order_by="MatchRow.id",
     )
     youth_matches: Mapped[list["MatchRow"]] = relationship(
         primaryjoin="and_(MatchRow.season_id == SeasonRow.id, MatchRow.squad == 'youth')",
         overlaps="matches,season",
+        order_by="MatchRow.id",
     )
 
 
