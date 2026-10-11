@@ -292,20 +292,25 @@ cd frontend && vercel --prod        # l'interface (Root Directory : frontend)
 
 Si le domaine Railway change, le reporter dans `frontend/vercel.json`.
 
-### Données sur Supabase (Postgres)
+### Données sur Postgres
 
 Sans réglage, les parties sont des fichiers SQLite sur le disque de l'API. Avec
-`RUGBY_DATABASE_URL`, tout va dans un serveur Postgres, par exemple Supabase : les
-comptes et le registre des parties dans le schéma `public`, et chaque partie dans
-son propre schéma (`save_u<compte>_s<n>`) avec les mêmes tables qu'en SQLite. Le
-moteur et les routes ne voient pas la différence (`database.py`).
+`RUGBY_DATABASE_URL`, tout va dans un serveur Postgres : les comptes et le
+registre des parties dans le schéma `public`, et chaque partie dans son propre
+schéma (`save_u<compte>_s<n>`) avec les mêmes tables qu'en SQLite. Le moteur et
+les routes ne voient pas la différence (`database.py`). L'URL peut être celle
+que donne l'hébergeur (`postgres://` ou `postgresql://`) : le pilote psycopg est
+ajouté automatiquement.
 
-Dans Supabase : *Project Settings → Database → Connection string*, prendre la
-version **Session pooler** (le port 5432 du `pooler.supabase.com`, joignable en
-IPv4), et l'écrire avec le pilote psycopg :
+En production, la base est le service Postgres du projet Railway, dans le même
+centre de données que l'API : `RUGBY_DATABASE_URL=${{Postgres.DATABASE_URL}}`
+(référence Railway, réseau privé). Une base distante marche aussi, par exemple
+Supabase avec son **Session pooler** (joignable en IPv4), mais chaque journée
+jouée fait quelques centaines de requêtes : à 15 ms d'aller-retour, c'est 6 s
+par journée contre moins d'une seconde en local.
 
 ```
-RUGBY_DATABASE_URL=postgresql+psycopg://postgres.<ref>:<mot de passe>@aws-0-<région>.pooler.supabase.com:5432/postgres
+RUGBY_DATABASE_URL=postgresql://postgres.<ref>:<mot de passe>@aws-0-<région>.pooler.supabase.com:5432/postgres
 ```
 
 Le disque de l'API ne garde alors que les photos (`RUGBY_SAVES_DIR/photos`), qui

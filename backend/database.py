@@ -37,8 +37,21 @@ from models.orm import Base, ClubRow, PlayerRow, StaffRow
 
 # Dossier des parties SQLite et des photos (surchargeable : instance de test, volume en prod).
 SAVES_DIR = Path(os.environ.get("RUGBY_SAVES_DIR", "./saves"))
-# Serveur Postgres (SQLAlchemy, ex. postgresql+psycopg://...) ; None : SQLite par fichier.
-DATABASE_URL = os.environ.get("RUGBY_DATABASE_URL") or None
+
+
+def _postgres_url(url: str | None) -> str | None:
+    """L'URL telle que SQLAlchemy la veut, avec le pilote psycopg : les hébergeurs
+    (Railway, Supabase, Heroku) donnent `postgres://` ou `postgresql://` sans pilote."""
+    if not url:
+        return None
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix) :]
+    return url
+
+
+# Serveur Postgres (ex. postgresql://... d'un hébergeur) ; None : SQLite par fichier.
+DATABASE_URL = _postgres_url(os.environ.get("RUGBY_DATABASE_URL"))
 SLOT_COUNT = 3
 # Connexions SQLite gardées ouvertes : au-delà, la plus ancienne est fermée.
 ENGINE_CACHE_SIZE = 64
