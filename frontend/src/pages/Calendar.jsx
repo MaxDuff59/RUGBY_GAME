@@ -196,7 +196,7 @@ function SeasonView({ matchdays, myId }) {
             <th scope="col" className="left">Adversaire</th>
             <th scope="col" className="left">Lieu</th>
             <th scope="col">Score</th>
-            <th scope="col" className="left">Résultat</th>
+            <th scope="col">Résultat</th>
           </tr>
         </thead>
         <tbody>
@@ -216,7 +216,7 @@ function SeasonView({ matchdays, myId }) {
             const played = match.home_score !== null;
             const mine = home ? match.home_score : match.away_score;
             const theirs = home ? match.away_score : match.home_score;
-            const result = played ? RESULTS[matchResult(match, myId)] : "";
+            const result = played ? matchResult(match, myId) : null;
             const note = played ? scoreNote(match, myId) : null;
             return (
               <tr key={md.matchday}>
@@ -233,7 +233,11 @@ function SeasonView({ matchdays, myId }) {
                   {played ? `${mine} – ${theirs}` : "–"}
                   {note && <span className="muted"> {note}</span>}
                 </td>
-                <td className="left">{result}</td>
+                <td>
+                  {result && (
+                    <span className={`result-dot result-dot--${result}`} role="img" title={RESULTS[result]} aria-label={RESULTS[result]} />
+                  )}
+                </td>
               </tr>
             );
           })}

@@ -29,8 +29,10 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   L'accent bordeaux `#7A1F2B` reste celui des écrans sans club (parties) ; au choix du
   club, l'interface prend ses couleurs dès qu'on le sélectionne, et chaque partie montre
   son bouton « Continuer » à la couleur de son club.
-- Victoire / nul / défaite se distinguent par la forme (plein noir, gris, contour),
-  pas par le rouge et le vert.
+- Dans les pastilles de forme (V / N / D), victoire / nul / défaite se distinguent par
+  la forme (plein noir, gris, contour). Dans la colonne « Résultat » de l'onglet Saison
+  du calendrier, un simple rond de couleur : vert (`--win`), gris (`--draw`), rouge
+  (`--loss`), avec le libellé en info-bulle.
 
 ## Typographie
 

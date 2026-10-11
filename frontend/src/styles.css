@@ -13,6 +13,10 @@
   /* Seconde couleur du club (liseré sous l'en-tête) ; accent et elle suivent le club choisi. */
   --accent-2: #ffffff;
   --pitch: #2e4a38;
+  /* Résultats : victoire, nul, défaite (ronds du calendrier) */
+  --win: #2f7d4f;
+  --draw: #a9abb0;
+  --loss: #b3362f;
 
   --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
   --font-body: "Instrument Sans", system-ui, sans-serif;
@@ -1271,6 +1275,27 @@ body,
 .pill--D {
   border: 1.5px solid var(--ink);
   color: var(--ink);
+}
+
+/* Résultat d'un match (calendrier, onglet Saison) : un rond de couleur */
+.result-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.result-dot--V {
+  background: var(--win);
+}
+
+.result-dot--N {
+  background: var(--draw);
+}
+
+.result-dot--D {
+  background: var(--loss);
 }
 
 /* Rapport de force : nous à gauche, eux à droite */
