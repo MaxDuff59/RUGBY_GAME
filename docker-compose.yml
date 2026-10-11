@@ -1,8 +1,9 @@
-# Essai de la production en local : http://localhost:8000
+# Essai de l'API en local dans son image : http://localhost:8000/docs
 #   docker compose up --build
-# Les parties et les comptes restent dans le volume `rugby-data`.
+# Les parties et les comptes restent dans le volume `rugby-data`. L'interface se
+# lance à part (`npm run dev` dans frontend/, qui relaie /api vers ce port).
 services:
-  rugby:
+  api:
     build: .
     ports:
       - "8000:8000"

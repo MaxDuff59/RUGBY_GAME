@@ -279,27 +279,31 @@ avec une petite pénalité. Le catalogue est dans `backend/engine/affairs.py`.
 
 ## Mise en production
 
-Un seul conteneur sert l'API et l'interface construite (`Dockerfile`) : l'API sous
-`/api`, l'interface partout ailleurs (`api.main:site`). Les parties, les comptes et
-les photos vivent dans `/data`, à monter sur un volume persistant.
+Deux services : l'API sur Railway (image Docker, `Dockerfile`), l'interface sur
+Vercel (`frontend/vercel.json`). Vercel relaie `/api/*` vers l'API, comme Vite
+en développement : le navigateur ne parle qu'au domaine Vercel, donc pas de
+CORS ni de cookie inter-sites. Les parties, les comptes et les photos vivent
+dans `/data` sur Railway, monté sur un volume persistant.
 
 ```bash
-docker compose up --build          # essai en local : http://localhost:8000
-fly launch --copy-config --no-deploy && fly volumes create rugby_data --size 1 --region cdg && fly deploy
+railway up --service rugby --ci     # l'API (projet rugby-manager, service rugby, volume /data)
+cd frontend && vercel --prod        # l'interface (Root Directory : frontend)
 ```
 
-Variables d'environnement :
+Si le domaine Railway change, le reporter dans `frontend/vercel.json`.
+
+Variables d'environnement de l'API :
 
 | Variable | Rôle | Dans l'image |
 |---|---|---|
 | `RUGBY_SAVES_DIR` | Dossier des parties, des comptes et des photos | `/data/saves` |
 | `RUGBY_USERS_DB_URL` | Base des comptes (SQLAlchemy ; par défaut `users.db` dans le dossier des parties) | — |
-| `RUGBY_STATIC_DIR` | Le `dist/` de Vite servi par l'API | `/app/static` |
 | `RUGBY_COOKIE_SECURE` | `1` derrière HTTPS (cookie de session marqué Secure) | `1` |
+| `RUGBY_STATIC_DIR` | Optionnel : un `dist/` de Vite servi par l'API elle-même (`api.main:site`, tout sur un seul port) | — |
 | `PORT` | Port d'écoute | `8000` |
 
-Une seule machine à la fois : les parties sont des fichiers SQLite. Pour en
-avoir plusieurs, il faudrait un stockage partagé. Pas de réinitialisation de
+Une seule machine d'API à la fois : les parties sont des fichiers SQLite. Pour
+en avoir plusieurs, il faudrait un stockage partagé. Pas de réinitialisation de
 mot de passe (il faudrait un envoi d'e-mail).
 
 ## Principe d'architecture

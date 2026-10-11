@@ -2,7 +2,7 @@
 #   fly launch --copy-config --no-deploy   # crée l'application (change `app` ci-dessous)
 #   fly volumes create rugby_data --size 1 --region cdg
 #   fly deploy
-# Une seule machine : les parties sont des fichiers SQLite sur le volume.
+# API seule (l'interface est sur Vercel). Une seule machine : parties en SQLite sur le volume.
 app = "rugby-manager"
 primary_region = "cdg"
 
@@ -30,7 +30,7 @@ primary_region = "cdg"
     timeout = "5s"
     grace_period = "10s"
     method = "GET"
-    path = "/api/health"
+    path = "/health"
 
 [[vm]]
   size = "shared-cpu-1x"

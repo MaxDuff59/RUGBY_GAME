@@ -12,3 +12,4 @@ backend/tests
 **/.DS_Store
 .vscode
 .idea
+frontend
