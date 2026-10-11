@@ -18,3 +18,6 @@ dist/
 .DS_Store
 .vscode/
 .idea/
+
+# Vercel (lien local vers le projet)
+.vercel/
