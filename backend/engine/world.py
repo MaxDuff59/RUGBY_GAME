@@ -178,6 +178,7 @@ class World:
             season.matches += next_playoff_matches(
                 league_config(league), season.league_matches(league), season.year
             )
+        season.tests += internationals.next_round(season.tests, season.year)
         day = next_date([*season.matches, *season.tests])
         if day is not None:
             for code, team in internationals.due_lists(season.tests, season.squads, day):

@@ -300,6 +300,7 @@ def _prepare_day(session: Session, season: SeasonRow) -> datetime.date | None:
     for league in _season_league_codes(season):
         _ensure_next_stage(session, season, league)
     internationals.ensure_calendar(session, season)
+    internationals.ensure_next_round(session, season)
     dates = [m.date for m in season.matches if not m.is_played]
     next_test = internationals.next_test_date(session, season)
     if next_test is not None:

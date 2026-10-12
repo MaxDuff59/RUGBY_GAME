@@ -124,7 +124,9 @@ def selection_out(session: Session, season: SeasonRow, where: Situation) -> Sele
         record.lost += result < 0
     window = None
     if where.window is not None:
-        window = window_out(where.window, where.window_rows, internationals.squads(session, season))
+        window = window_out(
+            where.window, where.window_rows, internationals.squads(session, season), season.year
+        )
     return SelectionOut(
         nation=nation_out(nation),
         year=season.year,
@@ -182,7 +184,9 @@ def _pool_out(session: Session, season: SeasonRow, where: Situation) -> PoolOut:
     starts = season_starts(season, where.rows)
     window = None
     if where.window is not None:
-        window = window_out(where.window, where.window_rows, internationals.squads(session, season))
+        window = window_out(
+            where.window, where.window_rows, internationals.squads(session, season), season.year
+        )
     return PoolOut(
         nation=nation_out(nation),
         window=window,

@@ -290,7 +290,7 @@ export default function Selection() {
                           {opponent.name}
                         </span>
                       </td>
-                      <td className="left muted">{home ? "Dom." : "Ext."}</td>
+                      <td className="left muted">{match.neutral ? "Neutre" : home ? "Dom." : "Ext."}</td>
                       <td>
                         {played ? `${home ? match.home_score : match.away_score} – ${home ? match.away_score : match.home_score}` : "–"}
                         {note && <span className="muted"> {note}</span>}
@@ -362,7 +362,7 @@ function Opponent({ match, myId, label }) {
         <h1 className="hero__title">{opponent.name}</h1>
       </div>
       <p className="hero__sub">
-        {home ? "À domicile" : "À l'extérieur"}
+        {match.neutral ? "Terrain neutre" : home ? "À domicile" : "À l'extérieur"}
         {label ? ` · ${label}` : ""}
       </p>
     </>

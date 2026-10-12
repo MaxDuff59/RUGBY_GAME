@@ -473,6 +473,10 @@ class InternationalRow(Base):
     # Code de la fenêtre (data/nations.py) ; `matchday` : numéro du match dans la fenêtre.
     competition: Mapped[str] = mapped_column(String(20))
     matchday: Mapped[int] = mapped_column(default=0)
+    # Tour à élimination directe de la Coupe du monde, « regular » pour tout le reste.
+    stage: Mapped[str] = mapped_column(
+        String(10), default=Stage.REGULAR.value, server_default=Stage.REGULAR.value
+    )
     home_id: Mapped[int]
     away_id: Mapped[int]
     home_score: Mapped[int | None]
@@ -496,10 +500,6 @@ class InternationalRow(Base):
     def away_club_id(self) -> int:
         return self.away_id
 
-    @property
-    def stage(self) -> str:
-        return Stage.REGULAR.value
-
     def to_domain(self) -> Match:
         return Match(
             id=self.id,
@@ -508,6 +508,7 @@ class InternationalRow(Base):
             matchday=self.matchday,
             home_score=self.home_score,
             away_score=self.away_score,
+            stage=Stage(self.stage),
             date=self.date,
             neutral=self.neutral,
             events=_events_from_json(self.events),
@@ -523,6 +524,7 @@ class InternationalRow(Base):
             season_id=season_id,
             competition=match.league,
             matchday=match.matchday,
+            stage=match.stage.value,
             home_id=match.home_club_id,
             away_id=match.away_club_id,
             home_score=match.home_score,

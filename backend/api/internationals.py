@@ -33,7 +33,7 @@ from engine.form import Form
 from engine.internationals import SquadKey
 from engine.offseason import RETIREMENT_AGE, develop_player
 from engine.season import rng_for
-from models import ATTRIBUTE_NAMES, Club, Injury, Match, Player, Squad
+from models import ATTRIBUTE_NAMES, Club, Injury, Match, Player, Squad, Stage
 from models.orm import (
     CallUpRow,
     ClubRow,
@@ -94,6 +94,7 @@ def fixture(row: InternationalRow) -> Match:
         matchday=row.matchday,
         home_score=row.home_score,
         away_score=row.away_score,
+        stage=Stage(row.stage),
         date=row.date,
         neutral=row.neutral,
         league=row.competition,
@@ -167,6 +168,19 @@ def ensure_calendar(session: Session, season: SeasonRow) -> None:
     for nation in rules.participants():
         for player in rules.reinforcements(nation, pool[nation.code], player_ids, rng, season.year):
             session.add(PlayerRow.from_domain(player))
+    session.commit()
+
+
+def ensure_next_round(session: Session, season: SeasonRow) -> None:
+    """Coupe du monde : crée les matchs du tour suivant quand tous ceux du tour en
+    cours sont joués (quarts après les poules, puis demies, puis finale)."""
+    rows = [row for row in test_rows(session, season) if row.competition == rules.WORLD_CUP.code]
+    if not rows or any(not row.is_played for row in rows):
+        return
+    upcoming = rules.next_round([row.to_domain() for row in rows], season.year)
+    if not upcoming:
+        return
+    session.add_all(InternationalRow.from_domain(match, season.id) for match in upcoming)
     session.commit()
 
 

@@ -187,6 +187,7 @@ def _start_test(session, human: SelectorRow) -> LiveOut:
         day=day,
         home_form=forms[home.id],
         away_form=forms[away.id],
+        knockout=Stage(match_row.stage).is_playoff,
         home_tactics=opponent_tactics if home is opponent else Tactics(),
         away_tactics=opponent_tactics if away is opponent else Tactics(),
         auto={opponent.id},

@@ -33,6 +33,10 @@ const NATION_COLORS = {
   Argentine: ["#3F87C5", "#FFFFFF"],
   Fidji: ["#1A1A1A", "#68BFE5"],
   Géorgie: ["#8C1D2C", "#FFFFFF"],
+  Japon: ["#BC002D", "#FFFFFF"],
+  Samoa: ["#002B7F", "#CE1126"],
+  Tonga: ["#A3081F", "#FFFFFF"],
+  Portugal: ["#046A38", "#DA291C"],
 };
 
 export function clubInfo(name) {

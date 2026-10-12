@@ -19,15 +19,23 @@ from data.generator import (
     generate_real_clubs,
     generate_youth_player,
 )
-from data.leagues import league
-from data.nations import NATIONS_BY_CODE, WINDOWS_BY_CODE, home_nation
+from data.leagues import LEAGUES_BY_CODE, league
+from data.nations import (
+    NATIONS_BY_CODE,
+    WINDOWS_BY_CODE,
+    WORLD_CUP,
+    WORLD_CUP_POTS,
+    home_nation,
+    season_windows,
+)
 from database import init_db
 from engine import internationals as rules
-from engine.calendar import SATURDAY
+from engine.calendar import SATURDAY, is_world_cup_year, season_dates, world_cup_saturdays
 from engine.match_engine import SLOT_POSITIONS, select_bench, select_lineup
 from engine.medical import new_injury
+from engine.season import next_playoff_matches, schedule
 from engine.world import World
-from models import Club, InjurySource, Position, Squad
+from models import Club, InjurySource, Position, Squad, Stage
 from models.orm import (
     Base,
     CallUpRow,
@@ -36,6 +44,7 @@ from models.orm import (
     InternationalRow,
     MatchRow,
     PlayerRow,
+    SeasonRow,
 )
 from tests import conftest
 
@@ -55,7 +64,8 @@ def test_a_season_has_three_windows_on_saturdays():
     assert all(m.date.weekday() == SATURDAY for m in matches)
     # Dans l'ordre de la saison : août-octobre, novembre, février-mars.
     first = {
-        code: min(m.date for m in rules.window_matches(matches, code)) for code in WINDOWS_BY_CODE
+        window.code: min(m.date for m in rules.window_matches(matches, window.code))
+        for window in season_windows(2026)
     }
     assert first["rugby_championship"] == datetime.date(2026, 8, 15)
     assert first["autumn"] == datetime.date(2026, 11, 14)
@@ -90,7 +100,8 @@ def test_autumn_hosts_meet_three_different_visitors_and_they_rotate():
             met.setdefault(m.home_club_id, set()).add(m.away_club_id)
         return met
 
-    first, second = visitors(2026), visitors(2027)
+    # 2027 est une année de Coupe du monde, sans tournées : l'édition suivante est en 2028.
+    first, second = visitors(2026), visitors(2028)
     assert set(first) == {NATIONS_BY_CODE[code].id for code in WINDOWS_BY_CODE["autumn"].nations}
     for host in first:
         assert len(first[host]) == 3
@@ -110,6 +121,125 @@ def test_lists_are_due_two_weeks_before_the_first_match():
     for match in rules.window_matches(matches, "rugby_championship"):
         match.home_score = match.away_score = 10
     assert rules.due_lists(matches, [], datetime.date(2026, 10, 24)) == []
+
+
+# --- Coupe du monde ------------------------------------------------------------------------
+
+
+def test_world_cup_replaces_the_championship_and_the_tours_every_four_years():
+    assert [year for year in range(2026, 2036) if is_world_cup_year(year)] == [2027, 2031, 2035]
+    matches = rules.schedule(2027)
+    assert Counter(m.league for m in matches) == {"world_cup": 24, "six_nations": 15}
+    pools = rules.window_matches(matches, "world_cup")
+    assert all(m.neutral and m.stage == Stage.REGULAR for m in pools)
+    assert sorted({m.date for m in pools}) == world_cup_saturdays(2027)[:3]
+    assert world_cup_saturdays(2027)[0] == datetime.date(2027, 9, 11)
+    played = Counter(team for m in pools for team in (m.home_club_id, m.away_club_id))
+    assert len(played) == 16 and set(played.values()) == {3}
+    assert rules.announce_by(pools) == datetime.date(2027, 8, 28)
+
+
+def test_each_world_cup_pool_draws_one_nation_from_each_pot():
+    by_pot = [{NATIONS_BY_CODE[code].id for code in pot} for pot in WORLD_CUP_POTS]
+    first, second = rules.world_cup_pools(2027), rules.world_cup_pools(2031)
+    for pools in (first, second):
+        assert len(pools) == 4
+        for pool in pools:
+            assert [sum(team in pot for team in pool) for pot in by_pot] == [1, 1, 1, 1]
+    assert first != second  # le tirage tourne d'une édition à l'autre
+    # Les quatre invitées ne jouent que la Coupe du monde : on ne les dirige pas.
+    assert len(rules.participants()) == 16 and len(rules.selectable()) == 12
+    assert {n.code for n in rules.participants()} - {n.code for n in rules.selectable()} == {
+        "JPN",
+        "SAM",
+        "TON",
+        "POR",
+    }
+
+
+def play_out(matches, favourite=None):
+    """Joue les matchs restants : la mieux classée des chapeaux gagne (ou `favourite`)."""
+    order = [NATIONS_BY_CODE[code].id for pot in WORLD_CUP_POTS for code in pot]
+    for match in matches:
+        if match.is_played:
+            continue
+        home_wins = match.home_club_id == favourite or (
+            match.away_club_id != favourite
+            and order.index(match.home_club_id) < order.index(match.away_club_id)
+        )
+        match.home_score, match.away_score = (30, 10) if home_wins else (10, 30)
+
+
+def test_world_cup_knockout_rounds_follow_the_pools():
+    matches = rules.window_matches(rules.schedule(2027), "world_cup")
+    assert rules.next_round(matches, 2027) == []  # les poules ne sont pas finies
+    play_out(matches)
+
+    quarters = rules.next_round(matches, 2027)
+    assert len(quarters) == 4 and {m.stage for m in quarters} == {Stage.QUARTER}
+    assert {m.date for m in quarters} == {datetime.date(2027, 10, 2)}
+    assert all(m.neutral and m.matchday == 4 for m in quarters)
+    # Le premier d'une poule contre le deuxième de sa voisine : A et B, C et D.
+    (a, b, c, d) = (rules.world_cup_pools(2027)[i] for i in range(4))
+    assert [(m.home_club_id, m.away_club_id) for m in quarters] == [
+        (a[0], b[1]),
+        (c[0], d[1]),
+        (b[0], a[1]),
+        (d[0], c[1]),
+    ]
+    matches += quarters
+    assert rules.next_round(matches, 2027) == []  # quarts à jouer
+    play_out(matches)
+
+    semis = rules.next_round(matches, 2027)
+    assert [m.stage for m in semis] == [Stage.SEMI, Stage.SEMI]
+    assert {(m.home_club_id, m.away_club_id) for m in semis} == {(a[0], c[0]), (b[0], d[0])}
+    matches += semis
+    play_out(matches, favourite=d[0])
+
+    (final,) = rules.next_round(matches, 2027)
+    assert final.stage == Stage.FINAL and final.date == datetime.date(2027, 10, 16)
+    assert not rules.is_finished(WORLD_CUP, matches + [final])
+    matches.append(final)
+    assert rules.champion(WORLD_CUP, matches) is None
+    play_out(matches, favourite=d[0])
+    assert rules.next_round(matches, 2027) == []
+    assert rules.is_finished(WORLD_CUP, matches) and rules.champion(WORLD_CUP, matches) == d[0]
+
+
+def test_clubs_start_later_and_skip_the_november_break_in_a_world_cup_year():
+    top14 = LEAGUES_BY_CODE["top14"]
+    usual, _ = season_dates(2026, 26, top14.start, top14.breaks)
+    shifted, playoffs = season_dates(2027, 26, top14.start, top14.breaks)
+    cup = world_cup_saturdays(2027)
+    # Pas de club avant le dernier samedi des poules : trois samedis plus tard que d'habitude.
+    assert usual[0] == datetime.date(2026, 9, 5) and shifted[0] == cup[2] == datetime.date(
+        2027, 9, 25
+    )
+    # Quelques doublons : la fin des poules, puis les quarts, les demies et la finale.
+    assert sorted(set(shifted) & set(cup)) == cup[2:]
+    # Plus de trêve en novembre (pas de tournées d'automne) : la saison finit comme d'habitude.
+    november = [day for day in shifted if day.month == 11]
+    assert len(november) == 4 and len([day for day in usual if day.month == 11]) == 1
+    assert (shifted[-1] - usual[-1]).days in range(360, 368)
+    assert playoffs[-1] == datetime.date(2028, 5, 13)
+    # Le Super Rugby, de février à juillet, ne bouge pas.
+    southern = LEAGUES_BY_CODE["super_rugby"]
+    assert season_dates(2027, 22, southern.start, southern.breaks)[0][0] == datetime.date(
+        2028, 2, 5
+    )
+
+
+def test_playoffs_are_dated_after_the_last_matchday_actually_scheduled():
+    top14 = LEAGUES_BY_CODE["top14"]
+    matches = schedule(top14, list(range(1, 15)), 2027)
+    # Une saison tirée avec d'autres dates (partie d'avant ce calendrier) : tout a glissé.
+    for match in matches:
+        match.date += datetime.timedelta(weeks=5)
+        match.home_score = match.away_score = 10
+    last = max(m.date for m in matches)
+    barrages = next_playoff_matches(top14, matches, 2027)
+    assert barrages and all(m.date > last for m in barrages)
 
 
 # --- Listes --------------------------------------------------------------------------------
@@ -259,6 +389,35 @@ def test_world_plays_internationals_and_releases_players_on_clash_days():
     # Les internationaux ont bien joué en sélection ce jour-là.
     france_match = next(m for m in autumn if m.date == doublon and m.home_club_id == FRANCE.id)
     assert set(france_match.home_lineup) <= french
+
+
+def test_world_plays_a_whole_world_cup_and_frees_the_eliminated():
+    world = World(generate_real_clubs(random.Random(0), [league("top14")]), seed=0, year=2027)
+    season = world.season
+    cup = world_cup_saturdays(2027)
+    assert not season.window_matches("rugby_championship") and not season.window_matches("autumn")
+    assert min(m.date for m in season.matches) == cup[2]  # le Top 14 attend la fin des poules
+
+    while (day := world._next_day()) is not None and day <= cup[-1]:
+        world.play_day()
+
+    played = season.window_matches("world_cup")
+    assert len(played) == 24 + 4 + 2 + 1 and all(m.is_played for m in played)
+    assert Counter(m.stage for m in played)[Stage.FINAL] == 1
+    champion = rules.champion(WORLD_CUP, season.tests)
+    assert champion in {NATIONS_BY_CODE[code].id for code in WORLD_CUP.nations}
+    # Aucun match à élimination directe ne finit sur un nul.
+    assert all(m.result_for(m.home_club_id) != 0 for m in played if m.stage.is_playoff)
+
+    # Doublons : le jour d'un tour, seules les sélections encore en course gardent leurs joueurs.
+    for day, stage in zip(cup[3:], rules.KNOCKOUT_STAGES, strict=True):
+        alive = {
+            team for m in played if m.stage == stage for team in (m.home_club_id, m.away_club_id)
+        }
+        away = rules.absentees(season.tests, season.squads, day)
+        assert set(away.values()) == alive
+        for match in (m for m in season.matches if m.date == day):
+            assert not set(away) & {*match.home_lineup, *match.away_lineup}
 
 
 # --- API : un monde de vrais clubs (le Top 14 seul, pour aller vite) -------------------------
@@ -554,6 +713,85 @@ def test_selector_follows_the_whole_season_before_the_next_one(selector):
     assert [row["played"] for row in championship["standings"]] == [6, 6, 6, 6]
 
 
+# --- API : une saison de Coupe du monde -----------------------------------------------------
+
+
+@pytest.fixture
+def world_cup_year(nations, monkeypatch) -> tuple[TestClient, sessionmaker]:
+    """Le monde démarre en 2027, saison de Coupe du monde."""
+    monkeypatch.setattr("api.routers.career.FIRST_SEASON_YEAR", 2027)
+    return nations
+
+
+def test_club_career_lives_through_a_world_cup(world_cup_year):
+    client, _ = world_cup_year
+    toulouse = club_id(client, "Stade Toulousain")
+    client.post("/career", json={"manager_name": "Max", "club_id": toulouse})
+
+    calendar = client.get("/internationals").json()
+    assert [w["code"] for w in calendar["windows"]] == ["world_cup", "six_nations"]
+    cup = calendar["windows"][0]
+    assert [pool["name"] for pool in cup["pools"]] == ["Poule A", "Poule B", "Poule C", "Poule D"]
+    assert all(len(pool["standings"]) == 4 for pool in cup["pools"]) and cup["standings"] == []
+    assert len(cup["nations"]) == 16 and len(cup["matches"]) == 24
+    # Les six samedis sont connus d'avance, les affiches des tours suivants non.
+    assert cup["dates"] == [day.isoformat() for day in world_cup_saturdays(2027)]
+    assert cup["announced"] and calendar["today"] == "2027-09-11"
+
+    # La première journée de Top 14 tombe le dernier samedi des poules : doublon.
+    season = client.get("/seasons/current").json()
+    assert season["next_matchday"]["date"] == "2027-09-25"
+    away = [p for p in client.get(f"/clubs/{toulouse}").json()["players"] if p["duty"]]
+    assert away and all(p["duty"]["away"] for p in away)
+    assert {p["duty"]["competition"] for p in away} == {"Coupe du monde"}
+
+    played = client.post("/seasons/current/play").json()
+    assert played["played"]["date"] == "2027-09-25"
+    cup = client.get("/internationals").json()["windows"][0]
+    quarters = [m for m in cup["matches"] if m["stage"] == "quarter"]
+    assert len(quarters) == 4 and {m["date"] for m in quarters} == {"2027-10-02"}
+    assert all(m["neutral"] for m in quarters) and not cup["finished"]
+
+    for _ in range(3):
+        assert client.post("/seasons/current/play").status_code == 200
+    cup = client.get("/internationals").json()["windows"][0]
+    assert cup["finished"] and cup["champion"] is not None
+    final = next(m for m in cup["matches"] if m["stage"] == "final")
+    assert cup["champion"]["id"] in (final["home"]["id"], final["away"]["id"])
+    assert (final["home_score"], final["home_shootout"]) != (
+        final["away_score"],
+        final["away_shootout"],
+    )
+
+
+def test_selector_takes_his_nation_to_the_world_cup(world_cup_year):
+    client, _ = world_cup_year
+    assert client.post("/career", json={"manager_name": "Max", "nation": "JPN"}).status_code == 404
+    assert client.post("/career", json={"manager_name": "Max", "nation": "FRA"}).status_code == 201
+
+    state = client.get("/selection").json()
+    assert state["phase"] == "list" and state["window"]["code"] == "world_cup"
+    assert len(state["window"]["pools"]) == 4
+    announce_staff_list(client)
+    state = client.get("/selection").json()
+    assert state["phase"] == "match" and state["next_match"]["neutral"]
+
+    # Les trois matchs de poule ; ensuite un quart si la France est sortie de sa poule.
+    for _ in range(3):
+        result = client.post("/selection/advance").json()
+    state = result["selection"]
+    assert state["record"]["played"] == 3
+    cup = client.get("/internationals").json()["windows"][0]
+    pool = next(p for p in cup["pools"] if FRANCE.id in [row["club_id"] for row in p["standings"]])
+    rank = next(row["rank"] for row in pool["standings"] if row["club_id"] == FRANCE.id)
+    if rank <= 2:
+        assert state["next_match"]["stage"] == "quarter" and state["window"]["code"] == "world_cup"
+        live = client.post("/live").json()
+        assert live["knockout"] and live["stage"] == "quarter"
+    else:
+        assert state["window"]["code"] == "six_nations"
+
+
 # --- Parties d'avant les sélections ---------------------------------------------------------
 
 
@@ -582,3 +820,23 @@ def test_old_saves_get_their_players_nationality_back(tmp_path):
         assert foreigners  # les étrangers du Top 14 gardent leur pays
         assert session.scalars(select(PlayerRow).where(PlayerRow.nationality.is_(None))).all() == []
     assert home_nation("Stade Toulousain") == "FRA" and home_nation("RC Port-Vasor") is None
+
+
+def test_old_saves_get_the_stage_of_their_internationals(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'ancienne.db'}")
+    Base.metadata.create_all(engine)
+    with sessionmaker(bind=engine)() as session:
+        session.add(SeasonRow(id=1, year=2026, seed=1))
+        session.flush()
+        for match in rules.schedule(2026)[:2]:
+            session.add(InternationalRow.from_domain(match, 1))
+        session.commit()
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE internationals DROP COLUMN stage"))
+
+    init_db(engine)
+
+    with sessionmaker(bind=engine)() as session:
+        rows = session.scalars(select(InternationalRow)).all()
+        assert len(rows) == 2 and {row.stage for row in rows} == {"regular"}
+        assert rows[0].to_domain().stage == Stage.REGULAR

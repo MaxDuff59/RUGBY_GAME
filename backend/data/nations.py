@@ -1,4 +1,4 @@
-"""Les sélections nationales : douze nations, et leurs rendez-vous de la saison.
+"""Les sélections nationales : seize nations, et leurs rendez-vous de la saison.
 
 Un joueur porte la nationalité de sa fiche (data/rosters.json) ; un joueur
 inventé prend celle du pays de son club. Trois fenêtres internationales par
@@ -9,6 +9,12 @@ saison, chacune avec ses dates (un match par samedi, comme les championnats) :
   du Sud, les Fidji et la Géorgie ;
 - le Tournoi des Six Nations, en février-mars (un seul match contre chacun).
 
+Une saison sur quatre (engine/calendar.py), la Coupe du monde remplace le Rugby
+Championship et les tournées d'automne : seize nations, quatre poules de quatre
+puis quarts, demies et finale, en six samedis de septembre-octobre. Quatre de
+ces nations (Japon, Samoa, Tonga, Portugal) n'ont pas d'autre rendez-vous : on
+ne les dirige pas.
+
 Un championnat qui joue un samedi de match international est en « doublon » :
 ses internationaux manquent à leur club ce jour-là (engine/internationals.py).
 """
@@ -16,6 +22,7 @@ ses internationaux manquent à leur club ce jour-là (engine/internationals.py).
 from dataclasses import dataclass
 
 from data.leagues import LEAGUES_BY_CODE
+from engine.calendar import WORLD_CUP_ROUNDS, WORLD_CUP_START, is_world_cup_year
 
 # Identifiants d'équipe des sélections dans les matchs : loin de ceux des clubs.
 NATION_ID_BASE = 9000
@@ -46,6 +53,11 @@ NATIONS = [
     Nation("ARG", "Argentine", NATION_ID_BASE + 10, 13.0),
     Nation("FIJ", "Fidji", NATION_ID_BASE + 11, 12.5),
     Nation("GEO", "Géorgie", NATION_ID_BASE + 12, 12.0),
+    # Invitées de la Coupe du monde : presque tout leur groupe vient d'ailleurs.
+    Nation("JPN", "Japon", NATION_ID_BASE + 13, 11.5),
+    Nation("SAM", "Samoa", NATION_ID_BASE + 14, 11.0),
+    Nation("TON", "Tonga", NATION_ID_BASE + 15, 11.0),
+    Nation("POR", "Portugal", NATION_ID_BASE + 16, 10.5),
 ]
 NATIONS_BY_CODE = {nation.code: nation for nation in NATIONS}
 NATIONS_BY_ID = {nation.id: nation for nation in NATIONS}
@@ -123,7 +135,8 @@ class Window:
     start: tuple[int, int]
     weeks: tuple[bool, ...]
     # tournament : tous contre tous une fois (les réceptions s'inversent chaque année) ;
-    # home_away : aller-retour ; tours : `nations` reçoit `visitors`, un adversaire par samedi.
+    # home_away : aller-retour ; tours : `nations` reçoit `visitors`, un adversaire par
+    # samedi ; world_cup : poules de quatre sur terrain neutre, puis élimination directe.
     format: str
     nations: tuple[str, ...]
     visitors: tuple[str, ...] = ()
@@ -141,7 +154,25 @@ class Window:
 SIX_NATIONS = ("FRA", "ENG", "IRE", "SCO", "WAL", "ITA")
 RUGBY_CHAMPIONSHIP = ("NZL", "RSA", "AUS", "ARG")
 
-# Dans l'ordre de la saison (août à mars).
+# Têtes de série de la Coupe du monde : quatre chapeaux, une nation de chacun par poule.
+WORLD_CUP_POTS = (
+    ("RSA", "NZL", "IRE", "FRA"),
+    ("ENG", "ARG", "SCO", "AUS"),
+    ("ITA", "WAL", "FIJ", "GEO"),
+    ("JPN", "SAM", "TON", "POR"),
+)
+WORLD_CUP = Window(
+    code="world_cup",
+    name="Coupe du monde",
+    short_name="Mondial",
+    start=WORLD_CUP_START,
+    weeks=(True,) * WORLD_CUP_ROUNDS,
+    format="world_cup",
+    nations=tuple(code for pot in WORLD_CUP_POTS for code in pot),
+)
+
+# Toutes les fenêtres, dans l'ordre de la saison (août à mars) ; celles d'une saison
+# donnée : `season_windows`.
 WINDOWS = [
     Window(
         code="rugby_championship",
@@ -152,6 +183,7 @@ WINDOWS = [
         format="home_away",
         nations=RUGBY_CHAMPIONSHIP,
     ),
+    WORLD_CUP,
     Window(
         code="autumn",
         name="Tournées d'automne",
@@ -173,7 +205,17 @@ WINDOWS = [
     ),
 ]
 WINDOWS_BY_CODE = {window.code: window for window in WINDOWS}
+# Ce que la Coupe du monde remplace la saison où elle se joue.
+_REPLACED_BY_WORLD_CUP = {"rugby_championship", "autumn"}
 
 
 def window(code: str) -> Window:
     return WINDOWS_BY_CODE[code]
+
+
+def season_windows(year: int) -> list[Window]:
+    """Les fenêtres de la saison `year` : la Coupe du monde, une saison sur quatre, à
+    la place du Rugby Championship et des tournées d'automne."""
+    if is_world_cup_year(year):
+        return [w for w in WINDOWS if w.code not in _REPLACED_BY_WORLD_CUP]
+    return [w for w in WINDOWS if w is not WORLD_CUP]

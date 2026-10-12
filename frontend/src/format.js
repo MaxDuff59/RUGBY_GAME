@@ -132,8 +132,19 @@ export const CATEGORIES = {
   hospitality: "Buvettes et loges",
 };
 
-// Un match dans sa fenêtre internationale : « Journée 3 » d'un tournoi, « Test 2 » d'une tournée.
-export const testLabel = (window, match) => `${window.has_table ? "Journée" : "Test"} ${match.matchday}`;
+// Un match dans sa fenêtre internationale : « Journée 3 » d'un tournoi ou d'une poule,
+// « Test 2 » d'une tournée, « Quarts de finale » en Coupe du monde.
+export const testLabel = (window, match) =>
+  match.stage !== "regular" ? STAGES[match.stage] : `${window.has_table ? "Journée" : "Test"} ${match.matchday}`;
+
+// Un samedi d'une fenêtre : le libellé de ses matchs, ou, pour un tour de Coupe du monde
+// dont les affiches ne sont pas encore connues, celui du tour (les trois derniers samedis).
+export function windowDayLabel(window, date) {
+  const match = window.matches.find((m) => m.date === date);
+  if (match) return testLabel(window, match);
+  const left = window.dates.length - window.dates.indexOf(date);
+  return { 3: STAGES.quarter, 2: STAGES.semi, 1: STAGES.final }[left] ?? window.name;
+}
 
 // --- Recrutement --------------------------------------------------------------------
 

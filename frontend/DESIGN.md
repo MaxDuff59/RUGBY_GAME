@@ -190,6 +190,18 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   - Le XV : la page Effectif, avec le club du joueur à la place de valeur, salaire et contrat.
   - Calendrier : une pastille par fenêtre ; à gauche ses matchs (et son classement), à
     droite la liste de 42 d'une sélection au choix.
+- Coupe du monde (`WindowBoard`) : le tableau final en tête, le tour le plus avancé
+  d'abord (finale, demies, quarts), puis un classement par poule avec un filet sous les
+  deux qualifiés, puis les matchs de poule. Sur terrain neutre : « Terrain neutre » à la
+  place de domicile / extérieur.
+- Calendrier du club et sélections : la colonne « Sélections » de l'onglet Saison porte,
+  sur une journée jouée un samedi international, l'étiquette « Doublon » (contour), la
+  fenêtre et le nombre de nos absents une fois les listes annoncées (leurs noms en
+  info-bulle), sinon le libellé du jour (« Journée 2 », « Quarts de finale »). Les samedis
+  où seules les sélections jouent s'intercalent en gris : « Pas de match de championnat ».
+  Onglet Mois : sous le match du club, une case à contour avec la fenêtre (et « Doublon »
+  si nous jouons). Onglet Semaine : une ligne « Doublon » en tête de la journée avec les
+  noms des absents, puis les matchs internationaux de la semaine dans leur propre carte.
 - Carrière de club : entrée « Sélections » dans le menu (volet « Plus » sur téléphone),
   même page que le calendrier du sélectionneur, nos joueurs en gras dans les listes.
   Sous l'affiche du prochain match, une ligne « Doublon » (étiquette contour) : combien

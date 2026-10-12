@@ -68,7 +68,7 @@ def start_career(payload: CareerIn, session: SessionDep) -> CareerOut:
         club = load_club(session, payload.club_id)
     else:
         nation = NATIONS_BY_CODE.get(payload.nation.upper())
-        selectable = {n.code for n in internationals.rules.participants()}
+        selectable = {n.code for n in internationals.rules.selectable()}
         if nation is None or nation.code not in selectable:
             raise HTTPException(status_code=404, detail=f"Sélection « {payload.nation} » inconnue")
         if not internationals.has_nations(session):

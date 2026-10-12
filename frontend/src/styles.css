@@ -4330,3 +4330,23 @@ a.button {
   line-height: 1.5;
   border-bottom: 1px solid var(--line-soft);
 }
+
+/* Calendrier, vue Mois : sous le match du club, le samedi international du jour. */
+.calendar__event--test {
+  background: none;
+  border: 1px solid var(--line);
+  padding: 4px 8px;
+}
+
+.calendar__event--test .tag {
+  min-height: 16px;
+  padding: 0 5px;
+  font-size: 10px;
+}
+
+/* Étiquette « Doublon » suivie de son texte (calendrier) : un peu d'air entre les deux. */
+td > .tag:first-child,
+.calendar__event-text > .tag,
+.call-ups > .tag {
+  margin-right: 6px;
+}

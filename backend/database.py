@@ -359,12 +359,31 @@ def _add_nationality(engine: Engine) -> None:
             session.commit()
 
 
+def _add_international_stage(engine: Engine) -> None:
+    """Tour des matchs internationaux, ajouté après coup avec la Coupe du monde (SQLite
+    comme Postgres) : ceux d'avant étaient tous des matchs de tournoi ou de tournée."""
+    inspector = inspect(engine)
+    schema = _schema_of(engine)
+    if not inspector.has_table("internationals", schema=schema):
+        return
+    columns = {c["name"] for c in inspector.get_columns("internationals", schema=schema)}
+    if "stage" in columns:
+        return
+    table = f'"{schema}"."internationals"' if schema else "internationals"
+    with engine.begin() as connection:
+        connection.execute(
+            text(f"ALTER TABLE {table} ADD COLUMN stage VARCHAR(10) NOT NULL DEFAULT 'regular'")
+        )
+
+
 def _migrate(engine: Engine) -> None:
     """Les quelques changements de schéma qu'on sait rattraper sans repartir de zéro
     (parties SQLite d'avant ces changements ; en Postgres les schémas naissent à jour,
-    sauf pour la graine des saisons et la nationalité des joueurs)."""
+    sauf pour la graine des saisons, la nationalité des joueurs et le tour des matchs
+    internationaux)."""
     _add_season_seed(engine)
     _add_nationality(engine)
+    _add_international_stage(engine)
     if engine.dialect.name != "sqlite":
         return
     inspector = inspect(engine)

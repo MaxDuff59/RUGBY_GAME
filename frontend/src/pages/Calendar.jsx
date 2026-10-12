@@ -16,6 +16,7 @@ import {
   parseDate,
   startOfWeek,
   toIso,
+  windowDayLabel,
 } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 
@@ -27,11 +28,17 @@ const VIEWS = [
 
 const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
-// Calendrier de la saison : par semaine, par mois ou en entier.
+// Calendrier de la saison : par semaine, par mois ou en entier. Les fenêtres
+// internationales y figurent aussi, samedi par samedi : un jour où le club joue pendant
+// que des sélections jouent est un doublon, avec nos joueurs retenus quand les listes
+// sont annoncées.
 export default function Calendar() {
   const { career } = useOutletContext();
   const myId = career.club_id;
   const season = useApi(useCallback(api.getCurrentSeason, []));
+  // Sans sélections (monde de clubs inventés) ou en cas d'erreur : un calendrier de club seul.
+  const tests = useApi(useCallback(api.getInternationals, []));
+  const international = useMemo(() => internationalDays(tests.data), [tests.data]);
   const [view, setView] = useState("week");
   // Date « curseur » : null tant que la saison n'est pas chargée (on se place
   // alors sur la prochaine journée).
@@ -88,48 +95,90 @@ export default function Calendar() {
         </div>
       )}
 
-      {view === "week" && <WeekView current={current} matchdays={matchdays} myId={myId} />}
-      {view === "month" && <MonthView current={current} matchdays={matchdays} myId={myId} onPick={(date) => { setCursor(date); setView("week"); }} />}
-      {view === "season" && <SeasonView matchdays={matchdays} myId={myId} />}
+      {view === "week" && <WeekView current={current} matchdays={matchdays} international={international} myId={myId} />}
+      {view === "month" && (
+        <MonthView
+          current={current}
+          matchdays={matchdays}
+          international={international}
+          myId={myId}
+          onPick={(date) => {
+            setCursor(date);
+            setView("week");
+          }}
+        />
+      )}
+      {view === "season" && <SeasonView matchdays={matchdays} international={international} myId={myId} />}
     </>
   );
 }
 
 // --- Semaine ----------------------------------------------------------------------
 
-function WeekView({ current, matchdays, myId }) {
+function WeekView({ current, matchdays, international, myId }) {
   const monday = startOfWeek(current);
   const sunday = addDays(monday, 6);
-  const inWeek = matchdays.filter((md) => {
-    const day = parseDate(md.date);
+  const within = (iso) => {
+    const day = parseDate(iso);
     return day >= monday && day <= sunday;
-  });
+  };
+  const inWeek = matchdays.filter((md) => within(md.date));
+  const testDays = [...international.values()].filter((day) => within(day.date));
 
-  if (inWeek.length === 0) {
-    return (
-      <div className="card card--padded">
-        <p className="eyebrow">Trêve</p>
-        <p style={{ margin: "8px 0 0" }}>Pas de match cette semaine.</p>
-      </div>
-    );
-  }
-
-  return inWeek.map((md) => (
-    <section key={md.matchday} className="section fill">
-      <div className="section__head">
-        <h2 className="eyebrow">{md.stage === "regular" ? `Journée ${md.matchday}` : STAGES[md.stage]}</h2>
-        <span className="muted">{formatLongDate(md.date)}</span>
-      </div>
-      <div className="card">
-        <MatchList matches={md.matches} myClubId={myId} />
-      </div>
-    </section>
-  ));
+  return (
+    <>
+      {inWeek.length === 0 && (
+        <div className="card card--padded">
+          <p className="eyebrow">Trêve</p>
+          <p style={{ margin: "8px 0 0" }}>
+            {testDays.length > 0 ? "Pas de match de championnat cette semaine : place aux sélections." : "Pas de match cette semaine."}
+          </p>
+        </div>
+      )}
+      {inWeek.map((md) => {
+        const doublon = international.get(md.date);
+        const ours = md.matches.find((m) => m.home.id === myId || m.away.id === myId);
+        return (
+          <section key={md.matchday} className="section fill">
+            <div className="section__head">
+              <h2 className="eyebrow">{md.stage === "regular" ? `Journée ${md.matchday}` : STAGES[md.stage]}</h2>
+              <span className="muted">{formatLongDate(md.date)}</span>
+            </div>
+            <div className="card">
+              {doublon && ours && (
+                <p className="call-ups">
+                  <span className="tag tag--fragile">Doublon</span> {doublonText(doublon, ours.home_score !== null)}
+                </p>
+              )}
+              <MatchList matches={md.matches} myClubId={myId} />
+            </div>
+          </section>
+        );
+      })}
+      {testDays.map((day) => (
+        <section key={day.date} className="section fill">
+          <div className="section__head">
+            <h2 className="eyebrow">
+              {day.window.name} · {day.label}
+            </h2>
+            <span className="muted">{formatLongDate(day.date)}</span>
+          </div>
+          <div className="card">
+            {day.matches.length > 0 ? (
+              <MatchList matches={day.matches} myClubId={null} />
+            ) : (
+              <p className="table__note">Les affiches seront connues à la fin du tour précédent.</p>
+            )}
+          </div>
+        </section>
+      ))}
+    </>
+  );
 }
 
 // --- Mois -------------------------------------------------------------------------
 
-function MonthView({ current, matchdays, myId, onPick }) {
+function MonthView({ current, matchdays, international, myId, onPick }) {
   const first = new Date(current.getFullYear(), current.getMonth(), 1);
   const gridStart = startOfWeek(first);
   const byDate = Object.fromEntries(matchdays.map((md) => [md.date, md]));
@@ -147,6 +196,7 @@ function MonthView({ current, matchdays, myId, onPick }) {
       <div className="calendar__grid">
         {days.map((day) => {
           const md = byDate[toIso(day)];
+          const test = international.get(toIso(day));
           const outside = day.getMonth() !== current.getMonth();
           const mine = md?.matches.find((m) => m.home.id === myId || m.away.id === myId);
           return (
@@ -156,6 +206,20 @@ function MonthView({ current, matchdays, myId, onPick }) {
                 <button type="button" className={`calendar__event${mine ? " calendar__event--mine" : ""}`} onClick={() => onPick(day)}>
                   <span className="calendar__event-label">{matchdayLabel(md)}</span>
                   {mine ? <MyMatchLine match={mine} myId={myId} /> : <span className="muted">Sans nous</span>}
+                </button>
+              )}
+              {/* Sélections ce jour-là : un doublon si nous jouons aussi. */}
+              {test && (
+                <button
+                  type="button"
+                  className="calendar__event calendar__event--test"
+                  title={mine ? doublonText(test, mine.home_score !== null) : `${test.window.name} · ${test.label}`}
+                  onClick={() => onPick(day)}
+                >
+                  <span className="calendar__event-text">
+                    {mine && <span className="tag tag--fragile">Doublon</span>} {test.window.short_name}
+                    <span className="muted"> · {mine && test.absent.length > 0 ? absentCount(test) : test.label}</span>
+                  </span>
                 </button>
               )}
             </div>
@@ -185,7 +249,15 @@ function MyMatchLine({ match, myId }) {
 
 // --- Saison -----------------------------------------------------------------------
 
-function SeasonView({ matchdays, myId }) {
+function SeasonView({ matchdays, international, myId }) {
+  // Nos journées, et entre elles les samedis où seules les sélections jouent.
+  const clubDates = new Set(matchdays.map((md) => md.date));
+  const rows = [
+    ...matchdays.map((md) => ({ date: md.date, md })),
+    ...[...international.values()].filter((day) => !clubDates.has(day.date)).map((test) => ({ date: test.date, test })),
+  ].sort((a, b) => a.date.localeCompare(b.date));
+  const withTests = international.size > 0;
+
   return (
     <div className="card table-wrap fill">
       <table className="table">
@@ -197,10 +269,24 @@ function SeasonView({ matchdays, myId }) {
             <th scope="col" className="left">Lieu</th>
             <th scope="col">Score</th>
             <th scope="col">Résultat</th>
+            {withTests && <th scope="col" className="left">Sélections</th>}
           </tr>
         </thead>
         <tbody>
-          {matchdays.map((md) => {
+          {rows.map(({ date, md, test }) => {
+            if (test) {
+              return (
+                <tr key={`test-${date}`} className="table__row--bench">
+                  <td className="left jersey">–</td>
+                  <td className="left muted">{formatShortDate(date)}</td>
+                  <td className="left muted" colSpan={4}>Pas de match de championnat</td>
+                  <td className="left">
+                    {test.window.short_name} <span className="muted">· {test.label}</span>
+                  </td>
+                </tr>
+              );
+            }
+            const doublon = international.get(md.date);
             const match = md.matches.find((m) => m.home.id === myId || m.away.id === myId);
             if (!match) {
               return (
@@ -208,6 +294,9 @@ function SeasonView({ matchdays, myId }) {
                   <td className="left jersey">{matchdayLabel(md)}</td>
                   <td className="left muted">{formatShortDate(md.date)}</td>
                   <td className="left muted" colSpan={4}>Sans nous</td>
+                  {withTests && (
+                    <td className="left muted">{doublon && `${doublon.window.short_name} · ${doublon.label}`}</td>
+                  )}
                 </tr>
               );
             }
@@ -238,6 +327,16 @@ function SeasonView({ matchdays, myId }) {
                     <span className={`result-dot result-dot--${result}`} role="img" title={RESULTS[result]} aria-label={RESULTS[result]} />
                   )}
                 </td>
+                {withTests && (
+                  <td className="left" title={doublon ? doublonText(doublon, played) : undefined}>
+                    {doublon && (
+                      <>
+                        <span className="tag tag--fragile">Doublon</span> {doublon.window.short_name}
+                        <span className="muted"> · {doublon.absent.length > 0 ? absentCount(doublon) : doublon.label}</span>
+                      </>
+                    )}
+                  </td>
+                )}
               </tr>
             );
           })}
@@ -250,6 +349,44 @@ function SeasonView({ matchdays, myId }) {
 // --- Utilitaires --------------------------------------------------------------------
 
 const RESULTS = { V: "Victoire", N: "Nul", D: "Défaite" };
+
+// Les samedis des fenêtres internationales, par date : la fenêtre, le libellé du jour
+// (« Journée 2 », « Test 1 », « Quarts de finale »), ses matchs, et nos joueurs retenus
+// qui manqueront ce jour-là (connus une fois les listes annoncées).
+function internationalDays(data) {
+  const days = new Map();
+  for (const window of data?.windows ?? []) {
+    for (const date of window.dates) {
+      days.set(date, {
+        date,
+        window,
+        label: windowDayLabel(window, date),
+        matches: window.matches.filter((match) => match.date === date),
+        absent: [],
+      });
+    }
+  }
+  for (const { player, dates } of data?.my_players ?? []) {
+    for (const date of dates) days.get(date)?.absent.push(player.name);
+  }
+  return days;
+}
+
+const absentCount = (day) => `${day.absent.length} absent${day.absent.length > 1 ? "s" : ""}`;
+
+// « Tournoi des Six Nations, journée 1 : 5 joueurs en sélection (…) », ou ce qu'on en sait :
+// rien de plus pour un match déjà joué, et avant l'annonce des listes ou le tirage d'un
+// tour de Coupe du monde, on ne peut pas encore dire qui manquera.
+function doublonText(day, played = false) {
+  const where = `${day.window.name}, ${day.label.toLowerCase()}`;
+  if (day.absent.length > 0) {
+    return `${where} : ${day.absent.length} joueur${day.absent.length > 1 ? "s" : ""} en sélection (${day.absent.join(", ")}).`;
+  }
+  if (played) return `${where}.`;
+  if (day.matches.length === 0) return `${where} : nos joueurs des sélections encore en course manqueront.`;
+  if (!day.window.announced) return `${where} : les listes ne sont pas encore annoncées.`;
+  return `${where} : aucun de nos joueurs n'est retenu.`;
+}
 
 // Regroupe les matchs par journée : [{ matchday, stage, date, matches }], dans l'ordre.
 function groupByMatchday(matches) {

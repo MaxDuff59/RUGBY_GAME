@@ -157,7 +157,7 @@ parties ailleurs (ex. pour une instance de test).
 
 ## Sélections nationales
 
-Douze sélections (`backend/data/nations.py`) et trois fenêtres par saison, un match
+Seize sélections (`backend/data/nations.py`) et trois fenêtres par saison, un match
 par samedi comme les championnats :
 
 | Fenêtre | Quand | Qui |
@@ -165,6 +165,19 @@ par samedi comme les championnats :
 | Rugby Championship | 15 août – début octobre, 6 samedis | Nouvelle-Zélande, Afrique du Sud, Australie, Argentine, aller-retour |
 | Tournées d'automne | mi-novembre, 3 samedis | les six nations du Tournoi reçoivent celles du Sud, les Fidji et la Géorgie (les adversaires tournent d'une saison à l'autre) |
 | Tournoi des Six Nations | février-mars, 5 samedis | France, Angleterre, Irlande, Écosse, Galles, Italie ; qui reçoit s'inverse chaque saison |
+
+**Coupe du monde.** Une saison sur quatre (2027, 2031...), elle remplace le Rugby
+Championship et les tournées d'automne : seize nations, quatre poules de quatre (une
+nation de chacun des quatre chapeaux, le tirage tourne d'une édition à l'autre), puis
+quarts, demies et finale, sur terrain neutre, en six samedis à partir de la
+mi-septembre. Un match à élimination directe ne finit pas sur un nul (prolongation,
+tirs au but). Quatre nations n'ont pas d'autre rendez-vous (Japon, Samoa, Tonga,
+Portugal) : on ne les dirige pas. Cette saison-là les clubs décalent leur calendrier
+(`backend/engine/calendar.py`) : aucun match avant le dernier samedi des poules, et plus
+de trêve en novembre. Le Top 14 démarre trois samedis plus tard et finit à la même
+date ; ses quatre premières journées sont des doublons, de moins en moins lourds : fin
+des poules (les seize listes), puis quarts, demies et finale (les sélections encore en
+course seulement).
 
 Un joueur garde la nationalité de sa fiche (`rosters.json`) ; un joueur inventé prend
 celle du pays de son club, les jeunes du centre de formation aussi. Un monde de clubs
@@ -185,8 +198,9 @@ avec ses meilleurs espoirs aux postes dégarnis. Avec les trêves actuelles, le 
 a un doublon en novembre et trois pendant le Tournoi, plus quatre en septembre-octobre
 pour ses joueurs du Rugby Championship ; la Premiership, aux trêves plus longues, en a
 moitié moins. Le manager
-est prévenu à l'annonce des listes, la page Club signale le doublon du prochain match
-et la page Effectif marque les absents. Une titularisation promise à un joueur parti en
+est prévenu à l'annonce des listes, la page Club signale le doublon du prochain match,
+la page Effectif marque les absents, et le calendrier du club montre les samedis
+internationaux et les doublons, journée par journée. Une titularisation promise à un joueur parti en
 sélection attend son retour. Un blessé en sélection revient à son club avec sa blessure.
 
 **Carrière de sélectionneur.** Au choix de la carrière, « Sélectionneur national » :
@@ -200,9 +214,12 @@ Règles dans `backend/engine/internationals.py` (calendrier, listes, doublons, m
 branchement en base dans `backend/api/internationals.py`. Les matchs internationaux
 ont leur table (`internationals`), les listes aussi (`call_ups`), la carrière de
 sélectionneur la sienne (`selectors`). Une partie d'avant les sélections s'ouvre
-toujours : la nationalité des joueurs est ajoutée et retrouvée à l'ouverture, et sa
-saison en cours ne reçoit que les fenêtres pas encore commencées. Le niveau des
-sélections vient de celui de leurs joueurs, donc de leurs clubs.
+toujours : la nationalité des joueurs et le tour des matchs internationaux sont ajoutés
+à l'ouverture, et sa saison en cours ne reçoit que les fenêtres pas encore commencées
+(ni son calendrier de clubs, déjà tiré, le décalage d'une année de Coupe du monde). Le
+niveau des sélections vient de celui de leurs joueurs, donc de leurs clubs ; le moteur
+laisse beaucoup de place au hasard d'un match : sur 200 Coupes du monde simulées, les
+cinq favoris la gagnent chacun entre 9 et 16 fois sur 100.
 
 ## Jouer le match
 

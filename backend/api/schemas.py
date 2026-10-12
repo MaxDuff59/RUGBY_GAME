@@ -1155,6 +1155,9 @@ class NationSummary(NationOut):
 class CalledPlayer(BaseModel):
     player: PlayerRef
     nation: NationOut
+    competition: str | None = None  # nom de la fenêtre
+    # Doublons à venir : les jours où sa sélection joue en même temps que son club.
+    dates: list[datetime.date] = []
 
 
 class CallUpNotice(BaseModel):
@@ -1166,6 +1169,13 @@ class CallUpNotice(BaseModel):
     doublons: list[datetime.date]
 
 
+class PoolTableOut(BaseModel):
+    """Une poule de la Coupe du monde et son classement."""
+
+    name: str
+    standings: list[StandingOut]
+
+
 class WindowOut(BaseModel):
     """Une fenêtre internationale de la saison : ses matchs, son classement s'il y en a un."""
 
@@ -1175,10 +1185,12 @@ class WindowOut(BaseModel):
     has_table: bool
     announce_by: datetime.date  # date limite d'annonce des listes
     announced: bool  # les listes des sélections gérées par leur staff sont publiées
+    # Tous ses samedis, y compris ceux des tours de Coupe du monde pas encore tirés.
     dates: list[datetime.date]
     nations: list[NationOut]
     matches: list[MatchSummary]
-    standings: list[StandingOut]  # vide pour une tournée
+    standings: list[StandingOut]  # vide pour une tournée et pour la Coupe du monde
+    pools: list[PoolTableOut] = []  # Coupe du monde : un classement par poule
     finished: bool
     champion: ClubRef | None = None
 

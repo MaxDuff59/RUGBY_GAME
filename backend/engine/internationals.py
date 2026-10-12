@@ -1,6 +1,8 @@
 """Les sélections nationales : calendrier des fenêtres, listes, doublons et matchs.
 
-Chaque saison a ses fenêtres internationales (data/nations.py). Deux semaines
+Chaque saison a ses fenêtres internationales (data/nations.py) ; une sur quatre
+s'ouvre par la Coupe du monde : quatre poules de quatre sur terrain neutre, puis
+quarts, demies et finale, créés tour après tour (`next_round`). Deux semaines
 avant le premier match d'une fenêtre, chaque sélection annonce une liste de 42
 joueurs : son staff la compose (`pick_squad`), ou le sélectionneur quand c'est
 le joueur. Un match international se joue avec le moteur des clubs : la
@@ -28,17 +30,35 @@ from data.nations import (
     NATIONS_BY_CODE,
     WINDOWS,
     WINDOWS_BY_CODE,
+    WORLD_CUP,
+    WORLD_CUP_POTS,
     Nation,
     Window,
     home_nation,
+    season_windows,
 )
-from engine.calendar import SATURDAY
+from engine.calendar import (
+    SATURDAY,
+    WORLD_CUP_EVERY,
+    WORLD_CUP_FIRST_YEAR,
+    WORLD_CUP_POOL_ROUNDS,
+)
 from engine.form import Form
 from engine.freshness import squad_freshness
 from engine.match_engine import RATING_FOR_POSITION, simulate_match
 from engine.medical import new_injury
-from engine.season import generate_fixtures
-from models import Club, EventType, Injury, InjurySource, Match, Player, Position, Squad
+from engine.season import generate_fixtures, seeding
+from models import (
+    Club,
+    EventType,
+    Injury,
+    InjurySource,
+    Match,
+    Player,
+    Position,
+    Squad,
+    Stage,
+)
 
 # La liste d'une sélection pour une fenêtre, et sa répartition quand le staff la compose.
 SQUAD_SIZE = 42
@@ -106,14 +126,42 @@ def window_dates(window: Window, year: int) -> list[datetime.date]:
     return [day + datetime.timedelta(weeks=i) for i, played in enumerate(window.weeks) if played]
 
 
+def world_cup_pools(year: int) -> list[list[int]]:
+    """Les poules de la Coupe du monde de la saison `year` : une nation de chaque
+    chapeau, le tirage tournant d'une édition à l'autre."""
+    edition = (year - WORLD_CUP_FIRST_YEAR) // WORLD_CUP_EVERY
+    size = len(WORLD_CUP_POTS[0])
+    return [
+        [
+            NATIONS_BY_CODE[pot[(pool + edition * rank) % size]].id
+            for rank, pot in enumerate(WORLD_CUP_POTS)
+        ]
+        for pool in range(size)
+    ]
+
+
+def _editions(year: int) -> int:
+    """Nombre de saisons sans Coupe du monde jusqu'à `year` : ce qui fait tourner les
+    tournées d'automne, qui sautent ces années-là."""
+    world_cups = max(0, (year - WORLD_CUP_FIRST_YEAR) // WORLD_CUP_EVERY + 1)
+    return year - world_cups
+
+
 def _pairings(window: Window, year: int) -> list[list[tuple[int, int]]]:
-    """Les affiches (reçoit, se déplace) de chaque samedi de match de la fenêtre."""
+    """Les affiches (reçoit, se déplace) de chaque samedi de match de la fenêtre ;
+    pour la Coupe du monde, ceux des poules."""
     ids = [NATIONS_BY_CODE[code].id for code in window.nations]
+    if window.format == "world_cup":
+        by_pool = [generate_fixtures(pool) for pool in world_cup_pools(year)]
+        return [
+            [pairing for fixtures in by_pool for pairing in fixtures[r]]
+            for r in range(WORLD_CUP_POOL_ROUNDS)
+        ]
     if window.format == "tours":
         visitors = [NATIONS_BY_CODE[code].id for code in window.visitors]
         rounds = sum(window.weeks)
-        # Les adversaires tournent d'une saison à l'autre.
-        shift = rounds * year
+        # Les adversaires tournent d'une édition à l'autre.
+        shift = rounds * _editions(year)
         return [
             [(home, visitors[(i + r + shift) % len(visitors)]) for i, home in enumerate(ids)]
             for r in range(rounds)
@@ -126,17 +174,98 @@ def _pairings(window: Window, year: int) -> list[list[tuple[int, int]]]:
     return fixtures[:half] if year % 2 == 0 else fixtures[half:]
 
 
-def schedule(year: int, windows: Iterable[Window] = WINDOWS) -> list[Match]:
-    """Tous les matchs internationaux de la saison, datés mais pas encore joués.
-    `Match.league` porte le code de la fenêtre, `matchday` le numéro du match dans celle-ci."""
+def schedule(year: int, windows: Iterable[Window] | None = None) -> list[Match]:
+    """Tous les matchs internationaux de la saison connus d'avance, datés mais pas
+    encore joués (les tours à élimination directe de la Coupe du monde viendront avec
+    `next_round`). `Match.league` porte le code de la fenêtre, `matchday` le numéro du
+    match dans celle-ci ; la Coupe du monde se joue sur terrain neutre."""
+    windows = season_windows(year) if windows is None else windows
     return [
-        Match(home_club_id=home, away_club_id=away, matchday=number, date=day, league=window.code)
+        Match(
+            home_club_id=home,
+            away_club_id=away,
+            matchday=number,
+            date=day,
+            league=window.code,
+            neutral=window.format == "world_cup",
+        )
         for window in windows
         for number, (day, pairings) in enumerate(
-            zip(window_dates(window, year), _pairings(window, year), strict=True), start=1
+            zip(window_dates(window, year), _pairings(window, year), strict=False), start=1
         )
         for home, away in pairings
     ]
+
+
+# Tours à élimination directe de la Coupe du monde, après les poules.
+KNOCKOUT_STAGES = (Stage.QUARTER, Stage.SEMI, Stage.FINAL)
+
+
+def pool_matches(matches: Iterable[Match], pool: Iterable[int]) -> list[Match]:
+    """Les matchs de poule de la Coupe du monde entre les nations de `pool`."""
+    members = set(pool)
+    return [
+        m
+        for m in matches
+        if m.league == WORLD_CUP.code and m.stage == Stage.REGULAR and m.home_club_id in members
+    ]
+
+
+def next_round(matches: Iterable[Match], year: int) -> list[Match]:
+    """Les matchs du tour suivant de la Coupe du monde, quand tous ceux du tour en
+    cours sont joués (aucun sinon, sans Coupe du monde cette saison, ou la finale jouée).
+
+    Quarts : le premier d'une poule contre le deuxième de sa voisine (A et B, C et D).
+    Ensuite les vainqueurs se retrouvent dans l'ordre du tableau."""
+    cup = window_matches(matches, WORLD_CUP.code)
+    if not cup or any(not m.is_played for m in cup):
+        return []
+    dates = window_dates(WORLD_CUP, year)
+    played = max(m.matchday for m in cup)
+    if played >= len(dates):
+        return []
+    if played == WORLD_CUP_POOL_ROUNDS:
+        ranked = [seeding(pool_matches(cup, pool)) for pool in world_cup_pools(year)]
+        (a, b, c, d) = ranked
+        pairs = [(a[0], b[1]), (c[0], d[1]), (b[0], a[1]), (d[0], c[1])]
+    else:
+        winners = [
+            m.winner_id([m.home_club_id, m.away_club_id]) for m in cup if m.matchday == played
+        ]
+        pairs = list(zip(winners[::2], winners[1::2], strict=True))
+    return [
+        Match(
+            home_club_id=home,
+            away_club_id=away,
+            matchday=played + 1,
+            stage=KNOCKOUT_STAGES[played - WORLD_CUP_POOL_ROUNDS],
+            date=dates[played],
+            neutral=True,
+            league=WORLD_CUP.code,
+        )
+        for home, away in pairs
+    ]
+
+
+def is_finished(window: Window, matches: Iterable[Match]) -> bool:
+    """La fenêtre est-elle terminée (pour la Coupe du monde : la finale jouée) ?"""
+    ours = window_matches(matches, window.code)
+    if not ours or any(not m.is_played for m in ours):
+        return False
+    return window.format != "world_cup" or any(m.stage == Stage.FINAL for m in ours)
+
+
+def champion(window: Window, matches: Iterable[Match]) -> int | None:
+    """Le vainqueur d'une fenêtre terminée : le premier du classement d'un tournoi, le
+    vainqueur de la finale de la Coupe du monde ; None pour une tournée."""
+    matches = list(matches)
+    if not is_finished(window, matches) or not window.has_table:
+        return None
+    ours = window_matches(matches, window.code)
+    if window.format == "world_cup":
+        final = next(m for m in ours if m.stage == Stage.FINAL)
+        return final.winner_id([final.home_club_id, final.away_club_id])
+    return seeding(ours)[0]
 
 
 def window_matches(matches: Iterable[Match], code: str) -> list[Match]:
@@ -326,6 +455,7 @@ def play_tests(
             day=day,
             home_form=forms.get(home.id, Form()),
             away_form=forms.get(away.id, Form()),
+            knockout=match.stage.is_playoff,
         )
         match.home_score, match.away_score = result.home_score, result.away_score
         match.events = list(result.events)
@@ -353,6 +483,13 @@ def window_of(match: Match) -> Window:
 
 
 def participants(windows: Iterable[Window] = WINDOWS) -> list[Nation]:
-    """Les sélections qui ont au moins un rendez-vous, dans l'ordre de data/nations.py."""
+    """Les sélections qui ont au moins un rendez-vous, Coupe du monde comprise, dans
+    l'ordre de data/nations.py."""
     codes = {code for window in windows for code in window.teams}
     return [nation for nation in NATIONS if nation.code in codes]
+
+
+def selectable() -> list[Nation]:
+    """Les sélections que l'on peut diriger : celles qui jouent chaque saison, pas
+    seulement la Coupe du monde."""
+    return participants(window for window in WINDOWS if window is not WORLD_CUP)

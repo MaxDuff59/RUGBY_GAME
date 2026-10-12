@@ -12,7 +12,7 @@ from collections.abc import Iterable
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from engine.calendar import season_dates
+from engine.calendar import playoff_dates, season_dates
 from models import Match, Season, Stage, StandingRow
 
 if TYPE_CHECKING:
@@ -194,7 +194,8 @@ def next_playoff_matches(league: "League", matches: Iterable[Match], year: int) 
         return []
     stage, pairings = next_round
     regular = regular_matchdays(matches)
-    _, dates = season_dates(year, regular, league.start, league.breaks, len(stages))
+    last_regular = max(m.date for m in matches if m.stage == Stage.REGULAR)
+    dates = playoff_dates(year, league.start, league.breaks, last_regular, len(stages))
     index = stages.index(stage)
     return [
         Match(

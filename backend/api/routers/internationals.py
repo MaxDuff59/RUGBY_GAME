@@ -24,6 +24,7 @@ from api.schemas import (
     NationSummary,
     PlayerOut,
     PlayerRef,
+    PoolTableOut,
     SquadPlayerOut,
     StandingOut,
     WindowOut,
@@ -81,16 +82,25 @@ def _standings(matches: list[Match]) -> list[StandingOut]:
 
 
 def window_out(
-    window: Window, rows: list[InternationalRow], lists: dict[rules.SquadKey, list[int]]
+    window: Window,
+    rows: list[InternationalRow],
+    lists: dict[rules.SquadKey, list[int]],
+    year: int,
 ) -> WindowOut:
-    """Une fenêtre telle qu'on la lit : `rows` sont ses matchs, `lists` les listes de la saison."""
+    """Une fenêtre de la saison `year` telle qu'on la lit : `rows` sont ses matchs,
+    `lists` les listes de la saison."""
     matches = [row.to_domain() for row in rows]
     teams = sorted({team for m in matches for team in (m.home_club_id, m.away_club_id)})
-    finished = all(m.is_played for m in matches)
-    standings = _standings(matches) if window.has_table else []
-    champion = None
-    if finished and standings:
-        champion = ClubRef(id=standings[0].club_id, name=standings[0].club_name)
+    world_cup = window.format == "world_cup"
+    pools = []
+    if world_cup:
+        pools = [
+            PoolTableOut(
+                name=f"Poule {letter}", standings=_standings(rules.pool_matches(matches, pool))
+            )
+            for letter, pool in zip("ABCD", rules.world_cup_pools(year), strict=True)
+        ]
+    winner = rules.champion(window, matches)
     return WindowOut(
         code=window.code,
         name=window.name,
@@ -98,12 +108,13 @@ def window_out(
         has_table=window.has_table,
         announce_by=rules.announce_by(matches),
         announced=any((window.code, team) in lists for team in teams),
-        dates=sorted({m.date for m in matches}),
+        dates=sorted({*rules.window_dates(window, year), *(m.date for m in matches)}),
         nations=[nation_out(NATIONS_BY_ID[team]) for team in teams],
         matches=[MatchSummary.from_match(m, NATION_NAMES) for m in matches],
-        standings=standings,
-        finished=finished,
-        champion=champion,
+        standings=_standings(matches) if window.has_table and not world_cup else [],
+        pools=pools,
+        finished=rules.is_finished(window, matches),
+        champion=ClubRef(id=winner, name=NATION_NAMES[winner]) if winner is not None else None,
     )
 
 
@@ -114,7 +125,7 @@ def windows_out(session: Session, season: SeasonRow) -> list[WindowOut]:
     for window in WINDOWS:
         ours = [row for row in rows if row.competition == window.code]
         if ours:
-            out.append(window_out(window, ours, lists))
+            out.append(window_out(window, ours, lists, season.year))
     return out
 
 
@@ -161,7 +172,10 @@ def get_internationals(session: SessionDep) -> InternationalsOut:
         rows = session.scalars(select(PlayerRow).where(PlayerRow.id.in_(list(duties))))
         my_players = [
             CalledPlayer(
-                player=player_ref(row.to_domain()), nation=nation_out(duties[row.id].nation)
+                player=player_ref(row.to_domain()),
+                nation=nation_out(duties[row.id].nation),
+                competition=duties[row.id].window.name,
+                dates=duties[row.id].dates,
             )
             for row in rows
         ]
@@ -181,7 +195,7 @@ def list_nations(session: SessionDep) -> list[NationSummary]:
     day = game_date(session)
     pool = internationals.eligible_players(session)
     summaries = []
-    for nation in rules.participants():
+    for nation in rules.selectable():
         players = pool[nation.code]
         team = team_strength(rules.national_team(nation, rules.pick_squad(players, day)), day)
         level = (team.set_piece + team.pack + team.attack + team.defense) / 4
@@ -192,7 +206,10 @@ def list_nations(session: SessionDep) -> list[NationSummary]:
                 name=nation.name,
                 player_count=len(players),
                 level=round(level, 1),
-                competitions=[w.name for w in WINDOWS if nation.code in w.teams],
+                # Ses rendez-vous de chaque saison (la Coupe du monde vient en plus).
+                competitions=[
+                    w.name for w in WINDOWS if w is not rules.WORLD_CUP and nation.code in w.teams
+                ],
             )
         )
     return summaries
