@@ -1094,10 +1094,24 @@ class ContractOut(BaseModel):
     signed_on: datetime.date | None = None
 
 
+class SigningOut(BaseModel):
+    """Un recrutement du club dirigé en vue : négociation en cours (`club`, `player`),
+    ou accord signé qui attend l'intersaison (`agreed`)."""
+
+    id: int
+    player: PlayerOut
+    club: ClubRef | None  # son club actuel ; None : agent libre
+    kind: DealKind
+    stage: Literal["club", "player", "agreed"]
+    wage: int | None  # salaire convenu
+    years: int | None  # durée convenue
+
+
 class ContractsOverview(BaseModel):
     season_year: int
     pros: list[ContractOut]
     youths: list[ContractOut]
+    signings: list[SigningOut]  # accords signés d'abord, puis négociations en cours
     # Pros sous contrat la saison prochaine (arrivées sous pré-contrat comprises).
     squad_next: int
     squad_min: int

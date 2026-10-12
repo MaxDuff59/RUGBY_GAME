@@ -1142,9 +1142,180 @@ select.tactics__select {
   overflow: auto;
 }
 
-/* Les trois cartes du bas : le classement plus large que les deux autres. */
+/* Les trois cartes du bas (classement, journal, transferts) : le classement plus large
+   que les deux autres, et chacune sur toute la hauteur qui reste. */
 .club-grid--three {
   grid-template-columns: minmax(480px, 1.3fr) repeat(2, minmax(0, 1fr));
+}
+
+.club-grid--three > .section > .card {
+  flex: 1 1 auto;
+}
+
+/* Les trois titres sur la même ligne, que la carte ait un sélecteur ou non. */
+.club-grid--three .section__head {
+  min-height: 40px;
+  align-items: center;
+}
+
+/* Extrait du journal : un article à la fois, la navigation au pied de la carte. La carte
+   sert de repère de hauteur : assez haute, elle liste aussi les autres titres. */
+.club-grid--three > .section > .headlines {
+  container-type: size;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.headlines > .story {
+  flex: 1 1 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.headlines__more {
+  display: none;
+  flex: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@container (min-height: 560px) {
+  .headlines__more {
+    display: block;
+  }
+}
+
+.headlines__link {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 22px;
+  border-top: 1px solid var(--line-soft);
+  cursor: pointer;
+}
+
+.headlines__link:hover {
+  background: var(--line-soft);
+}
+
+.headlines__link .feed__title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.headlines > .table__note {
+  flex: 1 1 0;
+  margin: 0;
+}
+
+.headlines__nav {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.headlines__step,
+.headlines__dot {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.headlines__step {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  color: var(--ink-muted);
+}
+
+.headlines__step:hover {
+  background: var(--line-soft);
+  color: var(--ink);
+}
+
+.headlines__dots {
+  display: flex;
+}
+
+/* La pastille est petite, sa zone de clic non. */
+.headlines__dot {
+  width: 24px;
+  height: 36px;
+}
+
+.headlines__dot::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--neutral-soft);
+  transition: width 0.15s ease;
+}
+
+.headlines__dot:hover::before {
+  background: var(--neutral);
+}
+
+.headlines__dot[aria-pressed="true"]::before {
+  width: 20px;
+  background: var(--accent);
+}
+
+.headlines__link:focus-visible,
+.headlines__step:focus-visible,
+.headlines__dot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Transferts : fins de contrat puis prochaines signatures. Deux zones qui défilent chacune
+   sous son titre ; les signatures gardent leur hauteur, jusqu'à la moitié de la carte. */
+.club-grid--three > .section > .transfer-board {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.transfer-board__part {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.transfer-board__part--signings {
+  flex: 0 1 auto;
+  max-height: 50%;
+  border-top: 1px solid var(--line);
+}
+
+.transfer-board__list {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.transfer-board .matches__stage {
+  flex: none;
+  padding: 16px 18px 8px;
+}
+
+.transfer-board .table__note {
+  margin: 0;
+  padding: 4px 18px 12px;
 }
 
 /* Phases finales puis classement, dans une seule cellule. */
@@ -1166,7 +1337,7 @@ select.tactics__select {
 }
 
 .standings .table {
-  font-size: clamp(9px, calc((100cqh - 115px - var(--rows, 14) * 1px) / var(--rows, 14) / 2.6), 13px);
+  font-size: clamp(9px, calc((100cqh - 115px - var(--rows, 14) * 1px) / var(--rows, 14) / 2.6), 16px);
 }
 
 .standings .table td {
@@ -1756,15 +1927,46 @@ select.tactics__select {
   background: var(--neutral);
 }
 
-/* En-tête de la page Club : le prochain match, et le moral de l'effectif à côté */
-/* Le prochain match sur toute la largeur, la vie du club en discret à sa droite :
-   une seule carte, séparée par un filet. */
+/* En-tête de la page Club : le prochain match sur toute la largeur, la vie du club en
+   discret à sa droite : une seule carte, séparée par des filets. */
 .hero-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+}
+
+/* Un match à jouer (ordinateur) : le rapport de force entre l'affiche et la vie du club. */
+.hero-row--versus {
+  grid-template-columns: minmax(0, 1fr) 440px 340px;
+}
+
+/* Les trois titres de la carte sur la même ligne : 40 px, la marge du titre de l'affiche
+   comprise (36 px en fenêtre étroite). */
+.hero-versus {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 40px 28px 28px;
+  border-left: 1px solid var(--line-soft);
+}
+
+/* Les lignes se partagent la hauteur de la carte. */
+.hero-versus > div:last-child {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.hero-versus .versus {
+  flex: 1 1 auto;
+  padding: 4px 0;
+}
+
+.hero-versus > .muted {
+  margin: 0;
 }
 
 .hero-row > .hero {
@@ -1794,6 +1996,91 @@ select.tactics__select {
 
 .hero-row > .club-notes .club-note__value {
   font-size: 18px;
+}
+
+.hero-row--versus > .club-notes {
+  justify-content: flex-start;
+  padding: 40px 28px 28px;
+}
+
+.hero-row--versus > .club-notes .club-note {
+  flex: 1 1 auto;
+}
+
+.hero-row--versus .section__head {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 12px;
+}
+
+@media (max-width: 1600px) {
+  .hero-row--versus {
+    grid-template-columns: minmax(0, 1fr) 340px 290px;
+  }
+  .hero-row--versus > .hero-versus,
+  .hero-row--versus > .club-notes {
+    padding: 40px 22px 28px;
+  }
+  .hero-row--versus .hero__title {
+    font-size: 44px;
+  }
+  .hero-versus .section__head > .muted {
+    display: none;
+  }
+}
+
+/* Fenêtre étroite : les chiffres seuls, sans les barres ni les noms des clubs. */
+@media (max-width: 1400px) {
+  .hero-row--versus {
+    grid-template-columns: minmax(0, 1fr) 210px 200px;
+  }
+  .hero-row--versus > .hero {
+    padding: 24px;
+  }
+  .hero-row--versus > .hero-versus,
+  .hero-row--versus > .club-notes {
+    padding: 36px 18px 24px;
+  }
+  .hero-versus .versus,
+  .hero-versus .versus--form {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .hero-versus .versus > :nth-child(2),
+  .hero-versus .versus > :nth-child(4),
+  .hero-versus .versus__name,
+  .hero-row--versus .club-note__chart,
+  .hero-row--versus > .club-notes .section__head > .muted {
+    display: none;
+  }
+  .hero-row--versus .club-note {
+    grid-template-columns: minmax(0, 1fr) 40px;
+  }
+  .hero-row--versus .hero__forms {
+    gap: 8px 24px;
+  }
+}
+
+@media (max-width: 1150px) {
+  .hero-row--versus {
+    grid-template-columns: minmax(0, 1fr) 176px 156px;
+  }
+  .hero-row--versus > .hero-versus,
+  .hero-row--versus > .club-notes {
+    padding: 36px 14px 24px;
+  }
+  .hero-row--versus .hero__title {
+    font-size: 36px;
+  }
+  .hero-versus .versus {
+    gap: 6px;
+  }
+  .hero-versus .versus__value {
+    font-size: 18px;
+  }
+  .hero-versus .versus__label {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
 }
 
 @media (max-width: 960px) {
@@ -4940,6 +5227,22 @@ td > .tag:first-child,
 @container (max-height: 235px) {
   .story--card .story__visual {
     display: none;
+  }
+}
+
+/* Une carte très basse (extrait du tableau de bord, petite fenêtre) : le titre seul. */
+@container (max-height: 160px) {
+  .story--card .story__meta {
+    display: none;
+  }
+  .story--card .story__title {
+    -webkit-line-clamp: 2;
+  }
+}
+
+@container (max-height: 115px) {
+  .story--card .story__title {
+    -webkit-line-clamp: 1;
   }
 }
 

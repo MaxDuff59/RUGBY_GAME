@@ -360,6 +360,10 @@ def test_precontract_brings_the_player_at_the_next_season(manager):
     # Il n'a pas encore bougé, mais l'accord est listé.
     assert all(p["id"] != player_id for p in manager.get("/clubs/3").json()["players"])
     assert any(n["id"] == opened["id"] for n in answer["overview"]["negotiations"])
+    # Le tableau de bord l'annonce parmi les prochaines signatures, avec son club actuel.
+    (signing,) = manager.get("/contracts").json()["signings"]
+    assert signing["player"]["id"] == player_id and signing["stage"] == "agreed"
+    assert signing["club"]["id"] == listing["club_id"] and signing["years"] == years
     assert manager.delete(f"/transfers/negotiations/{opened['id']}").status_code == 400
 
     for _ in range(21):

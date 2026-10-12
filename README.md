@@ -361,6 +361,9 @@ L'intersaison est refusée si moins de 25 pros restent sous contrat.
 
 Le bilan de fin de saison (`GET /seasons/current/review`, puis `GET /contracts`)
 s'ouvre après la finale, en trois étapes : résultats, vie du club, contrats.
+`GET /contracts` donne aussi les prochaines signatures du club (`signings` : accords en
+attente de l'intersaison, négociations en cours) : la carte « Transferts » de la page
+Club les montre sous les fins de contrat.
 
 ## Centre de formation
 

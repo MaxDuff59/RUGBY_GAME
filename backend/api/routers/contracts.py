@@ -24,7 +24,14 @@ from api.free_agents import release
 from api.jokers import joker_ids
 from api.ledger import current_season, game_date
 from api.moves import log_move
-from api.schemas import ClubRef, ContractOut, ContractsOverview, ExtendIn, PlayerOut
+from api.schemas import (
+    ClubRef,
+    ContractOut,
+    ContractsOverview,
+    ExtendIn,
+    PlayerOut,
+    SigningOut,
+)
 from engine.contracts import (
     leaves_academy_next_season,
     pick_suitor,
@@ -86,6 +93,36 @@ def _incoming(session: Session, club_id: int) -> int:
         .select_from(NegotiationRow)
         .where(NegotiationRow.club_id == club_id, NegotiationRow.stage == "agreed")
     )
+
+
+def _signings(
+    session: Session, club_id: int, day: datetime.date, names: dict[int, str]
+) -> list[SigningOut]:
+    """Recrutements du club en vue : accords qui attendent l'intersaison, puis négociations
+    en cours, les plus récents d'abord."""
+    rows = session.scalars(
+        select(NegotiationRow)
+        .where(
+            NegotiationRow.club_id == club_id,
+            NegotiationRow.stage.in_(["club", "player", "agreed"]),
+        )
+        .order_by(NegotiationRow.id.desc())
+    ).all()
+    out = []
+    for row in sorted(rows, key=lambda row: row.stage != "agreed"):
+        origin = row.player.club_id
+        out.append(
+            SigningOut(
+                id=row.id,
+                player=PlayerOut.from_player(row.player.to_domain(), day, names),
+                club=None if origin is None else ClubRef(id=origin, name=names[origin]),
+                kind=DealKind(row.kind),
+                stage=row.stage,
+                wage=row.wage,
+                years=row.years,
+            )
+        )
+    return out
 
 
 def _situation(
@@ -169,6 +206,7 @@ def contracts_overview(session: Session, me: ClubRow) -> ContractsOverview:
         season_year=year,
         pros=pros,
         youths=youths,
+        signings=_signings(session, me.id, day, names),
         squad_next=len(staying) + _incoming(session, me.id),
         squad_min=SQUAD_MIN,
         squad_max=SQUAD_MAX,

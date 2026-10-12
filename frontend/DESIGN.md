@@ -65,14 +65,24 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
 - Cartes : fond surface, bordure 1 px, rayon 10 px, pas d'ombre.
 - Rapport de force : 5 lignes (conquête, paquet, attaque, défense, buteur), notes
   sur 20 issues directement du moteur (`TeamStrength`).
-- Page Club (ordinateur) : le prochain match sur toute la largeur, avec la vie du club
-  en discret dans sa partie droite (même carte, séparée par un filet) ; en dessous,
-  trois cartes : classement (plus large), rapport de force, dernière journée.
+- Page Club (ordinateur) : une seule carte en tête, séparée par des filets : le prochain
+  match, puis le rapport de force, puis la vie du club en discret à droite, les trois
+  titres sur la même ligne. En dessous, sur toute la hauteur qui reste, trois cartes :
+  classement (plus large), journal, transferts. Fenêtre étroite (≤ 1400 px) : rapport de
+  force et vie du club gardent leurs chiffres seuls, sans barres. La dernière journée
+  n'a plus sa carte sur ordinateur (elle garde son onglet sur téléphone).
+- Journal de la page Club : un article à la fois parmi les quatre plus lourds, flèches
+  et pastilles au pied de la carte ; carte assez haute, les autres titres sont listés
+  sous l'article et y mènent d'un clic. « Tout le journal » ouvre la page Journal.
+- Transferts de la page Club : nos fins de contrat (ce que le joueur demande pour
+  prolonger, ou son départ déjà acté), puis les prochaines signatures (accords en
+  attente de l'intersaison, négociations en cours). Deux zones dans la carte, chacune
+  défile sous son titre ; les signatures gardent leur hauteur, jusqu'à la moitié.
 - Classement de la page Club : toutes les équipes visibles sans défilement, quel que
   soit leur nombre. La taille du texte se calcule d'après la hauteur de la carte et le
-  nombre de lignes (`.standings`, unités `cqh`), entre 9 et 13 px ; les noms de clubs
+  nombre de lignes (`.standings`, unités `cqh`), entre 9 et 16 px ; les noms de clubs
   se coupent plutôt que de passer à la ligne. Pas de note sous le tableau.
-- Vie du club (page Club, à droite du prochain match) : 5 lignes (moral, cohésion,
+- Vie du club (page Club, à droite du rapport de force) : 5 lignes (moral, cohésion,
   fraîcheur, direction, supporters), chacune avec son libellé et son palier, une barre
   par match joué de la saison (gris, la dernière en accent, pointillé à la note de
   départ) et la note sur 20 à droite. L'objectif de la direction en tête de carte.
@@ -106,7 +116,7 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   en accent, la journée en cours sur fond gris, notre résultat à droite de chaque ligne
   jouée (pastille V / N / D, notre score d'abord), « Arrêter » finit la journée en cours.
   Le fond de la fenêtre est à peine assombri (`light`) : derrière, la page Club se met à
-  jour à chaque journée (classement, vie du club, dernière journée). À la fin : bilan,
+  jour à chaque journée (classement, vie du club, journal, transferts). À la fin : bilan,
   classement avant → après, blessés, signés ailleurs, sélections, affaires tranchées par
   le staff ; le bouton mène à l'affaire en attente ou au bilan de la saison s'il y en a.
 - Infrastructures : chaque carte a un bouton « Voir » qui ouvre une grande fenêtre

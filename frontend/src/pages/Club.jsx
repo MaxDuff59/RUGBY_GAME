@@ -11,12 +11,14 @@ import SeasonReview from "../components/SeasonReview.jsx";
 import Simulation, { simulationTargets } from "../components/Simulation.jsx";
 import SortHeader from "../components/SortHeader.jsx";
 import SplitButton from "../components/SplitButton.jsx";
+import Story, { Kicker, Route, Who } from "../components/Story.jsx";
 import {
   INJURY_SOURCES,
   SEVERITIES,
   STAGES,
   formatDiff,
   formatLongDate,
+  formatMoney,
   formatNote,
   formatRank,
   formatShortDate,
@@ -43,9 +45,13 @@ const PHONE_TABS = [
   { key: "strength", label: "Rapport de force" },
 ];
 
-// Tableau de bord : prochain match (avec la vie du club), puis classement, rapport de
-// force et derniers résultats. Sur téléphone, la vue de base garde le prochain match et
-// le classement ; vie du club, dernière journée et rapport de force ont chacun leur onglet.
+// Articles du journal que le tableau de bord laisse feuilleter.
+const HEADLINES = 4;
+
+// Tableau de bord : le prochain match, avec le rapport de force et la vie du club dans la
+// même carte ; dessous, sur toute la hauteur restante, le classement, un extrait du
+// journal et les transferts. Sur téléphone, la vue de base garde le prochain match et le
+// classement ; vie du club, dernière journée et rapport de force ont chacun leur onglet.
 export default function Club() {
   const { career } = useOutletContext();
   const navigate = useNavigate();
@@ -187,6 +193,7 @@ export default function Club() {
   const data = season.data;
   const next = data.next_matchday;
   const myNextMatch = next?.matches.find((m) => m.home.id === myId || m.away.id === myId) ?? null;
+  const opponentId = myNextMatch ? (myNextMatch.home.id === myId ? myNextMatch.away.id : myNextMatch.home.id) : null;
   const rankOf = (clubId) => data.standings.find((row) => row.club_id === clubId)?.rank;
   // Menu de la flèche de « Simuler la journée » : plusieurs journées d'un coup.
   const simulateOptions = next
@@ -249,7 +256,7 @@ export default function Club() {
       {phone && shown("notes") && <ClubNotes clubId={myId} season={data} version={notesVersion} />}
 
       {shown("board") && (
-        <div className="hero-row">
+        <div className={`hero-row${!phone && opponentId !== null ? " hero-row--versus" : ""}`}>
           {data.phase === "finished" ? (
             <section className="hero">
               <p className="eyebrow">Saison {data.year} terminée</p>
@@ -317,22 +324,31 @@ export default function Club() {
               </div>
             </section>
           )}
+          {!phone && opponentId !== null && <Strength myId={myId} opponentId={opponentId} embedded />}
           {!phone && <ClubNotes clubId={myId} season={data} version={notesVersion} />}
         </div>
       )}
 
-      {(shown("board") || shown("strength") || shown("last")) && (
+      {!phone && (
+        <div className="club-grid club-grid--three fill">
+          <Leagues key={data.league.code} season={data} myId={myId} />
+          <Headlines season={data} />
+          <TransferBoard season={data} club={{ id: myId, name: career.club_name }} />
+        </div>
+      )}
+
+      {phone && (
         <div className="club-grid club-grid--three fill">
           {shown("board") && <Leagues key={data.league.code} season={data} myId={myId} />}
 
           {shown("strength") &&
-            (myNextMatch ? (
-              <Strength myId={myId} opponentId={myNextMatch.home.id === myId ? myNextMatch.away.id : myNextMatch.home.id} />
+            (opponentId !== null ? (
+              <Strength myId={myId} opponentId={opponentId} />
             ) : (
-              phone && <p className="muted">Ton club ne joue pas la prochaine journée.</p>
+              <p className="muted">Ton club ne joue pas la prochaine journée.</p>
             ))}
 
-          {shown("last") && !lastMatchday && phone && <p className="muted">Aucune journée jouée cette saison.</p>}
+          {shown("last") && !lastMatchday && <p className="muted">Aucune journée jouée cette saison.</p>}
           {shown("last") && lastMatchday && (
             <section className="section">
               <div className="section__head">
@@ -476,56 +492,64 @@ function NextMatch({ match, myId, rankOf, matches }) {
   );
 }
 
-// Les 5 notes du moteur, mon club contre l'adversaire du prochain match.
-function Strength({ myId, opponentId }) {
+// Les 5 notes du moteur, mon club contre l'adversaire du prochain match. `embedded` :
+// dans la carte du prochain match (ordinateur), sans carte à lui.
+function Strength({ myId, opponentId, embedded = false }) {
   const mine = useApi(useCallback(() => api.getClub(myId), [myId]));
   const theirs = useApi(useCallback(() => api.getClub(opponentId), [opponentId]));
   const myNotes = useApi(useCallback(() => api.getClubNotes(myId), [myId]));
   const theirNotes = useApi(useCallback(() => api.getClubNotes(opponentId), [opponentId]));
+  const loading = mine.loading || theirs.loading;
+  const failed = mine.error || theirs.error;
 
-  if (mine.loading || theirs.loading) return <p className="status">Chargement…</p>;
-  if (mine.error || theirs.error) return null;
+  // Dans la carte du match, sa colonne reste en place le temps du chargement.
+  if (!embedded && loading) return <p className="status">Chargement…</p>;
+  if (!embedded && failed) return null;
 
   return (
-    <section className="section">
+    <section className={embedded ? "hero-versus" : "section"}>
       <div className="section__head">
         <h2 className="eyebrow">Rapport de force</h2>
         <span className="muted">Notes sur 20, XV de départ</span>
       </div>
-      <div className="card card--padded">
-        <div className="versus__names">
-          <span className="with-crest">
-            <ClubCrest name={mine.data.name} size={18} />
-            {mine.data.name}
-          </span>
-          <span className="with-crest">
-            {theirs.data.name}
-            <ClubCrest name={theirs.data.name} size={18} />
-          </span>
+      {loading || failed ? (
+        <p className="muted">{failed ? "Indisponible pour l'instant." : "Chargement…"}</p>
+      ) : (
+        <div className={embedded ? undefined : "card card--padded"}>
+          <div className="versus__names">
+            <span className="with-crest">
+              <ClubCrest name={mine.data.name} size={18} />
+              <span className="versus__name">{mine.data.name}</span>
+            </span>
+            <span className="with-crest">
+              <span className="versus__name">{theirs.data.name}</span>
+              <ClubCrest name={theirs.data.name} size={18} />
+            </span>
+          </div>
+          {STRENGTH_LINES.map((line) => {
+            const us = mine.data.strength[line.key];
+            const them = theirs.data.strength[line.key];
+            const usWins = us >= them;
+            return (
+              <div key={line.key} className="versus">
+                <span className={`versus__value num ${usWins ? "versus__value--wins" : ""}`}>{formatNote(us)}</span>
+                <div className="meter meter--reverse">
+                  <div
+                    className={`meter__fill ${usWins ? "meter__fill--accent" : "meter__fill--muted"}`}
+                    style={{ width: `${(us / 20) * 100}%` }}
+                  />
+                </div>
+                <span className="versus__label">{line.label}</span>
+                <div className="meter">
+                  <div className={`meter__fill ${usWins ? "meter__fill--muted" : ""}`} style={{ width: `${(them / 20) * 100}%` }} />
+                </div>
+                <span className={`versus__value num ${usWins ? "" : "versus__value--wins"}`}>{formatNote(them)}</span>
+              </div>
+            );
+          })}
+          {myNotes.data && theirNotes.data && <FormLine us={myNotes.data.form} them={theirNotes.data.form} />}
         </div>
-        {STRENGTH_LINES.map((line) => {
-          const us = mine.data.strength[line.key];
-          const them = theirs.data.strength[line.key];
-          const usWins = us >= them;
-          return (
-            <div key={line.key} className="versus">
-              <span className={`versus__value num ${usWins ? "versus__value--wins" : ""}`}>{formatNote(us)}</span>
-              <div className="meter meter--reverse">
-                <div
-                  className={`meter__fill ${usWins ? "meter__fill--accent" : "meter__fill--muted"}`}
-                  style={{ width: `${(us / 20) * 100}%` }}
-                />
-              </div>
-              <span className="versus__label">{line.label}</span>
-              <div className="meter">
-                <div className={`meter__fill ${usWins ? "meter__fill--muted" : ""}`} style={{ width: `${(them / 20) * 100}%` }} />
-              </div>
-              <span className={`versus__value num ${usWins ? "" : "versus__value--wins"}`}>{formatNote(them)}</span>
-            </div>
-          );
-        })}
-        {myNotes.data && theirNotes.data && <FormLine us={myNotes.data.form} them={theirNotes.data.form} />}
-      </div>
+      )}
     </section>
   );
 }
@@ -584,6 +608,167 @@ function FormLine({ us, them }) {
         {percent(them.total)}
       </span>
     </div>
+  );
+}
+
+// Extrait du journal : les articles les plus lourds, un à la fois, à feuilleter ; les
+// autres titres dessous quand la carte est assez haute.
+function Headlines({ season }) {
+  // Rechargé à chaque journée jouée (la saison change d'objet).
+  const journal = useApi(useCallback(api.getJournal, [season]));
+  const [index, setIndex] = useState(0);
+  const articles = journal.data?.articles.slice(0, HEADLINES) ?? [];
+  // Nouvelle édition : on revient à la une.
+  useEffect(() => setIndex(0), [journal.data]);
+  const article = articles[Math.min(index, articles.length - 1)];
+  const step = (by) => setIndex((current) => (current + by + articles.length) % articles.length);
+
+  return (
+    <section className="section">
+      <div className="section__head">
+        <h2 className="eyebrow">Journal</h2>
+        <Link to="/journal" className="muted">
+          Tout le journal
+        </Link>
+      </div>
+      <div className="card headlines">
+        {article ? (
+          <Story key={article.id} article={article} />
+        ) : (
+          <p className="table__note">
+            {journal.error ? journal.error.message : journal.loading ? "Chargement…" : "Rien à signaler pour l'instant."}
+          </p>
+        )}
+        {articles.length > 1 && (
+          <ul className="headlines__more">
+            {articles.map(
+              (entry, position) =>
+                entry !== article && (
+                  <li key={entry.id}>
+                    <button type="button" className="headlines__link" onClick={() => setIndex(position)}>
+                      <Kicker article={entry} date />
+                      <span className="feed__title">{entry.title}</span>
+                    </button>
+                  </li>
+                ),
+            )}
+          </ul>
+        )}
+        {articles.length > 1 && (
+          <div className="headlines__nav">
+            <button type="button" className="headlines__step" aria-label="Article précédent" onClick={() => step(-1)}>
+              <Chevron back />
+            </button>
+            <div className="headlines__dots" role="group" aria-label="Article">
+              {articles.map((entry, position) => (
+                <button
+                  key={entry.id}
+                  type="button"
+                  className="headlines__dot"
+                  aria-label={`Article ${position + 1} sur ${articles.length}`}
+                  aria-pressed={entry === article}
+                  title={entry.title}
+                  onClick={() => setIndex(position)}
+                />
+              ))}
+            </div>
+            <button type="button" className="headlines__step" aria-label="Article suivant" onClick={() => step(1)}>
+              <Chevron />
+            </button>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function Chevron({ back = false }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={back ? "M10 3 5 8l5 5" : "m6 3 5 5-5 5"} />
+    </svg>
+  );
+}
+
+// Ce qui attend un joueur en fin de contrat qu'on ne peut plus prolonger (statuts de l'API).
+const CONTRACT_STATUS = {
+  signed_elsewhere: "Part à l'intersaison",
+  retiring: "Prend sa retraite",
+  leaving_academy: "À passer pro",
+};
+
+// Où en est un recrutement (étapes d'une négociation).
+const SIGNING_STAGES = {
+  club: "Indemnité à convenir",
+  player: "Salaire à convenir",
+  agreed: "À l'intersaison",
+};
+
+// Transferts : nos joueurs en fin de contrat (ceux déjà prolongés n'y sont plus), puis
+// les prochaines signatures, accords en attente de l'intersaison et négociations en cours.
+// Deux zones dans la carte : chacune défile sous son titre.
+function TransferBoard({ season, club }) {
+  // Rechargé à chaque journée jouée : un concurrent a pu signer l'un des nôtres.
+  const contracts = useApi(useCallback(api.getContracts, [season]));
+  const data = contracts.data;
+  const leaving = data ? [...data.pros, ...data.youths].filter((item) => item.status !== "extended") : [];
+  const signings = data?.signings ?? [];
+
+  return (
+    <section className="section">
+      <div className="section__head">
+        <h2 className="eyebrow">Transferts</h2>
+        <Link to="/transferts" className="muted">
+          Voir le marché
+        </Link>
+      </div>
+      <div className="card transfer-board">
+        {!data ? (
+          <p className="table__note">{contracts.error ? contracts.error.message : "Chargement…"}</p>
+        ) : (
+          <>
+            <div className="transfer-board__part">
+              <div className="matches__stage">Fins de contrat · {leaving.length}</div>
+              <div className="transfer-board__list">
+                {leaving.length === 0 && <p className="table__note">Personne n'arrive en fin de contrat cette saison.</p>}
+                <ul className="moves">
+                  {leaving.map((item) => (
+                    <li key={item.player.id} className="move">
+                      <Who player={item.player} />
+                      <span className="move__deal">
+                        {item.status === "signed_elsewhere" ? (
+                          <Route move={{ origin: club, destination: item.new_club }} />
+                        ) : (
+                          item.status === "open" && <span className="num">{formatMoney(item.wage_demand)}/saison</span>
+                        )}
+                        <span className="muted">{item.status === "open" ? "pour prolonger" : CONTRACT_STATUS[item.status]}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <div className="transfer-board__part transfer-board__part--signings">
+              <div className="matches__stage">Prochaines signatures · {signings.length}</div>
+              <div className="transfer-board__list">
+                {signings.length === 0 && <p className="table__note">Aucune signature en vue.</p>}
+                <ul className="moves">
+                  {signings.map((signing) => (
+                    <li key={signing.id} className="move">
+                      <Who player={signing.player} />
+                      <span className="move__deal">
+                        <Route move={{ origin: signing.club, destination: club }} />
+                        <span className="muted">{SIGNING_STAGES[signing.stage]}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </section>
   );
 }
 
