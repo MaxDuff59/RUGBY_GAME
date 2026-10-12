@@ -25,7 +25,7 @@ from api.deps import SessionDep, load_clubs
 from api.free_agents import age_free_agents, release, renew_pool
 from api.jokers import close_jokers, end_piges
 from api.ledger import current_season, record
-from api.live import load_live, run_training_week
+from api.live import live_match_row, load_live, run_training_week
 from api.notes import History, ensure_preseason_ranks, season_leagues
 from api.routers.contracts import contracts_overview, expire_contracts, rival_signings
 from api.routers.leagues import league_out
@@ -369,10 +369,9 @@ def _play_day(
         # Titularisations promises au manager (api/affairs.py).
         clubs[my_club_id].forced_starters = forced_starters(session, my_club_id)
 
-    # Match en direct du club dirigé : le staff finit ce qu'il reste à jouer.
-    live = load_live(session, clubs)
-    if live is not None and live.match_row not in todays:
-        live = None
+    # Match en direct du club dirigé : le staff finit ce qu'il reste à jouer. Un jour
+    # où seul un autre championnat joue, il attend le sien (ses clubs ne sont pas chargés).
+    live = load_live(session, clubs) if live_match_row(session) in todays else None
 
     # Classement avant la journée : il fixe l'affluence (et départage les phases finales).
     seeding = {league: _seeding(season, league) for league in leagues}

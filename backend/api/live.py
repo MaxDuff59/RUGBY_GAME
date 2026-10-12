@@ -64,10 +64,15 @@ def load_live(session: Session, clubs: dict[int, Club]) -> Live | None:
     return Live(row=row, match=live, match_row=match_row)
 
 
+def live_match_row(session: Session) -> MatchRow | None:
+    """Le match du calendrier joué en direct en ce moment (None s'il n'y en a pas)."""
+    row = session.scalars(select(LiveMatchRow)).first()
+    return session.get(MatchRow, row.match_id) if row is not None else None
+
+
 def live_club_ids(session: Session) -> set[int]:
     """Les deux clubs du match en direct en cours (aucun s'il n'y en a pas)."""
-    row = session.scalars(select(LiveMatchRow)).first()
-    match_row = session.get(MatchRow, row.match_id) if row is not None else None
+    match_row = live_match_row(session)
     return {match_row.home_club_id, match_row.away_club_id} if match_row is not None else set()
 
 

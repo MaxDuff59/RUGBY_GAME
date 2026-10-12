@@ -66,6 +66,19 @@ def test_other_leagues_play_their_matchdays_on_the_way(two_leagues):
     assert played_matchdays(prod2) == {1, 2, 3}
 
 
+def test_live_match_waits_while_another_league_plays_first(two_leagues):
+    # Le match en direct est lancé alors que la Pro D2 a encore des samedis à jouer avant.
+    live = two_leagues.post("/live").json()
+    played = two_leagues.post("/live/finish")
+    assert played.status_code == 200
+    result = played.json()
+    assert result["played"]["matchday"] == 1
+    assert live["match_id"] in [m["id"] for m in result["played"]["matches"]]
+    assert two_leagues.get("/live").status_code == 404
+    prod2 = two_leagues.get("/seasons/current?league=prod2").json()
+    assert played_matchdays(prod2) == {1, 2, 3}
+
+
 def test_pro_d2_champion_goes_up_and_top14_last_goes_down(two_leagues):
     while two_leagues.get("/seasons/current").json()["phase"] != "finished":
         assert two_leagues.post("/seasons/current/play").status_code == 200
