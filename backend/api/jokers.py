@@ -19,8 +19,10 @@ from sqlalchemy.orm import Session
 from api.affairs import notify, pending_affairs, settle_unanswered
 from api.free_agents import release
 from api.ledger import current_season, game_date
+from api.moves import log_move
 from engine.economy import SQUAD_MAX
 from engine.free_agents import free_agent_wage
+from engine.journal import MoveKind
 from engine.medical import allows_joker
 from engine.transfers import preferred_years
 from models import Squad
@@ -123,6 +125,7 @@ def sign(session: Session, negotiation: NegotiationRow, year: int) -> str:
     player.club_id = negotiation.club_id
     joker.status = "active"
     joker.signed_on = game_date(session)
+    log_move(session, MoveKind.JOKER, player, joker.signed_on, destination=negotiation.club_id)
     return (
         f"{_name(player)} arrive en joker médical jusqu'au retour de {injured}, "
         f"prévu le {joker.injury.return_date:%d/%m/%Y}."

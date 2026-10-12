@@ -73,6 +73,9 @@ export const api = {
   listNations: () => request("/internationals/nations"),
   getNationSquad: (competition, code) => request(`/internationals/${competition}/${code}`),
 
+  // Journal : articles, matchs de chaque compétition, mouvements de joueurs (toute carrière)
+  getJournal: () => request("/journal"),
+
   // Sélectionneur : où il en est, sa liste de 42, son XV, et le monde qui avance jour par jour
   getSelection: () => request("/selection"),
   getSelectionPool: () => request("/selection/pool"),

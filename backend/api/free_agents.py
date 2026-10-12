@@ -6,6 +6,7 @@ contrat. Le premier vivier est créé avec le monde (database.py) ; le
 recrutement par le manager passe par routers/transfers.py.
 """
 
+import datetime
 import random
 from collections.abc import Iterator
 
@@ -13,8 +14,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import engine.free_agents
+from api.moves import log_move
 from engine.economy import wage_for
 from engine.free_agents import age_free_agent
+from engine.journal import MoveKind
 from models import ATTRIBUTE_NAMES, Squad
 from models.orm import ClubRow, PlayerRow
 
@@ -56,9 +59,11 @@ def renew_pool(
     rng: random.Random,
     my_club_id: int | None,
     player_ids: Iterator[int],
+    day: datetime.date,
 ) -> None:
     """Intersaison, après les départs : les clubs IA à court d'effectif piochent
-    dans le vivier, qui est ensuite ramené entre son minimum et son maximum."""
+    dans le vivier, qui est ensuite ramené entre son minimum et son maximum.
+    `day` : la date de l'intersaison, pour le registre des mouvements."""
     session.flush()
     session.expire_all()
     rows = {row.id: row for row in free_agent_rows(session)}
@@ -77,6 +82,7 @@ def renew_pool(
             player.wage,
             player.contract_until,
         )
+        log_move(session, MoveKind.FREE, row, day, destination=player.club_id)
     for player in renewal.dropped:
         session.delete(rows[player.id])
     for player in renewal.arrivals:

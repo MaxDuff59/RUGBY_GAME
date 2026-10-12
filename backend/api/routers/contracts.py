@@ -23,6 +23,7 @@ from api.deps import SessionDep, load_my_club_row
 from api.free_agents import release
 from api.jokers import joker_ids
 from api.ledger import current_season, game_date
+from api.moves import log_move
 from api.schemas import ClubRef, ContractOut, ContractsOverview, ExtendIn, PlayerOut
 from engine.contracts import (
     leaves_academy_next_season,
@@ -34,6 +35,7 @@ from engine.contracts import (
 )
 from engine.economy import SQUAD_MAX, SQUAD_MIN
 from engine.free_agents import settle_contracts
+from engine.journal import MoveKind
 from engine.transfers import DealKind, playing_time, time_label
 from models import Club, Player, Squad
 from models.orm import CareerRow, ClubRow, NegotiationRow, PlayerRow, SeasonRow
@@ -330,9 +332,10 @@ def rival_signings(
 
 
 def expire_contracts(
-    session: Session, year: int, my_club_id: int | None, rng: random.Random
+    session: Session, year: int, my_club_id: int | None, rng: random.Random, day: datetime.date
 ) -> None:
     """Intersaison (après les pré-contrats) : contrats arrivés à terme avant `year`.
+    `day` : la date de l'intersaison, pour le registre des mouvements.
 
     Les clubs IA prolongent la plupart de leurs joueurs et laissent partir les
     autres (engine/free_agents.py). Ceux du club dirigé qui n'ont pas été
@@ -352,4 +355,5 @@ def expire_contracts(
             for player in squad:
                 rows[player.id].contract_until = player.contract_until
         for row in leaving:
+            log_move(session, MoveKind.RELEASE, row, day, origin=club_row.id)
             release(row, year)

@@ -10,6 +10,8 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from engine.economy import FacilityKind, TransactionCategory, market_value
+from engine.journal import Kind as ArticleKind
+from engine.journal import MoveKind
 from engine.match_engine import Defence, GamePlan, PenaltyChoice, TeamStrength
 from engine.notes import Note
 from engine.sponsors import Placement
@@ -1277,3 +1279,87 @@ class AdvanceOut(BaseModel):
     club_matches: int  # matchs de clubs joués ce jour-là
     injuries: list["InjuryCase"]  # blessés de notre liste, en sélection ou en club
     selection: SelectionOut
+
+
+# --- Journal (engine/journal.py) -----------------------------------------------------------
+
+
+class JournalPlayer(BaseModel):
+    """Un joueur cité par le journal. `id` à None : il n'a plus de fiche (retraite)."""
+
+    id: int | None
+    name: str
+    position: Position
+    age: int
+    overall: float
+    photo: str | None = None
+
+
+class MoveOut(BaseModel):
+    """Un mouvement de joueur : d'où il vient, où il va."""
+
+    id: str
+    kind: MoveKind
+    date: datetime.date
+    player: JournalPlayer
+    origin: ClubRef | None  # None : il était sans club
+    destination: ClubRef | None  # None : il part sans club, ou raccroche
+    fee: int | None = None
+    pending: bool = False  # pré-contrat signé : il arrivera à l'intersaison
+    mine: bool = False
+
+
+class ProspectOut(BaseModel):
+    """Un joueur à suivre sur le marché : en dernière année de contrat (`club` : le
+    sien), ou sans club."""
+
+    player: JournalPlayer
+    club: ClubRef | None
+    mine: bool = False
+
+
+class ArticleOut(BaseModel):
+    """Un article : son titre, sa brève, et de quoi l'illustrer (équipes, joueur, match)."""
+
+    id: str
+    kind: ArticleKind
+    date: datetime.date
+    title: str
+    body: str
+    competition: str | None = None
+    international: bool = False
+    mine: bool = False  # concerne le club ou la sélection du joueur
+    teams: list[ClubRef] = []
+    player: JournalPlayer | None = None
+    match: MatchSummary | None = None
+    move: MoveOut | None = None
+
+
+class RoundOut(BaseModel):
+    """Les matchs d'une compétition un même jour."""
+
+    label: str  # « Journée 12 », « Finale », « Test 2 »
+    date: datetime.date
+    matches: list[MatchSummary]
+
+
+class CompetitionOut(BaseModel):
+    """Un championnat ou une fenêtre internationale : sa dernière journée, la prochaine."""
+
+    code: str
+    name: str
+    international: bool = False
+    last: RoundOut | None
+    next: RoundOut | None
+
+
+class JournalOut(BaseModel):
+    year: int
+    today: datetime.date
+    # Du sujet le plus lourd au plus léger ; les six premiers font la une.
+    articles: list[ArticleOut]
+    competitions: list[CompetitionOut]
+    focus: str | None  # la compétition du joueur, à montrer d'abord
+    moves: list[MoveOut]  # les plus récents d'abord
+    # À suivre sur le marché, les mieux notés d'abord : fins de contrat, puis agents libres.
+    prospects: list[ProspectOut]

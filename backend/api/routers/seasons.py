@@ -38,6 +38,7 @@ from api.free_agents import age_free_agents, release, renew_pool
 from api.jokers import close_jokers, end_piges
 from api.ledger import current_season, record
 from api.live import live_match_row, load_live, load_live_test
+from api.moves import log_move
 from api.notes import History, ensure_preseason_ranks, season_leagues
 from api.routers.contracts import contracts_overview, expire_contracts, rival_signings
 from api.routers.leagues import league_out
@@ -65,6 +66,7 @@ from data.leagues import DEFAULT_LEAGUE, PROMOTION, league_config, sort_codes
 from data.nations import NATIONS_BY_CODE, WINDOWS_BY_CODE
 from engine.board import should_sack
 from engine.economy import SQUAD_MIN
+from engine.journal import MoveKind
 from engine.matchday import Day, play_day
 from engine.offseason import club_offseason
 from engine.season import (
@@ -818,8 +820,10 @@ def start_next_season(session: SessionDep) -> SeasonOut:
 
     rng = season_rng(season, "offseason")
     year = season.year + 1
+    # Date des mouvements de l'intersaison (api/moves.py) : au lendemain du dernier match.
+    day = max(m.date for m in season.matches) + datetime.timedelta(days=1)
     close_jokers(session, year)
-    _offseason_moves(session, year, rng, my_club_id)
+    _offseason_moves(session, year, rng, my_club_id, day)
     age_free_agents(session, year, rng)
     next_id = (session.scalar(select(func.max(PlayerRow.id))) or 0) + 1
     player_ids = itertools.count(next_id)
@@ -838,6 +842,8 @@ def start_next_season(session: SessionDep) -> SeasonOut:
         for player in squad:
             row = rows[player.id]
             if player.id in retired:
+                row.age = player.age
+                log_move(session, MoveKind.RETIREMENT, row, day, origin=club_row.id)
                 session.delete(row)
                 continue
             row.age = player.age
@@ -849,7 +855,7 @@ def start_next_season(session: SessionDep) -> SeasonOut:
             release(rows[youth.id], year)
         for youth in moves.newcomers:
             session.add(PlayerRow.from_domain(youth))
-    renew_pool(session, year, rng, my_club_id, player_ids)
+    renew_pool(session, year, rng, my_club_id, player_ids, day)
     internationals.offseason(session, rng)
     session.commit()
 
@@ -857,7 +863,11 @@ def start_next_season(session: SessionDep) -> SeasonOut:
 
 
 def _offseason_moves(
-    session: Session, year: int, rng: random.Random, my_club_id: int | None
+    session: Session,
+    year: int,
+    rng: random.Random,
+    my_club_id: int | None,
+    day: datetime.date,
 ) -> None:
     """Mouvements de l'intersaison, avant le vieillissement : prêts, pré-contrats, contrats."""
     # Les prêtés rentrent chez leur club propriétaire.
@@ -869,6 +879,8 @@ def _offseason_moves(
     for neg in session.scalars(select(NegotiationRow).where(NegotiationRow.stage != "done")):
         if neg.stage == "agreed":
             player = neg.player
+            if player.club_id != neg.club_id:
+                log_move(session, MoveKind.PRECONTRACT, player, day, player.club_id, neg.club_id)
             player.club_id = neg.club_id
             player.wage = neg.wage
             player.contract_until = year + neg.years - 1
@@ -878,7 +890,7 @@ def _offseason_moves(
             neg.message = "La saison est terminée sans accord."
 
     session.flush()
-    expire_contracts(session, year, my_club_id, rng)
+    expire_contracts(session, year, my_club_id, rng, day)
     session.commit()
     session.expire_all()  # les effectifs ont changé : relationships à relire
 

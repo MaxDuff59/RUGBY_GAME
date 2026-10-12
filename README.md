@@ -155,6 +155,7 @@ parties ailleurs (ex. pour une instance de test).
 | `GET /selection`, `POST /selection/advance` | Sélectionneur : où il en est ; jouer le prochain jour de match du monde |
 | `GET /selection/pool`, `POST /selection/list`, `POST /selection/replace` | Joueurs sélectionnables ; annoncer la liste de 42 ; remplacer un blessé |
 | `GET /selection/team`, `PUT` / `DELETE /selection/lineup` | Le groupe et son XV ; composer ; rendre la main au staff |
+| `GET /journal` | Le journal du monde, pour toute carrière : articles, matchs de chaque compétition, mouvements de joueurs |
 
 ## Sélections nationales
 
@@ -221,6 +222,29 @@ toujours : la nationalité des joueurs et le tour des matchs internationaux sont
 niveau des sélections vient de celui de leurs joueurs, donc de leurs clubs ; le moteur
 laisse beaucoup de place au hasard d'un match : sur 200 Coupes du monde simulées, les
 cinq favoris la gagnent chacun entre 9 et 16 fois sur 100.
+
+## Journal
+
+Onglet « Journal », dans une carrière de club comme de sélectionneur : les nouvelles
+du monde en un écran. Des articles (résultats de la dernière journée de chaque
+championnat et de chaque fenêtre internationale, affiches à venir, point sur les
+classements, transferts, joueurs à suivre sur le marché, blessures, listes des
+sélections), les matchs joués et à venir de la compétition de son choix, et les
+derniers mouvements de joueurs.
+
+Rien n'est inventé ni tiré au hasard : chaque article part d'un fait du jeu, et le
+même monde donne le même journal. Les titres, les brèves et leur poids (ce qui fait
+la une) s'écrivent dans `backend/engine/journal.py` ; `backend/api/routers/journal.py`
+lit les faits en base et ne garde, par compétition, que ce qui touche le joueur et
+les articles les plus lourds. Ce qui concerne son club ou sa sélection passe devant ;
+une nouvelle s'efface avec le temps, sauf pendant une trêve ou une intersaison.
+
+Les mouvements de joueurs sont inscrits au moment où ils ont lieu dans la table
+`moves` (`backend/api/moves.py`) : transferts, prêts, signatures d'agents libres et
+jokers du club dirigé, puis à l'intersaison les pré-contrats exécutés, les fins de
+contrat, les recrues des clubs IA et les retraites. Les parties commencées avant ce
+registre le reçoivent vide (la table est créée à l'ouverture) : le journal y reprend
+les arrivées déjà négociées, puis il se remplit à la première intersaison.
 
 ## Jouer le match
 

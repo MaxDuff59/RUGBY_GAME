@@ -658,6 +658,30 @@ class JokerRow(Base):
     negotiation: Mapped["NegotiationRow | None"] = relationship()
 
 
+class MoveRow(Base):
+    """Un mouvement de joueur (transfert, prêt, signature, départ, retraite), inscrit
+    au moment où il a lieu (api/moves.py) pour le journal (api/routers/journal.py).
+
+    Le nom, le poste, l'âge et la note sont recopiés : le joueur peut ne plus avoir
+    de ligne ensuite (retraite), d'où `player_id` sans clé étrangère.
+    """
+
+    __tablename__ = "moves"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    date: Mapped[datetime.date] = mapped_column(Date)
+    kind: Mapped[str] = mapped_column(String(12))  # `MoveKind`, engine/journal.py
+    player_id: Mapped[int]
+    player_name: Mapped[str] = mapped_column(String(101))
+    position: Mapped[str] = mapped_column(String(12))
+    age: Mapped[int]
+    overall: Mapped[float]
+    # None : sans club (agent libre avant, ou après).
+    from_club_id: Mapped[int | None] = mapped_column(ForeignKey("clubs.id"))
+    to_club_id: Mapped[int | None] = mapped_column(ForeignKey("clubs.id"))
+    fee: Mapped[int | None]  # indemnité de transfert
+
+
 class TransactionRow(Base):
     """Une opération financière d'un club (voir api/ledger.py)."""
 

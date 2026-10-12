@@ -170,8 +170,8 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
 - Choix de la carrière : deux pastilles sous le nom, « Manager d'un club » et
   « Sélectionneur national » (absentes dans un monde sans sélections). Les sélections se
   choisissent comme les clubs : nom, niveau du XV, rendez-vous de la saison en petit.
-- Carrière de sélectionneur : quatre entrées dans le menu, toutes dans la barre du
-  téléphone : Sélection, Liste, Le XV, Calendrier.
+- Carrière de sélectionneur : quatre entrées dans la barre du téléphone (Sélection,
+  Liste, Le XV, Calendrier), plus le Journal (dans le menu ; volet « Plus » sur téléphone).
   - Sélection (accueil) : même charpente que la page Club. L'affiche dit ce qui attend
     le sélectionneur : « Annonce ta liste » (bouton vers la liste), l'adversaire du jour
     (« Simuler le match » en contour, « Jouer le match » en accent), ou le prochain
@@ -214,6 +214,33 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   s'ouvre sur nos retenus, sélection par sélection, et les dates de doublon.
 - Fiche joueur : nationalité après l'âge ; « Hors championnats » pour un joueur
   sélectionnable sans club dans le jeu.
+- Journal (page `/journal`, entrée « Journal » sous l'accueil dans les deux carrières ;
+  volet « Plus » sur téléphone) : la une d'un journal sportif, sans image. Titre de page
+  et date d'édition, puis sept rubriques en pastilles (À la une, Mon club ou Ma sélection,
+  Résultats, À venir, Transferts, Infirmerie, Sélections) qui filtrent les articles.
+  Une grille qui tient dans l'écran : la une sur deux colonnes (rubrique en libellé,
+  étiquette « À la une » en accent, grand titre en capitales dont la taille suit la
+  largeur de la carte, brève, illustration à droite derrière un filet), des articles en
+  cartes autour d'elle (illustration en tête, titre, brève, date), « Le fil » (toutes les
+  autres brèves, les plus lourdes d'abord, blason ou photo devant), puis deux cartes l'une
+  sous l'autre : « Matchs » (liste déroulante de la compétition, pastilles Résultats /
+  À venir, affiches en `MatchList`) et « Transferts » (derniers mouvements, puis « À
+  suivre sur le marché » : fins de contrat et agents libres, avec leur note). Cinq
+  colonnes à partir de 1700 px (cinq articles autour de la une, dont deux brèves
+  empilées), quatre à partir de 1280 px (deux articles), deux en dessous (aucun : tout
+  passe dans le fil). Illustrations : feuille de score d'un match (une ligne par équipe,
+  blason, nom en capitales, score à droite, le battu en gris ; avant le match, le jour à
+  la place du score), portrait du joueur avec le blason de son club, trajet d'un
+  mouvement (blason de départ, flèche, blason d'arrivée, un rond en pointillé pour « sans
+  club », l'indemnité ou la nature dessous), ou blasons seuls. Ce qui touche notre équipe
+  porte un point de la couleur du club devant sa rubrique, et son nom en accent dans les
+  transferts. Un titre mène à la fiche du joueur quand l'article en a un. Les cartes
+  d'article sont des conteneurs de taille (`@container`) : quand la hauteur manque, la
+  brève raccourcit, puis disparaît, puis l'illustration ; une grande carte grossit son
+  texte. Les cartes à en-tête fixe (`.panel`) défilent dans leur corps.
+  Sur téléphone : les rubriques défilent sur une ligne ; la une, deux articles, puis le
+  fil. La carte des matchs n'apparaît que sous « Résultats » et « À venir » (la rubrique
+  choisit ce qu'elle montre), celle des transferts sous « Transferts ».
 
 ## Hauteur d'écran
 
@@ -248,7 +275,7 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   `NAV_ITEMS`), puis « Plus ». L'onglet actif : pastille de la couleur du club derrière
   le pictogramme, libellé en accent.
 - « Plus » ouvre un volet (`.sheet`) posé sur la barre, le reste de l'écran assombri :
-  les autres pages en vignettes (Médical, Formation, Staff, Infrastructures, Finances ;
+  les autres pages en vignettes (Journal, Médical, Formation, Staff, Infrastructures, Finances ;
   la page courante en accent), puis manager, numéro de partie et « Quitter la partie ».
   Il se ferme au changement de page, par Échap ou en touchant le fond ; « Plus » reste
   marqué actif tant que l'on est sur l'une de ses pages.

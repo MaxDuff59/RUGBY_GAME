@@ -31,6 +31,7 @@ from api.deps import SessionDep, load_my_club_row
 from api.jokers import joker_ids, joker_slots, live_jokers, squad_count, start_talks
 from api.jokers import sign as sign_joker
 from api.ledger import current_season, game_date, record
+from api.moves import log_move
 from api.schemas import (
     ClubRef,
     DealOption,
@@ -49,6 +50,7 @@ from api.schemas import (
 from data.leagues import league_config, sort_codes
 from engine.economy import SQUAD_MAX, SQUAD_MIN, TransactionCategory, sale_price
 from engine.free_agents import free_agent_wage, seasons_without_club
+from engine.journal import MoveKind
 from engine.transfers import (
     CLUB_OPENING_MARKUP,
     COOLDOWN_WEEKS_AFTER_MY_EXIT,
@@ -543,12 +545,14 @@ def _execute(session: Session, me: ClubRow, row: NegotiationRow, year: int) -> s
         return sign_joker(session, row, year)  # en plus de l'effectif
     if squad_count(session, me) >= SQUAD_MAX:
         raise HTTPException(status_code=400, detail=f"Effectif complet ({SQUAD_MAX} joueurs)")
+    day = game_date(session)
     if kind == DealKind.FREE:
         player.wage = row.wage
         player.contract_until = year + row.years - 1
         player.club_id = me.id
+        log_move(session, MoveKind.FREE, player, day, destination=me.id)
         return f"{name} s'engage avec le club pour {row.years} saisons."
-    seller, day = player.club, game_date(session)
+    seller = player.club
     if kind == DealKind.TRANSFER:
         if me.balance < row.fee:
             raise HTTPException(status_code=400, detail="Trésorerie insuffisante pour l'indemnité")
@@ -572,10 +576,12 @@ def _execute(session: Session, me: ClubRow, row: NegotiationRow, year: int) -> s
         player.contract_until = year + row.years - 1
         player.loaned_from = None
         player.club_id = me.id
+        log_move(session, MoveKind.TRANSFER, player, day, seller.id, me.id, row.fee)
         return f"{name} rejoint le club pour {row.years} saisons."
 
     player.loaned_from = seller.id
     player.club_id = me.id
+    log_move(session, MoveKind.LOAN, player, day, seller.id, me.id)
     return f"{name} est prêté jusqu'à la fin de la saison."
 
 
@@ -751,6 +757,7 @@ def sell(player_id: int, session: SessionDep) -> TransfersOverview:
         session, buyer, TransactionCategory.TRANSFER, f"Achat · {name} ({club.name})", -price, day
     )
     row.club_id = buyer.id
+    log_move(session, MoveKind.TRANSFER, row, day, club.id, buyer.id, price)
     session.commit()
     session.refresh(club)
     return _overview(session, club)

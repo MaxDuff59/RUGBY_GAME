@@ -9,6 +9,7 @@ import Club from "./pages/Club.jsx";
 import Facilities from "./pages/Facilities.jsx";
 import Finances from "./pages/Finances.jsx";
 import Internationals from "./pages/Internationals.jsx";
+import Journal from "./pages/Journal.jsx";
 import Login from "./pages/Login.jsx";
 import Match from "./pages/Match.jsx";
 import Medical from "./pages/Medical.jsx";
@@ -41,6 +42,7 @@ export default function App() {
       <Route path="/start" element={<StartCareer />} />
       <Route element={<Layout />}>
         <Route index element={<Home />} />
+        <Route path="/journal" element={<Journal />} />
         <Route path="/calendrier" element={<Calendar />} />
         <Route path="/international" element={<Internationals />} />
         <Route path="/liste" element={<SquadList />} />

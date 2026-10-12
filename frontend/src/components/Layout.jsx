@@ -13,6 +13,7 @@ import NavIcon from "./NavIcon.jsx";
 // dans le volet « Plus ». `icon` : clé du pictogramme (NavIcon).
 const NAV_ITEMS = [
   { to: "/", label: "Club", icon: "club", primary: true },
+  { to: "/journal", label: "Journal", icon: "journal" },
   { to: "/calendrier", label: "Calendrier", icon: "calendrier", primary: true },
   { to: "/effectif", label: "Effectif", icon: "effectif", primary: true },
   { to: "/medical", label: "Médical", icon: "medical" },
@@ -25,9 +26,10 @@ const NAV_ITEMS = [
   // La page Match (/match) n'a pas d'entrée ici : on y va par « Jouer le match », page Club.
 ];
 
-// Carrière de sélectionneur : pas de club à gérer, quatre pages.
+// Carrière de sélectionneur : pas de club à gérer, ses quatre pages et le journal.
 const SELECTOR_NAV_ITEMS = [
   { to: "/", label: "Sélection", icon: "club", primary: true },
+  { to: "/journal", label: "Journal", icon: "journal" },
   { to: "/liste", label: "Liste", icon: "liste", primary: true },
   { to: "/effectif", label: "Le XV", icon: "effectif", primary: true },
   { to: "/international", label: "Calendrier", icon: "calendrier", primary: true },

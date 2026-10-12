@@ -2,6 +2,13 @@
 // du texte courant. Chaque entrée du menu (Layout) a sa clé.
 const PATHS = {
   club: <path d="M12 3l7 2.6V11c0 4.8-3.3 8.3-7 10-3.7-1.7-7-5.2-7-10V5.6L12 3z" />,
+  // Journal : une page pliée, ses lignes de texte
+  journal: (
+    <>
+      <path d="M16.5 8.5H20v9.2a1.75 1.75 0 0 1-3.5 0V4.5H4v13.2a1.8 1.8 0 0 0 1.8 1.8h12.4" />
+      <path d="M7 8.5h6.5M7 12h6.5M7 15.5h4" />
+    </>
+  ),
   calendrier: (
     <>
       <rect x="3.5" y="5" width="17" height="15" rx="2" />
