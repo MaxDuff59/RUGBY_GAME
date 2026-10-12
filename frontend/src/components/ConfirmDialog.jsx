@@ -44,29 +44,7 @@ export default function ConfirmDialog({
 
       {text && <p className="confirm__text">{text}</p>}
 
-      {rows.length > 0 && (
-        <dl className="confirm__rows">
-          {rows.map((row) => (
-            <div key={row.label} className="confirm__row">
-              <dt>{row.label}</dt>
-              <dd>
-                <span className="confirm__value">
-                  {row.from !== undefined ? (
-                    <>
-                      <span className="confirm__from">{row.from}</span>
-                      <span className="confirm__arrow" aria-label="devient">→</span>
-                      {row.to}
-                    </>
-                  ) : (
-                    row.value
-                  )}
-                </span>
-                {row.hint && <span className="confirm__hint">{row.hint}</span>}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      )}
+      <SummaryRows rows={rows} />
 
       {warning && <p className="confirm__warning">{warning}</p>}
       {error && <p className="status--error" style={{ margin: 0 }}>{error.message}</p>}
@@ -80,6 +58,34 @@ export default function ConfirmDialog({
         </button>
       </div>
     </Modal>
+  );
+}
+
+// Récapitulatif en lignes « libellé → valeur » (voir `rows` plus haut).
+export function SummaryRows({ rows }) {
+  if (rows.length === 0) return null;
+  return (
+    <dl className="confirm__rows">
+      {rows.map((row) => (
+        <div key={row.label} className="confirm__row">
+          <dt>{row.label}</dt>
+          <dd>
+            <span className="confirm__value">
+              {row.from !== undefined ? (
+                <>
+                  <span className="confirm__from">{row.from}</span>
+                  <span className="confirm__arrow" aria-label="devient">→</span>
+                  {row.to}
+                </>
+              ) : (
+                row.value
+              )}
+            </span>
+            {row.hint && <span className="confirm__hint">{row.hint}</span>}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 

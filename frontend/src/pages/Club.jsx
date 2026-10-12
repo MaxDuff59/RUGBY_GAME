@@ -8,7 +8,9 @@ import FormPills, { recentForm } from "../components/FormPills.jsx";
 import MatchList from "../components/MatchList.jsx";
 import { NOTE_LINES, NoteLine } from "../components/NoteLine.jsx";
 import SeasonReview from "../components/SeasonReview.jsx";
+import Simulation, { simulationTargets } from "../components/Simulation.jsx";
 import SortHeader from "../components/SortHeader.jsx";
+import SplitButton from "../components/SplitButton.jsx";
 import {
   INJURY_SOURCES,
   SEVERITIES,
@@ -67,6 +69,8 @@ export default function Club() {
   const affairs = useApi(useCallback(api.getAffairs, []));
   const pending = affairs.data?.pending ?? [];
   const [showAffairs, setShowAffairs] = useState(false);
+  // Fenêtre « Simuler jusqu'à… » : { until }, la date proposée (null : à choisir).
+  const [simulation, setSimulation] = useState(null);
   const [notesVersion, setNotesVersion] = useState(0); // recharge la vie du club après une réponse
 
   async function act(call, onDone) {
@@ -82,21 +86,25 @@ export default function Club() {
   }
 
   // Après une journée jouée (simulée ici, ou finie depuis la page Match) : la suite.
+  // `run` : pendant une simulation sur plusieurs journées, ce qu'elles ont laissé depuis
+  // la première (blessés, joueurs signés ailleurs, sélections).
   const applyResult = useCallback(
-    (result) => {
+    (result, run = null) => {
       // Limogé par la direction : la carrière est terminée, on choisit un autre club.
       if (result.dismissal) {
         navigate("/start", { replace: true });
         return;
       }
       setLastPlayed(result.played);
-      setNewInjuries(result.injuries);
-      setSignings(result.signings);
-      setCallUps(result.call_ups ?? []);
+      setNewInjuries(run?.injuries ?? result.injuries);
+      setSignings(run?.signings ?? result.signings);
+      setCallUps(run?.callUps ?? result.call_ups ?? []);
       season.setData(result.season);
+      affairs.setData({ pending: result.affairs, recent: affairs.data?.recent ?? [] });
+      // La fenêtre de simulation reste devant : affaires et bilan attendent sa fermeture.
+      if (run) return;
       // La finale vient d'être jouée : place au bilan (les affaires passent devant).
       setShowReview(result.season.phase === "finished" && result.affairs.length === 0);
-      affairs.setData({ pending: result.affairs, recent: affairs.data?.recent ?? [] });
       setShowAffairs(result.affairs.length > 0);
     },
     [navigate, season.setData, affairs.setData, affairs.data],
@@ -120,6 +128,25 @@ export default function Club() {
       return;
     }
     act(api.playMatchday, applyResult);
+  };
+
+  const simulateUntil = (until) => {
+    if (pending.length > 0) {
+      setShowAffairs(true);
+      return;
+    }
+    setActionError(null);
+    setSimulation({ until });
+  };
+
+  // Fenêtre de simulation refermée : les affaires et le bilan qu'elle faisait attendre.
+  const closeSimulation = (played) => {
+    setSimulation(null);
+    if (!played) return;
+    // Les affaires tranchées par le staff en chemin rejoignent les affaires réglées.
+    affairs.reload();
+    setShowAffairs(pending.length > 0);
+    setShowReview(season.data?.phase === "finished" && pending.length === 0);
   };
 
   const playLive = () => {
@@ -161,6 +188,18 @@ export default function Club() {
   const next = data.next_matchday;
   const myNextMatch = next?.matches.find((m) => m.home.id === myId || m.away.id === myId) ?? null;
   const rankOf = (clubId) => data.standings.find((row) => row.club_id === clubId)?.rank;
+  // Menu de la flèche de « Simuler la journée » : plusieurs journées d'un coup.
+  const simulateOptions = next
+    ? [
+        { key: "date", label: "Une date à choisir…", onSelect: () => simulateUntil(null) },
+        ...simulationTargets(data).map((target) => ({
+          key: target.key,
+          label: target.label,
+          hint: target.hint,
+          onSelect: () => simulateUntil(target.date),
+        })),
+      ]
+    : [];
 
   // Derniers résultats : la journée qu'on vient de jouer, sinon la dernière jouée.
   const playedMatches = data.matches.filter((m) => m.home_score !== null);
@@ -180,6 +219,15 @@ export default function Club() {
       )}
       {showAffairs && pending.length > 0 && (
         <Affairs affairs={pending} onAnswered={affairAnswered} onClose={() => setShowAffairs(false)} />
+      )}
+      {simulation && (
+        <Simulation
+          season={data}
+          clubId={myId}
+          initialUntil={simulation.until}
+          onPlayed={applyResult}
+          onClose={closeSimulation}
+        />
       )}
 
       {phone && (
@@ -241,13 +289,19 @@ export default function Club() {
                 </>
               )}
               <div className="hero__actions">
-                <button type="button" className="button" disabled={busy} onClick={simulate}>
+                <SplitButton
+                  disabled={busy}
+                  onClick={simulate}
+                  menuLabel="Autres simulations"
+                  menuTitle="Simuler jusqu'à…"
+                  options={pending.length > 0 ? [] : simulateOptions}
+                >
                   {busy
                     ? "Simulation…"
                     : pending.length > 0
                       ? `${pending.length} affaire${pending.length > 1 ? "s" : ""} à régler`
                       : "Simuler la journée"}
-                </button>
+                </SplitButton>
                 <button
                   type="button"
                   className="button button--primary"

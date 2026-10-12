@@ -95,6 +95,20 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   puis une réponse par ligne. Après la réponse : la réaction (filet accent à gauche)
   et les effets, note par note (hausse en noir, baisse en gris). Tant qu'une affaire
   attend, le bouton « Simuler la journée » devient « 1 affaire à régler ».
+- Simuler plusieurs journées : « Simuler la journée » est un bouton en deux parties
+  (`SplitButton`), l'action à gauche, une flèche à droite. La flèche ouvre un menu
+  « Simuler jusqu'à… » (bordure noire, pas d'ombre ; au-dessus du bouton si la place manque
+  en bas) : une date à choisir, la fin de la phase aller, de la saison régulière, de la
+  saison. Chaque choix ouvre la fenêtre de simulation (`Simulation`, `Modal compact`) :
+  la date (champ, raccourcis en pastilles, ou clic sur une journée de la liste), la liste
+  des journées à venir (celles d'après la date en retrait) et le sort des affaires (« Le
+  staff tranche » par défaut, ou « M'arrêter »). Pendant la simulation : barre de progression
+  en accent, la journée en cours sur fond gris, notre résultat à droite de chaque ligne
+  jouée (pastille V / N / D, notre score d'abord), « Arrêter » finit la journée en cours.
+  Le fond de la fenêtre est à peine assombri (`light`) : derrière, la page Club se met à
+  jour à chaque journée (classement, vie du club, dernière journée). À la fin : bilan,
+  classement avant → après, blessés, signés ailleurs, sélections, affaires tranchées par
+  le staff ; le bouton mène à l'affaire en attente ou au bilan de la saison s'il y en a.
 - Infrastructures : chaque carte a un bouton « Voir » qui ouvre une grande fenêtre
   (`Modal`) : à gauche la scène 3D (`Scene3D.jsx`, transformations CSS, pas de
   bibliothèque ; on glisse pour tourner, « Recentrer » remet la vue), à droite le panneau.

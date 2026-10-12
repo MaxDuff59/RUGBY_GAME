@@ -580,6 +580,76 @@ body,
   cursor: default;
 }
 
+/* Bouton en deux parties : l'action, puis une flèche qui ouvre un menu d'actions voisines */
+.split {
+  position: relative;
+  display: inline-flex;
+}
+
+.split__main {
+  border-radius: 6px 0 0 6px;
+}
+
+.split__toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border-left: 0;
+  border-radius: 0 6px 6px 0;
+}
+
+.split__toggle[aria-expanded="true"] {
+  background: var(--line-soft);
+}
+
+.split__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 6;
+  width: max-content;
+  min-width: 100%;
+  max-width: calc(100vw - 64px);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+}
+
+.split__menu--above {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.split__title {
+  margin: 0;
+  padding: 8px 12px 6px;
+}
+
+.split__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--ink);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.split__item:hover,
+.split__item:focus-visible {
+  background: var(--line-soft);
+  outline: none;
+}
+
 .input {
   min-height: 44px;
   padding: 0 14px;
@@ -2401,6 +2471,21 @@ button.market-item__main:focus-visible {
   }
 }
 
+/* Sur téléphone, la barre d'onglets passe devant : la fenêtre s'arrête au-dessus d'elle. */
+@media (max-width: 960px) {
+  .modal-backdrop {
+    padding-bottom: calc(24px + var(--tabbar-h));
+  }
+  .modal {
+    max-height: calc(100dvh - 48px - var(--tabbar-h));
+  }
+}
+
+/* Fond à peine assombri : la page reste lisible derrière (simulation de plusieurs journées) */
+.modal-backdrop--light {
+  background: rgba(22, 24, 27, 0.28);
+}
+
 /* Fenêtre étroite, à la hauteur de son contenu (affaires entre deux matchs) */
 .modal--compact {
   max-width: 640px;
@@ -3148,6 +3233,151 @@ button.market-item__main:focus-visible {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 12px;
+}
+
+/* --- Simulation de plusieurs journées ------------------------------------------------ */
+
+.modal--dialog.simulation {
+  margin-top: 6vh;
+}
+
+/* Sur téléphone, la fenêtre prend toute la hauteur libre, jusqu'à la barre d'onglets. */
+@media (max-width: 960px) {
+  .modal--dialog.simulation {
+    margin-top: 0;
+  }
+}
+
+.simulation__fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+}
+
+.simulation__fields .field {
+  flex: 0 0 180px;
+}
+
+.simulation__progress {
+  transition: width 0.3s ease-out;
+}
+
+/* Les journées : une grille partagée, pour que date, adversaire et résultat s'alignent
+   d'une ligne à l'autre. La liste défile dans la fenêtre. */
+.simulation__days {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  column-gap: 16px;
+  max-height: min(34vh, 380px);
+  overflow-y: auto;
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.simulation__day,
+.simulation__row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+}
+
+.simulation__day + .simulation__day {
+  border-top: 1px solid var(--line-soft);
+}
+
+.simulation__row {
+  min-height: 42px;
+  padding: 6px 8px;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+}
+
+button.simulation__row {
+  cursor: pointer;
+}
+
+button.simulation__row:hover,
+button.simulation__row:focus-visible {
+  background: var(--line-soft);
+  outline: none;
+}
+
+/* Après la date choisie : en retrait */
+.simulation__day--out {
+  opacity: 0.4;
+}
+
+.simulation__day--current {
+  background: var(--line-soft);
+}
+
+.simulation__when {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.simulation__when strong {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.simulation__opponent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.simulation__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.simulation__result {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 64px;
+}
+
+.simulation__score {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  text-align: right;
+}
+
+.simulation__option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.simulation__option p {
+  margin: 2px 0 0;
+}
+
+@media (max-width: 520px) {
+  .simulation__days {
+    column-gap: 10px;
+  }
+  .simulation__venue {
+    display: none;
+  }
 }
 
 /* --- Infrastructures : fenêtre « Voir » et scène 3D --------------------------------- */
