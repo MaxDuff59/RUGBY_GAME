@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import engine.history
+from api import internationals
 from api.ledger import game_date
 from api.schemas import ClubNotesOut, FormOut, NoteOut, ObjectiveOut
 from engine.board import SACK_THRESHOLD, SACK_WARNING
@@ -118,6 +119,7 @@ class History(engine.history.History):
             leagues=[season_leagues(season) for season in seasons],
             ranks=[ensure_preseason_ranks(session, season) for season in seasons],
             affair_boosts=_affair_boosts(session),
+            internationals=internationals.played_tests(session),
             sponsor_moods={
                 row.id: sponsor_mood(deals_from(row.sponsors))
                 for row in session.scalars(select(ClubRow))

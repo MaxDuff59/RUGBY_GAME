@@ -7,7 +7,8 @@ joueurs inventés sinon, ou pour combler un poste vide.
 Chaque club reçoit un niveau de base ; ses joueurs sont tirés autour de ce
 niveau, avec un profil d'attributs cohérent avec leur poste. Un vrai joueur n'a
 pas de note publique : son niveau suit celui de son club, plus haut s'il est
-international, et selon son âge.
+international, et selon son âge. Il garde sa nationalité ; un joueur inventé
+prend celle du pays de son club (data/nations.py), aucune dans un monde inventé.
 """
 
 import itertools
@@ -20,6 +21,7 @@ from datetime import date
 from pathlib import Path
 
 from data.leagues import DEFAULT_LEAGUE, LEAGUES, League
+from data.nations import home_nation, nation_code
 from engine.economy import SQUAD_MAX, SQUAD_MIN, STADIUM_STEPS, staff_wage, wage_for
 from models import (
     ATTRIBUTE_MAX,
@@ -140,6 +142,7 @@ def generate_player(
     club_id: int | None,
     rng: random.Random,
     season_year: int = FIRST_SEASON_YEAR,
+    nationality: str | None = None,
 ) -> Player:
     """Crée un joueur dont les attributs tournent autour de `level` (sur 20)."""
     # Chaque joueur a son propre niveau, un peu au-dessus ou en dessous de son club.
@@ -152,6 +155,7 @@ def generate_player(
         age=rng.randint(18, 35),
         position=position,
         club_id=club_id,
+        nationality=nationality,
         **attributes,
     )
     # Salaire négocié autour de la valeur du joueur (de -10 % à +15 %).
@@ -191,9 +195,10 @@ def generate_youth_player(
     rng: random.Random,
     season_year: int = FIRST_SEASON_YEAR,
     age: int | None = None,
+    nationality: str | None = None,
 ) -> Player:
     """Un espoir : jeune, mal payé, sous contrat de formation."""
-    youth = generate_player(player_id, position, level, club_id, rng, season_year)
+    youth = generate_player(player_id, position, level, club_id, rng, season_year, nationality)
     youth.age = age if age is not None else rng.randint(*YOUTH_AGES)
     youth.wage = YOUTH_WAGE
     youth.contract_until = season_year + YOUTH_CONTRACT_YEARS - 1
@@ -235,6 +240,18 @@ REAL_PLAYER_SPREAD = 1.0
 def load_rosters() -> dict:
     """Les vrais effectifs connus (data/rosters.json), par nom de club."""
     return json.loads(ROSTERS_PATH.read_text()) if ROSTERS_PATH.exists() else {}
+
+
+def roster_nationalities(rosters: dict | None = None) -> dict[str, str]:
+    """Nationalité de chaque vrai joueur connu, par nom complet (pros et espoirs)."""
+    rosters = load_rosters() if rosters is None else rosters
+    known = {}
+    for roster in rosters.values():
+        for entry in [*roster.get("pros", []), *roster.get("youths", [])]:
+            code = nation_code(entry.get("nationality"))
+            if code:
+                known.setdefault(entry["name"].strip(), code)
+    return known
 
 
 def _age_offset(age: int) -> float:
@@ -289,6 +306,7 @@ def _entries(raw: list[dict], ages: tuple[int, int], rng: random.Random) -> list
             "name": e["name"],
             "position": Position(e["position"].upper()),
             "international": bool(e.get("international")),
+            "nationality": nation_code(e.get("nationality")),
             "age": _real_age(e, ages, rng),
             "photo": e.get("photo"),
         }
@@ -307,6 +325,7 @@ def _real_player(
         age=entry["age"],
         position=entry["position"],
         club_id=club_id,
+        nationality=entry["nationality"],
         **_attributes(player_id, entry["position"], player_level, rng),
     )
     player.wage = wage_for(player, noise=rng.uniform(0.9, 1.15))
@@ -367,20 +386,27 @@ def _real_squads(
         youth.squad = Squad.YOUTH
         club.youths.append(youth)
 
-    # Postes vides ou trop peu fournis : des joueurs inventés comblent.
+    # Postes vides ou trop peu fournis : des joueurs inventés, du pays du club, comblent.
+    country = home_nation(club.name)
+
+    def invented(position: Position) -> Player:
+        return generate_player(next(player_ids), position, level, club.id, rng, nationality=country)
+
     counts = Counter(p.position for p in club.players)
     for position, minimum in POSITION_MINIMUM.items():
         for _ in range(minimum - counts[position]):
-            club.players.append(generate_player(next(player_ids), position, level, club.id, rng))
+            club.players.append(invented(position))
     while len(club.players) < SQUAD_MIN:
         counts = Counter(p.position for p in club.players)
         position = min(Position, key=lambda p: counts[p] / SQUAD_COMPOSITION[p])
-        club.players.append(generate_player(next(player_ids), position, level, club.id, rng))
+        club.players.append(invented(position))
     counts = Counter(p.position for p in club.youths)
     for position, size in YOUTH_COMPOSITION.items():
         for _ in range(math.ceil(size / 2) - counts[position]):
             club.youths.append(
-                generate_youth_player(next(player_ids), position, junior_level, club.id, rng)
+                generate_youth_player(
+                    next(player_ids), position, junior_level, club.id, rng, nationality=country
+                )
             )
 
 
@@ -521,16 +547,26 @@ def _make_club(
     if roster and roster.get("pros"):
         _real_squads(club, roster, level, player_ids, rng, [] if released is None else released)
     else:
+        country = home_nation(name)
         for position, size in SQUAD_COMPOSITION.items():
             for _ in range(size):
                 club.players.append(
-                    generate_player(next(player_ids), position, level, club_id, rng)
+                    generate_player(
+                        next(player_ids), position, level, club_id, rng, nationality=country
+                    )
                 )
         junior_level = youth_level(level, club.facilities.academy_level)
         for position, size in YOUTH_COMPOSITION.items():
             for _ in range(size):
                 club.youths.append(
-                    generate_youth_player(next(player_ids), position, junior_level, club_id, rng)
+                    generate_youth_player(
+                        next(player_ids),
+                        position,
+                        junior_level,
+                        club_id,
+                        rng,
+                        nationality=country,
+                    )
                 )
     # Un membre de staff par poste, de niveau proche de celui du club.
     for role in StaffRole:

@@ -19,7 +19,7 @@ import random
 from collections import OrderedDict
 from pathlib import Path
 
-from sqlalchemy import Engine, create_engine, event, func, inspect, select, text
+from sqlalchemy import Engine, create_engine, event, func, inspect, select, text, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from data.generator import (
@@ -30,7 +30,9 @@ from data.generator import (
     generate_clubs,
     generate_real_clubs,
     generate_staff_candidates,
+    roster_nationalities,
 )
+from data.nations import home_nation
 from engine.free_agents import newcomers
 from models import ATTRIBUTE_MAX, ATTRIBUTE_MIN, Position
 from models.orm import Base, ClubRow, PlayerRow, StaffRow
@@ -316,11 +318,53 @@ def _add_season_seed(engine: Engine) -> None:
         connection.execute(text(f"ALTER TABLE {table} ADD COLUMN seed INTEGER"))
 
 
+def _add_nationality(engine: Engine) -> None:
+    """Nationalité des joueurs, ajoutée après coup (SQLite comme Postgres) avec les
+    sélections nationales : un vrai joueur retrouve la sienne dans data/rosters.json,
+    un joueur inventé prend celle du pays de son club (aucune dans un monde inventé)."""
+    inspector = inspect(engine)
+    schema = _schema_of(engine)
+    if not inspector.has_table("players", schema=schema):
+        return
+    if "nationality" in {c["name"] for c in inspector.get_columns("players", schema=schema)}:
+        return
+    table = f'"{schema}"."players"' if schema else "players"
+    with engine.begin() as connection:
+        connection.execute(text(f"ALTER TABLE {table} ADD COLUMN nationality VARCHAR(3)"))
+    known = roster_nationalities()
+    with sessionmaker(bind=engine)() as session:
+        countries = {
+            club_id: home_nation(name)
+            for club_id, name in session.execute(select(ClubRow.id, ClubRow.name))
+        }
+        rows = session.execute(
+            select(
+                PlayerRow.id,
+                PlayerRow.first_name,
+                PlayerRow.last_name,
+                PlayerRow.club_id,
+                PlayerRow.loaned_from,
+            )
+        )
+        found = []
+        for player_id, first_name, last_name, club_id, loaned_from in rows:
+            # Un joueur prêté est formé (ou payé) par son club propriétaire.
+            code = known.get(f"{first_name} {last_name}".strip()) or countries.get(
+                loaned_from or club_id
+            )
+            if code:
+                found.append({"id": player_id, "nationality": code})
+        if found:
+            session.execute(update(PlayerRow), found)
+            session.commit()
+
+
 def _migrate(engine: Engine) -> None:
     """Les quelques changements de schéma qu'on sait rattraper sans repartir de zéro
     (parties SQLite d'avant ces changements ; en Postgres les schémas naissent à jour,
-    sauf pour la graine des saisons)."""
+    sauf pour la graine des saisons et la nationalité des joueurs)."""
     _add_season_seed(engine)
+    _add_nationality(engine)
     if engine.dialect.name != "sqlite":
         return
     inspector = inspect(engine)

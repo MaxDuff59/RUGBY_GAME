@@ -59,6 +59,7 @@ export default function Club() {
   const [lastPlayed, setLastPlayed] = useState(null); // la journée qu'on vient de simuler
   const [newInjuries, setNewInjuries] = useState([]); // nos blessés de cette journée
   const [signings, setSignings] = useState([]); // nos joueurs signés ailleurs cette journée
+  const [callUps, setCallUps] = useState([]); // nos joueurs dans les listes des sélections annoncées depuis
   const [showReview, setShowReview] = useState(false); // bilan de fin de saison
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState(null);
@@ -91,6 +92,7 @@ export default function Club() {
       setLastPlayed(result.played);
       setNewInjuries(result.injuries);
       setSignings(result.signings);
+      setCallUps(result.call_ups ?? []);
       season.setData(result.season);
       // La finale vient d'être jouée : place au bilan (les affaires passent devant).
       setShowReview(result.season.phase === "finished" && result.affairs.length === 0);
@@ -147,6 +149,7 @@ export default function Club() {
       setLastPlayed(null);
       setNewInjuries([]);
       setSignings([]);
+      setCallUps([]);
       setShowReview(false);
       season.setData(data);
     });
@@ -227,7 +230,10 @@ export default function Club() {
                 {formatLongDate(next.date)}
               </p>
               {myNextMatch ? (
-                <NextMatch match={myNextMatch} myId={myId} rankOf={rankOf} matches={data.matches} />
+                <>
+                  <NextMatch match={myNextMatch} myId={myId} rankOf={rankOf} matches={data.matches} />
+                  <Doublon clubId={myId} season={data} />
+                </>
               ) : (
                 <>
                   <h1 className="hero__title">Tu ne joues pas</h1>
@@ -282,6 +288,8 @@ export default function Club() {
                 <span className="muted">{formatLongDate(lastMatchday.date)}</span>
               </div>
               <div className="card">
+                {/* Rare et lourd de conséquences : avant les résultats, pour ne pas le manquer. */}
+                {lastPlayed && callUps.length > 0 && <NewCallUps notices={callUps} />}
                 <MatchList matches={lastMatchday.matches} myClubId={myId} />
                 {lastPlayed && newInjuries.length > 0 && <NewInjuries cases={newInjuries} />}
                 {lastPlayed && signings.length > 0 && <NewSignings signings={signings} />}
@@ -334,6 +342,56 @@ function NewSignings({ signings }) {
         ))}
       </ul>
     </>
+  );
+}
+
+// Les listes des sélections annoncées depuis la journée précédente : nos joueurs retenus,
+// sélection par sélection, et les jours où ils nous manqueront. Compact : une liste de 42
+// peut prendre une vingtaine de joueurs au même club.
+function NewCallUps({ notices }) {
+  return notices.map((notice) => {
+    const byNation = new Map();
+    for (const { player, nation } of notice.players) {
+      if (!byNation.has(nation.name)) byNation.set(nation.name, []);
+      byNation.get(nation.name).push(player.name.split(" ").slice(1).join(" ") || player.name);
+    }
+    const days = notice.doublons;
+    return (
+      <div key={notice.competition}>
+        <div className="matches__stage">
+          Sélections · {notice.competition} · {notice.players.length} retenu{notice.players.length > 1 ? "s" : ""}
+        </div>
+        <p className="call-ups">
+          {[...byNation].map(([nation, names]) => (
+            <span key={nation}>
+              <strong>{nation}</strong> : {names.join(", ")}.{" "}
+            </span>
+          ))}
+          <span className="muted">
+            {days.length > 0
+              ? `Doublon${days.length > 1 ? "s" : ""} : ils manqueront le${days.length > 1 ? "s" : ""} ${days.map(formatShortDate).join(", ")}`
+              : "Aucun doublon : nous ne jouons pas ces jours-là."}
+          </span>
+        </p>
+      </div>
+    );
+  });
+}
+
+// Sous l'affiche : nos joueurs retenus par une sélection qui joue le même jour que nous.
+function Doublon({ clubId, season }) {
+  // Rechargé à chaque journée jouée (la saison change d'objet).
+  const club = useApi(useCallback(() => api.getClub(clubId), [clubId, season]));
+  const away = club.data?.players.filter((player) => player.duty?.away) ?? [];
+  if (away.length === 0) return null;
+  const names = away.map((player) => player.last_name);
+  return (
+    <p className="muted doublon">
+      <span className="tag tag--fragile">Doublon</span>{" "}
+      {away.length} joueur{away.length > 1 ? "s" : ""} en sélection : {names.slice(0, 6).join(", ")}
+      {names.length > 6 ? ` et ${names.length - 6} autre${names.length - 6 > 1 ? "s" : ""}` : ""}.{" "}
+      <Link to="/effectif">Voir le XV</Link>
+    </p>
   );
 }
 

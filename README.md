@@ -128,7 +128,7 @@ parties ailleurs (ex. pour une instance de test).
 | `GET /clubs/{id}/notes` | Vie du club sur 20 (moral, cohésion, fraîcheur, confiance de la direction, ferveur des supporters) et forme du jour |
 | `GET /career/dismissal` | Dernier limogeage, tant qu'aucune nouvelle carrière n'a commencé |
 | `GET /players/{id}` | Fiche d'un joueur : comparaison à son poste, note à chaque poste, saison, blessures |
-| `POST /career`, `GET /career` | Choisir son club (tire aussi le calendrier de la 1re saison) |
+| `POST /career`, `GET /career` | Choisir son club, ou sa sélection (`nation`) ; tire aussi le calendrier de la 1re saison |
 | `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | Compte : s'inscrire, se connecter (cookie de session), se déconnecter, qui suis-je |
 | `GET /saves`, `POST /saves/{n}/load`, `POST /saves/{n}/new`, `DELETE /saves/{n}` | Parties sauvegardées du compte : lister, charger, créer un monde neuf, supprimer |
 | `GET /photos/{nom}` | Photo d'un vrai joueur, depuis notre copie |
@@ -150,6 +150,59 @@ parties ailleurs (ex. pour une instance de test).
 | `GET /medical`, `POST /medical/{id}/protocol/{protocol}` | Infirmerie : blessés, protocole de soins, dossier médical |
 | `GET /academy`, `POST /academy/promote/{id}`, `POST /academy/demote/{id}` | Centre de formation : espoirs, championnat espoirs, promotions |
 | `GET /affairs`, `POST /affairs/{id}/answer` | Affaires entre deux matchs : celles en attente, et la réponse (effets révélés) |
+| `GET /internationals`, `GET /internationals/nations`, `GET /internationals/{fenêtre}/{nation}` | Calendrier international de la saison ; sélections à diriger ; liste d'une sélection |
+| `GET /selection`, `POST /selection/advance` | Sélectionneur : où il en est ; jouer le prochain jour de match du monde |
+| `GET /selection/pool`, `POST /selection/list`, `POST /selection/replace` | Joueurs sélectionnables ; annoncer la liste de 42 ; remplacer un blessé |
+| `GET /selection/team`, `PUT` / `DELETE /selection/lineup` | Le groupe et son XV ; composer ; rendre la main au staff |
+
+## Sélections nationales
+
+Douze sélections (`backend/data/nations.py`) et trois fenêtres par saison, un match
+par samedi comme les championnats :
+
+| Fenêtre | Quand | Qui |
+|---|---|---|
+| Rugby Championship | 15 août – début octobre, 6 samedis | Nouvelle-Zélande, Afrique du Sud, Australie, Argentine, aller-retour |
+| Tournées d'automne | mi-novembre, 3 samedis | les six nations du Tournoi reçoivent celles du Sud, les Fidji et la Géorgie (les adversaires tournent d'une saison à l'autre) |
+| Tournoi des Six Nations | février-mars, 5 samedis | France, Angleterre, Irlande, Écosse, Galles, Italie ; qui reçoit s'inverse chaque saison |
+
+Un joueur garde la nationalité de sa fiche (`rosters.json`) ; un joueur inventé prend
+celle du pays de son club, les jeunes du centre de formation aussi. Un monde de clubs
+inventés n'a ni pays ni sélections. L'Angleterre, l'Irlande et la Nouvelle-Zélande ne
+retiennent que les joueurs de leurs clubs. Une sélection à court de monde à un poste
+(aucun club gallois dans le jeu, peu de piliers fidjiens...) appelle des joueurs
+« hors championnats » : inventés, sans club dans le jeu et hors du marché.
+
+**Listes.** Deux semaines avant le premier match d'une fenêtre, chaque sélection annonce
+42 joueurs (6 piliers, 4 talonneurs, 5 deuxièmes lignes, 8 troisièmes lignes, 4 demis
+de mêlée, 3 ouvreurs, 5 centres, 4 ailiers, 3 arrières quand c'est le staff qui
+compose, sans les blessés).
+
+**Doublons.** Le jour où sa sélection joue, un joueur de la liste manque à son club ;
+les autres samedis de la fenêtre il lui est rendu, avec la fatigue de ses matchs (les
+matchs internationaux comptent dans la fraîcheur). Le club complète sa feuille de match
+avec ses meilleurs espoirs aux postes dégarnis. Avec les trêves actuelles, le Top 14
+a un doublon en novembre et trois pendant le Tournoi, plus quatre en septembre-octobre
+pour ses joueurs du Rugby Championship ; la Premiership, aux trêves plus longues, en a
+moitié moins. Le manager
+est prévenu à l'annonce des listes, la page Club signale le doublon du prochain match
+et la page Effectif marque les absents. Une titularisation promise à un joueur parti en
+sélection attend son retour. Un blessé en sélection revient à son club avec sa blessure.
+
+**Carrière de sélectionneur.** Au choix de la carrière, « Sélectionneur national » :
+pas de club (les 63 sont menés par leur staff), quatre pages. Le monde avance un jour
+de match à la fois ; il s'arrête tant que la liste due n'est pas annoncée, puis à
+chaque match de la sélection, à simuler ou à jouer en direct avec le XV composé parmi
+les 42. Une liste annoncée ne bouge plus, sauf pour remplacer un blessé. La saison
+suivante se lance quand tous les championnats ont fini.
+
+Règles dans `backend/engine/internationals.py` (calendrier, listes, doublons, matchs),
+branchement en base dans `backend/api/internationals.py`. Les matchs internationaux
+ont leur table (`internationals`), les listes aussi (`call_ups`), la carrière de
+sélectionneur la sienne (`selectors`). Une partie d'avant les sélections s'ouvre
+toujours : la nationalité des joueurs est ajoutée et retrouvée à l'ouverture, et sa
+saison en cours ne reçoit que les fenêtres pas encore commencées. Le niveau des
+sélections vient de celui de leurs joueurs, donc de leurs clubs.
 
 ## Jouer le match
 

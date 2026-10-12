@@ -65,6 +65,25 @@ export const api = {
   getLastDismissal: () => request("/career/dismissal"),
   startCareer: (managerName, clubId) =>
     post("/career", { manager_name: managerName, club_id: clubId }),
+  // Carrière de sélectionneur : `nation` est le code de la sélection (ex. "FRA").
+  startSelectorCareer: (managerName, nation) => post("/career", { manager_name: managerName, nation }),
+
+  // Sélections nationales : calendrier international, sélections à diriger, liste d'une nation
+  getInternationals: () => request("/internationals"),
+  listNations: () => request("/internationals/nations"),
+  getNationSquad: (competition, code) => request(`/internationals/${competition}/${code}`),
+
+  // Sélectionneur : où il en est, sa liste de 42, son XV, et le monde qui avance jour par jour
+  getSelection: () => request("/selection"),
+  getSelectionPool: () => request("/selection/pool"),
+  announceList: (playerIds) => post("/selection/list", { player_ids: playerIds }),
+  replaceInList: (playerOut, playerIn) =>
+    post("/selection/replace", { player_out: playerOut, player_in: playerIn }),
+  getSelectionTeam: () => request("/selection/team"),
+  setSelectionLineup: (playerIds) =>
+    request("/selection/lineup", { method: "PUT", body: { player_ids: playerIds } }),
+  resetSelectionLineup: () => del("/selection/lineup"),
+  advanceSelection: () => post("/selection/advance"),
 
   // Saison : calendrier, journée suivante, saison suivante
   // Sans championnat : celui du club dirigé.

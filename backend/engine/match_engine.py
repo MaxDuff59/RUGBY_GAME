@@ -797,7 +797,8 @@ class Side:
 
     @classmethod
     def from_state(cls, club: Club, state: dict) -> "Side":
-        players = {p.id: p for p in club.players}
+        # Espoirs compris : ils suppléent les internationaux un jour de doublon.
+        players = {p.id: p for p in [*club.players, *club.youths]}
         form = Form(
             morale=state["form"]["morale"],
             cohesion=state["form"]["cohesion"],

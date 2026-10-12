@@ -26,6 +26,7 @@ from api.routers import (
     contracts,
     facilities,
     finances,
+    internationals,
     leagues,
     live,
     matches,
@@ -34,6 +35,7 @@ from api.routers import (
     players,
     saves,
     seasons,
+    selection,
     staff,
     transfers,
 )
@@ -76,6 +78,8 @@ app.include_router(players.router)
 app.include_router(affairs.router)
 app.include_router(contracts.router)
 app.include_router(live.router)
+app.include_router(internationals.router)
+app.include_router(selection.router)
 app.include_router(photos.router)
 
 

@@ -5,6 +5,11 @@ Le calendrier est tiré au début de la saison (matchs sans score). Chaque appel
 tous ses matchs (qui blessent aussi), puis les recettes et les salaires. Les
 phases finales se créent au fil des résultats.
 
+Les matchs internationaux (api/internationals.py) suivent le même calendrier :
+à chaque date, les listes dues sont annoncées, les joueurs retenus par une
+sélection qui joue ce jour-là manquent à leur club (doublon), puis les matchs
+internationaux se jouent.
+
 Les règles sont dans le moteur (engine/season.py, engine/matchday.py,
 engine/offseason.py) : ici on charge le monde depuis la base, on appelle le
 moteur et on enregistre ce qu'il rend. Le hasard vient de la graine de la
@@ -14,11 +19,13 @@ saison (`season_rng`).
 import datetime
 import itertools
 import random
+from dataclasses import dataclass, field
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from api import internationals
 from api.affairs import (
     affair_out,
     draw_affair,
@@ -30,19 +37,23 @@ from api.deps import SessionDep, load_clubs
 from api.free_agents import age_free_agents, release, renew_pool
 from api.jokers import close_jokers, end_piges
 from api.ledger import current_season, record
-from api.live import live_match_row, load_live
+from api.live import live_match_row, load_live, load_live_test
 from api.notes import History, ensure_preseason_ranks, season_leagues
 from api.routers.contracts import contracts_overview, expire_contracts, rival_signings
 from api.routers.leagues import league_out
 from api.routers.medical import injury_case
 from api.schemas import (
+    CalledPlayer,
+    CallUpNotice,
     ClubRef,
     DismissalOut,
     InjuryCase,
     LeagueOut,
     MatchdayOut,
     MatchSummary,
+    NationOut,
     ObjectiveOut,
+    PlayerRef,
     PlayOut,
     ScorerOut,
     SeasonOut,
@@ -51,6 +62,7 @@ from api.schemas import (
 )
 from data.generator import FIRST_SEASON_YEAR
 from data.leagues import DEFAULT_LEAGUE, PROMOTION, league_config, sort_codes
+from data.nations import NATIONS_BY_CODE, WINDOWS_BY_CODE
 from engine.board import should_sack
 from engine.economy import SQUAD_MIN
 from engine.matchday import Day, play_day
@@ -81,6 +93,7 @@ from models.orm import (
     ClubRow,
     DismissalRow,
     InjuryRow,
+    InternationalRow,
     MatchRow,
     NegotiationRow,
     PlayerRow,
@@ -264,6 +277,8 @@ def create_season(session: Session, year: int, seed: int | None = None) -> Seaso
     session.commit()
     # Figé maintenant, avant que l'effectif ne bouge : l'objectif de la direction en dépend.
     ensure_preseason_ranks(session, season)
+    # Calendrier international, et les listes déjà dues au premier jour de la saison.
+    _prepare_day(session, season)
     return season
 
 
@@ -280,10 +295,19 @@ def _ensure_next_stage(session: Session, season: SeasonRow, league: str) -> None
 
 
 def _prepare_day(session: Session, season: SeasonRow) -> datetime.date | None:
-    """Ouvre les tours de phases finales prêts ; renvoie le prochain jour de match."""
+    """Ouvre les tours de phases finales prêts et annonce les listes des sélections
+    dues ; renvoie le prochain jour de match, clubs et sélections confondus."""
     for league in _season_league_codes(season):
         _ensure_next_stage(session, season, league)
-    return min((m.date for m in season.matches if not m.is_played), default=None)
+    internationals.ensure_calendar(session, season)
+    dates = [m.date for m in season.matches if not m.is_played]
+    next_test = internationals.next_test_date(session, season)
+    if next_test is not None:
+        dates.append(next_test)
+    day = min(dates, default=None)
+    if day is not None:
+        internationals.announce_due(session, season, day)
+    return day
 
 
 def _write_result(row: MatchRow, match: Match) -> None:
@@ -292,18 +316,26 @@ def _write_result(row: MatchRow, match: Match) -> None:
     row.home_lineup, row.away_lineup = list(match.home_lineup), list(match.away_lineup)
 
 
-def _play_day(
-    session: Session, season: SeasonRow, day: datetime.date
-) -> tuple[list[MatchRow], list[InjuryCase]]:
+@dataclass
+class DayResult:
+    """Ce qu'un jour de match a donné : les matchs de clubs, les matchs internationaux,
+    et les blessés du club dirigé (ou, pour un sélectionneur, de sa liste)."""
+
+    matches: list[MatchRow] = field(default_factory=list)
+    tests: list[InternationalRow] = field(default_factory=list)
+    cases: list[InjuryCase] = field(default_factory=list)
+
+
+def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayResult:
     """Joue tous les matchs du jour `day`, tous championnats confondus, et passe les
     écritures financières : charge le monde, laisse le moteur jouer la journée
-    (engine/matchday.py), puis enregistre ce qu'il rend.
+    (engine/matchday.py), puis enregistre ce qu'il rend. Les matchs internationaux
+    du jour se jouent ensuite (api/internationals.py).
 
-    Seuls les clubs qui jouent ce jour-là ont leur semaine d'entraînement. Si le
-    match du club dirigé est en cours en direct (api/live.py), il est joué
-    jusqu'au bout par le staff et compte tel quel ; la semaine d'entraînement a
-    alors déjà eu lieu. Renvoie les matchs joués et les blessés du club dirigé
-    (entraînement et matchs).
+    Seuls les clubs qui jouent ce jour-là ont leur semaine d'entraînement, sans leurs
+    joueurs retenus par une sélection qui joue le même jour. Si le match du club
+    dirigé est en cours en direct (api/live.py), il est joué jusqu'au bout par le
+    staff et compte tel quel ; la semaine d'entraînement a alors déjà eu lieu.
     """
     session.expire_all()  # blessures et effectifs des jours précédents
     todays = sorted(
@@ -319,10 +351,17 @@ def _play_day(
     rows_by_id = {row.id: row for row in _club_rows(session) if row.league in leagues}
     wanted = set(rows_by_id) | ({my_club_id} if my_club_id is not None else set())
     clubs = load_clubs(session, wanted)
-    players = {p.id: p for club in clubs.values() for p in club.players}
+    players = {p.id: p for club in clubs.values() for p in [*club.players, *club.youths]}
     if my_club_id is not None:
         # Titularisations promises au manager (api/affairs.py).
         clubs[my_club_id].forced_starters = forced_starters(session, my_club_id)
+    # Doublon : les joueurs retenus par une sélection qui joue aujourd'hui manquent
+    # à leur club, qui fait monter des espoirs aux postes dégarnis.
+    away = internationals.absentees_on(session, season, day)
+    for club in clubs.values():
+        internationals.rules.release(club, away, day)
+    human = internationals.selector(session)
+    watched = _selector_list(session, season, human) if human is not None else set()
 
     # Match en direct du club dirigé : le staff finit ce qu'il reste à jouer. Un jour
     # où seul un autre championnat joue, il attend le sien (ses clubs ne sont pas chargés).
@@ -362,7 +401,8 @@ def _play_day(
     for row, match in zip([*todays, *youth_rows], [*matches, *youth_matches], strict=True):
         _write_result(row, match)
 
-    # Blessures de la journée : enregistrées en base, et renvoyées pour le club dirigé.
+    # Blessures de la journée : enregistrées en base, et renvoyées pour le club dirigé
+    # (ou, pour un sélectionneur, pour les joueurs de sa liste).
     my_injuries: list[tuple[InjuryRow, Injury]] = []
     if live is not None:
         for injury_row in session.scalars(
@@ -372,7 +412,26 @@ def _play_day(
     for club_id, injury in report.injuries:
         injury_row = InjuryRow.from_domain(injury)
         session.add(injury_row)
-        if club_id == my_club_id:
+        if club_id == my_club_id or injury.player_id in watched:
+            my_injuries.append((injury_row, injury))
+
+    # Les matchs internationaux du jour, avec leur propre hasard : les clubs jouent
+    # la même journée qu'il y en ait ou non.
+    test_day = internationals.play_tests(
+        session,
+        season,
+        day,
+        season_rng(season, day, "internationals"),
+        history.appearances,
+        clubs,
+        my_club_id,
+        live=load_live_test(session) if human is not None else None,
+    )
+    for injury_row, injury in test_day.injuries:
+        in_my_club = injury.player_id in players and (
+            players[injury.player_id].club_id == my_club_id
+        )
+        if (my_club_id is not None and in_my_club) or injury.player_id in watched:
             my_injuries.append((injury_row, injury))
 
     for movement in report.movements:
@@ -396,7 +455,36 @@ def _play_day(
         for injury_row, injury in my_injuries:
             injury.id = injury_row.id  # attribué à l'enregistrement
             cases.append(injury_case(players[injury.player_id], injury, my_club, day))
-    return todays, cases
+    elif my_injuries:
+        listed = {
+            row.id: row.to_domain()
+            for row in session.scalars(
+                select(PlayerRow).where(PlayerRow.id.in_([i.player_id for _, i in my_injuries]))
+            )
+        }
+        for injury_row, injury in my_injuries:
+            injury.id = injury_row.id
+            cases.append(
+                injury_case(listed[injury.player_id], injury, internationals.rules.NO_CLUB, day)
+            )
+    return DayResult(matches=todays, tests=test_day.rows, cases=cases)
+
+
+def _selector_list(session: Session, season: SeasonRow, human) -> set[int]:
+    """Les joueurs de la liste du sélectionneur, tant que sa fenêtre n'est pas finie :
+    leurs blessures, en club comme en sélection, lui sont signalées."""
+    nation = NATIONS_BY_CODE[human.nation]
+    open_windows = {
+        row.competition
+        for row in internationals.test_rows(session, season)
+        if not row.is_played and nation.id in (row.home_id, row.away_id)
+    }
+    return {
+        player_id
+        for row in internationals.call_up_rows(session, season)
+        if row.nation == nation.code and row.competition in open_windows
+        for player_id in row.player_ids
+    }
 
 
 def _play_matchday(session: Session, season: SeasonRow) -> tuple[MatchdayOut, list[InjuryCase]]:
@@ -411,9 +499,9 @@ def _play_matchday(session: Session, season: SeasonRow) -> tuple[MatchdayOut, li
         raise HTTPException(status_code=400, detail="La saison est terminée")
     injuries: list[InjuryCase] = []
     while (day := _prepare_day(session, season)) is not None:
-        todays, cases = _play_day(session, season, day)
-        injuries += cases
-        ours = [m for m in todays if m.league == league]
+        result = _play_day(session, season, day)
+        injuries += result.cases
+        ours = [m for m in result.matches if m.league == league]
         if ours:
             break
     else:
@@ -569,13 +657,21 @@ def play_next_matchday(session: SessionDep) -> PlayOut:
     Les piges des jokers médicaux terminées donnent lieu à un avis.
     """
     season = _current_or_404(session)
+    if internationals.selector(session) is not None:
+        raise HTTPException(
+            status_code=400, detail="Un sélectionneur avance jour par jour (/selection/advance)"
+        )
     ignore_pending(session)
+    known_lists = {row.id for row in internationals.call_up_rows(session, season)}
     played, injuries = _play_matchday(session, season)
     dismissal = _board_verdict(session, played)
-    affairs, signings = [], []
+    affairs, signings, call_ups = [], [], []
     if dismissal is None:
+        call_ups = _call_up_notices(session, season, known_lists)
         rng = season_rng(season, played.date, "affairs")
-        affairs = settle_promises(session, season, played.date)
+        affairs = settle_promises(
+            session, season, played.date, internationals.absentees_on(session, season, played.date)
+        )
         drawn = draw_affair(session, season, rng)
         affairs += [drawn] if drawn is not None else []
         league = focus_league(session)
@@ -590,7 +686,48 @@ def play_next_matchday(session: SessionDep) -> PlayOut:
         dismissal=DismissalOut.model_validate(dismissal) if dismissal else None,
         affairs=[affair_out(row) for row in affairs],
         signings=signings,
+        call_ups=call_ups,
     )
+
+
+def _call_up_notices(session: Session, season: SeasonRow, known: set[int]) -> list[CallUpNotice]:
+    """Les joueurs du club dirigé retenus dans les listes annoncées depuis `known`
+    (celles d'avant la journée), fenêtre par fenêtre, avec les doublons à prévoir."""
+    career = session.scalars(select(CareerRow)).first()
+    new = [row for row in internationals.call_up_rows(session, season) if row.id not in known]
+    if career is None or not new:
+        return []
+    duties = internationals.club_duties(session, career.club_id)
+    squad = {row.id: row for row in session.get(ClubRow, career.club_id).players}
+    notices: dict[str, CallUpNotice] = {}
+    for call in new:
+        nation = NATIONS_BY_CODE[call.nation]
+        for player_id in call.player_ids:
+            if player_id not in squad:
+                continue
+            player = squad[player_id].to_domain()
+            notice = notices.setdefault(
+                call.competition,
+                CallUpNotice(
+                    competition=WINDOWS_BY_CODE[call.competition].name, players=[], doublons=[]
+                ),
+            )
+            notice.players.append(
+                CalledPlayer(
+                    player=PlayerRef(
+                        id=player.id,
+                        name=player.name,
+                        position=player.position,
+                        age=player.age,
+                        overall=player.overall,
+                    ),
+                    nation=NationOut.model_validate(nation),
+                )
+            )
+            duty = duties.get(player_id)
+            if duty is not None:
+                notice.doublons = sorted({*notice.doublons, *duty.dates})
+    return list(notices.values())
 
 
 def _board_verdict(session: Session, played: MatchdayOut) -> DismissalRow | None:
@@ -649,7 +786,11 @@ def start_next_season(session: SessionDep) -> SeasonOut:
 
     Refusée si l'effectif pro du club dirigé passerait sous le minimum."""
     season = _current_or_404(session)
-    if _phase(season, focus_league(session)) != "finished":
+    if internationals.selector(session) is not None:
+        # Un sélectionneur suit toute la saison du monde, jour par jour.
+        if _prepare_day(session, season) is not None:
+            raise HTTPException(status_code=400, detail="La saison n'est pas terminée")
+    elif _phase(season, focus_league(session)) != "finished":
         raise HTTPException(status_code=400, detail="La saison n'est pas terminée")
     career = session.scalars(select(CareerRow)).first()
     my_club_id = career.club_id if career is not None else None
@@ -708,6 +849,7 @@ def start_next_season(session: SessionDep) -> SeasonOut:
         for youth in moves.newcomers:
             session.add(PlayerRow.from_domain(youth))
     renew_pool(session, year, rng, my_club_id, player_ids)
+    internationals.offseason(session, rng)
     session.commit()
 
     return _season_out(session, create_season(session, year, rng.randrange(SEED_RANGE)))

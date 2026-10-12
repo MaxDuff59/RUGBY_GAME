@@ -161,6 +161,8 @@ class PlayerRow(Base):
     loaned_from: Mapped[int | None] = mapped_column(ForeignKey("clubs.id"))
     squad: Mapped[str] = mapped_column(String(5), default=Squad.PRO.value)
     photo: Mapped[str | None] = mapped_column(String(300))
+    # Nationalité sportive (data/nations.py), None si elle est inconnue.
+    nationality: Mapped[str | None] = mapped_column(String(3))
 
     club: Mapped[ClubRow | None] = relationship(
         foreign_keys=[club_id], overlaps="players,youths", viewonly=True
@@ -201,6 +203,7 @@ class PlayerRow(Base):
             loaned_from=self.loaned_from,
             squad=Squad(self.squad),
             photo=self.photo,
+            nationality=self.nationality,
         )
 
     @classmethod
@@ -217,6 +220,7 @@ class PlayerRow(Base):
             loaned_from=player.loaned_from,
             squad=player.squad.value,
             photo=player.photo,
+            nationality=player.nationality,
             **player.attributes,
         )
 
@@ -348,6 +352,32 @@ class SeasonRow(Base):
     )
 
 
+def _events_from_json(events: list[dict]) -> list[MatchEvent]:
+    return [
+        MatchEvent(
+            minute=e["minute"],
+            type=EventType(e["type"]),
+            club_id=e["club_id"],
+            player_id=e.get("player_id"),
+            other_player_id=e.get("other_player_id"),
+        )
+        for e in events
+    ]
+
+
+def _events_to_json(events: list[MatchEvent]) -> list[dict]:
+    return [
+        {
+            "minute": e.minute,
+            "type": e.type.value,
+            "club_id": e.club_id,
+            "player_id": e.player_id,
+            "other_player_id": e.other_player_id,
+        }
+        for e in events
+    ]
+
+
 class MatchRow(Base):
     __tablename__ = "matches"
 
@@ -388,16 +418,7 @@ class MatchRow(Base):
             stage=Stage(self.stage),
             date=self.date,
             neutral=self.neutral,
-            events=[
-                MatchEvent(
-                    minute=e["minute"],
-                    type=EventType(e["type"]),
-                    club_id=e["club_id"],
-                    player_id=e.get("player_id"),
-                    other_player_id=e.get("other_player_id"),
-                )
-                for e in self.events
-            ],
+            events=_events_from_json(self.events),
             home_lineup=list(self.home_lineup or []),
             away_lineup=list(self.away_lineup or []),
             league=self.league,
@@ -417,16 +438,7 @@ class MatchRow(Base):
             stage=match.stage.value,
             date=match.date,
             neutral=match.neutral,
-            events=[
-                {
-                    "minute": e.minute,
-                    "type": e.type.value,
-                    "club_id": e.club_id,
-                    "player_id": e.player_id,
-                    "other_player_id": e.other_player_id,
-                }
-                for e in match.events
-            ],
+            events=_events_to_json(match.events),
             home_lineup=list(match.home_lineup),
             away_lineup=list(match.away_lineup),
         )
@@ -448,6 +460,125 @@ class LiveMatchRow(Base):
     match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"), unique=True)
     my_injuries: Mapped[list[int]] = mapped_column(JSON, default=list)
     state: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class InternationalRow(Base):
+    """Un match international (engine/internationals.py), dans sa propre table : les
+    équipes y sont des sélections (`Nation.id`, data/nations.py), pas des clubs."""
+
+    __tablename__ = "internationals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    season_id: Mapped[int] = mapped_column(ForeignKey("seasons.id"))
+    # Code de la fenêtre (data/nations.py) ; `matchday` : numéro du match dans la fenêtre.
+    competition: Mapped[str] = mapped_column(String(20))
+    matchday: Mapped[int] = mapped_column(default=0)
+    home_id: Mapped[int]
+    away_id: Mapped[int]
+    home_score: Mapped[int | None]
+    away_score: Mapped[int | None]
+    date: Mapped[datetime.date] = mapped_column(Date)
+    neutral: Mapped[bool] = mapped_column(default=False)
+    events: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    home_lineup: Mapped[list[int]] = mapped_column(JSON, default=list)
+    away_lineup: Mapped[list[int]] = mapped_column(JSON, default=list)
+
+    @property
+    def is_played(self) -> bool:
+        return self.home_score is not None
+
+    # Mêmes noms que `MatchRow`, pour ce qui lit l'un ou l'autre (match en direct).
+    @property
+    def home_club_id(self) -> int:
+        return self.home_id
+
+    @property
+    def away_club_id(self) -> int:
+        return self.away_id
+
+    @property
+    def stage(self) -> str:
+        return Stage.REGULAR.value
+
+    def to_domain(self) -> Match:
+        return Match(
+            id=self.id,
+            home_club_id=self.home_id,
+            away_club_id=self.away_id,
+            matchday=self.matchday,
+            home_score=self.home_score,
+            away_score=self.away_score,
+            date=self.date,
+            neutral=self.neutral,
+            events=_events_from_json(self.events),
+            home_lineup=list(self.home_lineup or []),
+            away_lineup=list(self.away_lineup or []),
+            league=self.competition,
+        )
+
+    @classmethod
+    def from_domain(cls, match: Match, season_id: int) -> "InternationalRow":
+        return cls(
+            id=match.id,
+            season_id=season_id,
+            competition=match.league,
+            matchday=match.matchday,
+            home_id=match.home_club_id,
+            away_id=match.away_club_id,
+            home_score=match.home_score,
+            away_score=match.away_score,
+            date=match.date,
+            neutral=match.neutral,
+            events=_events_to_json(match.events),
+            home_lineup=list(match.home_lineup),
+            away_lineup=list(match.away_lineup),
+        )
+
+    def write_result(self, match: Match) -> None:
+        self.home_score, self.away_score = match.home_score, match.away_score
+        self.events = _events_to_json(match.events)
+        self.home_lineup, self.away_lineup = list(match.home_lineup), list(match.away_lineup)
+
+
+class CallUpRow(Base):
+    """La liste d'une sélection pour une fenêtre internationale : annoncée deux semaines
+    avant son premier match, par le staff ou par le sélectionneur."""
+
+    __tablename__ = "call_ups"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    season_id: Mapped[int] = mapped_column(ForeignKey("seasons.id"))
+    competition: Mapped[str] = mapped_column(String(20))
+    nation: Mapped[str] = mapped_column(String(3))
+    # Identifiants des joueurs retenus. À réassigner en entier.
+    player_ids: Mapped[list[int]] = mapped_column(JSON, default=list)
+    announced_on: Mapped[datetime.date] = mapped_column(Date)
+
+
+class LiveInternationalRow(Base):
+    """Le match international que le sélectionneur joue en direct (voir `LiveMatchRow`)."""
+
+    __tablename__ = "live_internationals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    match_id: Mapped[int] = mapped_column(ForeignKey("internationals.id"), unique=True)
+    state: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class SelectorRow(Base):
+    """Partie sauvegardée d'un sélectionneur : la sélection nationale qu'il dirige.
+
+    À part de `CareerRow` : tout ce qui gère un club (finances, transferts, staff...)
+    ne voit alors aucune carrière, et tous les clubs sont menés par leur staff.
+    """
+
+    __tablename__ = "selectors"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    manager_name: Mapped[str] = mapped_column(String(100))
+    nation: Mapped[str] = mapped_column(String(3))
+    # XV choisi, place par place, comme `ClubRow.lineup_choice`. À réassigner en entier.
+    lineup_choice: Mapped[list] = mapped_column(JSON, default=list)
 
 
 class CareerRow(Base):

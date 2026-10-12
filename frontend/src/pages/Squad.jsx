@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
+import ClubCrest from "../components/ClubCrest.jsx";
 import InjuryIcon from "../components/InjuryIcon.jsx";
 import LineupPicker from "../components/LineupPicker.jsx";
 import Pitch from "../components/Pitch.jsx";
@@ -20,10 +21,18 @@ import { usePitchWidth } from "../hooks/usePitchWidth.js";
 import { useSort } from "../hooks/useSort.js";
 import { buildLineup, lineupChoice } from "../lineup.js";
 
+// L'effectif du club et son XV de départ. Pour un sélectionneur, la même page montre son
+// groupe (sa liste de 42, ou celle que propose le staff tant qu'elle n'est pas annoncée).
+// Dans un club, les joueurs retenus par une sélection qui joue le jour du prochain match
+// sont marqués « En sélection » et sortent du XV ; des espoirs montent à leur place.
 export default function Squad() {
   const { career } = useOutletContext();
   const navigate = useNavigate();
-  const load = useCallback(() => api.getClub(career.club_id), [career.club_id]);
+  const national = career.kind === "nation";
+  const load = useCallback(
+    () => (national ? api.getSelectionTeam() : api.getClub(career.club_id)),
+    [national, career.club_id],
+  );
   const { data: club, error, loading, setData } = useApi(load);
   // Sans tri choisi (null), l'ordre reste celui du staff : titulaires du 1 au 15, puis les autres.
   const squadSort = useSort(club ? squadRows(club) : [], null);
@@ -45,6 +54,8 @@ export default function Squad() {
   );
   const open = (player) => navigate(`/joueurs/${player.id}`);
   const jerseys = new Map(lineup.map(({ slot, player }) => [player.id, slot.number]));
+  // Doublon : nos joueurs retenus par une sélection qui joue le jour de notre prochain match.
+  const away = club.players.filter((player) => player.duty?.away);
 
   // Le joueur choisi prend la place ; s'il était titulaire, il échange avec l'ancien.
   async function replace({ slot, player }, candidate) {
@@ -55,13 +66,14 @@ export default function Squad() {
       if (index === from) return { ...entry, player };
       return entry;
     });
-    setData(await api.setLineup(club.id, lineupChoice(next)));
+    const choice = lineupChoice(next);
+    setData(await (national ? api.setSelectionLineup(choice) : api.setLineup(club.id, choice)));
   }
 
   async function resetLineup() {
     setResetting(true);
     try {
-      setData(await api.resetLineup(club.id));
+      setData(await (national ? api.resetSelectionLineup() : api.resetLineup(club.id)));
     } finally {
       setResetting(false);
     }
@@ -71,8 +83,8 @@ export default function Squad() {
     <>
       <header className="squad__head">
         <div className="squad__stats">
-          <h1 className="title">Effectif</h1>
-          <Stat value={club.players.length} label="joueurs" />
+          <h1 className="title">{national ? "Composition" : "Effectif"}</h1>
+          <Stat value={club.players.length} label={national ? "joueurs dans le groupe" : "joueurs"} />
           <Stat value={formatNote(average(starters.map((p) => p.overall)))} label="note moyenne du XV" />
           <Stat value={formatNote(average(starters.map((p) => p.age)))} label="âge moyen du XV" />
         </div>
@@ -80,6 +92,7 @@ export default function Squad() {
           <p className="muted">
             {club.lineup_custom ? "Ta composition" : "Composition choisie par le staff"} · touche un joueur du
             terrain pour le remplacer, une ligne du tableau pour sa fiche
+            {away.length > 0 && ` · doublon : ${away.length} joueur${away.length > 1 ? "s" : ""} en sélection au prochain match`}
           </p>
           {club.lineup_custom && (
             <button type="button" className="button button--small" disabled={resetting} onClick={resetLineup}>
@@ -120,9 +133,10 @@ export default function Squad() {
                 {header("positionRank", "Poste", "asc", true)}
                 {header("age", "Âge", "asc")}
                 {header("overall", "Note")}
-                {header("value", "Valeur")}
-                {header("wage", "Salaire")}
-                {header("contract_until", "Contrat", "asc", false, "Fin du contrat")}
+                {national && header("club_name", "Club", "asc", true)}
+                {!national && header("value", "Valeur")}
+                {!national && header("wage", "Salaire")}
+                {!national && header("contract_until", "Contrat", "asc", false, "Fin du contrat")}
                 {ATTRIBUTES.map((attr) => (
                   <SortHeader
                     key={attr.key}
@@ -156,16 +170,32 @@ export default function Squad() {
                       <PlayerAvatar src={player.photo} size={26} />
                       <InjuryIcon injury={player.injury} />
                       {player.name}
+                      <DutyTag player={player} />
                     </div>
                   </td>
                   <td className="left">{POSITIONS[player.position].label}</td>
                   <td className="muted">{player.age}</td>
                   <td className="note">{formatNote(player.overall)}</td>
-                  <td>{formatMoney(player.value)}</td>
-                  <td className="muted">{formatMoney(player.wage)}</td>
-                  <td className="muted">
-                    {player.loaned_from ? `Prêt · ${player.loaned_from_name}` : formatContractEnd(player.contract_until)}
-                  </td>
+                  {national ? (
+                    <td className="left">
+                      {player.club_name ? (
+                        <span className="with-crest">
+                          <ClubCrest name={player.club_name} size={18} />
+                          {player.club_name}
+                        </span>
+                      ) : (
+                        <span className="muted">Hors championnats</span>
+                      )}
+                    </td>
+                  ) : (
+                    <>
+                      <td>{formatMoney(player.value)}</td>
+                      <td className="muted">{formatMoney(player.wage)}</td>
+                      <td className="muted">
+                        {player.loaned_from ? `Prêt · ${player.loaned_from_name}` : formatContractEnd(player.contract_until)}
+                      </td>
+                    </>
+                  )}
                   {ATTRIBUTES.map((attr) => {
                     const value = player[attr.key];
                     const tone = value >= 15 ? "cell--strong" : value <= 8 ? "cell--weak" : "";
@@ -181,8 +211,10 @@ export default function Squad() {
           </table>
           <p className="table__note">
             {ATTRIBUTES.map((attr) => `${attr.short} ${attr.label.toLowerCase()}`).join(" · ")}.
-            Attributs sur 20 ; en gras à partir de 15. Le numéro indique les titulaires. Salaire par saison,
-            contrat jusqu'en juin de l'année indiquée. Les blessés ne sont pas alignés : voir la page Médical.
+            Attributs sur 20 ; en gras à partir de 15. Le numéro indique les titulaires.{" "}
+            {national
+              ? "Le groupe est ta liste ; tant qu'elle n'est pas annoncée, celle que propose le staff. Les blessés ne sont pas alignés."
+              : "Salaire par saison, contrat jusqu'en juin de l'année indiquée. Les blessés ne sont pas alignés : voir la page Médical. « En sélection » : retenu par sa sélection, qui joue le jour de notre prochain match (doublon) ; des espoirs complètent alors la feuille de match."}
           </p>
         </div>
       </div>
@@ -190,7 +222,7 @@ export default function Squad() {
       {picking && (
         <LineupPicker
           entry={picking}
-          players={club.players}
+          players={club.players.filter((player) => !player.duty?.away)}
           jerseys={jerseys}
           onPick={(candidate) => replace(picking, candidate)}
           onOpen={open}
@@ -224,6 +256,34 @@ function sortSquad(rows) {
     if (a.positionRank !== b.positionRank) return a.positionRank - b.positionRank;
     return b.overall - a.overall;
   });
+}
+
+// À côté du nom : retenu en sélection (absent du prochain match, ou seulement dans la
+// liste), ou espoir monté le temps d'un doublon.
+function DutyTag({ player }) {
+  const { duty } = player;
+  if (duty?.away) {
+    return (
+      <span className="tag tag--fragile" title={`${duty.competition} · ${duty.nation.name} joue le jour de notre prochain match`}>
+        En sélection
+      </span>
+    );
+  }
+  if (duty) {
+    return (
+      <span className="tag tag--light" title={`Dans la liste de ${duty.nation.name} · ${duty.competition}`}>
+        {duty.nation.code}
+      </span>
+    );
+  }
+  if (player.squad === "youth") {
+    return (
+      <span className="tag tag--light" title="Espoir appelé pour suppléer un international">
+        Espoir
+      </span>
+    );
+  }
+  return null;
 }
 
 function Stat({ value, label }) {

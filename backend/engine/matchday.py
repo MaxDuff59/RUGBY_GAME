@@ -126,7 +126,8 @@ def play_day(
     playing = sorted(
         (club for club in clubs.values() if club.league in leagues), key=lambda club: club.id
     )
-    players = {p.id: p for club in clubs.values() for p in club.players}
+    # Avec les espoirs appelés en renfort un jour de doublon (engine/internationals.py).
+    players = {p.id: p for club in clubs.values() for p in [*club.players, *club.cover]}
     rank_of = {
         club_id: rank
         for league in leagues

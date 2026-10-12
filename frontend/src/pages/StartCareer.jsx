@@ -8,12 +8,17 @@ import { formatLongDate, formatNote } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { chosenSlot } from "../save.js";
 
-// Première page : on choisit son nom de manager, un championnat, puis le club que
-// l'on dirige. Après un limogeage, on y revient pour reprendre un autre club.
+// Première page : on choisit son nom de manager, puis un club (un championnat, puis le
+// club que l'on dirige) ou une sélection nationale. Après un limogeage, on y revient
+// pour reprendre un autre club.
 export default function StartCareer() {
   const navigate = useNavigate();
   const { data: clubs, error, loading } = useApi(useCallback(api.listClubs, []));
   const leagues = useApi(useCallback(api.listLeagues, []));
+  // Vide dans un monde de clubs inventés : pas de sélections à diriger.
+  const nations = useApi(useCallback(api.listNations, []));
+  const [kind, setKind] = useState("club"); // "club" ou "nation"
+  const [nationCode, setNationCode] = useState(null);
   const [leagueCode, setLeagueCode] = useState(null);
   const { data: dismissal } = useApi(useCallback(api.getLastDismissal, []));
   const [managerName, setManagerName] = useState("");
@@ -21,8 +26,12 @@ export default function StartCareer() {
     if (dismissal) setManagerName(dismissal.manager_name);
   }, [dismissal]);
   const [clubId, setClubId] = useState(null);
-  // Aperçu : l'interface prend les couleurs du club dès qu'on le sélectionne.
-  useClubTheme(clubs?.find((club) => club.id === clubId)?.name);
+  // Aperçu : l'interface prend les couleurs du club (ou de la sélection) dès qu'on le choisit.
+  const chosenName =
+    kind === "nation"
+      ? nations.data?.find((nation) => nation.code === nationCode)?.name
+      : clubs?.find((club) => club.id === clubId)?.name;
+  useClubTheme(chosenName);
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -31,7 +40,8 @@ export default function StartCareer() {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await api.startCareer(managerName.trim(), clubId);
+      if (kind === "nation") await api.startSelectorCareer(managerName.trim(), nationCode);
+      else await api.startCareer(managerName.trim(), clubId);
       navigate("/", { replace: true });
     } catch (err) {
       setSubmitError(err);
@@ -52,7 +62,9 @@ export default function StartCareer() {
     );
   }
 
-  const canSubmit = managerName.trim() !== "" && clubId !== null && !submitting;
+  const chosen = kind === "nation" ? nationCode !== null : clubId !== null;
+  const canSubmit = managerName.trim() !== "" && chosen && !submitting;
+  const hasNations = (nations.data?.length ?? 0) > 0;
   // Un seul championnat (monde inventé) : on passe directement aux clubs.
   const league =
     leagues.data.length === 1 ? leagues.data[0] : leagues.data.find((l) => l.code === leagueCode);
@@ -79,7 +91,7 @@ export default function StartCareer() {
           <p className="eyebrow">
             <Link to="/parties">Parties</Link> · Partie {chosenSlot()} · Nouvelle carrière
           </p>
-          <h1 className="title">Choisis ton club</h1>
+          <h1 className="title">{kind === "nation" ? "Choisis ta sélection" : "Choisis ton club"}</h1>
         </div>
       )}
 
@@ -95,7 +107,46 @@ export default function StartCareer() {
         />
       </div>
 
-      {league ? (
+      {hasNations && (
+        <div className="chips" role="group" aria-label="Carrière">
+          <button type="button" className="chip" aria-pressed={kind === "club"} onClick={() => setKind("club")}>
+            Manager d'un club
+          </button>
+          <button type="button" className="chip" aria-pressed={kind === "nation"} onClick={() => setKind("nation")}>
+            Sélectionneur national
+          </button>
+        </div>
+      )}
+
+      {kind === "nation" ? (
+        <div className="section">
+          <div className="section__head">
+            <p className="eyebrow">Les sélections</p>
+            <span className="muted">
+              Pas de club à gérer : une liste de 42 joueurs à annoncer avant chaque rendez-vous, puis les matchs.
+            </span>
+          </div>
+          <ul className="club-list">
+            {nations.data.map((nation) => (
+              <li key={nation.code}>
+                <button
+                  type="button"
+                  className="club-option"
+                  aria-pressed={nation.code === nationCode}
+                  onClick={() => setNationCode(nation.code)}
+                >
+                  <span className="club-option__name with-crest">
+                    <ClubCrest name={nation.name} size={32} />
+                    {nation.name}
+                  </span>
+                  <span className="num">Niveau {formatNote(nation.level)} / 20</span>
+                  <span className="club-option__detail">{nation.competitions.join(" · ")}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : league ? (
         <div className="section">
           <div className="section__head">
             <p className="eyebrow">Les clubs · {league.name}</p>

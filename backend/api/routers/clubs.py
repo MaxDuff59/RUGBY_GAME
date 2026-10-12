@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from api import internationals
 from api.deps import SessionDep, load_club, load_my_club_row
 from api.ledger import game_date
 from api.notes import club_notes
@@ -11,8 +12,10 @@ from api.schemas import (
     ClubDetail,
     ClubNotesOut,
     ClubSummary,
+    DutyOut,
     FacilitiesOut,
     LineupIn,
+    NationOut,
     PlayerOut,
     StrengthOut,
 )
@@ -44,18 +47,35 @@ def list_clubs(session: SessionDep) -> list[ClubSummary]:
 
 @router.get("/{club_id}", response_model=ClubDetail)
 def get_club(club_id: int, session: SessionDep) -> ClubDetail:
-    """Effectif complet d'un club et ses notes collectives (XV de départ, blessés exclus)."""
+    """Effectif complet d'un club et ses notes collectives : le XV de son prochain
+    match, sans les blessés ni les joueurs retenus en sélection ce jour-là."""
     club = load_club(session, club_id)
     day = game_date(session)
     names = {row.id: row.name for row in session.scalars(select(ClubRow))}
+    duties = internationals.release_for_next_match(session, club)
     return ClubDetail(
         id=club.id,
         name=club.name,
         balance=club.balance,
         facilities=FacilitiesOut.model_validate(club.facilities),
         strength=StrengthOut.from_team(team_strength(club, day)),
-        players=[PlayerOut.from_player(p, day, names) for p in club.players],
+        # Les pros, puis les espoirs appelés en renfort pour un doublon.
+        players=[
+            PlayerOut.from_player(p, day, names, duty_out(duties.get(p.id)))
+            for p in [*club.players, *club.cover]
+        ],
         lineup_custom=any(player_id is not None for player_id in club.lineup_choice),
+    )
+
+
+def duty_out(duty: internationals.Duty | None) -> DutyOut | None:
+    if duty is None:
+        return None
+    return DutyOut(
+        nation=NationOut.model_validate(duty.nation),
+        competition=duty.window.name,
+        dates=duty.dates,
+        away=duty.away,
     )
 
 
@@ -71,13 +91,19 @@ def set_lineup(club_id: int, lineup: LineupIn, session: SessionDep) -> ClubDetai
     if len(set(chosen)) != len(chosen):
         raise HTTPException(status_code=400, detail="Un joueur ne peut occuper qu'une place")
     day = game_date(session)
-    players = {p.id: p for p in row.to_domain().players}
+    club = row.to_domain()
+    internationals.release_for_next_match(session, club)
+    players = {p.id: p for p in [*club.players, *club.cover]}
     for player_id in chosen:
         player = players.get(player_id)
         if player is None:
             raise HTTPException(status_code=400, detail="Ce joueur n'est pas dans ton effectif")
         if player.is_injured(day):
             raise HTTPException(status_code=400, detail=f"{player.name} est blessé")
+        if player_id in club.called_up:
+            raise HTTPException(
+                status_code=400, detail=f"{player.name} est retenu en sélection pour ce match"
+            )
     row.lineup_choice = list(ids)
     session.commit()
     return get_club(club_id, session)
@@ -102,4 +128,6 @@ def _my_club_row(session: Session, club_id: int) -> ClubRow:
 def get_club_notes(club_id: int, session: SessionDep) -> ClubNotesOut:
     """Notes de vie du club sur 20 : moral, cohésion, fraîcheur, confiance de la
     direction et ferveur des supporters, avec leur évolution sur la saison."""
-    return club_notes(session, load_club(session, club_id))
+    club = load_club(session, club_id)
+    internationals.release_for_next_match(session, club)
+    return club_notes(session, club)

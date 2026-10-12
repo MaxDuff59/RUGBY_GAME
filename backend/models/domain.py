@@ -53,6 +53,9 @@ class Squad(StrEnum):
 
     PRO = "pro"
     YOUTH = "youth"  # espoirs
+    # Sélectionnable, mais dans un championnat hors du jeu : sans club ici, et pas
+    # sur le marché (voir engine/internationals.py).
+    AWAY = "away"
 
 
 # Âge maximal pour redescendre un pro chez les espoirs, et pour y rester.
@@ -152,6 +155,8 @@ class Player:
     squad: Squad = Squad.PRO
     # Photo du vrai joueur (URL Wikimedia Commons), None pour un joueur inventé.
     photo: str | None = None
+    # Nationalité sportive, en trois lettres (data/nations.py) ; None si elle est inconnue.
+    nationality: str | None = None
 
     def __post_init__(self) -> None:
         # On refuse tout attribut hors de l'échelle 1-20 dès la création.
@@ -275,14 +280,20 @@ class Club:
     # XV choisi par le manager, place par place (None : place laissée au staff) ; vide
     # pour les clubs de l'IA. Voir select_lineup.
     lineup_choice: list[int | None] = field(default_factory=list)
+    # Doublon (non stocké, posé par l'appelant, voir engine/internationals.py) : les
+    # joueurs retenus en sélection le jour du match, et les espoirs qui les suppléent.
+    called_up: set[int] = field(default_factory=set)
+    cover: list[Player] = field(default_factory=list)
 
     def players_at(self, position: Position) -> list[Player]:
         """Joueurs de l'effectif à un poste donné."""
         return [p for p in self.players if p.position == position]
 
     def available_players(self, day: datetime.date | None) -> list[Player]:
-        """Joueurs aptes à jouer à cette date (les blessés sont exclus)."""
-        return [p for p in self.players if not p.is_injured(day)]
+        """Joueurs aptes à jouer à cette date : ni blessés, ni retenus en sélection ;
+        un jour de doublon, les espoirs appelés en renfort en sont."""
+        squad = [p for p in self.players if p.id not in self.called_up] + self.cover
+        return [p for p in squad if not p.is_injured(day)]
 
     def staff_level(self, role: StaffRole) -> int:
         """Niveau (1 à 5) du membre du staff à ce poste, 0 si le poste est vacant."""
@@ -298,8 +309,11 @@ class Club:
         return sum(p.wage for p in self.youths)
 
     def youth_team(self) -> "Club":
-        """Les espoirs vus comme une équipe, pour les faire jouer avec le moteur."""
-        return Club(id=self.id, name=self.name, players=self.youths, facilities=self.facilities)
+        """Les espoirs vus comme une équipe, pour les faire jouer avec le moteur
+        (sans ceux qui suppléent les pros ce jour-là)."""
+        busy = {p.id for p in self.cover}
+        youths = [p for p in self.youths if p.id not in busy]
+        return Club(id=self.id, name=self.name, players=youths, facilities=self.facilities)
 
     @property
     def staff_wages(self) -> int:

@@ -19,6 +19,7 @@ import {
   formatNote,
   formatPercent,
   formatShortDate,
+  nationalityLabel,
 } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { usePitchWidth } from "../hooks/usePitchWidth.js";
@@ -66,6 +67,8 @@ export default function Player() {
   const { player } = data;
   const position = POSITIONS[player.position];
   const isYouth = player.squad === "youth";
+  const isAway = player.squad === "away"; // sélectionnable, mais hors des championnats du jeu
+  const selector = career.kind === "nation";
   // Les espoirs n'ont pas de numéro : l'effectif renvoyé par /clubs ne contient que les pros.
   const squadPlayers = !isYouth && club.data ? club.data.players : [];
   const jerseys = jerseyNumbers(squadPlayers, data.lineup_ids);
@@ -110,7 +113,16 @@ export default function Player() {
             <button type="button" className="link-button" onClick={() => navigate(-1)}>← Retour</button>
             {" · "}
             {data.club && <ClubCrest name={data.club.name} size={16} className="eyebrow__crest" />}
-            {data.club ? <Link to={mine ? "/effectif" : "/transferts"}>{data.club.name}</Link> : <Link to="/transferts">Agent libre</Link>}
+            {/* Un sélectionneur n'a ni effectif de club ni marché : le club n'est qu'un nom. */}
+            {isAway ? (
+              "Hors championnats"
+            ) : selector ? (
+              (data.club?.name ?? "Agent libre")
+            ) : data.club ? (
+              <Link to={mine ? "/effectif" : "/transferts"}>{data.club.name}</Link>
+            ) : (
+              <Link to="/transferts">Agent libre</Link>
+            )}
             {data.club && " · "}
             {data.club && (isYouth ? "Espoir" : jersey !== null ? `Titulaire · n° ${jersey}` : "Remplaçant")}
           </p>
@@ -120,10 +132,22 @@ export default function Player() {
           </h1>
           <p className="muted player-head__line">
             {position.label} · {player.age} ans ·{" "}
-            {data.club
-              ? `contrat jusqu'en juin ${formatContractEnd(player.contract_until)}`
-              : `sans contrat (dernier en ${formatLastSeason(player.contract_until)})`}
+            {player.nationality && `${nationalityLabel(player.nationality)} · `}
+            {isAway
+              ? "évolue hors des championnats du jeu"
+              : data.club
+                ? `contrat jusqu'en juin ${formatContractEnd(player.contract_until)}`
+                : `sans contrat (dernier en ${formatLastSeason(player.contract_until)})`}
             {player.loaned_from_name && ` · prêté par ${player.loaned_from_name}`}
+            {player.duty && (
+              <>
+                {" · "}
+                <span className={`tag ${player.duty.away ? "tag--fragile" : "tag--light"}`}>
+                  {player.duty.away ? "En sélection" : player.duty.nation.code}
+                </span>{" "}
+                {player.duty.competition}
+              </>
+            )}
             {player.injury?.status === "active" && (
               <>
                 {" · "}

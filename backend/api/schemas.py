@@ -87,6 +87,26 @@ class InjuryOut(BaseModel):
         )
 
 
+class NationOut(BaseModel):
+    """Une sélection nationale (data/nations.py)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int  # identifiant d'équipe dans les matchs internationaux
+    code: str
+    name: str
+
+
+class DutyOut(BaseModel):
+    """Le joueur figure dans la liste de sa sélection pour une fenêtre en cours."""
+
+    nation: NationOut
+    competition: str  # nom de la fenêtre
+    # Doublons à venir : les jours où sa sélection joue en même temps que son club.
+    dates: list[datetime.date]
+    away: bool  # dont le prochain match de son club : il le manquera
+
+
 class PlayerOut(BaseModel):
     # Permet de construire le schéma directement depuis un `Player` du domaine.
     model_config = ConfigDict(from_attributes=True)
@@ -113,9 +133,14 @@ class PlayerOut(BaseModel):
     loaned_from: int | None  # club propriétaire si le joueur est prêté
     squad: Squad
     photo: str | None = None  # URL de la photo (vrais joueurs), None sinon
+    nationality: str | None = None  # trois lettres (data/nations.py), None si inconnue
+    club_id: int | None = None  # None : agent libre, ou hors des championnats du jeu
+    club_name: str | None = None
     loaned_from_name: str | None = None
     # Blessure en cours ou période de fragilité ; None si le joueur est apte.
     injury: InjuryOut | None = None
+    # Retenu en sélection (renseigné sur l'effectif d'un club) ; None sinon.
+    duty: DutyOut | None = None
 
     @classmethod
     def from_player(
@@ -123,15 +148,23 @@ class PlayerOut(BaseModel):
         player: Player,
         day: datetime.date | None = None,
         club_names: dict[int, str] | None = None,
+        duty: DutyOut | None = None,
     ) -> "PlayerOut":
         # Tous les champs viennent du joueur, sauf ceux qui se calculent.
-        computed = {"value", "injury", "loaned_from_name"}
+        computed = {"value", "injury", "loaned_from_name", "duty", "club_name"}
         fields = {name: getattr(player, name) for name in cls.model_fields if name not in computed}
         injury = None
         if day is not None and (player.is_injured(day) or player.is_fragile(day)):
             injury = InjuryOut.from_injury(player.injury, day)
         owner = (club_names or {}).get(player.loaned_from) if player.loaned_from else None
-        return cls(**fields, value=market_value(player), injury=injury, loaned_from_name=owner)
+        return cls(
+            **fields,
+            value=market_value(player),
+            injury=injury,
+            club_name=(club_names or {}).get(player.club_id),
+            loaned_from_name=owner,
+            duty=duty,
+        )
 
 
 class PlayerSeasonStats(BaseModel):
@@ -535,17 +568,24 @@ class MatchdayOut(BaseModel):
 
 
 class CareerIn(BaseModel):
+    """Manager d'un club (`club_id`) ou sélectionneur d'une nation (`nation`, son code)."""
+
     manager_name: str = Field(min_length=1, max_length=100)
-    club_id: int
+    club_id: int | None = None
+    nation: str | None = None
 
 
 class CareerOut(BaseModel):
     id: int
     manager_name: str
+    # nation : carrière de sélectionneur. `club_id` et `club_name` sont alors ceux de
+    # la sélection (son identifiant d'équipe, son nom), `nation` son code.
+    kind: Literal["club", "nation"] = "club"
     club_id: int
     club_name: str
     league: str
     league_name: str
+    nation: str | None = None
 
 
 # --- Championnats ----------------------------------------------------------------------
@@ -634,6 +674,8 @@ class PlayOut(BaseModel):
     affairs: list["AffairOut"] = []
     # Joueurs du club dirigé en fin de contrat qu'un concurrent vient de signer.
     signings: list["ContractOut"] = []
+    # Listes des sélections annoncées depuis la journée précédente : nos joueurs retenus.
+    call_ups: list["CallUpNotice"] = []
 
 
 # --- Affaires entre deux matchs (engine/affairs.py) -----------------------------------
@@ -1097,3 +1139,129 @@ class SeasonReviewOut(BaseModel):
     balance_start: int
     balance_end: int
     scorers: list[ScorerOut]  # meilleurs marqueurs pros, trois au plus
+
+
+# --- Sélections nationales (engine/internationals.py) -----------------------------------
+
+
+class NationSummary(NationOut):
+    """Une sélection au choix du sélectionneur : son vivier et le niveau de son XV."""
+
+    player_count: int  # joueurs sélectionnables
+    level: float  # moyenne des 4 notes collectives du XV que composerait le staff
+    competitions: list[str]  # ses rendez-vous de la saison
+
+
+class CalledPlayer(BaseModel):
+    player: PlayerRef
+    nation: NationOut
+
+
+class CallUpNotice(BaseModel):
+    """Les joueurs du club dirigé retenus pour une fenêtre internationale."""
+
+    competition: str  # nom de la fenêtre
+    players: list[CalledPlayer]
+    # Doublons : les jours où le club joue pendant qu'au moins l'un d'eux est en sélection.
+    doublons: list[datetime.date]
+
+
+class WindowOut(BaseModel):
+    """Une fenêtre internationale de la saison : ses matchs, son classement s'il y en a un."""
+
+    code: str
+    name: str
+    short_name: str
+    has_table: bool
+    announce_by: datetime.date  # date limite d'annonce des listes
+    announced: bool  # les listes des sélections gérées par leur staff sont publiées
+    dates: list[datetime.date]
+    nations: list[NationOut]
+    matches: list[MatchSummary]
+    standings: list[StandingOut]  # vide pour une tournée
+    finished: bool
+    champion: ClubRef | None = None
+
+
+class InternationalsOut(BaseModel):
+    year: int
+    today: datetime.date
+    windows: list[WindowOut]
+    # Dans une carrière de club : nos joueurs retenus en ce moment.
+    my_players: list[CalledPlayer] = []
+
+
+class SquadPlayerOut(BaseModel):
+    """Un joueur sélectionnable, ou retenu, vu par un sélectionneur."""
+
+    player: PlayerOut
+    club: ClubRef | None  # None : il évolue hors des championnats du jeu
+    position_rating: float  # note à son poste, critère du staff
+    starts: int  # titularisations cette saison, club et sélection
+
+
+class NationSquadOut(BaseModel):
+    """La liste d'une sélection pour une fenêtre."""
+
+    nation: NationOut
+    competition: str
+    announced_on: datetime.date | None  # None : pas encore annoncée
+    players: list[SquadPlayerOut]
+
+
+class RecordOut(BaseModel):
+    played: int
+    won: int
+    drawn: int
+    lost: int
+
+
+class SelectionOut(BaseModel):
+    """Où en est le sélectionneur : ce qui l'attend avant de pouvoir avancer."""
+
+    nation: NationOut
+    year: int
+    today: datetime.date
+    # list : la liste doit être annoncée ; match : notre match est le prochain jour joué ;
+    # wait : rien pour nous ce jour-là ; finished : la saison est terminée.
+    phase: Literal["list", "match", "wait", "finished"]
+    # La fenêtre en cours ou à venir de notre sélection (None : plus aucune cette saison).
+    window: WindowOut | None
+    list_announced: bool  # notre liste pour cette fenêtre est annoncée
+    next_match: MatchSummary | None
+    next_day: datetime.date | None  # prochain jour de match dans le monde, clubs compris
+    record: RecordOut  # nos matchs de la saison
+    squad_size: int  # taille d'une liste
+
+
+class PoolOut(BaseModel):
+    """Tous les joueurs sélectionnables pour la prochaine liste, et celle du staff."""
+
+    nation: NationOut
+    window: WindowOut | None  # None : plus de fenêtre cette saison
+    announced: bool
+    size: int
+    quota: dict[Position, int]  # la répartition que suit le staff
+    minimum: dict[Position, int]  # ce qu'une liste doit au moins compter
+    selected: list[int]  # la liste annoncée (vide sinon)
+    suggested: list[int]  # la proposition du staff
+    players: list[SquadPlayerOut]
+
+
+class SquadListIn(BaseModel):
+    player_ids: list[int]
+
+
+class ReplaceIn(BaseModel):
+    player_out: int
+    player_in: int
+
+
+class AdvanceOut(BaseModel):
+    """Un jour de match joué par le monde pendant une carrière de sélectionneur."""
+
+    date: datetime.date
+    tests: list[MatchSummary]  # matchs internationaux du jour
+    club_matches: int  # matchs de clubs joués ce jour-là
+    injuries: list["InjuryCase"]  # blessés de notre liste, en sélection ou en club
+    selection: SelectionOut

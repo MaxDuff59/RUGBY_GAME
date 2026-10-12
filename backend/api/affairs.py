@@ -8,6 +8,7 @@ Le cycle, autour de chaque journée (api/routers/seasons.py) :
 """
 
 import random
+from collections.abc import Iterable
 from datetime import date, timedelta
 
 from fastapi import HTTPException
@@ -332,8 +333,13 @@ def ignore_pending(session: Session) -> None:
     session.commit()
 
 
-def settle_promises(session: Session, season: SeasonRow, day: date) -> list[AffairRow]:
-    """Tranche les promesses sur le match du jour du club dirigé ; renvoie les suites."""
+def settle_promises(
+    session: Session, season: SeasonRow, day: date, away: Iterable[int] = ()
+) -> list[AffairRow]:
+    """Tranche les promesses sur le match du jour du club dirigé ; renvoie les suites.
+
+    `away` : les joueurs retenus en sélection ce jour-là (doublon). Une titularisation
+    promise à l'un d'eux attend son retour : elle sera tranchée au match suivant."""
     career = session.scalars(select(CareerRow)).first()
     if career is None:
         return []
@@ -369,7 +375,10 @@ def settle_promises(session: Session, season: SeasonRow, day: date) -> list[Affa
             AffairRow.promise_settled.is_(False),
         )
     )
+    away = set(away)
     for row in list(rows):
+        if row.promise == PromiseKind.START.value and row.context.get("player_id") in away:
+            continue
         row.promise_settled = True
         option = next(o for o in CATALOGUE[row.scenario].options if o.key == row.choice)
         kept = promise_kept(

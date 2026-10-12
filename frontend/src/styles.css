@@ -4178,3 +4178,155 @@ button.market-item__main:focus-visible {
   font-weight: 600;
   white-space: nowrap;
 }
+
+/* --- Sélections nationales ------------------------------------------------------- */
+
+/* Choix de carrière : sous le nom d'une sélection, ses rendez-vous de la saison. */
+.club-option__detail {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+/* Tableau de bord du sélectionneur : à droite de l'affiche, quelques repères sur le groupe. */
+.facts {
+  gap: 16px;
+}
+
+.facts__list {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px 16px;
+  align-items: baseline;
+}
+
+.facts__list dt {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.facts__list dd {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.facts__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Liste des 42 : le compteur passe en accent tant que le compte n'y est pas. */
+.big-num--accent {
+  color: var(--accent);
+}
+
+.list-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.list-filters__side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.list-filters__search {
+  min-height: 36px;
+  width: 200px;
+  border-radius: 18px;
+}
+
+/* Dans une pastille de poste : joueurs cochés / nombre que retient le staff. */
+.chip__count {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+.chip__count--short {
+  font-weight: 700;
+  opacity: 1;
+  color: var(--accent);
+}
+
+.chip[aria-pressed="true"] .chip__count--short {
+  color: #fff;
+}
+
+.list-check {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  vertical-align: middle;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.list-check:disabled {
+  cursor: default;
+}
+
+.list-forfeit {
+  min-height: 26px;
+  padding: 0 10px;
+}
+
+/* Nos joueurs dans la liste d'une sélection (carrière de club). */
+.table__row--ours td {
+  font-weight: 700;
+}
+
+/* Doublon, sous l'affiche du prochain match : nos joueurs partis en sélection. */
+.doublon {
+  margin: 0;
+}
+
+.doublon .tag {
+  margin-right: 6px;
+}
+
+.doublon a {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+@media (max-width: 960px) {
+  .list-filters__side {
+    flex: 1 1 100%;
+  }
+  .list-filters__search {
+    flex: 1 1 auto;
+    width: auto;
+  }
+}
+
+/* Petits tableaux en colonne étroite (parcours de la sélection) : rien ne passe à la ligne. */
+.table--nowrap td {
+  white-space: nowrap;
+}
+
+/* Un lien dessiné en bouton centre son libellé comme un bouton. */
+a.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Annonce des listes dans la carte de la journée simulée : nos retenus, en quelques lignes. */
+.call-ups {
+  margin: 0;
+  padding: 10px 16px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  border-bottom: 1px solid var(--line-soft);
+}

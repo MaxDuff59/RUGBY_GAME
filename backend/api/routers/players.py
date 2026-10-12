@@ -3,8 +3,10 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
+from api import internationals
 from api.deps import SessionDep
 from api.ledger import current_season, game_date
+from api.routers.clubs import duty_out
 from api.schemas import ClubRef, InjuryOut, PeerOut, PlayerDetail, PlayerOut, PlayerSeasonStats
 from data.leagues import league_config
 from engine.match_engine import (
@@ -98,9 +100,12 @@ def get_player(player_id: int, session: SessionDep) -> PlayerDetail:
 
     lineup_ids: list[int] = []
     club = None
+    duty = None
     if row.club is not None:
         club = ClubRef(id=row.club.id, name=row.club.name)
         domain_club = row.club.to_domain()
+        duties = internationals.release_for_next_match(session, domain_club)
+        duty = duty_out(duties.get(player.id))
         team = domain_club.youth_team() if player.squad == Squad.YOUTH else domain_club
         lineup_ids = [p.id for p in team_strength(team, day).lineup]
 
@@ -123,7 +128,7 @@ def get_player(player_id: int, session: SessionDep) -> PlayerDetail:
     others = [p for p in everyone if p.id != player.id]
 
     return PlayerDetail(
-        player=PlayerOut.from_player(player, day, names),
+        player=PlayerOut.from_player(player, day, names, duty),
         club=club,
         lineup_ids=lineup_ids,
         starter=player.id in lineup_ids,

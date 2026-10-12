@@ -6,11 +6,11 @@ l'historique des opérations restent toujours cohérents.
 
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from engine.economy import TransactionCategory
-from models.orm import ClubRow, MatchRow, SeasonRow, TransactionRow
+from models.orm import ClubRow, InternationalRow, MatchRow, SeasonRow, TransactionRow
 
 
 def record(
@@ -38,16 +38,21 @@ def record(
 
 
 def game_date(session: Session) -> date:
-    """Date « du jour » dans le jeu : celle de la prochaine journée à jouer.
+    """Date « du jour » dans le jeu : celle du prochain jour de match, clubs et
+    sélections confondus.
 
     Sans match à venir (saison terminée) : la date du dernier match ; sans
     saison du tout : la date réelle.
     """
-    next_match = session.scalars(
-        select(MatchRow).where(MatchRow.home_score.is_(None)).order_by(MatchRow.date)
-    ).first()
-    if next_match is not None:
-        return next_match.date
+    upcoming = [
+        session.scalar(select(func.min(MatchRow.date)).where(MatchRow.home_score.is_(None))),
+        session.scalar(
+            select(func.min(InternationalRow.date)).where(InternationalRow.home_score.is_(None))
+        ),
+    ]
+    upcoming = [day for day in upcoming if day is not None]
+    if upcoming:
+        return min(upcoming)
     last_match = session.scalars(select(MatchRow).order_by(MatchRow.date.desc())).first()
     if last_match is not None:
         return last_match.date

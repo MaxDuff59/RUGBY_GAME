@@ -15,6 +15,7 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from api import internationals
 from api.schemas import (
     ClubRef,
     LiveEventOut,
@@ -32,16 +33,24 @@ from engine.match_engine import (
 )
 from engine.matchday import training_week
 from models import Club, EventType, Injury, Stage
-from models.orm import InjuryRow, LiveMatchRow, MatchRow
+from models.orm import (
+    InjuryRow,
+    InternationalRow,
+    LiveInternationalRow,
+    LiveMatchRow,
+    MatchRow,
+    SeasonRow,
+)
 
 
 @dataclass
 class Live:
-    """Un match en direct chargé : sa ligne de sauvegarde, le moteur et le match du calendrier."""
+    """Un match en direct chargé : sa ligne de sauvegarde, le moteur et le match du
+    calendrier (un match de clubs, ou un match international pour un sélectionneur)."""
 
-    row: LiveMatchRow
+    row: LiveMatchRow | LiveInternationalRow
     match: LiveMatch
-    match_row: MatchRow
+    match_row: MatchRow | InternationalRow
 
     def save(self) -> None:
         self.row.state = self.match.to_state()
@@ -61,6 +70,23 @@ def load_live(session: Session, clubs: dict[int, Club]) -> Live | None:
     live = LiveMatch.from_state(
         clubs[match_row.home_club_id], clubs[match_row.away_club_id], row.state
     )
+    return Live(row=row, match=live, match_row=match_row)
+
+
+def load_live_test(session: Session) -> Live | None:
+    """Le match international que le sélectionneur joue en direct, reconstruit avec la
+    liste de chaque sélection (None s'il n'y en a pas)."""
+    row = session.scalars(select(LiveInternationalRow)).first()
+    if row is None:
+        return None
+    match_row = session.get(InternationalRow, row.match_id)
+    if match_row is None or match_row.is_played:
+        session.delete(row)
+        session.commit()
+        return None
+    season = session.get(SeasonRow, match_row.season_id)
+    teams, _ = internationals.national_teams(session, season, [match_row], {})
+    live = LiveMatch.from_state(teams[match_row.home_id], teams[match_row.away_id], row.state)
     return Live(row=row, match=live, match_row=match_row)
 
 

@@ -52,6 +52,9 @@ class History:
     affair_boosts: AffairBoosts = field(default_factory=dict)
     # Ce que les supporters pensent des sponsors du maillot (engine/sponsors.py), par club.
     sponsor_moods: dict[int, float] = field(default_factory=dict)
+    # Matchs internationaux joués (engine/internationals.py) : ils ne comptent que
+    # dans la fatigue des joueurs, pas dans les notes des clubs.
+    internationals: list[Match] = field(default_factory=list)
 
     @property
     def this_season(self) -> list[Match]:
@@ -63,7 +66,7 @@ class History:
 
     @cached_property
     def appearances(self) -> dict[int, list[date]]:
-        return appearances_by_player(self.everything)
+        return appearances_by_player([*self.everything, *self.internationals])
 
     def boosts(self, club_id: int, key: str, this_season: bool = False) -> list[Boost]:
         """Décisions du manager sur une note (celles de la saison seulement, au besoin)."""

@@ -162,6 +162,45 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   accent, ses coéquipiers en noir, les autres joueurs du poste en gris, et son percentile ;
   terrain avec sa note à chaque place, son poste naturel en accent.
 
+- Sélections nationales : une sélection n'a pas de blason, donc l'écusson à initiales à
+  ses couleurs (`NATION_COLORS`, `src/clubs.js`) ; l'interface prend ces couleurs pour un
+  sélectionneur, comme pour un club.
+- Choix de la carrière : deux pastilles sous le nom, « Manager d'un club » et
+  « Sélectionneur national » (absentes dans un monde sans sélections). Les sélections se
+  choisissent comme les clubs : nom, niveau du XV, rendez-vous de la saison en petit.
+- Carrière de sélectionneur : quatre entrées dans le menu, toutes dans la barre du
+  téléphone : Sélection, Liste, Le XV, Calendrier.
+  - Sélection (accueil) : même charpente que la page Club. L'affiche dit ce qui attend
+    le sélectionneur : « Annonce ta liste » (bouton vers la liste), l'adversaire du jour
+    (« Simuler le match » en contour, « Jouer le match » en accent), ou le prochain
+    rendez-vous avec « Avancer jusqu'au prochain rendez-vous », qui enchaîne les jours
+    de match et affiche la date en cours, « Arrêter » à la place du bouton. À sa droite,
+    « Le groupe » : bilan, rendez-vous, état de la liste. En dessous, trois cartes : la
+    fenêtre internationale (`WindowBoard` : classement d'un tournoi, puis les matchs
+    jour par jour, liste déroulante pour changer de fenêtre), « Notre saison » (nos
+    matchs, résultat en rond de couleur) et le dernier jour joué avec les blessés du groupe.
+  - Liste : titre, compteur « 38 / 42 » en accent tant que le compte n'y est pas, puis
+    « Proposition du staff », « Tout retirer » et « Annoncer la liste » (accent, avec
+    fenêtre de confirmation). Une pastille par poste avec joueurs cochés / nombre que
+    retient le staff, en accent sous le minimum ; « Dans la liste » et une recherche.
+    Le tableau reprend celui de l'effectif (case à cocher, club, note, note au poste,
+    titularisations, 9 attributs) ; les joueurs non cochés en gris. On coche en touchant
+    la ligne, le nom ouvre la fiche. Le brouillon survit à un aller-retour sur une fiche.
+    Une fois annoncée : lecture seule, « Forfait » à côté d'un blessé pour le remplacer.
+  - Le XV : la page Effectif, avec le club du joueur à la place de valeur, salaire et contrat.
+  - Calendrier : une pastille par fenêtre ; à gauche ses matchs (et son classement), à
+    droite la liste de 42 d'une sélection au choix.
+- Carrière de club : entrée « Sélections » dans le menu (volet « Plus » sur téléphone),
+  même page que le calendrier du sélectionneur, nos joueurs en gras dans les listes.
+  Sous l'affiche du prochain match, une ligne « Doublon » (étiquette contour) : combien
+  de joueurs en sélection, leurs noms, lien vers le XV ; pas de carte en plus. Dans
+  l'effectif, après le nom : code de la sélection (étiquette grise) pour un joueur de la
+  liste, « En sélection » (contour) s'il manque le prochain match, « Espoir » pour un
+  jeune monté le temps du doublon. À l'annonce des listes, la carte « Journée simulée »
+  s'ouvre sur nos retenus, sélection par sélection, et les dates de doublon.
+- Fiche joueur : nationalité après l'âge ; « Hors championnats » pour un joueur
+  sélectionnable sans club dans le jeu.
+
 ## Hauteur d'écran
 
 - Aucune page ne dépasse 100 % de la hauteur de la fenêtre : jamais de défilement

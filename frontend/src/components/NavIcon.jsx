@@ -47,6 +47,20 @@ const PATHS = {
       <path d="M6 12h.01M18 12h.01" />
     </>
   ),
+  // Sélections nationales : un globe
+  selections: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M3.5 12h17M12 3.5c2.6 2.4 3.9 5.2 3.9 8.5s-1.3 6.1-3.9 8.5M12 3.5C9.4 5.9 8.1 8.7 8.1 12s1.3 6.1 3.9 8.5" />
+    </>
+  ),
+  // Liste du sélectionneur : des lignes cochées
+  liste: (
+    <>
+      <path d="M9.5 6.5h10M9.5 12h10M9.5 17.5h10" />
+      <path d="M3.8 6.4l1.3 1.3L7.4 5M3.8 11.9l1.3 1.3 2.3-2.7M3.8 17.4l1.3 1.3 2.3-2.7" />
+    </>
+  ),
   plus: (
     <>
       <circle cx="5.5" cy="12" r="1.6" fill="currentColor" stroke="none" />

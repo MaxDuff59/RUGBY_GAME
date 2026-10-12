@@ -201,6 +201,27 @@ export default function Match() {
 // --- Pas de match en cours ----------------------------------------------------------------
 
 function NoLiveMatch({ career, onStarted }) {
+  if (career.kind === "nation") return <NoLiveTest />;
+  return <NoLiveClubMatch career={career} onStarted={onStarted} />;
+}
+
+// Sélectionneur : le match se lance depuis son tableau de bord, le jour où il tombe.
+function NoLiveTest() {
+  return (
+    <section className="hero">
+      <p className="eyebrow">Match en direct</p>
+      <h1 className="hero__title">Aucun match en cours</h1>
+      <p className="hero__sub">Le match de la sélection se lance le jour où il tombe</p>
+      <div className="hero__actions">
+        <Link to="/" className="button button--primary">
+          Retour à la sélection
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function NoLiveClubMatch({ career, onStarted }) {
   const season = useApi(useCallback(api.getCurrentSeason, []));
   const affairs = useApi(useCallback(api.getAffairs, []));
   const [busy, setBusy] = useState(false);

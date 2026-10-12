@@ -7,6 +7,8 @@ la forme des clubs tirée de l'historique (engine/history.py), puis l'intersaiso
 (fins de contrat, vieillissement, retraites, espoirs, agents libres, montée et
 descente). Tous les clubs sont gérés par leur staff : il n'y a ni transferts
 négociés, ni affaires, ni travaux, qui passent par les décisions du manager.
+Un monde de vrais clubs a aussi ses sélections nationales (engine/internationals.py) :
+leurs listes, leurs matchs, et les doublons qui privent les clubs de leurs internationaux.
 
 Le hasard vient de la graine du monde : la même graine rejoue la même histoire.
 """
@@ -18,10 +20,12 @@ from dataclasses import dataclass, field
 
 from data.generator import FIRST_SEASON_YEAR
 from data.leagues import PROMOTION, league_config, sort_codes
+from data.nations import NATIONS_BY_ID, Nation, home_nation
+from engine import internationals
 from engine.free_agents import age_free_agent, release, renew_pool, settle_contracts
 from engine.history import History, expected_ranks
 from engine.matchday import Day, DayReport, play_day
-from engine.offseason import club_offseason
+from engine.offseason import RETIREMENT_AGE, club_offseason, develop_player
 from engine.season import (
     champion,
     league_table,
@@ -46,9 +50,15 @@ class SeasonLog:
     leagues: dict[int, str]  # championnat de chaque club cette saison-là
     ranks: dict[int, int]  # rang attendu de chaque club dans son championnat
     played: list[Match] = field(default_factory=list)  # matchs pros joués, dans l'ordre
+    # Matchs internationaux (`Match.league` : le code de la fenêtre) et listes annoncées.
+    tests: list[Match] = field(default_factory=list)
+    squads: dict[internationals.SquadKey, list[int]] = field(default_factory=dict)
 
     def league_matches(self, league: str) -> list[Match]:
         return [m for m in self.matches if m.league == league]
+
+    def window_matches(self, code: str) -> list[Match]:
+        return internationals.window_matches(self.tests, code)
 
 
 class World:
@@ -64,6 +74,10 @@ class World:
         (il ne change rien au reste du monde, et double le temps de calcul)."""
         self.clubs = {club.id: club for club in clubs}
         self.free_agents = list(free_agents)
+        # Sélections nationales : seulement avec de vrais clubs, qui ont un pays. Leurs
+        # joueurs qui évoluent hors des championnats du jeu sont dans `away`.
+        self.has_nations = any(home_nation(club.name) for club in self.clubs.values())
+        self.away: list[Player] = []
         self.seed = seed
         self.youth_leagues = youth_leagues
         self.seasons: list[SeasonLog] = []
@@ -105,7 +119,18 @@ class World:
             leagues=[season.leagues for season in self.seasons],
             ranks=[season.ranks for season in self.seasons],
             season_ids=[season.year for season in self.seasons],
+            internationals=[m for season in self.seasons for m in season.tests if m.is_played],
         )
+
+    def eligible(self, nation: Nation) -> list[Player]:
+        """Les joueurs que la sélection peut retenir."""
+        in_clubs = [
+            player
+            for club in self.clubs.values()
+            for player in club.players
+            if internationals.is_eligible(player, nation, club.name)
+        ]
+        return in_clubs + [p for p in self.away if p.nationality == nation.code]
 
     # -- La saison ------------------------------------------------------------------------
 
@@ -125,6 +150,14 @@ class World:
                 Match(m.home_club_id, m.away_club_id, m.matchday, date=m.date, league=m.league)
                 for m in matches
             ]
+        tests = []
+        if self.has_nations:
+            tests = internationals.schedule(year)
+            rng = rng_for(self.seed, year, "internationals")
+            for nation in internationals.participants():
+                self.away += internationals.reinforcements(
+                    nation, self.eligible(nation), self._player_ids, rng, year
+                )
         self.seasons.append(
             SeasonLog(
                 year=year,
@@ -133,17 +166,25 @@ class World:
                 leagues={club.id: club.league for club in self.clubs.values()},
                 # Figé maintenant : l'objectif de la direction en dépend.
                 ranks=expected_ranks(by_league, min(m.date for m in matches)),
+                tests=tests,
             )
         )
 
     def _next_day(self) -> datetime.date | None:
-        """Ouvre les tours de phases finales prêts ; renvoie le prochain jour de match."""
+        """Ouvre les tours de phases finales prêts et annonce les listes des sélections
+        dues ; renvoie le prochain jour de match, clubs et sélections confondus."""
         season = self.season
         for league in self.leagues:
             season.matches += next_playoff_matches(
                 league_config(league), season.league_matches(league), season.year
             )
-        return next_date(season.matches)
+        day = next_date([*season.matches, *season.tests])
+        if day is not None:
+            for code, team in internationals.due_lists(season.tests, season.squads, day):
+                first = min(m.date for m in season.window_matches(code))
+                squad = internationals.pick_squad(self.eligible(NATIONS_BY_ID[team]), first)
+                season.squads[(code, team)] = [p.id for p in squad]
+        return day
 
     def play_day(self) -> DayReport | None:
         """Joue le prochain jour de match, tous championnats confondus (None si la
@@ -157,6 +198,10 @@ class World:
         leagues = sorted({m.league for m in todays})
         history = self.history()
         playing = [club for club in self.clubs.values() if club.league in leagues]
+        # Doublon : les joueurs retenus par une sélection qui joue aujourd'hui manquent.
+        away = internationals.absentees(season.tests, season.squads, day)
+        for club in playing:
+            internationals.release(club, away, day)
         world = Day(
             date=day,
             clubs=self.clubs,
@@ -173,7 +218,33 @@ class World:
         season.played += report.played
         for movement in report.movements:
             self.clubs[movement.club_id].balance += movement.amount
+        for club in playing:
+            internationals.release(club, (), day)  # les internationaux rentrent
+        self._play_tests(day, history)
         return report
+
+    def _play_tests(self, day: datetime.date, history: History) -> None:
+        """Les matchs internationaux du jour, chaque sélection avec sa liste."""
+        season = self.season
+        tests = [m for m in season.tests if not m.is_played and m.date == day]
+        if not tests:
+            return
+        everyone = {p.id: p for club in self.clubs.values() for p in club.players}
+        everyone.update({p.id: p for p in self.away})
+        teams, forms = {}, {}
+        for match in tests:
+            for team in (match.home_club_id, match.away_club_id):
+                squad = [everyone[i] for i in season.squads[(match.league, team)] if i in everyone]
+                teams[team] = internationals.national_team(NATIONS_BY_ID[team], squad)
+                forms[team] = internationals.national_form(teams[team], history.appearances, day)
+        internationals.play_tests(
+            day,
+            tests,
+            teams,
+            rng_for(self.seed, day, "internationals"),
+            forms,
+            staff_of=lambda player: self.clubs.get(player.club_id, internationals.NO_CLUB),
+        )
 
     def play_season(self) -> SeasonLog:
         """Joue tout ce qu'il reste de la saison, phases finales comprises."""
@@ -215,6 +286,11 @@ class World:
                 release(youth, year)
             self.free_agents += moves.released
         renew_pool(clubs, self.free_agents, year, rng, self._player_ids)
+        # Hors des championnats du jeu aussi, on vieillit et on raccroche.
+        for player in self.away:
+            player.age += 1
+            develop_player(player, internationals.AWAY_TRAINING_LEVEL, rng)
+        self.away = [p for p in self.away if p.age < RETIREMENT_AGE]
 
         self._start_season(year)
         return self.season

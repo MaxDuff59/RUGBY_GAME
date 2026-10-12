@@ -15,6 +15,55 @@ export const POSITIONS = {
 // Ordre des postes, du 1 au 15.
 export const POSITION_ORDER = Object.keys(POSITIONS);
 
+// Nationalité sportive d'un joueur (code à trois lettres de l'API) ; un pays absent
+// d'ici s'affiche par son code.
+export const NATIONALITIES = {
+  FRA: "France",
+  ENG: "Angleterre",
+  IRE: "Irlande",
+  SCO: "Écosse",
+  WAL: "Pays de Galles",
+  ITA: "Italie",
+  NZL: "Nouvelle-Zélande",
+  RSA: "Afrique du Sud",
+  AUS: "Australie",
+  ARG: "Argentine",
+  FIJ: "Fidji",
+  GEO: "Géorgie",
+  SAM: "Samoa",
+  TON: "Tonga",
+  JPN: "Japon",
+  POR: "Portugal",
+  ESP: "Espagne",
+  ROM: "Roumanie",
+  NAM: "Namibie",
+  ZIM: "Zimbabwe",
+  USA: "États-Unis",
+  CAN: "Canada",
+  URU: "Uruguay",
+  CHI: "Chili",
+  NED: "Pays-Bas",
+  BEL: "Belgique",
+  GER: "Allemagne",
+  ALG: "Algérie",
+  MOR: "Maroc",
+};
+
+export const nationalityLabel = (code) => (code ? (NATIONALITIES[code] ?? code) : null);
+
+// Au pluriel, en minuscules : « il faut au moins 4 piliers ».
+export const POSITION_PLURALS = {
+  PROP: "piliers",
+  HOOKER: "talonneurs",
+  LOCK: "deuxièmes lignes",
+  BACK_ROW: "troisièmes lignes",
+  SCRUM_HALF: "demis de mêlée",
+  FLY_HALF: "demis d'ouverture",
+  CENTRE: "centres",
+  WING: "ailiers",
+  FULLBACK: "arrières",
+};
+
 // Les 9 attributs, avec l'abréviation affichée en tête de colonne.
 export const ATTRIBUTES = [
   { key: "pace", short: "VIT", label: "Vitesse" },
@@ -82,6 +131,9 @@ export const CATEGORIES = {
   affairs: "Vie du club",
   hospitality: "Buvettes et loges",
 };
+
+// Un match dans sa fenêtre internationale : « Journée 3 » d'un tournoi, « Test 2 » d'une tournée.
+export const testLabel = (window, match) => `${window.has_table ? "Journée" : "Test"} ${match.matchday}`;
 
 // --- Recrutement --------------------------------------------------------------------
 

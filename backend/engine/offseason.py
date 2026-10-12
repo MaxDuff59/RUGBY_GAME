@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 
 from data.generator import FIRST_SEASON_YEAR, generate_youth_player, youth_level
+from data.nations import home_nation
 from engine.economy import SQUAD_MAX, wage_for
 from models import (
     ATTRIBUTE_MAX,
@@ -82,7 +83,8 @@ def youth_intake(
     rng: random.Random | None = None,
     season_year: int = FIRST_SEASON_YEAR,
 ) -> list[Player]:
-    """Nouveaux espoirs du centre, aux postes les moins fournis chez les espoirs."""
+    """Nouveaux espoirs du centre, aux postes les moins fournis chez les espoirs.
+    Formés au club, ils ont la nationalité de son pays (data/nations.py)."""
     rng = rng or random.Random()
     squad_level = sum(p.overall for p in club.players) / max(len(club.players), 1)
     level = youth_level(squad_level, club.facilities.academy_level)
@@ -102,6 +104,7 @@ def youth_intake(
                 rng,
                 season_year,
                 age=rng.randint(*INTAKE_AGES),
+                nationality=home_nation(club.name),
             )
         )
     return newcomers

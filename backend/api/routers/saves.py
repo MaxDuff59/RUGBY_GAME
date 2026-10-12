@@ -11,10 +11,12 @@ from fastapi import APIRouter, HTTPException, Path
 from sqlalchemy import select
 
 import accounts
+from api import internationals
 from api.auth import UserDep
 from api.ledger import current_season, game_date
 from api.schemas import SaveOut
 from data.leagues import league_config
+from data.nations import NATIONS_BY_CODE
 from database import (
     SLOT_COUNT,
     OutdatedSave,
@@ -53,6 +55,10 @@ def _save_out(user: accounts.User, slot: int) -> SaveOut:
             out.manager_name = career.manager_name
             out.club_name = club.name
             out.league_name = league_config(club.league).name
+        elif (human := internationals.selector(session)) is not None:
+            out.manager_name = human.manager_name
+            out.club_name = NATIONS_BY_CODE[human.nation].name
+            out.league_name = "Sélection nationale"
     return out
 
 
