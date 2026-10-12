@@ -61,7 +61,7 @@ vrais clubs ; un club absent du fichier, ou un poste vide, reçoit des joueurs i
 Les notes restent calculées par le jeu (niveau du club, international, âge). Les parties
 déjà commencées gardent leurs joueurs.
 
-### Blasons et couleurs des clubs
+### Blasons et couleurs des clubs et des sélections
 
 ```bash
 uv run python -m scripts.fetch_club_logos          # blasons manquants (TheSportsDB) et couleurs
@@ -70,6 +70,7 @@ uv run python -m scripts.fetch_club_logos --force  # retélécharge tous les bla
 
 Les blasons vont dans `frontend/public/clubs/`, la table nom → blason et couleurs dans
 `frontend/src/clubLogos.json`. Les couleurs se corrigent dans `COLORS`, en tête du script.
+Les seize sélections nationales y sont aussi, sous leur nom français.
 
 ### Lancer l'API
 

@@ -1,9 +1,10 @@
 import { useEffect } from "react";
 import manifest from "./clubLogos.json";
 
-// Blason et couleurs d'un club. Les vrais clubs ont les leurs (clubLogos.json, rempli par
-// backend/scripts/fetch_club_logos.py) ; un club inventé reçoit deux couleurs tirées de
-// son nom, toujours les mêmes, et l'écusson à initiales.
+// Blason et couleurs d'un club ou d'une sélection nationale. Les vrais clubs et les
+// sélections ont les leurs (clubLogos.json, rempli par backend/scripts/fetch_club_logos.py) ;
+// un club inventé reçoit deux couleurs tirées de son nom, toujours les mêmes, et l'écusson
+// à initiales.
 
 // Couleurs de maillot pour les clubs inventés : [primaire, secondaire].
 const INVENTED_COLORS = [
@@ -19,28 +20,8 @@ const INVENTED_COLORS = [
   ["#4A4F55", "#E8B10F"],
 ];
 
-// Couleurs des sélections nationales (sans blason : l'écusson à initiales).
-const NATION_COLORS = {
-  France: ["#0B2A6F", "#FFFFFF"],
-  Angleterre: ["#C8102E", "#FFFFFF"],
-  Irlande: ["#0E7C4A", "#FFFFFF"],
-  Écosse: ["#0B1F44", "#FFFFFF"],
-  "Pays de Galles": ["#B5121B", "#FFFFFF"],
-  Italie: ["#1B5FBF", "#FFFFFF"],
-  "Nouvelle-Zélande": ["#111111", "#FFFFFF"],
-  "Afrique du Sud": ["#0B5A3C", "#F2C230"],
-  Australie: ["#B57A00", "#0B5A3C"],
-  Argentine: ["#3F87C5", "#FFFFFF"],
-  Fidji: ["#1A1A1A", "#68BFE5"],
-  Géorgie: ["#8C1D2C", "#FFFFFF"],
-  Japon: ["#BC002D", "#FFFFFF"],
-  Samoa: ["#002B7F", "#CE1126"],
-  Tonga: ["#A3081F", "#FFFFFF"],
-  Portugal: ["#046A38", "#DA291C"],
-};
-
 export function clubInfo(name) {
-  const entry = (name && (manifest[name] ?? (NATION_COLORS[name] && { colors: NATION_COLORS[name] }))) || {};
+  const entry = (name && manifest[name]) || {};
   return {
     logo: entry.logo ?? null,
     light: Boolean(entry.light),

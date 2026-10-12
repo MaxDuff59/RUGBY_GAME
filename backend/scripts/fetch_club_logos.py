@@ -1,4 +1,5 @@
-"""Télécharge les blasons et les couleurs des vrais clubs depuis TheSportsDB.
+"""Télécharge les blasons et les couleurs des vrais clubs et des sélections
+nationales depuis TheSportsDB.
 
 Les images vont dans frontend/public/clubs/ ; la table nom du club -> blason et
 couleurs (primaire, secondaire) dans frontend/src/clubLogos.json, que l'interface
@@ -7,6 +8,9 @@ Un club introuvable (ou inventé) garde l'écusson à initiales, et ses couleurs
 sont tirées de son nom (frontend/src/clubs.js). `COLORS` corrige les couleurs
 absentes ou fausses chez TheSportsDB. Un blason presque blanc (invisible sur le
 fond clair) est marqué `light` : l'interface le pose sur une pastille du club.
+
+Les sélections (data/nations.py) sont rangées dans la même table sous leur nom
+français ; TheSportsDB les connaît sous « <pays en anglais> Rugby ».
 
 Usage (depuis le dossier backend/) :
     uv run python -m scripts.fetch_club_logos
@@ -25,6 +29,7 @@ import zlib
 from pathlib import Path
 
 from data.leagues import LEAGUES
+from data.nations import NATIONS
 
 # Championnats de rugby à XIII, à écarter (des homonymes y jouent).
 THIRTEEN = re.compile(r"rugby league|super league|\bnrl\b")
@@ -114,9 +119,10 @@ def get(url: str) -> bytes:
     raise RuntimeError("inaccessible")
 
 
-def find_team(name: str, country_hint: str) -> dict | None:
-    """Fiche TheSportsDB du club de rugby (à XV) le plus proche de ce nom."""
-    for query in [name, *ALIASES.get(name, [])]:
+def find_team(name: str, country_hint: str, queries: list[str] | None = None) -> dict | None:
+    """Fiche TheSportsDB du club de rugby (à XV) le plus proche de ce nom ; `queries` :
+    les noms à chercher, quand celui du jeu n'en fait pas partie (sélections)."""
+    for query in queries or [name, *ALIASES.get(name, [])]:
         data = json.loads(get(API + urllib.parse.quote(query)))
         teams = [
             t for t in data.get("teams") or []
@@ -206,6 +212,43 @@ COLORS = {
     "Western Force": ["#002B5C", "#0072CE"],
     "Fijian Drua": ["#0072CE", "#FFFFFF"],
     "Moana Pasifika": ["#00A0AF", "#000000"],
+    # Sélections nationales
+    "France": ["#0B2A6F", "#FFFFFF"],
+    "Angleterre": ["#C8102E", "#FFFFFF"],
+    "Irlande": ["#0E7C4A", "#FFFFFF"],
+    "Écosse": ["#0B1F44", "#FFFFFF"],
+    "Pays de Galles": ["#B5121B", "#FFFFFF"],
+    "Italie": ["#1B5FBF", "#FFFFFF"],
+    "Nouvelle-Zélande": ["#111111", "#FFFFFF"],
+    "Afrique du Sud": ["#0B5A3C", "#F2C230"],
+    "Australie": ["#B57A00", "#0B5A3C"],
+    "Argentine": ["#3F87C5", "#FFFFFF"],
+    "Fidji": ["#1A1A1A", "#68BFE5"],
+    "Géorgie": ["#8C1D2C", "#FFFFFF"],
+    "Japon": ["#BC002D", "#FFFFFF"],
+    "Samoa": ["#002B7F", "#CE1126"],
+    "Tonga": ["#A3081F", "#FFFFFF"],
+    "Portugal": ["#046A38", "#DA291C"],
+}
+
+# Pays de chaque sélection, en anglais : TheSportsDB la nomme « <pays> Rugby ».
+NATION_COUNTRIES = {
+    "FRA": "France",
+    "ENG": "England",
+    "IRE": "Ireland",
+    "SCO": "Scotland",
+    "WAL": "Wales",
+    "ITA": "Italy",
+    "NZL": "New Zealand",
+    "RSA": "South Africa",
+    "AUS": "Australia",
+    "ARG": "Argentina",
+    "FIJ": "Fiji",
+    "GEO": "Georgia",
+    "JPN": "Japan",
+    "SAM": "Samoa",
+    "TON": "Tonga",
+    "POR": "Portugal",
 }
 
 COUNTRIES = {
@@ -266,6 +309,23 @@ def colors_of(team: dict) -> list[str]:
     return found[:2]
 
 
+def dump(manifest: dict) -> str:
+    """La table telle qu'elle est rangée dans le dépôt : triée par nom, un champ par
+    ligne dans le même ordre, les deux couleurs sur une seule ligne."""
+    ordered = {
+        name: {key: entry[key] for key in ("logo", "colors", "light") if key in entry}
+        for name, entry in sorted(manifest.items())
+    }
+    text = json.dumps(ordered, ensure_ascii=False, indent=2)
+    inline = re.sub(
+        r"\[\s+(.*?)\s+\]",
+        lambda array: "[" + re.sub(r",\s+", ", ", array.group(1)) + "]",
+        text,
+        flags=re.DOTALL,
+    )
+    return inline + "\n"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--force", action="store_true", help="retélécharge les blasons présents")
@@ -273,34 +333,45 @@ def main() -> None:
 
     LOGO_DIR.mkdir(parents=True, exist_ok=True)
     manifest = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else {}
+    # (nom dans le jeu, pays attendu, noms à chercher ou None pour celui du jeu et ses alias)
+    wanted = [
+        (club.name, COUNTRIES.get(league.code, ""), None)
+        for league in LEAGUES
+        for club in league.clubs
+    ]
+    wanted += [
+        (nation.name, NATION_COUNTRIES[nation.code], [f"{NATION_COUNTRIES[nation.code]} Rugby"])
+        for nation in NATIONS
+    ]
     missing = []
-    for league in LEAGUES:
-        for club in league.clubs:
-            entry = manifest.get(club.name, {})
-            filename = f"{slug(club.name)}.png"
-            path = LOGO_DIR / filename
-            team = None
-            if args.force or not path.exists():
-                team = find_team(club.name, COUNTRIES.get(league.code, ""))
-                if team:
-                    # /small : vignette de 250 px, bien assez pour l'écusson.
-                    path.write_bytes(get(f"{team['strBadge']}/small"))
-            if path.exists():
-                entry["logo"] = f"/clubs/{filename}"
-                entry["light"] = is_light(path.read_bytes())
-            else:
-                missing.append(club.name)
-            colors = COLORS.get(club.name) or (colors_of(team) if team else entry.get("colors"))
-            if colors:
-                entry["colors"] = colors
-            manifest[club.name] = entry
-            if team or not path.exists():
-                print(f"  {'ok' if path.exists() else '- '}  {club.name}")
-            # Écrit à chaque club : un arrêt en route ne perd rien.
-            text = json.dumps(dict(sorted(manifest.items())), ensure_ascii=False, indent=2)
-            MANIFEST.write_text(text + "\n")
+    for name, country, queries in wanted:
+        entry = manifest.get(name, {})
+        filename = f"{slug(name)}.png"
+        path = LOGO_DIR / filename
+        team = None
+        if args.force or not path.exists():
+            team = find_team(name, country, queries)
+            if team:
+                # /small : vignette de 250 px, bien assez pour l'écusson.
+                path.write_bytes(get(f"{team['strBadge']}/small"))
+        if path.exists():
+            entry["logo"] = f"/clubs/{filename}"
+            entry["light"] = is_light(path.read_bytes())
+        else:
+            missing.append(name)
+        colors = COLORS.get(name) or (colors_of(team) if team else entry.get("colors"))
+        if colors:
+            entry["colors"] = colors
+        manifest[name] = entry
+        if team or not path.exists():
+            print(f"  {'ok' if path.exists() else '- '}  {name}")
+        # Écrit à chaque équipe : un arrêt en route ne perd rien.
+        MANIFEST.write_text(dump(manifest))
 
-    print(f"\n{len(manifest)} clubs, {len(missing)} sans blason : {', '.join(missing) or 'aucun'}")
+    print(
+        f"\n{len(manifest)} clubs et sélections, {len(missing)} sans blason : "
+        f"{', '.join(missing) or 'aucun'}"
+    )
 
 
 if __name__ == "__main__":

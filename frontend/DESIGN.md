@@ -162,8 +162,10 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   accent, ses coéquipiers en noir, les autres joueurs du poste en gris, et son percentile ;
   terrain avec sa note à chaque place, son poste naturel en accent.
 
-- Sélections nationales : une sélection n'a pas de blason, donc l'écusson à initiales à
-  ses couleurs (`NATION_COLORS`, `src/clubs.js`) ; l'interface prend ces couleurs pour un
+- Sélections nationales : chacune a son blason, téléchargé comme ceux des clubs
+  (`fetch_club_logos.py`, rangé dans `public/clubs/` et `clubLogos.json` sous son nom
+  français, avec ses deux couleurs) ; un blason blanc (la fougère néo-zélandaise) est posé
+  sur une pastille sombre. L'interface prend les couleurs de la sélection pour un
   sélectionneur, comme pour un club.
 - Choix de la carrière : deux pastilles sous le nom, « Manager d'un club » et
   « Sélectionneur national » (absentes dans un monde sans sélections). Les sélections se

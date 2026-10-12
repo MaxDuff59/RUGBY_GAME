@@ -9,6 +9,26 @@
     "colors": ["#FFD100", "#002B5C"],
     "light": false
   },
+  "Afrique du Sud": {
+    "logo": "/clubs/afrique-du-sud.png",
+    "colors": ["#0B5A3C", "#F2C230"],
+    "light": false
+  },
+  "Angleterre": {
+    "logo": "/clubs/angleterre.png",
+    "colors": ["#C8102E", "#FFFFFF"],
+    "light": false
+  },
+  "Argentine": {
+    "logo": "/clubs/argentine.png",
+    "colors": ["#3F87C5", "#FFFFFF"],
+    "light": false
+  },
+  "Australie": {
+    "logo": "/clubs/australie.png",
+    "colors": ["#B57A00", "#0B5A3C"],
+    "light": false
+  },
   "Aviron Bayonnais": {
     "logo": "/clubs/aviron-bayonnais.png",
     "colors": ["#6CACE4", "#FFFFFF"],
@@ -90,10 +110,20 @@
     "colors": ["#E30613", "#0055A4"],
     "light": false
   },
+  "Fidji": {
+    "logo": "/clubs/fidji.png",
+    "colors": ["#1A1A1A", "#68BFE5"],
+    "light": false
+  },
   "Fijian Drua": {
     "logo": "/clubs/fijian-drua.png",
     "colors": ["#0072CE", "#FFFFFF"],
     "light": true
+  },
+  "France": {
+    "logo": "/clubs/france.png",
+    "colors": ["#0B2A6F", "#FFFFFF"],
+    "light": false
   },
   "Glasgow Warriors": {
     "logo": "/clubs/glasgow-warriors.png",
@@ -105,19 +135,39 @@
     "colors": ["#CE0E2D", "#FFFFFF"],
     "light": false
   },
+  "Géorgie": {
+    "logo": "/clubs/georgie.png",
+    "colors": ["#8C1D2C", "#FFFFFF"],
+    "light": false
+  },
   "Harlequins": {
     "logo": "/clubs/harlequins.png",
     "colors": ["#C8006A", "#00A9E0"],
     "light": false
   },
   "Highlanders": {
-    "colors": ["#1B2A6B", "#8A1538"],
     "logo": "/clubs/highlanders.png",
+    "colors": ["#1B2A6B", "#8A1538"],
     "light": false
   },
   "Hurricanes": {
     "logo": "/clubs/hurricanes.png",
     "colors": ["#FFD100", "#000000"],
+    "light": false
+  },
+  "Irlande": {
+    "logo": "/clubs/irlande.png",
+    "colors": ["#0E7C4A", "#FFFFFF"],
+    "light": false
+  },
+  "Italie": {
+    "logo": "/clubs/italie.png",
+    "colors": ["#1B5FBF", "#FFFFFF"],
+    "light": false
+  },
+  "Japon": {
+    "logo": "/clubs/japon.png",
+    "colors": ["#BC002D", "#FFFFFF"],
     "light": false
   },
   "LOU Rugby": {
@@ -141,8 +191,8 @@
     "light": false
   },
   "Moana Pasifika": {
-    "colors": ["#00A0AF", "#000000"],
     "logo": "/clubs/moana-pasifika.png",
+    "colors": ["#00A0AF", "#000000"],
     "light": false
   },
   "Montpellier Hérault Rugby": {
@@ -170,14 +220,29 @@
     "colors": ["#00703C", "#C9A227"],
     "light": false
   },
+  "Nouvelle-Zélande": {
+    "logo": "/clubs/nouvelle-zelande.png",
+    "colors": ["#111111", "#FFFFFF"],
+    "light": true
+  },
   "Oyonnax Rugby": {
     "logo": "/clubs/oyonnax-rugby.png",
     "colors": ["#D50032", "#000000"],
     "light": false
   },
+  "Pays de Galles": {
+    "logo": "/clubs/pays-de-galles.png",
+    "colors": ["#B5121B", "#FFFFFF"],
+    "light": false
+  },
+  "Portugal": {
+    "logo": "/clubs/portugal.png",
+    "colors": ["#046A38", "#DA291C"],
+    "light": false
+  },
   "Provence Rugby": {
-    "colors": ["#1B3E8E", "#F5C400"],
     "logo": "/clubs/provence-rugby.png",
+    "colors": ["#1B3E8E", "#F5C400"],
     "light": true
   },
   "Queensland Reds": {
@@ -206,6 +271,11 @@
   "Sale Sharks": {
     "logo": "/clubs/sale-sharks.png",
     "colors": ["#0B1F4B", "#00A5DF"],
+    "light": false
+  },
+  "Samoa": {
+    "logo": "/clubs/samoa.png",
+    "colors": ["#002B7F", "#CE1126"],
     "light": false
   },
   "Saracens": {
@@ -256,6 +326,11 @@
     "colors": ["#002B5C", "#FFFFFF"],
     "light": true
   },
+  "Tonga": {
+    "logo": "/clubs/tonga.png",
+    "colors": ["#A3081F", "#FFFFFF"],
+    "light": false
+  },
   "US Carcassonne": {
     "logo": "/clubs/us-carcassonne.png",
     "colors": ["#FFD200", "#000000"],
@@ -305,5 +380,10 @@
     "logo": "/clubs/zebre-parma.png",
     "colors": ["#000000", "#FFFFFF"],
     "light": true
+  },
+  "Écosse": {
+    "logo": "/clubs/ecosse.png",
+    "colors": ["#0B1F44", "#FFFFFF"],
+    "light": false
   }
 }
