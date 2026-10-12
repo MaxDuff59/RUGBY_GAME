@@ -3,9 +3,14 @@ au fil du jeu, et chaque compte ne voit que les siennes."""
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, inspect, select, text
+from sqlalchemy.orm import sessionmaker
 
 import database
 from api.main import app
+from api.routers.seasons import _play_matchday, create_season, season_rng
+from models.orm import Base, ClubRow, SeasonRow
+from tests import conftest
 
 
 def sign_up(email: str) -> TestClient:
@@ -93,3 +98,50 @@ def test_the_game_needs_an_account(world):
     assert anonymous.get("/saves").status_code == 401
     assert anonymous.get("/career").status_code == 401
     assert anonymous.post("/saves/1/new").status_code == 401
+
+
+# --- Graine du hasard de la saison -----------------------------------------------------------
+
+
+def _fresh_world(seed: int):
+    """Un monde neuf (toujours le même) et sa première saison, sur une base en mémoire."""
+    engine = conftest.test_engine()
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine, expire_on_commit=False)()
+    database.seed_if_empty(session, club_count=10, seed=0, real=False)
+    return session, create_season(session, 2026, seed=seed)
+
+
+def _scores(seed: int) -> list[tuple]:
+    session, season = _fresh_world(seed)
+    with session:
+        for _ in range(2):
+            _play_matchday(session, season)
+        played = [m for m in season.matches if m.is_played]
+        injuries = session.scalar(text("SELECT COUNT(*) FROM injuries"))
+        balances = [row.balance for row in session.scalars(select(ClubRow).order_by(ClubRow.id))]
+        return [(m.home_score, m.away_score, m.home_lineup) for m in played] + [injuries, balances]
+
+
+def test_a_season_seed_replays_the_same_matchdays():
+    assert _scores(11) == _scores(11)
+    assert _scores(11) != _scores(12)
+
+
+def test_old_saves_get_a_season_seed(tmp_path):
+    """Une partie d'avant les graines s'ouvre encore : la colonne est ajoutée, et la
+    saison en cours tire sa graine à la prochaine journée."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'ancienne.db'}")
+    Base.metadata.create_all(engine)
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE seasons DROP COLUMN seed"))
+        connection.execute(text("INSERT INTO seasons (id, year) VALUES (1, 2026)"))
+
+    database.init_db(engine)
+
+    assert "seed" in {column["name"] for column in inspect(engine).get_columns("seasons")}
+    with sessionmaker(bind=engine)() as session:
+        season = session.scalars(select(SeasonRow)).one()
+        assert season.seed is None
+        season_rng(season, "2026-09-05")
+        assert season.seed is not None

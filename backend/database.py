@@ -302,9 +302,25 @@ def init_db(engine: Engine) -> None:
             )
 
 
+def _add_season_seed(engine: Engine) -> None:
+    """Graine du hasard de la saison, ajoutée après coup (SQLite comme Postgres) :
+    les saisons en cours en tirent une à leur prochaine journée."""
+    inspector = inspect(engine)
+    schema = _schema_of(engine)
+    if not inspector.has_table("seasons", schema=schema):
+        return
+    if "seed" in {column["name"] for column in inspector.get_columns("seasons", schema=schema)}:
+        return
+    table = f'"{schema}"."seasons"' if schema else "seasons"
+    with engine.begin() as connection:
+        connection.execute(text(f"ALTER TABLE {table} ADD COLUMN seed INTEGER"))
+
+
 def _migrate(engine: Engine) -> None:
     """Les quelques changements de schéma qu'on sait rattraper sans repartir de zéro
-    (parties SQLite d'avant ces changements ; en Postgres les schémas naissent à jour)."""
+    (parties SQLite d'avant ces changements ; en Postgres les schémas naissent à jour,
+    sauf pour la graine des saisons)."""
+    _add_season_seed(engine)
     if engine.dialect.name != "sqlite":
         return
     inspector = inspect(engine)

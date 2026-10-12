@@ -11,13 +11,14 @@ sans club : après une saison sans contrat, il peut arrêter. Aucune dépendance
 
 import random
 from collections import Counter
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
+from dataclasses import dataclass
 
 from data.generator import SQUAD_COMPOSITION, generate_player
 from engine.economy import WAGE_MIN, wage_for
-from engine.offseason import RETIREMENT_AGE
-from engine.transfers import TIME_BENCH, TIME_STARTER, playing_time
-from models import Club, Player, Position
+from engine.offseason import RETIREMENT_AGE, develop_player
+from engine.transfers import TIME_BENCH, TIME_STARTER, playing_time, preferred_years
+from models import Club, Player, Position, Squad
 
 # --- Ce que demande un agent libre -------------------------------------------------------
 
@@ -51,12 +52,35 @@ NEWCOMER_LEVEL = (8.0, 11.5)
 NEWCOMER_AGES = (22, 33)
 
 
+# Un agent libre ne s'entraîne nulle part : il progresse (ou décline) comme
+# dans le plus petit centre d'entraînement.
+FREE_TRAINING_LEVEL = 1
+
+
+def release(player: Player, season_year: int) -> None:
+    """Le joueur quitte son club sans contrat (un espoir sort du centre en pro)."""
+    if player.squad == Squad.YOUTH:
+        player.squad = Squad.PRO
+        player.wage = wage_for(player)
+    player.club_id = None
+    player.loaned_from = None
+    player.contract_until = min(player.contract_until, season_year - 1)
+
+
 def quits(player: Player, season_year: int, rng: random.Random) -> bool:
     """À l'intersaison (après vieillissement) : l'agent libre raccroche-t-il ?"""
     if player.age >= RETIREMENT_AGE:
         return True
     chance = QUIT_CHANCE.get(seasons_without_club(player, season_year), 1.0)
     return rng.random() < chance
+
+
+def age_free_agent(player: Player, season_year: int, rng: random.Random) -> bool:
+    """Intersaison d'un agent libre : il vieillit, progresse ou décline. Renvoie
+    False s'il arrête."""
+    player.age += 1
+    develop_player(player, FREE_TRAINING_LEVEL, rng)
+    return not quits(player, season_year, rng)
 
 
 def trim_pool(pool: list[Player]) -> list[Player]:
@@ -96,6 +120,10 @@ RELEASE_FLOOR = 28  # pas de départ libre sous ce nombre de pros
 SQUAD_TARGET = sum(SQUAD_COMPOSITION.values())
 
 
+# Durée (en saisons) des contrats que les clubs IA renouvellent.
+AI_RENEWAL_YEARS = (1, 3)
+
+
 def ai_releases(player: Player, squad_size: int, rng: random.Random) -> bool:
     """Le club IA laisse-t-il partir ce joueur en fin de contrat ?"""
     if squad_size <= RELEASE_FLOOR:
@@ -115,3 +143,61 @@ def ai_pick(club: Club, pool: list[Player]) -> Player | None:
         if candidates:
             return max(candidates, key=lambda p: p.overall)
     return None
+
+
+def settle_contracts(club: Club, season_year: int, rng: random.Random) -> list[Player]:
+    """Fins de contrat d'un club IA avant la saison `season_year` : il prolonge la
+    plupart de ses joueurs (et tous ses espoirs) et laisse partir les autres.
+
+    Renvoie ceux qui partent, retirés de l'effectif : à l'appelant d'en faire des
+    agents libres (`release`).
+    """
+    leaving = []
+    squad_size = len(club.players)
+    for player in [*club.players, *club.youths]:
+        if player.contract_until >= season_year:
+            continue
+        if player.squad == Squad.PRO and ai_releases(player, squad_size, rng):
+            squad_size -= 1
+            leaving.append(player)
+        else:
+            player.contract_until = season_year + rng.randint(*AI_RENEWAL_YEARS) - 1
+    gone = {player.id for player in leaving}
+    club.players = [p for p in club.players if p.id not in gone]
+    return leaving
+
+
+@dataclass
+class PoolRenewal:
+    """Ce que l'intersaison a changé dans le vivier des agents libres."""
+
+    signed: list[Player]  # recrutés par un club IA (club, salaire et contrat à jour)
+    dropped: list[Player]  # en trop : ils quittent le rugby pro
+    arrivals: list[Player]  # arrivés de l'extérieur
+
+
+def renew_pool(
+    clubs: Iterable[Club],
+    pool: list[Player],
+    season_year: int,
+    rng: random.Random,
+    player_ids: Iterator[int],
+) -> PoolRenewal:
+    """Intersaison, après les départs : les clubs IA (`clubs`) à court d'effectif
+    piochent dans le vivier, qui est ensuite ramené entre son minimum et son
+    maximum. `pool` et les effectifs sont mis à jour."""
+    signed = []
+    for club in clubs:
+        while (player := ai_pick(club, pool)) is not None:
+            player.club_id = club.id
+            player.wage = wage_for(player)
+            player.contract_until = season_year + rng.randint(*preferred_years(player)) - 1
+            club.players.append(player)
+            pool.remove(player)
+            signed.append(player)
+    dropped = trim_pool(pool)
+    for player in dropped:
+        pool.remove(player)
+    arrivals = newcomers(pool, player_ids, season_year, rng)
+    pool.extend(arrivals)
+    return PoolRenewal(signed, dropped, arrivals)

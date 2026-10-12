@@ -33,7 +33,7 @@ from engine.contracts import (
     retires_next_season,
 )
 from engine.economy import SQUAD_MAX, SQUAD_MIN
-from engine.free_agents import ai_releases
+from engine.free_agents import settle_contracts
 from engine.transfers import DealKind, playing_time, time_label
 from models import Club, Player, Squad
 from models.orm import CareerRow, ClubRow, NegotiationRow, PlayerRow, SeasonRow
@@ -41,10 +41,6 @@ from models.orm import CareerRow, ClubRow, NegotiationRow, PlayerRow, SeasonRow
 router = APIRouter(prefix="/contracts", tags=["contrats"])
 
 EXTENSION = "extension"
-
-# Un club IA prolonge son joueur en fin de contrat d'une à trois saisons ; un
-# joueur que le manager laisse partir signe aussi pour une à trois saisons.
-AI_RENEWAL_YEARS = (1, 3)
 
 
 def _season_or_404(session: Session) -> SeasonRow:
@@ -339,23 +335,21 @@ def expire_contracts(
     """Intersaison (après les pré-contrats) : contrats arrivés à terme avant `year`.
 
     Les clubs IA prolongent la plupart de leurs joueurs et laissent partir les
-    autres. Ceux du club dirigé qui n'ont pas été prolongés partent : tous
-    deviennent agents libres (un espoir sort du centre en pro).
+    autres (engine/free_agents.py). Ceux du club dirigé qui n'ont pas été
+    prolongés partent : tous deviennent agents libres (un espoir sort du centre
+    en pro).
     """
-    pros_by_club = Counter(
-        session.scalars(select(PlayerRow.club_id).where(PlayerRow.squad == Squad.PRO.value))
-    )
-    expired = session.scalars(
-        select(PlayerRow).where(PlayerRow.contract_until < year, PlayerRow.club_id.is_not(None))
-    )
-    for row in expired:
-        mine = row.club_id == my_club_id
-        is_pro = row.squad == Squad.PRO.value
-        if not mine and not (
-            is_pro and ai_releases(row.to_domain(), pros_by_club[row.club_id], rng)
-        ):
-            row.contract_until = year + rng.randint(*AI_RENEWAL_YEARS) - 1
-            continue
-        if is_pro:
-            pros_by_club[row.club_id] -= 1
-        release(row, year)
+    session.flush()
+    session.expire_all()  # les pré-contrats viennent de changer les effectifs
+    for club_row in session.scalars(select(ClubRow).order_by(ClubRow.id)):
+        rows = {row.id: row for row in [*club_row.players, *club_row.youths]}
+        if club_row.id == my_club_id:
+            leaving = [row for row in rows.values() if row.contract_until < year]
+        else:
+            club = club_row.to_domain()
+            squad = [*club.players, *club.youths]
+            leaving = [rows[player.id] for player in settle_contracts(club, year, rng)]
+            for player in squad:
+                rows[player.id].contract_until = player.contract_until
+        for row in leaving:
+            release(row, year)

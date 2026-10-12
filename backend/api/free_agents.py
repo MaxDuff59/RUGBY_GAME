@@ -12,16 +12,11 @@ from collections.abc import Iterator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import engine.free_agents
 from engine.economy import wage_for
-from engine.free_agents import ai_pick, newcomers, quits, trim_pool
-from engine.offseason import develop_player
-from engine.transfers import preferred_years
+from engine.free_agents import age_free_agent
 from models import ATTRIBUTE_NAMES, Squad
 from models.orm import ClubRow, PlayerRow
-
-# Un agent libre ne s'entraîne nulle part : il progresse (ou décline) comme
-# dans le plus petit centre d'entraînement.
-FREE_TRAINING_LEVEL = 1
 
 
 def free_agent_rows(session: Session) -> list[PlayerRow]:
@@ -47,9 +42,7 @@ def age_free_agents(session: Session, season_year: int, rng: random.Random) -> N
     progressent ou déclinent, et certains arrêtent."""
     for row in free_agent_rows(session):
         player = row.to_domain()
-        player.age += 1
-        develop_player(player, FREE_TRAINING_LEVEL, rng)
-        if quits(player, season_year, rng):
+        if not age_free_agent(player, season_year, rng):
             session.delete(row)
             continue
         row.age = player.age
@@ -70,18 +63,21 @@ def renew_pool(
     session.expire_all()
     rows = {row.id: row for row in free_agent_rows(session)}
     pool = [row.to_domain() for row in rows.values()]
-    for club_row in session.scalars(select(ClubRow).where(ClubRow.id != my_club_id)):
-        club = club_row.to_domain()
-        while (player := ai_pick(club, pool)) is not None:
-            row = rows[player.id]
-            row.club_id = club.id
-            row.wage = wage_for(player)
-            row.contract_until = season_year + rng.randint(*preferred_years(player)) - 1
-            player.club_id = club.id
-            club.players.append(player)
-            pool.remove(player)
-    for player in trim_pool(pool):
+    clubs = [
+        row.to_domain()
+        for row in session.scalars(
+            select(ClubRow).where(ClubRow.id != my_club_id).order_by(ClubRow.id)
+        )
+    ]
+    renewal = engine.free_agents.renew_pool(clubs, pool, season_year, rng, player_ids)
+    for player in renewal.signed:
+        row = rows[player.id]
+        row.club_id, row.wage, row.contract_until = (
+            player.club_id,
+            player.wage,
+            player.contract_until,
+        )
+    for player in renewal.dropped:
         session.delete(rows[player.id])
-        pool.remove(player)
-    for player in newcomers(pool, player_ids, season_year, rng):
+    for player in renewal.arrivals:
         session.add(PlayerRow.from_domain(player))

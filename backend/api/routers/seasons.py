@@ -4,6 +4,11 @@ Le calendrier est tiré au début de la saison (matchs sans score). Chaque appel
 à `play` joue la journée suivante : la semaine d'entraînement (qui peut blesser),
 tous ses matchs (qui blessent aussi), puis les recettes et les salaires. Les
 phases finales se créent au fil des résultats.
+
+Les règles sont dans le moteur (engine/season.py, engine/matchday.py,
+engine/offseason.py) : ici on charge le monde depuis la base, on appelle le
+moteur et on enregistre ce qu'il rend. Le hasard vient de la graine de la
+saison (`season_rng`).
 """
 
 import datetime
@@ -25,7 +30,7 @@ from api.deps import SessionDep, load_clubs
 from api.free_agents import age_free_agents, release, renew_pool
 from api.jokers import close_jokers, end_piges
 from api.ledger import current_season, record
-from api.live import live_match_row, load_live, run_training_week
+from api.live import live_match_row, load_live
 from api.notes import History, ensure_preseason_ranks, season_leagues
 from api.routers.contracts import contracts_overview, expire_contracts, rival_signings
 from api.routers.leagues import league_out
@@ -47,32 +52,25 @@ from api.schemas import (
 from data.generator import FIRST_SEASON_YEAR
 from data.leagues import DEFAULT_LEAGUE, PROMOTION, league_config, sort_codes
 from engine.board import should_sack
-from engine.calendar import season_dates
-from engine.economy import (
-    CHAMPION_PRIZE,
-    PLAYOFF_PRIZES,
-    SQUAD_MAX,
-    SQUAD_MIN,
-    TransactionCategory,
-    attendance,
-    attendance_bonus,
-    hospitality_revenue,
-    matchday_wages,
-    sponsor_revenue,
-    ticketing_revenue,
-    wage_for,
+from engine.economy import SQUAD_MIN
+from engine.matchday import Day, play_day
+from engine.offseason import club_offseason
+from engine.season import (
+    champion,
+    league_table,
+    next_playoff_matches,
+    phase,
+    record_result,
+    rng_for,
+    schedule,
+    seeding,
 )
-from engine.match_engine import simulate_match
-from engine.medical import new_injury
-from engine.offseason import age_players, develop_players, retirees, youth_exits, youth_intake
-from engine.season import generate_fixtures, playoff_round, record_result
 from engine.sponsors import deals_from, jersey_revenue
 from models import (
     ATTRIBUTE_NAMES,
-    Club,
     EventType,
     Injury,
-    InjurySource,
+    Match,
     Season,
     Squad,
     Stage,
@@ -92,18 +90,18 @@ from models.orm import (
 
 router = APIRouter(prefix="/seasons", tags=["saisons"])
 
-__all__ = ["FIRST_SEASON_YEAR", "create_season", "focus_league", "router"]
+__all__ = ["FIRST_SEASON_YEAR", "create_season", "focus_league", "router", "season_rng"]
 
-STAGE_LABELS = {
-    Stage.QUARTER: "quarts de finale",
-    Stage.BARRAGE: "barrages",
-    Stage.SEMI: "demi-finales",
-    Stage.FINAL: "finale",
-}
+# Les graines tiennent dans un entier de la base (32 bits signés).
+SEED_RANGE = 2**31
 
 
-def _matchday_label(stage: Stage, matchday: int) -> str:
-    return f"journée {matchday}" if stage == Stage.REGULAR else STAGE_LABELS[stage]
+def season_rng(season: SeasonRow, *labels: object) -> random.Random:
+    """Le hasard d'un moment de la saison (une date, « offseason »...), tiré de sa
+    graine : rejoué dans le même état, ce moment donne le même résultat."""
+    if season.seed is None:
+        season.seed = random.randrange(SEED_RANGE)  # saison d'avant les graines
+    return rng_for(season.seed, *labels)
 
 
 # --- Lecture de la saison ------------------------------------------------------------
@@ -141,6 +139,10 @@ def _league_out(season: SeasonRow, league: str) -> LeagueOut:
     return league_out(league, len(_league_club_ids(season, league)))
 
 
+def _league_domain(season: SeasonRow, league: str) -> list[Match]:
+    return [m.to_domain() for m in _league_matches(season, league)]
+
+
 def _regular_matchday_count(season: SeasonRow, league: str) -> int:
     return max(
         m.matchday for m in _league_matches(season, league) if m.stage == Stage.REGULAR.value
@@ -156,35 +158,20 @@ def _table(season: SeasonRow, league: str) -> Season:
 
 def _standings(season: SeasonRow, league: str) -> Season:
     """Classement de la saison régulière d'un championnat, recalculé à partir des matchs joués."""
-    table = _table(season, league)
-    for row in _league_matches(season, league):
-        if row.stage == Stage.REGULAR.value and row.is_played:
-            match = row.to_domain()
-            table.matches.append(match)
-            record_result(table, match)
-    return table
+    return league_table(_league_domain(season, league))
 
 
 def _seeding(season: SeasonRow, league: str) -> list[int]:
     """Identifiants des clubs du championnat, du 1er au dernier de la saison régulière."""
-    return [row.club_id for row in _standings(season, league).table()]
+    return seeding(_league_domain(season, league))
 
 
 def _phase(season: SeasonRow, league: str) -> str:
-    matches = _league_matches(season, league)
-    if any(m.stage == Stage.REGULAR.value and not m.is_played for m in matches):
-        return "regular"
-    finals = [m for m in matches if m.stage == Stage.FINAL.value]
-    if finals and all(m.is_played for m in finals):
-        return "finished"
-    return "playoffs"
+    return phase(_league_domain(season, league))
 
 
 def _champion_id(season: SeasonRow, league: str) -> int | None:
-    final = next((m for m in _league_matches(season, league) if m.stage == Stage.FINAL.value), None)
-    if final is None or not final.is_played:
-        return None
-    return final.to_domain().winner_id(_seeding(season, league))
+    return champion(_league_domain(season, league))
 
 
 def _summary(row: MatchRow, names: dict[int, str]) -> MatchSummary:
@@ -255,34 +242,23 @@ def _season_out(session: Session, season: SeasonRow, league: str | None = None) 
 # --- Création et avancement ----------------------------------------------------------
 
 
-def create_season(session: Session, year: int) -> SeasonRow:
+def create_season(session: Session, year: int, seed: int | None = None) -> SeasonRow:
     """Tire le calendrier de la saison régulière de chaque championnat (matchs sans
-    score) et l'enregistre."""
+    score) et l'enregistre, avec la graine du hasard de la saison (au hasard sans `seed`)."""
     by_league: dict[str, list[int]] = {}
     for row in _club_rows(session):
         by_league.setdefault(row.league, []).append(row.id)
 
-    season = SeasonRow(year=year)
+    season = SeasonRow(year=year, seed=random.randrange(SEED_RANGE) if seed is None else seed)
     pros, youths = [], []
     for league, club_ids in by_league.items():
-        config = league_config(league)
-        fixtures = generate_fixtures(club_ids)
-        regular_dates, _ = season_dates(year, len(fixtures), config.start, config.breaks)
+        fixtures = schedule(league_config(league), club_ids, year, code=league)
         # Les espoirs jouent les mêmes affiches, le même jour (saison régulière seulement).
         for squad, target in ((Squad.PRO, pros), (Squad.YOUTH, youths)):
-            target.extend(
-                MatchRow(
-                    league=league,
-                    matchday=number,
-                    stage=Stage.REGULAR.value,
-                    date=regular_dates[number - 1],
-                    home_club_id=home,
-                    away_club_id=away,
-                    squad=squad.value,
-                )
-                for number, matchday in enumerate(fixtures, start=1)
-                for home, away in matchday
-            )
+            for match in fixtures:
+                row = MatchRow.from_domain(match)
+                row.squad = squad.value
+                target.append(row)
     season.matches, season.youth_matches = pros, youths
     session.add(season)
     session.commit()
@@ -294,39 +270,12 @@ def create_season(session: Session, year: int) -> SeasonRow:
 def _ensure_next_stage(session: Session, season: SeasonRow, league: str) -> None:
     """Crée les matchs du tour suivant d'un championnat quand tous ceux du tour en
     cours sont joués."""
-    matches = _league_matches(season, league)
-    if any(not m.is_played for m in matches):
-        return
-
-    config = league_config(league)
-    seeding = _seeding(season, league)
-    played = {
-        stage: [m.to_domain() for m in matches if m.stage == stage.value]
-        for stage in config.playoffs.stages
-    }
-    next_round = playoff_round(config.playoffs, seeding, played)
-    if next_round is None:
-        return  # finale jouée : la saison du championnat est terminée
-    stage, pairings = next_round
-
-    regular_count = _regular_matchday_count(season, league)
-    stages = config.playoffs.stages
-    _, playoff_dates = season_dates(
-        season.year, regular_count, config.start, config.breaks, len(stages)
+    upcoming = next_playoff_matches(
+        league_config(league), _league_domain(season, league), season.year
     )
-    round_index = stages.index(stage)
-    for home, away in pairings:
-        season.matches.append(
-            MatchRow(
-                league=league,
-                matchday=regular_count + round_index + 1,
-                stage=stage.value,
-                date=playoff_dates[round_index],
-                home_club_id=home,
-                away_club_id=away,
-                neutral=stage == Stage.FINAL and config.neutral_final,
-            )
-        )
+    if not upcoming:
+        return  # tour en cours, ou finale jouée : la saison du championnat est terminée
+    season.matches.extend(MatchRow.from_domain(match) for match in upcoming)
     session.commit()
 
 
@@ -337,11 +286,18 @@ def _prepare_day(session: Session, season: SeasonRow) -> datetime.date | None:
     return min((m.date for m in season.matches if not m.is_played), default=None)
 
 
+def _write_result(row: MatchRow, match: Match) -> None:
+    row.home_score, row.away_score = match.home_score, match.away_score
+    row.events = MatchRow.from_domain(match).events
+    row.home_lineup, row.away_lineup = list(match.home_lineup), list(match.away_lineup)
+
+
 def _play_day(
     session: Session, season: SeasonRow, day: datetime.date
 ) -> tuple[list[MatchRow], list[InjuryCase]]:
     """Joue tous les matchs du jour `day`, tous championnats confondus, et passe les
-    écritures financières.
+    écritures financières : charge le monde, laisse le moteur jouer la journée
+    (engine/matchday.py), puis enregistre ce qu'il rend.
 
     Seuls les clubs qui jouent ce jour-là ont leur semaine d'entraînement. Si le
     match du club dirigé est en cours en direct (api/live.py), il est joué
@@ -354,16 +310,15 @@ def _play_day(
         (m for m in season.matches if not m.is_played and m.date == day),
         key=lambda m: (m.league, m.id),
     )
+    youth_rows = [m for m in season.youth_matches if m.date == day and not m.is_played]
     leagues = sorted({m.league for m in todays})
     career = session.scalars(select(CareerRow)).first()
     my_club_id = career.club_id if career is not None else None
 
     # Seuls les clubs des championnats du jour (et le club dirigé) sont chargés.
-    club_rows = [row for row in _club_rows(session) if row.league in leagues]
-    rows_by_id = {row.id: row for row in club_rows}
+    rows_by_id = {row.id: row for row in _club_rows(session) if row.league in leagues}
     wanted = set(rows_by_id) | ({my_club_id} if my_club_id is not None else set())
     clubs = load_clubs(session, wanted)
-    playing = {club_id: clubs[club_id] for club_id in rows_by_id}
     players = {p.id: p for club in clubs.values() for p in club.players}
     if my_club_id is not None:
         # Titularisations promises au manager (api/affairs.py).
@@ -373,177 +328,63 @@ def _play_day(
     # où seul un autre championnat joue, il attend le sien (ses clubs ne sont pas chargés).
     live = load_live(session, clubs) if live_match_row(session) in todays else None
 
-    # Classement avant la journée : il fixe l'affluence (et départage les phases finales).
-    seeding = {league: _seeding(season, league) for league in leagues}
-    rank_of = {
-        club_id: rank for order in seeding.values() for rank, club_id in enumerate(order, start=1)
-    }
-    regular_count = {league: _regular_matchday_count(season, league) for league in leagues}
-    rng = random.Random()
+    def finish_live(match: Match) -> Match | None:
+        if live is None or match.id != live.match_row.id:
+            return None
+        live.match.auto = {match.home_club_id, match.away_club_id}
+        return live.match.play_to_end()
 
     # Forme du jour de chaque club (moral, cohésion, fraîcheur), avant toute écriture.
     history = History.load(session)
-    forms = {club_id: history.form(club, day) for club_id, club in playing.items()}
+    world = Day(
+        date=day,
+        clubs=clubs,
+        forms={club_id: history.form(clubs[club_id], day) for club_id in rows_by_id},
+        leagues={league: league_config(league) for league in leagues},
+        seeding={league: _seeding(season, league) for league in leagues},
+        regular_matchdays={league: _regular_matchday_count(season, league) for league in leagues},
+        managed_club_id=my_club_id,
+        fervour=lambda club_id: history.fervour(club_id).value,
+        shirt_revenue=lambda club_id: jersey_revenue(deals_from(rows_by_id[club_id].sponsors)),
+    )
+    matches = [row.to_domain() for row in todays]
+    youth_matches = [row.to_domain() for row in youth_rows]
+    report = play_day(
+        world,
+        matches,
+        season_rng(season, day),
+        youth_matches=youth_matches,
+        # Déjà faite si le match en direct a commencé : ses blessés sont dans la sauvegarde.
+        trained=live is not None,
+        finished=finish_live,
+    )
+
+    for row, match in zip([*todays, *youth_rows], [*matches, *youth_matches], strict=True):
+        _write_result(row, match)
 
     # Blessures de la journée : enregistrées en base, et renvoyées pour le club dirigé.
     my_injuries: list[tuple[InjuryRow, Injury]] = []
-
-    def save_injury(injury: Injury, club: Club) -> None:
-        injury_row = InjuryRow.from_domain(injury)
-        session.add(injury_row)
-        if club.id == my_club_id:
-            my_injuries.append((injury_row, injury))
-
-    # Semaine d'entraînement des clubs qui jouent (déjà faite si le match en direct
-    # a commencé : ses blessés sont dans la sauvegarde).
-    if live is None:
-        my_injuries.extend(run_training_week(session, playing, forms, day, rng, my_club_id))
-    else:
+    if live is not None:
         for injury_row in session.scalars(
             select(InjuryRow).where(InjuryRow.id.in_(live.row.my_injuries))
         ):
             my_injuries.append((injury_row, injury_row.to_domain()))
+    for club_id, injury in report.injuries:
+        injury_row = InjuryRow.from_domain(injury)
+        session.add(injury_row)
+        if club_id == my_club_id:
+            my_injuries.append((injury_row, injury))
 
-    for row in todays:
-        stage, matchday = Stage(row.stage), row.matchday
-        label = _matchday_label(stage, matchday)
-        config = league_config(row.league)
-        home, away = clubs[row.home_club_id], clubs[row.away_club_id]
-        if live is not None and row.id == live.match_row.id:
-            live.match.auto = {home.id, away.id}
-            result = live.match.play_to_end()
-        else:
-            result = simulate_match(
-                home,
-                away,
-                rng=rng,
-                matchday=matchday,
-                neutral=row.neutral,
-                day=day,
-                home_form=forms[home.id],
-                away_form=forms[away.id],
-                knockout=stage.is_playoff,
-            )
-        row.home_score, row.away_score = result.home_score, result.away_score
-        row.events = MatchRow.from_domain(result).events
-        row.home_lineup, row.away_lineup = result.home_lineup, result.away_lineup
-        for event in result.events:
-            if event.type == EventType.INJURY:
-                club = clubs[event.club_id]
-                injury = new_injury(
-                    players[event.player_id],
-                    club,
-                    InjurySource.MATCH,
-                    day,
-                    rng,
-                    decided=club.id != my_club_id,
-                )
-                save_injury(injury, club)
-
-        home_row, away_row = rows_by_id[home.id], rows_by_id[away.id]
-        spectators = attendance(
-            home_row.stadium_capacity,
-            rank_of[home.id],
-            len(seeding[row.league]),
-            stage.is_playoff,
-            rng,
-            fervour=history.fervour(home.id).value,
-            bonus=attendance_bonus(home.facilities),
-        )
+    for movement in report.movements:
         record(
             session,
-            home_row,
-            TransactionCategory.TICKETING,
-            f"Billetterie · {away.name} · {spectators:,} spectateurs".replace(",", " "),
-            ticketing_revenue(spectators),
+            rows_by_id[movement.club_id],
+            movement.category,
+            movement.label,
+            movement.amount,
             day,
-            matchday,
+            movement.matchday,
         )
-        if hospitality := hospitality_revenue(home.facilities, spectators):
-            record(
-                session,
-                home_row,
-                TransactionCategory.HOSPITALITY,
-                f"Buvettes, boutique et loges · {away.name}",
-                hospitality,
-                day,
-                matchday,
-            )
-        for club_row, club in ((home_row, home), (away_row, away)):
-            record(
-                session,
-                club_row,
-                TransactionCategory.SPONSORS,
-                f"Sponsors · {label}",
-                sponsor_revenue(club.facilities),
-                day,
-                matchday,
-            )
-            if shirt := jersey_revenue(deals_from(club_row.sponsors)):
-                record(
-                    session,
-                    club_row,
-                    TransactionCategory.SPONSORS,
-                    f"Sponsors du maillot · {label}",
-                    shirt,
-                    day,
-                    matchday,
-                )
-            if stage.is_playoff:
-                record(
-                    session,
-                    club_row,
-                    TransactionCategory.PRIZE,
-                    f"Prime · {label}",
-                    round(PLAYOFF_PRIZES[stage] * config.prize_factor),
-                    day,
-                    matchday,
-                )
-        if stage == Stage.FINAL:
-            winner = rows_by_id[result.winner_id(seeding[row.league])]
-            record(
-                session,
-                winner,
-                TransactionCategory.PRIZE,
-                "Prime · champion",
-                round(CHAMPION_PRIZE * config.prize_factor),
-                day,
-                matchday,
-            )
-
-    # Les espoirs jouent leur journée en même temps que les pros (sans blessures).
-    for row in season.youth_matches:
-        if row.date == day and not row.is_played:
-            result = simulate_match(
-                clubs[row.home_club_id].youth_team(),
-                clubs[row.away_club_id].youth_team(),
-                rng=rng,
-                matchday=row.matchday,
-            )
-            row.home_score, row.away_score = result.home_score, result.away_score
-            row.events = MatchRow.from_domain(result).events
-            row.home_lineup, row.away_lineup = result.home_lineup, result.away_lineup
-
-    # Les salaires se versent à chaque journée de saison régulière du championnat,
-    # à tous ses clubs.
-    for league in leagues:
-        regular = next(
-            (m for m in todays if m.league == league and m.stage == Stage.REGULAR.value), None
-        )
-        if regular is None:
-            continue
-        label = _matchday_label(Stage.REGULAR, regular.matchday)
-        for club_row in club_rows:
-            if club_row.league == league:
-                record(
-                    session,
-                    club_row,
-                    TransactionCategory.WAGES,
-                    f"Salaires · {label}",
-                    -matchday_wages(clubs[club_row.id], regular_count[league]),
-                    day,
-                    regular.matchday,
-                )
 
     if live is not None:
         session.delete(live.row)
@@ -733,7 +574,7 @@ def play_next_matchday(session: SessionDep) -> PlayOut:
     dismissal = _board_verdict(session, played)
     affairs, signings = [], []
     if dismissal is None:
-        rng = random.Random()
+        rng = season_rng(season, played.date, "affairs")
         affairs = settle_promises(session, season, played.date)
         drawn = draw_affair(session, season, rng)
         affairs += [drawn] if drawn is not None else []
@@ -833,7 +674,7 @@ def start_next_season(session: SessionDep) -> SeasonOut:
         session.get(ClubRow, relegated).league = lower
         session.commit()
 
-    rng = random.Random()
+    rng = season_rng(season, "offseason")
     year = season.year + 1
     close_jokers(session, year)
     _offseason_moves(session, year, rng, my_club_id)
@@ -844,38 +685,32 @@ def start_next_season(session: SessionDep) -> SeasonOut:
     for club_row in _club_rows(session):
         club = club_row.to_domain()
         rows = {row.id: row for row in [*club_row.players, *club_row.youths]}
-        age_players(club)
-        develop_players(club, rng)
-
+        squad = [*club.players, *club.youths]
         # Retraites, et espoirs trop âgés : les clubs IA promeuvent ceux qu'ils
         # peuvent garder, le manager a dû le faire lui-même avant l'intersaison ;
         # les autres quittent le centre et deviennent agents libres.
-        retired = {player.id for player in retirees(club)}
-        released = set()
-        for youth in sorted(youth_exits(club), key=lambda p: p.overall, reverse=True):
-            if club_row.id != my_club_id and len(club.players) - len(retired) < SQUAD_MAX:
-                rows[youth.id].squad = Squad.PRO.value
-                rows[youth.id].wage = wage_for(youth)
-                club.players.append(youth)
-            else:
-                released.add(youth.id)
-        for player in [*club.players, *club.youths]:
-            if player.id in retired:
-                session.delete(rows[player.id])
-                continue
+        moves = club_offseason(
+            club, player_ids, rng, year, promotes_youths=club_row.id != my_club_id
+        )
+        retired = {player.id for player in moves.retired}
+        for player in squad:
             row = rows[player.id]
+            if player.id in retired:
+                session.delete(row)
+                continue
             row.age = player.age
             for name in ATTRIBUTE_NAMES:
                 setattr(row, name, getattr(player, name))
-            if player.id in released:
-                release(row, year)
-        club.youths = [p for p in club.youths if p.id not in released]
-        for youth in youth_intake(club, player_ids, rng, year):
+        for youth in moves.promoted:
+            rows[youth.id].squad, rows[youth.id].wage = Squad.PRO.value, youth.wage
+        for youth in moves.released:
+            release(rows[youth.id], year)
+        for youth in moves.newcomers:
             session.add(PlayerRow.from_domain(youth))
     renew_pool(session, year, rng, my_club_id, player_ids)
     session.commit()
 
-    return _season_out(session, create_season(session, season.year + 1))
+    return _season_out(session, create_season(session, year, rng.randrange(SEED_RANGE)))
 
 
 def _offseason_moves(

@@ -327,6 +327,10 @@ class SeasonRow(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     year: Mapped[int] = mapped_column(unique=True)
+    # Graine du hasard de la saison (engine/season.py, `rng_for`) : avec elle, une
+    # journée rejouée dans le même état donne le même résultat. None : saison
+    # d'avant ce champ, qui en tire une à sa prochaine journée.
+    seed: Mapped[int | None] = mapped_column(default=None)
 
     # Le classement n'est pas stocké : il se recalcule à partir des matchs.
     # Les matchs des pros et ceux des espoirs partagent la table, séparés par `squad`.
@@ -396,6 +400,7 @@ class MatchRow(Base):
             ],
             home_lineup=list(self.home_lineup or []),
             away_lineup=list(self.away_lineup or []),
+            league=self.league,
         )
 
     @classmethod
@@ -403,6 +408,7 @@ class MatchRow(Base):
         return cls(
             id=match.id,
             season_id=season_id,
+            league=match.league,
             matchday=match.matchday,
             home_club_id=match.home_club_id,
             away_club_id=match.away_club_id,

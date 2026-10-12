@@ -39,7 +39,13 @@ Toutes les commandes se lancent **depuis `backend/`**.
 uv run python -m scripts.run_season                              # 10 clubs, ton club au hasard
 uv run python -m scripts.run_season --clubs 14 --club 3 --seed 42
 uv run python -m scripts.run_season --league top14 --club 1          # les vrais clubs d'un championnat
+uv run python -m scripts.run_season --league top14 --seasons 10 --seed 1   # dix saisons d'affilée
 ```
+
+La simulation tourne sans base de données avec les règles du jeu (`engine/world.py`) :
+forme, blessures, phases finales, argent, puis l'intersaison. Avec `--seasons`, un
+tableau suit le niveau, l'âge et la taille des effectifs et la trésorerie des clubs,
+saison après saison. La même graine (`--seed`) rejoue la même histoire.
 
 ### Vrais effectifs
 

@@ -2,8 +2,10 @@
 
 import random
 from collections.abc import Iterator
+from dataclasses import dataclass
 
 from data.generator import FIRST_SEASON_YEAR, generate_youth_player, youth_level
+from engine.economy import SQUAD_MAX, wage_for
 from models import (
     ATTRIBUTE_MAX,
     ATTRIBUTE_MIN,
@@ -12,6 +14,7 @@ from models import (
     Club,
     Player,
     Position,
+    Squad,
 )
 
 RETIREMENT_AGE = 36
@@ -102,3 +105,52 @@ def youth_intake(
             )
         )
     return newcomers
+
+
+@dataclass
+class ClubOffseason:
+    """Ce que l'intersaison a changé dans l'effectif d'un club."""
+
+    retired: list[Player]  # pros qui raccrochent
+    promoted: list[Player]  # espoirs passés pros
+    released: list[Player]  # espoirs trop âgés, non gardés : ils quittent le club
+    newcomers: list[Player]  # nouveaux espoirs du centre
+
+
+def club_offseason(
+    club: Club,
+    player_ids: Iterator[int],
+    rng: random.Random,
+    season_year: int = FIRST_SEASON_YEAR,
+    promotes_youths: bool = True,
+) -> ClubOffseason:
+    """L'intersaison d'un club, dans l'ordre : tout le monde vieillit et progresse,
+    les plus âgés raccrochent, les espoirs trop âgés passent pros ou partent, de
+    nouveaux espoirs arrivent. L'effectif du club est mis à jour.
+
+    `promotes_youths` : le club garde ses meilleurs espoirs sortants tant qu'il a
+    de la place (clubs IA) ; sinon ils partent tous (le manager a dû promouvoir
+    lui-même ceux qu'il voulait garder).
+    """
+    age_players(club)
+    develop_players(club, rng)
+
+    retired = retirees(club)
+    gone = {player.id for player in retired}
+    club.players = [p for p in club.players if p.id not in gone]
+
+    promoted, released = [], []
+    for youth in sorted(youth_exits(club), key=lambda p: p.overall, reverse=True):
+        if promotes_youths and len(club.players) < SQUAD_MAX:
+            youth.squad = Squad.PRO
+            youth.wage = wage_for(youth)
+            club.players.append(youth)
+            promoted.append(youth)
+        else:
+            released.append(youth)
+    leaving = {youth.id for youth in promoted + released}
+    club.youths = [p for p in club.youths if p.id not in leaving]
+
+    newcomers = youth_intake(club, player_ids, rng, season_year)
+    club.youths.extend(newcomers)
+    return ClubOffseason(retired, promoted, released, newcomers)

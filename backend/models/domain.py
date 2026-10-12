@@ -393,6 +393,7 @@ class Match:
     # XV de départ de chaque club (identifiants), remplis quand le match est joué.
     home_lineup: list[int] = field(default_factory=list)
     away_lineup: list[int] = field(default_factory=list)
+    league: str = "top14"  # code du championnat (data/leagues.py)
 
     def played_by(self, player_id: int) -> bool:
         return player_id in self.home_lineup or player_id in self.away_lineup

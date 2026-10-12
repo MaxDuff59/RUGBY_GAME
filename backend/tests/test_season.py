@@ -6,7 +6,10 @@ from collections import Counter
 import pytest
 
 from data.generator import generate_clubs
-from engine.season import generate_fixtures, simulate_season
+from engine.economy import SQUAD_MAX
+from engine.season import generate_fixtures, rng_for
+from engine.world import World
+from models import Stage
 
 
 @pytest.mark.parametrize(
@@ -57,12 +60,18 @@ def test_needs_at_least_two_clubs():
         generate_fixtures([1])
 
 
-def test_simulated_season_is_consistent():
-    clubs = generate_clubs(10, random.Random(0))
-    season = simulate_season(clubs, year=2026, rng=random.Random(0))
+def make_world(seed: int = 0, **options) -> World:
+    return World(generate_clubs(10, random.Random(0)), seed=seed, **options)
 
-    assert len(season.matches) == 90
-    table = season.table()
+
+def test_simulated_season_is_consistent():
+    world = make_world()
+    season = world.play_season()
+
+    regular = [m for m in season.matches if m.stage == Stage.REGULAR]
+    assert len(regular) == 90
+    assert all(m.is_played for m in season.matches)
+    table = world.table("top14")
     for row in table:
         assert row.played == 18
         assert row.won + row.drawn + row.lost == 18
@@ -71,3 +80,84 @@ def test_simulated_season_is_consistent():
     # Le classement est trié par points.
     points = [r.league_points for r in table]
     assert points == sorted(points, reverse=True)
+
+
+def test_season_ends_with_playoffs_and_a_champion():
+    world = make_world()
+    assert world.champion("top14") is None
+    season = world.play_season()
+
+    # Formule du Top 14 : deux barrages, deux demi-finales, une finale.
+    stages = Counter(m.stage for m in season.matches if m.stage != Stage.REGULAR)
+    assert stages == {Stage.BARRAGE: 2, Stage.SEMI: 2, Stage.FINAL: 1}
+    assert world.finished
+    qualified = [row.club_id for row in world.table("top14")[:6]]
+    assert world.champion("top14").id in qualified
+    assert world.play_day() is None
+
+
+def test_season_uses_the_whole_matchday():
+    """La saison en mémoire joue la vraie journée : dates, blessures, argent."""
+    world = make_world()
+    balances = {club.id: club.balance for club in world.clubs.values()}
+    report = world.play_day()
+
+    assert len(report.played) == 5
+    assert len({m.date for m in report.played}) == 1
+    # Chaque club a touché ses sponsors et payé ses salaires.
+    paid = {movement.club_id for movement in report.movements if movement.amount < 0}
+    assert paid == set(world.clubs)
+    for club in world.clubs.values():
+        moves = [m.amount for m in report.movements if m.club_id == club.id]
+        assert club.balance == balances[club.id] + sum(moves)
+    world.play_season()
+    injured = [p for club in world.clubs.values() for p in club.players if p.injury is not None]
+    assert injured
+
+
+def test_same_seed_replays_the_same_story():
+    def story(seed: int) -> list:
+        world = make_world(seed)
+        world.play_season()
+        world.offseason()
+        world.play_season()
+        return [
+            [(m.home_club_id, m.away_club_id, m.home_score, m.away_score) for m in season.played]
+            for season in world.seasons
+        ] + [sorted(p.id for club in world.clubs.values() for p in club.players)]
+
+    assert story(3) == story(3)
+    assert story(3) != story(4)
+
+
+def test_rng_for_depends_on_seed_and_moment():
+    assert rng_for(1, "2026-09-05").random() == rng_for(1, "2026-09-05").random()
+    assert rng_for(1, "2026-09-05").random() != rng_for(1, "2026-09-12").random()
+    assert rng_for(1, "2026-09-05").random() != rng_for(2, "2026-09-05").random()
+
+
+def test_offseason_starts_a_new_season():
+    world = make_world()
+    with pytest.raises(ValueError):
+        world.offseason()
+    ages = {p.id: p.age for club in world.clubs.values() for p in club.players}
+    world.play_season()
+    season = world.offseason()
+
+    assert season.year == world.seasons[0].year + 1
+    assert len(season.matches) == 90 and not season.played
+    for club in world.clubs.values():
+        assert len(club.players) <= SQUAD_MAX
+        assert all(p.club_id == club.id for p in club.players)
+        assert all(p.contract_until >= season.year for p in club.players)
+        assert all(p.age == ages[p.id] + 1 for p in club.players if p.id in ages)
+    assert all(p.club_id is None for p in world.free_agents)
+    world.play_season()
+    assert world.finished
+
+
+def test_youth_leagues_are_played_on_request():
+    world = make_world(youth_leagues=True)
+    world.play_day()
+    played = [m for m in world.season.youth_matches if m.is_played]
+    assert len(played) == 5

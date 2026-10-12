@@ -1,10 +1,22 @@
-"""Calendrier aller-retour, phases finales et simulation d'une saison complète."""
+"""Calendrier aller-retour, classement et phases finales d'un championnat.
 
+Tout part de la liste des matchs d'un championnat (`Match`, joués ou non) : le
+classement, la phase en cours et le tour suivant s'en déduisent. La journée
+elle-même se joue dans engine/matchday.py, et une saison entière sans base de
+données dans engine/world.py.
+"""
+
+import datetime
 import random
+from collections.abc import Iterable
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
-from engine.match_engine import simulate_match
-from models import Club, Match, Season, Stage
+from engine.calendar import season_dates
+from models import Match, Season, Stage, StandingRow
+
+if TYPE_CHECKING:
+    from data.leagues import League
 
 # Phases finales façon Top 14 : 6 qualifiés.
 PLAYOFF_QUALIFIERS = 6
@@ -98,21 +110,109 @@ def record_result(season: Season, match: Match) -> None:
     season.standings[away_id].record(match.away_score, match.home_score, away_tries, home_tries)
 
 
-def simulate_season(clubs: list[Club], year: int, rng: random.Random | None = None) -> Season:
-    """Génère le calendrier, joue tous les matchs et renvoie la saison avec son classement."""
-    rng = rng or random.Random()
-    clubs_by_id = {club.id: club for club in clubs}
-    season = Season(year=year, clubs=clubs)
+def rng_for(seed: int, *labels: object) -> random.Random:
+    """Le hasard d'un moment de la saison (une journée, l'intersaison...), tiré de la
+    graine de la saison : la même graine redonne les mêmes tirages."""
+    return random.Random(":".join(str(part) for part in (seed, *labels)))
 
-    for matchday_number, fixtures in enumerate(generate_fixtures(list(clubs_by_id)), start=1):
-        for home_id, away_id in fixtures:
-            match = simulate_match(
-                clubs_by_id[home_id], clubs_by_id[away_id], rng=rng, matchday=matchday_number
-            )
-            season.matches.append(match)
-            record_result(season, match)
 
-    return season
+def schedule(
+    league: "League", club_ids: list[int], year: int, code: str | None = None
+) -> list[Match]:
+    """Les matchs de saison régulière d'un championnat, datés mais pas encore joués.
+
+    `code` : code du championnat s'il diffère de celui de `league` (un monde
+    inventé joue avec la formule du Top 14)."""
+    fixtures = generate_fixtures(club_ids)
+    dates, _ = season_dates(year, len(fixtures), league.start, league.breaks)
+    return [
+        Match(
+            home_club_id=home,
+            away_club_id=away,
+            matchday=number,
+            date=dates[number - 1],
+            league=code or league.code,
+        )
+        for number, matchday in enumerate(fixtures, start=1)
+        for home, away in matchday
+    ]
+
+
+def regular_matchdays(matches: Iterable[Match]) -> int:
+    """Nombre de journées de saison régulière d'un championnat."""
+    return max(m.matchday for m in matches if m.stage == Stage.REGULAR)
+
+
+def league_table(matches: Iterable[Match]) -> Season:
+    """Classement de la saison régulière d'un championnat, d'après ses matchs joués."""
+    matches = list(matches)
+    table = Season(year=0, clubs=[])
+    club_ids = sorted({c for m in matches for c in (m.home_club_id, m.away_club_id)})
+    table.standings = {club_id: StandingRow(club_id=club_id) for club_id in club_ids}
+    for match in matches:
+        if match.stage == Stage.REGULAR and match.is_played:
+            table.matches.append(match)
+            record_result(table, match)
+    return table
+
+
+def seeding(matches: Iterable[Match]) -> list[int]:
+    """Identifiants des clubs du championnat, du 1er au dernier de la saison régulière."""
+    return [row.club_id for row in league_table(matches).table()]
+
+
+def phase(matches: Iterable[Match]) -> str:
+    """Où en est le championnat : "regular", "playoffs" ou "finished"."""
+    matches = list(matches)
+    if any(m.stage == Stage.REGULAR and not m.is_played for m in matches):
+        return "regular"
+    finals = [m for m in matches if m.stage == Stage.FINAL]
+    if finals and all(m.is_played for m in finals):
+        return "finished"
+    return "playoffs"
+
+
+def champion(matches: Iterable[Match]) -> int | None:
+    """Le vainqueur de la finale, None tant qu'elle n'est pas jouée."""
+    matches = list(matches)
+    final = next((m for m in matches if m.stage == Stage.FINAL), None)
+    if final is None or not final.is_played:
+        return None
+    return final.winner_id(seeding(matches))
+
+
+def next_playoff_matches(league: "League", matches: Iterable[Match], year: int) -> list[Match]:
+    """Les matchs du tour suivant d'un championnat, quand tous ceux du tour en cours
+    sont joués (aucun sinon, ou une fois la finale jouée)."""
+    matches = list(matches)
+    if any(not m.is_played for m in matches):
+        return []
+    stages = league.playoffs.stages
+    played = {stage: [m for m in matches if m.stage == stage] for stage in stages}
+    next_round = playoff_round(league.playoffs, seeding(matches), played)
+    if next_round is None:
+        return []
+    stage, pairings = next_round
+    regular = regular_matchdays(matches)
+    _, dates = season_dates(year, regular, league.start, league.breaks, len(stages))
+    index = stages.index(stage)
+    return [
+        Match(
+            home_club_id=home,
+            away_club_id=away,
+            matchday=regular + index + 1,
+            stage=stage,
+            date=dates[index],
+            neutral=stage == Stage.FINAL and league.neutral_final,
+            league=matches[0].league,
+        )
+        for home, away in pairings
+    ]
+
+
+def next_date(matches: Iterable[Match]) -> datetime.date | None:
+    """Le prochain jour de match (None si tout est joué)."""
+    return min((m.date for m in matches if not m.is_played), default=None)
 
 
 # --- Phases finales ------------------------------------------------------------------

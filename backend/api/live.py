@@ -3,7 +3,7 @@
 Le moteur (`engine.match_engine.LiveMatch`) joue minute par minute ; entre deux
 requêtes, son état complet dort dans `LiveMatchRow`. Ce module le charge, le
 sauvegarde et le met en forme pour l'API. La semaine d'entraînement qui précède
-la journée est jouée ici aussi, car elle a lieu avant le coup d'envoi : la
+la journée est enregistrée ici aussi, car elle a lieu avant le coup d'envoi : la
 journée (`api/routers/seasons.py`) ne la rejoue pas si un match en direct l'a
 déjà faite.
 """
@@ -30,7 +30,7 @@ from engine.match_engine import (
     LiveMatch,
     Side,
 )
-from engine.medical import training_injuries
+from engine.matchday import training_week
 from models import Club, EventType, Injury, Stage
 from models.orm import InjuryRow, LiveMatchRow, MatchRow
 
@@ -84,20 +84,17 @@ def run_training_week(
     rng: random.Random,
     my_club_id: int | None,
 ) -> list[tuple[InjuryRow, Injury]]:
-    """Semaine d'entraînement de tous les clubs, avant les matchs du jour.
-
-    Un blessé à l'entraînement manque le match du jour ; les joueurs fatigués se
-    blessent plus. Les blessures sont enregistrées ; celles du club dirigé sont
-    renvoyées (le manager choisit leur protocole).
+    """Semaine d'entraînement de tous les clubs, avant les matchs du jour
+    (engine/matchday.py). Les blessures sont enregistrées ; celles du club dirigé
+    sont renvoyées (le manager choisit leur protocole).
     """
     mine: list[tuple[InjuryRow, Injury]] = []
-    for club in clubs.values():
-        risk = forms[club.id].injury_weight
-        for injury in training_injuries(club, day, rng, club.id != my_club_id, risk):
-            injury_row = InjuryRow.from_domain(injury)
-            session.add(injury_row)
-            if club.id == my_club_id:
-                mine.append((injury_row, injury))
+    ordered = sorted(clubs.values(), key=lambda club: club.id)
+    for club_id, injury in training_week(ordered, forms, day, rng, my_club_id):
+        injury_row = InjuryRow.from_domain(injury)
+        session.add(injury_row)
+        if club_id == my_club_id:
+            mine.append((injury_row, injury))
     return mine
 
 

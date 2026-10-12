@@ -8,8 +8,6 @@ match est fini (ou pour l'abandonner au staff), `POST /live/finish` joue le
 reste de la journée : les autres matchs, l'économie, les affaires.
 """
 
-import random
-
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
@@ -22,6 +20,7 @@ from api.routers.seasons import (
     _ensure_next_stage,
     focus_league,
     play_next_matchday,
+    season_rng,
 )
 from api.schemas import AdvanceIn, LiveOut, PlayOut, SubstituteIn, TacticsIn
 from engine.match_engine import LiveMatch, Tactics, staff_tactics, team_strength
@@ -93,7 +92,7 @@ def start_live(session: SessionDep) -> LiveOut:
     clubs = load_clubs(session, {*playing_ids, my_club_id})
     clubs[my_club_id].forced_starters = forced_starters(session, my_club_id)
     playing = {club_id: club for club_id, club in clubs.items() if club.league in leagues}
-    rng = random.Random()
+    rng = season_rng(season, day, "live")
     history = History.load(session)
     forms = {club_id: history.form(club, day) for club_id, club in playing.items()}
     mine = run_training_week(session, playing, forms, day, rng, my_club_id)
