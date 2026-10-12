@@ -244,7 +244,8 @@ Les mouvements de joueurs sont inscrits au moment où ils ont lieu dans la table
 jokers du club dirigé, puis à l'intersaison les pré-contrats exécutés, les fins de
 contrat, les recrues des clubs IA et les retraites. Les parties commencées avant ce
 registre le reçoivent vide (la table est créée à l'ouverture) : le journal y reprend
-les arrivées déjà négociées, puis il se remplit à la première intersaison.
+les arrivées déjà négociées, puis il se remplit au fil des semaines : les clubs IA
+traitent entre eux toute la saison (voir « Le marché des clubs IA »).
 
 ## Jouer le match
 
@@ -313,6 +314,38 @@ discussion pendant 8 semaines, puis revient en ouvrant 10 % plus haut et avec
 un point de patience en moins par rupture passée. Quitter la table soi-même
 ferme la porte 2 semaines, sans rancune.
 
+### Le marché des clubs IA
+
+Les clubs IA traitent aussi entre eux, chaque jour de match, avec les mêmes règles
+(`backend/engine/market.py`, branché en base dans `backend/api/market.py`, appelé à
+la fin de la journée dans `api/routers/seasons.py`). Le club dirigé n'en fait pas
+partie : il recrute lui-même, et ses fins de contrat sont approchées à part.
+
+| Voie | Quand | Qui |
+|---|---|---|
+| Pré-contrat | phase retour et phases finales de son championnat | un joueur en dernière année de contrat ; les meilleurs d'un effectif sont les plus convoités, deux fois moins souvent que ceux du club dirigé |
+| Joker médical | saison régulière en cours | un club à court de joueurs valides à un poste, sur une blessure de plus de trois mois : le meilleur agent libre du poste |
+| Prêt | saison régulière en cours | le même club, sans longue blessure : le meilleur réserviste qu'un autre club peut lâcher |
+| Agent libre | saison régulière en cours | à défaut de prêt possible |
+
+Un joueur approché choisit parmi ses trois meilleures offres : des clubs de son
+championnat et quatre autres tirés au sort, où il serait au moins remplaçant, qui
+n'augmentent pas son salaire de plus de 30 %, et qui n'ont pas déjà signé quatre
+pré-contrats. Un international d'une fédération qui ne retient que les joueurs du
+pays (Angleterre, Irlande, Nouvelle-Zélande) y reste. Un club est « à court » à un
+poste quand il y compte moins de joueurs valides que ses titulaires plus une
+doublure, un absent de plus d'un mois ne comptant pas ; il agit une semaine sur deux.
+Il n'emprunte qu'un réserviste dont le club garde de quoi jouer (plus de 28 pros)
+et qui serait au moins remplaçant chez lui, et ne signe un agent libre que s'il vaut
+à peu près sa doublure ; l'un comme l'autre restent jusqu'à la fin de la saison.
+
+Un pré-contrat entre clubs IA est une négociation signée comme celles du manager,
+exécutée à l'intersaison. Sur le marché, le joueur porte alors « Déjà engagé » : on
+ne peut plus ni l'acheter ni le signer, seulement l'emprunter jusqu'à la fin de la
+saison. Un joueur en discussion avec le manager n'est pas approché. Tous ces
+mouvements paraissent dans le Journal. Sur une saison à 63 clubs : une cinquantaine
+de renforts et autant de pré-contrats.
+
 ## Fins de contrat
 
 Règles dans `engine/contracts.py`, routes dans `api/routers/contracts.py`.
@@ -322,7 +355,8 @@ et son temps de jeu ; un vétéran accepte une baisse) et pour une durée qui
 dépend de son âge. Sinon il part libre à l'intersaison et signe dans le club le
 moins fourni. Pendant la phase retour, les concurrents signent des pré-contrats
 avec tes joueurs en fin de contrat (les meilleurs de l'effectif sont les plus
-convoités) : ceux-là sont perdus. Les clubs IA prolongent leurs propres joueurs.
+convoités) : ceux-là sont perdus. Les clubs IA prolongent leurs propres joueurs,
+quand un autre club IA ne les a pas signés avant (voir « Le marché des clubs IA »).
 L'intersaison est refusée si moins de 25 pros restent sous contrat.
 
 Le bilan de fin de saison (`GET /seasons/current/review`, puis `GET /contracts`)

@@ -679,6 +679,16 @@ function listingBadges(listing, jokerPossible) {
     return badges;
   }
   const badges = [];
+  if (listing.signed_with) {
+    badges.push(
+      <StatusBadge
+        key="signed"
+        kind="locked"
+        label="Déjà engagé"
+        title={`Il a signé avec ${listing.signed_with} pour la saison prochaine : seul un prêt reste possible`}
+      />,
+    );
+  }
   if (listing.precontract) {
     badges.push(
       <StatusBadge

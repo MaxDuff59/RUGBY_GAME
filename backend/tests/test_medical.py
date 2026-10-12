@@ -274,10 +274,16 @@ def test_free_protocols_stay_available_when_broke(manager):
 def test_cannot_treat_another_club_injury(manager):
     for _ in range(3):
         manager.post("/seasons/current/play")
-    others = manager.get("/clubs/1").json()["players"]
+    # Un blessé d'un autre club, quel qu'il soit (le club dirigé est le 3).
+    others = [
+        player
+        for club in manager.get("/clubs").json()
+        if club["id"] != 3
+        for player in manager.get(f"/clubs/{club['id']}").json()["players"]
+    ]
     foreign = next((p["injury"]["id"] for p in others if p["injury"]), None)
     if foreign is None:
-        pytest.skip("pas de blessé dans le club 1 après trois journées")
+        pytest.skip("aucun blessé dans les autres clubs après trois journées")
     assert manager.post(f"/medical/{foreign}/protocol/standard").status_code == 404
 
 

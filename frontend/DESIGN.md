@@ -305,7 +305,8 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   Libre (cadenas ouvert, vert), fin de contrat (sablier, accent), transfert et son
   indemnité (flèche de sortie, noir), prêt (aller-retour, bleu), réserviste (banc, gris),
   ne discute plus (bulle barrée, rouge), intransférable (cadenas fermé, gris), joker
-  médical (croix, accent).
+  médical (croix, accent). « Déjà engagé » (cadenas fermé, gris) : il a signé un
+  pré-contrat avec un autre club, seul un prêt reste possible.
 - Transferts sur téléphone : sans le paragraphe d'introduction, les trois chiffres en
   ligne, puis deux pastilles « Recruter » / « Vendre ». Recruter : négociations et joker
   s'il y en a, puis le marché avec un tri (liste déroulante), les voies en pastilles

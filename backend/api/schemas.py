@@ -896,6 +896,8 @@ class ListingOut(BaseModel):
     talks_closed_until: datetime.date | None  # il ne veut plus discuter avant cette date
     free_agent: bool = False  # sans club ni contrat : il signe sans indemnité, tout de suite
     wage_demand: int | None = None  # agent libre : salaire demandé à l'ouverture
+    # Club avec qui il a signé un pré-contrat : il n'est plus à vendre, seulement à prêter.
+    signed_with: str | None = None
 
 
 class NegotiationOut(BaseModel):

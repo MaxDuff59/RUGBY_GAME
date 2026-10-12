@@ -262,14 +262,15 @@ def test_the_offseason_fills_the_register(manager):
 
     data = manager.get("/journal").json()
     moves = data["moves"]
-    kinds = {move["kind"] for move in moves}
-    # Des concurrents ont pu signer nos fins de contrat en pré-contrat pendant la saison.
-    assert moves and kinds <= {"free", "release", "retirement", "precontract"}
-    assert len({move["date"] for move in moves}) == 1 and moves[0]["date"] < data["today"]
-    # Les mieux notés d'abord.
-    notes = [move["player"]["overall"] for move in moves]
-    assert notes == sorted(notes, reverse=True)
-    for move in moves:
+    # Les plus récents d'abord, puis les mieux notés.
+    order = [(move["date"], move["player"]["overall"]) for move in moves]
+    assert order == sorted(order, reverse=True)
+    # En tête, l'intersaison : fins de contrat, recrues des clubs IA, retraites, et les
+    # pré-contrats signés pendant la saison qui viennent de s'exécuter.
+    offseason = [move for move in moves if move["date"] == moves[0]["date"]]
+    assert moves[0]["date"] < data["today"]
+    assert {move["kind"] for move in offseason} <= {"free", "release", "retirement", "precontract"}
+    for move in offseason:
         assert not move["pending"]
         if move["kind"] == "retirement":
             assert move["player"]["id"] is None and move["destination"] is None
@@ -277,8 +278,8 @@ def test_the_offseason_fills_the_register(manager):
             assert move["origin"] is not None and move["destination"] is None
         else:
             assert move["destination"] is not None and move["player"]["id"] is not None
-        if move["kind"] == "precontract":
-            assert move["origin"]["id"] == 3 and move["mine"]
+        clubs = {club["id"] for club in (move["origin"], move["destination"]) if club}
+        assert move["mine"] == (3 in clubs)
     assert any(article["kind"] == "transfer" for article in data["articles"])
     # La nouvelle saison n'a pas commencé : les affiches de la première journée.
     assert data["competitions"][0]["last"] is None

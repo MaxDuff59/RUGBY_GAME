@@ -6,6 +6,7 @@ directement avec lui pour la saison suivante. Le prêt sert à faire jouer un
 joueur qui manque de temps de jeu. Aucune dépendance à FastAPI ni à la base.
 """
 
+from collections.abc import Callable
 from enum import StrEnum
 
 from engine.economy import market_value
@@ -104,16 +105,25 @@ LOAN_TIME_WEIGHT = 0.7
 LOAN_PRESTIGE_WEIGHT = 0.1
 
 
-def move_appeal(player: Player, origin: Club, destination: Club) -> float:
+# Le niveau d'un club : `club_level`, ou une version qui garde ses calculs quand on
+# compare beaucoup de clubs d'un coup (engine/market.py).
+Level = Callable[[Club], float]
+
+
+def move_appeal(
+    player: Player, origin: Club, destination: Club, level: Level = club_level
+) -> float:
     """Attrait d'un transfert ou d'une signature libre, salaire mis à part."""
-    prestige = (club_level(destination) - club_level(origin)) / PRESTIGE_SCALE
+    prestige = (level(destination) - level(origin)) / PRESTIGE_SCALE
     time = playing_time(player, destination) - playing_time(player, origin)
     return PRESTIGE_WEIGHT * prestige + TIME_WEIGHT * time
 
 
-def wage_demand(player: Player, origin: Club, destination: Club) -> int | None:
+def wage_demand(
+    player: Player, origin: Club, destination: Club, level: Level = club_level
+) -> int | None:
     """Salaire annuel exigé pour venir, ou None si le joueur refuse quoi qu'on lui offre."""
-    appeal = move_appeal(player, origin, destination)
+    appeal = move_appeal(player, origin, destination, level)
     factor = 1 + (ACCEPT_THRESHOLD - appeal) / WAGE_WEIGHT
     if factor > WAGE_DEMAND_MAX:
         return None
@@ -125,10 +135,12 @@ def accepts_wage(player: Player, origin: Club, destination: Club, wage: int) -> 
     return demand is not None and wage >= demand
 
 
-def accepts_loan(player: Player, origin: Club, destination: Club) -> bool:
+def accepts_loan(
+    player: Player, origin: Club, destination: Club, level: Level = club_level
+) -> bool:
     """Le joueur accepte un prêt s'il y gagne du temps de jeu."""
     time = playing_time(player, destination) - playing_time(player, origin)
-    prestige = (club_level(destination) - club_level(origin)) / PRESTIGE_SCALE
+    prestige = (level(destination) - level(origin)) / PRESTIGE_SCALE
     return LOAN_TIME_WEIGHT * time + LOAN_PRESTIGE_WEIGHT * prestige >= ACCEPT_THRESHOLD
 
 

@@ -375,7 +375,7 @@ function Moves({ moves, prospects, market }) {
       </div>
       <div className="panel__body">
         {moves.length === 0 && (
-          <p className="table__note">Aucun mouvement pour l'instant : le marché s'anime surtout à l'intersaison.</p>
+          <p className="table__note">Aucun mouvement pour l'instant.</p>
         )}
         <ul className="moves">
           {moves.map((move) => (

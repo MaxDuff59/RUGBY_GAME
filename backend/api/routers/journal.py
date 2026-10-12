@@ -298,25 +298,25 @@ def _moves(session: Session, teams: dict[int, Team]) -> list[Move]:
         for row in rows
     ]
 
-    deals = list(
-        session.scalars(
-            select(NegotiationRow).where(
-                NegotiationRow.stage.in_(("agreed", "done")), NegotiationRow.kind != EXTENSION
-            )
+    # Les accords dont le registre ne dit rien : pré-contrats en attente, arrivées d'avant lui.
+    signed = session.execute(
+        select(NegotiationRow.id, NegotiationRow.player_id, NegotiationRow.club_id).where(
+            NegotiationRow.stage.in_(("agreed", "done")), NegotiationRow.kind != EXTENSION
         )
-    )
+    ).all()
     logged = {
         (player_id, club_id)
         for player_id, club_id in session.execute(
-            select(MoveRow.player_id, MoveRow.to_club_id).where(
-                MoveRow.player_id.in_([deal.player_id for deal in deals])
-            )
+            select(MoveRow.player_id, MoveRow.to_club_id).where(MoveRow.to_club_id.is_not(None))
         )
     }
-    for deal in deals:
-        player = deal.player
-        if player is None or (deal.player_id, deal.club_id) in logged:
-            continue
+    untold = [deal_id for deal_id, *where in signed if tuple(where) not in logged]
+    deals = session.execute(
+        select(NegotiationRow, PlayerRow)
+        .join(PlayerRow, NegotiationRow.player_id == PlayerRow.id)
+        .where(NegotiationRow.id.in_(untold))
+    )
+    for deal, player in deals:
         pending = deal.stage == "agreed"
         if pending and player.club_id == deal.club_id:
             continue

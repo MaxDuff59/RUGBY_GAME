@@ -38,6 +38,7 @@ from api.free_agents import age_free_agents, release, renew_pool
 from api.jokers import close_jokers, end_piges
 from api.ledger import current_season, record
 from api.live import live_match_row, load_live, load_live_test
+from api.market import market_day
 from api.moves import log_move
 from api.notes import History, ensure_preseason_ranks, season_leagues
 from api.routers.contracts import contracts_overview, expire_contracts, rival_signings
@@ -335,6 +336,8 @@ def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayRes
     (engine/matchday.py), puis enregistre ce qu'il rend. Les matchs internationaux
     du jour se jouent ensuite (api/internationals.py).
 
+    Le marché des clubs IA (api/market.py) se joue ensuite, une fois par jour de match.
+
     Seuls les clubs qui jouent ce jour-là ont leur semaine d'entraînement, sans leurs
     joueurs retenus par une sélection qui joue le même jour. Si le match du club
     dirigé est en cours en direct (api/live.py), il est joué jusqu'au bout par le
@@ -470,6 +473,8 @@ def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayRes
             cases.append(
                 injury_case(listed[injury.player_id], injury, internationals.rules.NO_CLUB, day)
             )
+    # Le soir des matchs, les clubs IA traitent entre eux : pré-contrats, prêts, agents libres.
+    market_day(session, season, day, season_rng(season, day, "market"))
     return DayResult(matches=todays, tests=test_day.rows, cases=cases)
 
 

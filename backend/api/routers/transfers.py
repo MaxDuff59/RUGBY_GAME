@@ -191,6 +191,7 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
         if row.cooldown_until and row.cooldown_until > day:
             closed_until = max(closed_until or row.cooldown_until, row.cooldown_until)
         memory[row.player_id] = (grudges, closed_until)
+    signed = _signed_elsewhere(session, me.id)
     listings = []
     for row in others:
         club = row.to_domain()
@@ -199,6 +200,7 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
             if player.loaned_from is not None:
                 continue  # un joueur prêté ne se négocie pas avec son club d'accueil
             grudges, closed_until = memory.get(player.id, (0, None))
+            gone = signed.get(player.id)
             listings.append(
                 ListingOut(
                     player=PlayerOut.from_player(player, day, names),
@@ -208,10 +210,11 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
                     league=league_config(club.league).short_name,
                     years_left=player.years_left(year),
                     playing_time=time_label(playing_time(player, club)),
-                    transfer_fee=_fee_opening(player, club, year, grudges),
+                    transfer_fee=None if gone else _fee_opening(player, club, year, grudges),
                     loanable=club_lends(player, club),
-                    precontract=can_precontract(player, year),
+                    precontract=can_precontract(player, year) and gone is None,
                     talks_closed_until=closed_until,
+                    signed_with=gone,
                 )
             )
     mine = me.to_domain()
@@ -295,10 +298,12 @@ def _options(
     grudges: int = 0,
     closed_until: datetime.date | None = None,
     slots: list[InjuryRow] = (),
+    signed_with: str | None = None,
 ) -> list[DealOption]:
     """Les voies, avec ce que demandent le club et le joueur à l'ouverture : les trois
     voies pour un joueur sous contrat ; pour un agent libre, la signature libre et
-    un joker médical par longue blessure (`slots`)."""
+    un joker médical par longue blessure (`slots`). `signed_with` : le club avec qui
+    il a déjà signé un pré-contrat ; seul un prêt reste alors possible."""
     if origin is None:
         free = seasons_without_club(player, year)
         reason = (
@@ -341,7 +346,10 @@ def _options(
     refusal = refusal_reason(player, origin, me) if wage is None else ""
     options = []
 
-    if fee is None:
+    gone = f"Il s'est déjà engagé avec {signed_with} pour la saison prochaine."
+    if signed_with is not None:
+        fee, reason = None, gone
+    elif fee is None:
         reason = "Le club refuse tout transfert : il est titulaire dans un grand club."
     elif wage is None:
         reason = refusal
@@ -357,7 +365,10 @@ def _options(
         )
     )
 
-    if not can_precontract(player, year):
+    signable = can_precontract(player, year) and signed_with is None
+    if signed_with is not None:
+        reason = gone
+    elif not signable:
         reason = f"Sous contrat jusqu'en {player.contract_until + 1} : pas encore négociable."
     elif wage is None:
         reason = refusal
@@ -366,9 +377,9 @@ def _options(
     options.append(
         DealOption(
             kind=DealKind.PRECONTRACT,
-            available=can_precontract(player, year) and wage is not None,
+            available=signable and wage is not None,
             reason=reason,
-            wage_demand=wage if can_precontract(player, year) else None,
+            wage_demand=wage if signable else None,
         )
     )
 
@@ -387,6 +398,17 @@ def _options(
         )
     )
     return options
+
+
+def _signed_elsewhere(session: Session, club_id: int) -> dict[int, str]:
+    """Les joueurs qui ont signé un pré-contrat avec un autre club que `club_id` : joueur
+    -> nom de ce club. Ils ne se recrutent plus, sauf en prêt jusqu'à la fin de la saison."""
+    rows = session.execute(
+        select(NegotiationRow.player_id, ClubRow.name)
+        .join(ClubRow, NegotiationRow.club_id == ClubRow.id)
+        .where(NegotiationRow.stage == "agreed", NegotiationRow.club_id != club_id)
+    )
+    return dict(rows.all())
 
 
 def _load_target(
@@ -435,7 +457,16 @@ def approach(player_id: int, session: SessionDep) -> TransferTargetOut:
         preferred_years=preferred_years(player),
         talks_closed_until=closed_until,
         grudges=grudges,
-        options=_options(player, origin, me, year, grudges, closed_until, slots),
+        options=_options(
+            player,
+            origin,
+            me,
+            year,
+            grudges,
+            closed_until,
+            slots,
+            _signed_elsewhere(session, me_row.id).get(player_id),
+        ),
         negotiation=_negotiation_out(active) if active else None,
     )
 
@@ -457,7 +488,8 @@ def open_negotiation(
     day = game_date(session)
     grudges, closed_until = _memory(session, me_row.id, player_id, day)
     slots = joker_slots(session, me_row, day) if origin is None else []
-    options = _options(player, origin, me, year, grudges, closed_until, slots)
+    signed_with = _signed_elsewhere(session, me_row.id).get(player_id)
+    options = _options(player, origin, me, year, grudges, closed_until, slots, signed_with)
     option = next(
         (
             o
