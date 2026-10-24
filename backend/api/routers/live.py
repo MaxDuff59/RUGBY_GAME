@@ -159,7 +159,10 @@ def start_live(session: SessionDep) -> LiveOut:
     # Le public est là dès le coup d'envoi ; la billetterie de la journée le reprend.
     crowd = None
     if not match_row.neutral:
-        seeding = cup.seeding(session, season) if in_cup else _seeding(season, league)
+        if in_cup:
+            seeding = cup.seeding(session, season, match_row.league)
+        else:
+            seeding = _seeding(season, league)
         fervour = history.fervour(home.id).value
         crowd = gate(home, seeding.index(home.id) + 1, len(seeding), stage.is_playoff, rng, fervour)
     live = LiveMatch(

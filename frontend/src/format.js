@@ -211,23 +211,30 @@ export const formatPercent = (ratio) => `${upToOneDecimal.format(ratio * 100)} %
 export const formatWeeks = (weeks) => `${weeks} semaine${weeks > 1 ? "s" : ""}`;
 
 // "J12" pour une journée, "Barrages" / "Demi-finales" / "Finale" sinon ; "Coupe · J1"
-// pour une journée de Coupe d'Europe (`cup`).
+// pour une journée de Coupe d'Europe (`cup`), "Challenge · J1" pour le Challenge européen.
 export const matchdayLabel = (match) => {
   const label = match.stage === "regular" ? `J${match.matchday}` : STAGES[match.stage];
-  return match.cup ? `Coupe · ${label}` : label;
+  if (!match.cup) return label;
+  return `${match.competition === CHALLENGE_NAME ? "Challenge" : "Coupe"} · ${label}`;
 };
 
+// Le nom du Challenge européen (api/cup.py) ; une journée de coupe sans nom est de la
+// Coupe d'Europe.
+const CHALLENGE_NAME = "Challenge européen";
+
 // "Journée 12 sur 26" (sans `regularMatchdays` : "Journée 12"), "Demi-finales",
-// "Coupe d'Europe · Poules, journée 2 sur 4", "Coupe d'Europe · Quarts de finale".
+// "Coupe d'Europe · Poules, journée 2 sur 4", "Challenge européen · Quarts de finale".
 export function matchdayTitle(day, regularMatchdays = null) {
   if (day.cup) {
-    return `Coupe d'Europe · ${day.stage === "regular" ? `Poules, journée ${day.matchday} sur ${CUP_POOL_ROUNDS}` : STAGES[day.stage]}`;
+    const rounds = day.pool_rounds ?? CUP_POOL_ROUNDS;
+    const stage = day.stage === "regular" ? `Poules, journée ${day.matchday} sur ${rounds}` : STAGES[day.stage];
+    return `${day.competition ?? "Coupe d'Europe"} · ${stage}`;
   }
   if (day.stage !== "regular") return STAGES[day.stage];
   return regularMatchdays ? `Journée ${day.matchday} sur ${regularMatchdays}` : `Journée ${day.matchday}`;
 }
 
-// Les journées de poule de la Coupe d'Europe (engine/europe.py, POOL_ROUNDS).
+// Les journées de poule de la Coupe d'Europe (engine/europe.py), sans précision de l'API.
 const CUP_POOL_ROUNDS = 4;
 
 // --- Match en direct ------------------------------------------------------------------

@@ -10,6 +10,9 @@ import { useApi } from "../hooks/useApi.js";
 import { usePitchWidth } from "../hooks/usePitchWidth.js";
 import { SLOTS } from "../lineup.js";
 
+// Les coupes d'Europe (api/cup.py) : ni trophées individuels, ni équipe type.
+const CUP_CODES = new Set(["champions_cup", "challenge_cup"]);
+
 const RECORDS = [
   { key: "tries", label: "Essais", unit: "essais" },
   { key: "points", label: "Points", unit: "pts" },
@@ -62,10 +65,10 @@ export default function Honours() {
             {data.club && <ClubHistory club={data.club} history={data.club_history} />}
           </div>
           <div className="honours__column">
-            <Awards season={season} myId={data.club?.id} cup={league.code === "champions_cup"} />
+            <Awards season={season} myId={data.club?.id} cup={CUP_CODES.has(league.code)} />
             <Records records={data.records} myId={data.club?.id} />
           </div>
-          <Team season={season} cup={league.code === "champions_cup"} />
+          <Team season={season} cup={CUP_CODES.has(league.code)} />
         </div>
       )}
     </>
@@ -134,7 +137,7 @@ function Awards({ season, myId, cup }) {
         {singles.length === 0 ? (
           <p className="table__note">
             {cup
-              ? "La Coupe d'Europe ne remet pas de trophées individuels : ils se jouent en championnat."
+              ? "Les coupes d'Europe ne remettent pas de trophées individuels : ils se jouent en championnat."
               : "Les trophées se remettent à la fin de la saison, après la finale."}
           </p>
         ) : (

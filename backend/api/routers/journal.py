@@ -147,13 +147,13 @@ def _competitions(session: Session, season: SeasonRow) -> list[_Competition]:
     tests: dict[str, list[Match]] = {}
     for row in internationals.test_rows(session, season):
         tests.setdefault(row.competition, []).append(row.to_domain())
-    if season.cup_matches:
+    for code in cup.codes(season):
         out.append(
             _Competition(
-                europe.CODE,
-                cup.LEAGUE.short_name,
-                cup.matches(season),
-                pools=cup.pools(session, season),
+                code,
+                cup.CUPS[code].short_name,
+                cup.matches(season, code),
+                pools=cup.pools(session, season, code),
             )
         )
     for code, matches in tests.items():
@@ -213,10 +213,10 @@ def _match_articles(
     for c in competitions:
         home = reader.follows(c)
         # Un grand championnat fait plus de bruit qu'un petit.
-        config = cup.LEAGUE if c.pools is not None else league_config(c.code)
+        config = cup.CUPS[c.code] if c.pools is not None else league_config(c.code)
         prestige = 0.0 if c.international else config.prize_factor * PRESTIGE
         world_cup = c.window is not None and c.window.format == "world_cup"
-        # Pas de classement général pour une coupe à poules (la Coupe d'Europe, le Mondial).
+        # Pas de classement général pour une coupe à poules (coupes d'Europe, Mondial).
         has_table = (c.window is None and c.pools is None) or (
             c.window is not None and c.window.has_table and not world_cup
         )

@@ -397,6 +397,7 @@ ADDED_COLUMNS = {
         "season_gain": "INTEGER NOT NULL DEFAULT 0",
     },
     "careers": {"difficulty": "VARCHAR(6) NOT NULL DEFAULT 'normal'"},
+    "cup_pools": {"competition": "VARCHAR(16) NOT NULL DEFAULT 'champions_cup'"},
     "clubs": {
         "captain_id": "INTEGER",
         "training_intensity": "VARCHAR(8) NOT NULL DEFAULT 'normal'",

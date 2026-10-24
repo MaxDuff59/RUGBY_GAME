@@ -30,25 +30,36 @@ const plural = (count, word) => `${count} ${word}${count > 1 ? "s" : ""}`;
 // simulation s'y arrête aussi.
 function upcoming(season, clubId = null) {
   const days = new Map();
+  // `cup` : la coupe d'Europe de la journée (null pour le championnat).
   const add = (match, cup) => {
-    const key = `${cup ? "cup" : "league"}:${match.matchday}`;
+    const key = `${cup ? cup.code : "league"}:${match.matchday}`;
     if (!days.has(key)) {
-      days.set(key, { matchday: match.matchday, stage: match.stage, date: match.date, matches: [], cup });
+      days.set(key, {
+        matchday: match.matchday,
+        stage: match.stage,
+        date: match.date,
+        matches: [],
+        cup: Boolean(cup),
+        competition: cup?.name,
+        pool_rounds: cup?.pool_rounds,
+      });
     }
     days.get(key).matches.push(match);
   };
   for (const match of season.matches) {
-    if (match.home_score === null) add(match, false);
+    if (match.home_score === null) add(match, null);
   }
-  for (const match of season.cup?.matches ?? []) {
-    const ours = match.home.id === clubId || match.away.id === clubId;
-    if (match.home_score === null && ours) add(match, true);
+  for (const cup of season.cups ?? []) {
+    for (const match of cup.matches) {
+      const ours = match.home.id === clubId || match.away.id === clubId;
+      if (match.home_score === null && ours) add(match, cup);
+    }
   }
   return [...days.values()].sort((a, b) => a.date.localeCompare(b.date) || a.matchday - b.matchday);
 }
 
 // La clé d'une journée jouée ou à jouer, la coupe à part du championnat.
-const dayKey = (day) => `${day.cup ? "cup" : "league"}:${day.matchday}`;
+const dayKey = (day) => `${day.cup ? (day.competition ?? "cup") : "league"}:${day.matchday}`;
 
 // Raccourcis de « Simuler jusqu'à… » : la fin de la phase aller et celle de la saison
 // régulière tant qu'elles sont devant nous, puis la fin de la saison.

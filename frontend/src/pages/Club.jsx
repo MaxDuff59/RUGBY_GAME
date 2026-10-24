@@ -466,10 +466,10 @@ function Doublon({ clubId, season }) {
   );
 }
 
-// Les matchs de la saison, championnat et Coupe d'Europe, dans l'ordre des dates : pour
+// Les matchs de la saison, championnat et coupes d'Europe, dans l'ordre des dates : pour
 // la forme du moment.
 const allMatches = (season) =>
-  [...season.matches, ...(season.cup?.matches ?? [])].sort((a, b) => a.date.localeCompare(b.date));
+  [...season.matches, ...(season.cups ?? []).flatMap((cup) => cup.matches)].sort((a, b) => a.date.localeCompare(b.date));
 
 function NextMatch({ match, myId, rankOf, matches }) {
   const home = match.home.id === myId;

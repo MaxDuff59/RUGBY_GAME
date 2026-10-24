@@ -705,7 +705,9 @@ class LiveOut(BaseModel):
     date: datetime.date
     neutral: bool
     knockout: bool
-    cup: bool  # un match de la Coupe d'Europe (sinon, du championnat)
+    cup: bool  # un match de coupe d'Europe (sinon, du championnat)
+    competition: str | None = None  # la coupe : « Coupe d'Europe », « Challenge européen »
+    pool_rounds: int | None = None  # ses journées de poule
     my_club_id: int
     minute: int  # dernière minute jouée (0 avant le coup d'envoi)
     last_minute: int  # 80, ou 100 si la prolongation est engagée
@@ -788,7 +790,9 @@ class MatchdayOut(BaseModel):
     stage: Stage
     date: datetime.date
     matches: list[MatchSummary]
-    cup: bool = False  # une journée de la Coupe d'Europe (sinon, du championnat)
+    cup: bool = False  # une journée de coupe d'Europe (sinon, du championnat)
+    competition: str | None = None  # la coupe : « Coupe d'Europe », « Challenge européen »
+    pool_rounds: int | None = None  # ses journées de poule
 
 
 # --- Carrière ------------------------------------------------------------------------
@@ -866,9 +870,12 @@ class CupPoolOut(BaseModel):
 
 
 class CupOut(BaseModel):
-    """La Coupe d'Europe de la saison (engine/europe.py)."""
+    """Une coupe d'Europe de la saison (engine/europe.py) : la Coupe d'Europe ou le
+    Challenge européen."""
 
+    code: str
     name: str
+    pool_rounds: int  # journées de poule
     pools: list[CupPoolOut]
     matches: list[MatchSummary]  # poules puis phases finales, dans l'ordre des dates
     # pools : poules en cours ; knockout : phases finales ; finished : finale jouée.
@@ -892,7 +899,8 @@ class SeasonOut(BaseModel):
     standings: list[StandingOut]  # saison régulière seulement
     matches: list[MatchSummary]  # tout le calendrier, phases finales comprises
     champion: ClubRef | None
-    cup: CupOut | None = None  # la Coupe d'Europe, dans un monde qui en a une
+    # Les coupes d'Europe (Coupe d'Europe, puis Challenge), dans un monde qui en a.
+    cups: list[CupOut] = []
 
 
 class SaveOut(BaseModel):

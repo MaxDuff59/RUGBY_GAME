@@ -331,12 +331,14 @@ class SuspensionRow(Base):
 
 
 class CupPoolRow(Base):
-    """Un club dans une poule de la Coupe d'Europe d'une saison (engine/europe.py)."""
+    """Un club dans une poule d'une coupe d'Europe d'une saison (engine/europe.py)."""
 
     __tablename__ = "cup_pools"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     season_id: Mapped[int] = mapped_column(ForeignKey("seasons.id"))
+    # La coupe : Coupe d'Europe (`champions_cup`) ou Challenge européen (`challenge_cup`).
+    competition: Mapped[str] = mapped_column(String(LEAGUE_CODE_LENGTH), default="champions_cup")
     pool: Mapped[str] = mapped_column(String(1))
     club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
 

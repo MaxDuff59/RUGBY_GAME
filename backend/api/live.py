@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api import internationals
-from api.cup import CUP_SQUAD
+from api.cup import CUP_SQUAD, CUPS
 from api.schemas import (
     ClubRef,
     CrowdOut,
@@ -30,6 +30,7 @@ from api.schemas import (
     TalkOptionOut,
     TalkOut,
 )
+from engine import europe
 from engine.form import Form
 from engine.match_engine import (
     HALF_TIME,
@@ -230,6 +231,8 @@ def _talk_out(live: LiveMatch, club_id: int) -> TalkOut:
 
 def live_out(live: Live, names: dict[int, str], my_club_id: int) -> LiveOut:
     match = live.match
+    # Un match de sélection (`InternationalRow`) n'a pas d'effectif : jamais de coupe.
+    in_cup = getattr(live.match_row, "squad", None) == CUP_SQUAD
     players = {**match.home.players(), **match.away.players()}
 
     def name_of(player_id: int | None) -> str | None:
@@ -243,8 +246,9 @@ def live_out(live: Live, names: dict[int, str], my_club_id: int) -> LiveOut:
         date=live.match_row.date,
         neutral=live.match_row.neutral,
         knockout=match.knockout,
-        # Un match de sélection (`InternationalRow`) n'a pas d'effectif : jamais de coupe.
-        cup=getattr(live.match_row, "squad", None) == CUP_SQUAD,
+        cup=in_cup,
+        competition=CUPS[live.match_row.league].short_name if in_cup else None,
+        pool_rounds=europe.FORMATS[live.match_row.league].pool_rounds if in_cup else None,
         my_club_id=my_club_id,
         minute=match.minute,
         last_minute=match.last_minute,
