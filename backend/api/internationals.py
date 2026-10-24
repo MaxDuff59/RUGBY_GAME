@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from api.deps import load_club
 from api.ledger import current_season, game_date
+from api.moves import delete_player
 from data.nations import (
     NATIONS_BY_CODE,
     NATIONS_BY_ID,
@@ -421,7 +422,7 @@ def offseason(session: Session, rng: random.Random) -> None:
         player = row.to_domain()
         player.age += 1
         if player.age >= RETIREMENT_AGE:
-            session.delete(row)
+            delete_player(session, row)
             continue
         develop_player(player, rules.AWAY_TRAINING_LEVEL, rng)
         row.age = player.age

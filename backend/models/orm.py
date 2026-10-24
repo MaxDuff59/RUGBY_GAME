@@ -31,6 +31,10 @@ from models.domain import (
     StandSide,
 )
 
+# Longueur des codes de championnat (data/leagues.py, et `champions_cup`) : Postgres la
+# fait respecter, SQLite non. 12 au départ, trop court pour la Coupe d'Europe.
+LEAGUE_CODE_LENGTH = 16
+
 
 class Base(DeclarativeBase):
     pass
@@ -42,7 +46,7 @@ class ClubRow(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True)
     # Championnat (data/leagues.py) ; change à l'intersaison en cas de montée ou de descente.
-    league: Mapped[str] = mapped_column(String(12), default="top14")
+    league: Mapped[str] = mapped_column(String(LEAGUE_CODE_LENGTH), default="top14")
     balance: Mapped[int] = mapped_column(default=0)
     stadium_capacity: Mapped[int] = mapped_column(default=4000)
     training_level: Mapped[int] = mapped_column(default=1)
@@ -359,7 +363,7 @@ class AwardRow(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     year: Mapped[int]
-    league: Mapped[str] = mapped_column(String(12))
+    league: Mapped[str] = mapped_column(String(LEAGUE_CODE_LENGTH))
     kind: Mapped[str] = mapped_column(String(12))  # `AwardKind`
     # Équipe type : la place (poste) ; None pour les autres trophées.
     slot: Mapped[str | None] = mapped_column(String(12), default=None)
@@ -482,8 +486,9 @@ class MatchRow(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     # Pas de saison pour un match amical.
     season_id: Mapped[int | None] = mapped_column(ForeignKey("seasons.id"))
-    # Championnat du match (les clubs peuvent en changer d'une saison à l'autre).
-    league: Mapped[str] = mapped_column(String(12), default="top14")
+    # Championnat du match (les clubs peuvent en changer d'une saison à l'autre), ou
+    # la Coupe d'Europe (`champions_cup`).
+    league: Mapped[str] = mapped_column(String(LEAGUE_CODE_LENGTH), default="top14")
     matchday: Mapped[int] = mapped_column(default=0)
     home_club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
     away_club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))

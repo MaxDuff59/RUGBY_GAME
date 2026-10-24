@@ -1,17 +1,31 @@
 """Registre des mouvements de joueurs : chaque arrivée, départ ou retraite passe par
 `log_move`, pour que le journal (api/routers/journal.py) puisse les raconter.
 
-Rien d'autre ne lit ce registre : les effectifs restent dans `players`.
+Rien d'autre ne lit ce registre : les effectifs restent dans `players`. Un joueur qui
+quitte le jeu (retraite, agent libre qui arrête) s'efface avec `delete_player`.
 """
 
 import datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from engine.journal import MoveKind
 from models import ATTRIBUTE_NAMES
-from models.orm import MoveRow, PlayerRow
+from models.orm import InjuryRow, JokerRow, MoveRow, NegotiationRow, PlayerRow, SuspensionRow
+
+
+def delete_player(session: Session, row: PlayerRow) -> None:
+    """Le joueur quitte le jeu : sa fiche, et ce qui y renvoie (suspensions, négociations,
+    jokers recrutés pour lui ou pour ses blessures ; ses blessures partent avec lui).
+    Postgres refuse d'effacer un joueur encore cité ailleurs, SQLite ne vérifie pas."""
+    injuries = select(InjuryRow.id).where(InjuryRow.player_id == row.id)
+    session.execute(
+        delete(JokerRow).where(or_(JokerRow.player_id == row.id, JokerRow.injury_id.in_(injuries)))
+    )
+    session.execute(delete(SuspensionRow).where(SuspensionRow.player_id == row.id))
+    session.execute(delete(NegotiationRow).where(NegotiationRow.player_id == row.id))
+    session.delete(row)
 
 
 def log_move(

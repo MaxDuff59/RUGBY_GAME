@@ -36,7 +36,7 @@ from data.nations import home_nation
 from engine.development import ceiling, initial_potential
 from engine.free_agents import newcomers
 from models import ATTRIBUTE_MAX, ATTRIBUTE_MIN, Position
-from models.orm import Base, ClubRow, PlayerRow, StaffRow
+from models.orm import LEAGUE_CODE_LENGTH, Base, ClubRow, PlayerRow, StaffRow
 
 # Dossier des parties SQLite et des photos (surchargeable : instance de test, volume en prod).
 SAVES_DIR = Path(os.environ.get("RUGBY_SAVES_DIR", "./saves"))
@@ -432,15 +432,39 @@ def _fill_potential(engine: Engine) -> None:
             session.commit()
 
 
+def _widen_league_codes(engine: Engine) -> None:
+    """Postgres : les colonnes de championnat créées à 12 caractères passent à
+    `LEAGUE_CODE_LENGTH`, pour le code de la Coupe d'Europe (SQLite ne limite pas)."""
+    schema = _schema_of(engine)
+    if engine.dialect.name == "sqlite" or schema is None:
+        return
+    with engine.begin() as connection:
+        short = connection.execute(
+            text(
+                "SELECT table_name FROM information_schema.columns WHERE table_schema = :schema"
+                " AND column_name = 'league' AND character_maximum_length < :length"
+            ),
+            {"schema": schema, "length": LEAGUE_CODE_LENGTH},
+        ).scalars()
+        for table in list(short):
+            connection.execute(
+                text(
+                    f'ALTER TABLE "{schema}"."{table}" ALTER COLUMN league '
+                    f"TYPE VARCHAR({LEAGUE_CODE_LENGTH})"
+                )
+            )
+
+
 def _migrate(engine: Engine) -> None:
     """Les quelques changements de schéma qu'on sait rattraper sans repartir de zéro
     (parties SQLite d'avant ces changements ; en Postgres les schémas naissent à jour,
     sauf pour la graine des saisons, la nationalité des joueurs, le tour des matchs
-    internationaux et `ADDED_COLUMNS`)."""
+    internationaux, la longueur des codes de championnat et `ADDED_COLUMNS`)."""
     _add_season_seed(engine)
     _add_nationality(engine)
     _add_international_stage(engine)
     _add_columns(engine)
+    _widen_league_codes(engine)
     _fill_potential(engine)
     if engine.dialect.name != "sqlite":
         return

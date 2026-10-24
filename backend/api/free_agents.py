@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import engine.free_agents
-from api.moves import log_move
+from api.moves import delete_player, log_move
 from engine.economy import wage_for
 from engine.free_agents import age_free_agent
 from engine.journal import MoveKind
@@ -46,7 +46,7 @@ def age_free_agents(session: Session, season_year: int, rng: random.Random) -> N
     for row in free_agent_rows(session):
         player = row.to_domain()
         if not age_free_agent(player, season_year, rng):
-            session.delete(row)
+            delete_player(session, row)
             continue
         row.age = player.age
         for name in ATTRIBUTE_NAMES:
@@ -87,6 +87,6 @@ def renew_pool(
     for player in renewal.renegotiated:
         session.get(PlayerRow, player.id).wage = player.wage
     for player in renewal.dropped:
-        session.delete(rows[player.id])
+        delete_player(session, rows[player.id])
     for player in renewal.arrivals:
         session.add(PlayerRow.from_domain(player))
