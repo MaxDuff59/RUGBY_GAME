@@ -327,17 +327,10 @@ body,
 }
 
 .brand__mark {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 1.5px solid var(--ink);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: 0.04em;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  object-fit: contain;
 }
 
 .brand__name {
@@ -1482,6 +1475,12 @@ select.tactics__select {
 }
 
 /* --- Connexion --------------------------------------------------------------- */
+
+.login__logo {
+  width: min(100%, 260px);
+  height: auto;
+  flex: none;
+}
 
 .login__form {
   display: flex;

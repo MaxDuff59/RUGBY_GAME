@@ -46,9 +46,9 @@ export default function Login() {
 
   return (
     <div className="start login">
+      <img className="login__logo" src="/logo.png" alt="Rugby Manager" />
       <header className="page-head">
         <div>
-          <p className="eyebrow">Rugby Manager</p>
           <h1 className="title">{registering ? "Créer un compte" : "Connexion"}</h1>
           <p className="muted" style={{ margin: "8px 0 0" }}>
             {registering

@@ -127,7 +127,7 @@ function Sidebar({ career, items, onContract }) {
   return (
     <nav className="sidebar" aria-label="Navigation principale">
       <div className="brand">
-        <span className="brand__mark">XV</span>
+        <img className="brand__mark" src="/logo-mark.png" alt="" />
         <span className="brand__name">Rugby Manager</span>
       </div>
       <ul className="nav">
