@@ -4,7 +4,11 @@ import { Link, Navigate, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useClubTheme } from "../clubs.js";
 import ClubCrest from "../components/ClubCrest.jsx";
-import { formatLongDate, formatNote } from "../format.js";
+import {
+  DIFFICULTIES,
+  formatLongDate,
+  formatNote,
+} from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { chosenSlot } from "../save.js";
 
@@ -34,6 +38,7 @@ export default function StartCareer() {
   useClubTheme(chosenName);
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [difficulty, setDifficulty] = useState("normal");
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -41,7 +46,7 @@ export default function StartCareer() {
     setSubmitError(null);
     try {
       if (kind === "nation") await api.startSelectorCareer(managerName.trim(), nationCode);
-      else await api.startCareer(managerName.trim(), clubId);
+      else await api.startCareer(managerName.trim(), clubId, difficulty);
       navigate("/", { replace: true });
     } catch (err) {
       setSubmitError(err);
@@ -115,6 +120,20 @@ export default function StartCareer() {
           <button type="button" className="chip" aria-pressed={kind === "nation"} onClick={() => setKind("nation")}>
             Sélectionneur national
           </button>
+        </div>
+      )}
+
+      {kind === "club" && (
+        <div className="field field--wide">
+          <span className="field__label">Difficulté</span>
+          <div className="chips" role="group" aria-label="Difficulté">
+            {Object.entries(DIFFICULTIES).map(([key, level]) => (
+              <button key={key} type="button" className="chip" aria-pressed={difficulty === key} onClick={() => setDifficulty(key)}>
+                {level.label}
+              </button>
+            ))}
+          </div>
+          <span className="muted">{DIFFICULTIES[difficulty].scope} Les matchs, eux, ne changent pas.</span>
         </div>
       )}
 

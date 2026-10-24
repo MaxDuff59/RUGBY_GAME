@@ -32,7 +32,7 @@ from api.jokers import joker_ids, joker_slots, live_jokers, squad_count, start_t
 from api.jokers import sign as sign_joker
 from api.ledger import current_season, game_date, record
 from api.moves import log_move
-from api.rules import check_salary_cap
+from api.rules import career_rules, check_salary_cap
 from api.schemas import (
     ClubRef,
     DealOption,
@@ -92,20 +92,35 @@ def _money(amount: int) -> str:
     return f"{amount:,} €".replace(",", " ")
 
 
-def _fee_opening(player: Player, club: Club, year: int, grudges: int = 0) -> int | None:
-    target = transfer_fee(player, club, year)
+def _scaled(amount: int | None, demands: float) -> int | None:
+    """Une exigence selon la difficulté de la carrière (engine/difficulty.py)."""
+    return None if amount is None else round(amount * demands)
+
+
+def _fee_target(player: Player, club: Club, year: int, demands: float = 1.0) -> int | None:
+    return _scaled(transfer_fee(player, club, year), demands)
+
+
+def _fee_opening(
+    player: Player, club: Club, year: int, grudges: int = 0, demands: float = 1.0
+) -> int | None:
+    target = _fee_target(player, club, year, demands)
     if target is None:
         return None
     return opening_ask(target, grudge_markup(CLUB_OPENING_MARKUP, grudges), FEE_STEP)
 
 
-def _wage_target(player: Player, origin: Club | None, me: Club) -> int | None:
-    """Salaire visé par le joueur pour venir (None s'il refuse) ; `origin` None = agent libre."""
-    return free_agent_wage(player, me) if origin is None else wage_demand(player, origin, me)
+def _wage_target(player: Player, origin: Club | None, me: Club, demands: float = 1.0) -> int | None:
+    """Salaire visé par le joueur pour venir (None s'il refuse) ; `origin` None = agent libre.
+    `demands` : l'exigence selon la difficulté de la carrière."""
+    target = free_agent_wage(player, me) if origin is None else wage_demand(player, origin, me)
+    return _scaled(target, demands)
 
 
-def _wage_opening(player: Player, origin: Club | None, me: Club, grudges: int = 0) -> int | None:
-    target = _wage_target(player, origin, me)
+def _wage_opening(
+    player: Player, origin: Club | None, me: Club, grudges: int = 0, demands: float = 1.0
+) -> int | None:
+    target = _wage_target(player, origin, me, demands)
     if target is None:
         return None
     return opening_ask(target, grudge_markup(PLAYER_OPENING_MARKUP, grudges), WAGE_STEP)
@@ -194,6 +209,7 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
             closed_until = max(closed_until or row.cooldown_until, row.cooldown_until)
         memory[row.player_id] = (grudges, closed_until)
     signed = _signed_elsewhere(session, me.id)
+    demands = career_rules(session).demands
     listings = []
     for row in others:
         club = row.to_domain()
@@ -212,7 +228,9 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
                     league=league_config(club.league).short_name,
                     years_left=player.years_left(year),
                     playing_time=time_label(playing_time(player, club)),
-                    transfer_fee=None if gone else _fee_opening(player, club, year, grudges),
+                    transfer_fee=None
+                    if gone
+                    else _fee_opening(player, club, year, grudges, demands),
                     loanable=club_lends(player, club),
                     precontract=can_precontract(player, year) and gone is None,
                     talks_closed_until=closed_until,
@@ -239,7 +257,7 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
                 precontract=False,
                 talks_closed_until=closed_until,
                 free_agent=True,
-                wage_demand=_wage_opening(player, None, mine, grudges),
+                wage_demand=_wage_opening(player, None, mine, grudges, demands),
             )
         )
     listings.sort(key=lambda listing: listing.player.value, reverse=True)
@@ -303,6 +321,7 @@ def _options(
     closed_until: datetime.date | None = None,
     slots: list[InjuryRow] = (),
     signed_with: str | None = None,
+    demands: float = 1.0,
 ) -> list[DealOption]:
     """Les voies, avec ce que demandent le club et le joueur à l'ouverture : les trois
     voies pour un joueur sous contrat ; pour un agent libre, la signature libre et
@@ -315,7 +334,7 @@ def _options(
             if free == 0
             else f"Sans club depuis {free + 1} intersaisons : il a hâte de rejouer."
         )
-        wage = _wage_opening(player, None, me, grudges)
+        wage = _wage_opening(player, None, me, grudges, demands)
         options = [DealOption(kind=DealKind.FREE, available=True, reason=reason, wage_demand=wage)]
         for slot in slots:
             injured = f"{slot.player.first_name} {slot.player.last_name}"
@@ -345,8 +364,8 @@ def _options(
         return [DealOption(kind=kind, available=False, reason=reason) for kind in kinds]
     if options is not None:
         return options
-    fee = _fee_opening(player, origin, year, grudges)
-    wage = _wage_opening(player, origin, me, grudges)
+    fee = _fee_opening(player, origin, year, grudges, demands)
+    wage = _wage_opening(player, origin, me, grudges, demands)
     refusal = refusal_reason(player, origin, me) if wage is None else ""
     options = []
 
@@ -470,6 +489,7 @@ def approach(player_id: int, session: SessionDep) -> TransferTargetOut:
             closed_until,
             slots,
             _signed_elsewhere(session, me_row.id).get(player_id),
+            career_rules(session).demands,
         ),
         negotiation=_negotiation_out(active) if active else None,
     )
@@ -493,7 +513,8 @@ def open_negotiation(
     grudges, closed_until = _memory(session, me_row.id, player_id, day)
     slots = joker_slots(session, me_row, day) if origin is None else []
     signed_with = _signed_elsewhere(session, me_row.id).get(player_id)
-    options = _options(player, origin, me, year, grudges, closed_until, slots, signed_with)
+    demands = career_rules(session).demands
+    options = _options(player, origin, me, year, grudges, closed_until, slots, signed_with, demands)
     option = next(
         (
             o
@@ -523,9 +544,11 @@ def open_negotiation(
         patience=grudge_patience(grudges),
         last_offer=None,
         fee_demand=option.fee_demand,
-        fee_floor=transfer_fee(player, origin, year) if origin else None,
+        fee_floor=_fee_target(player, origin, year, demands) if origin else None,
         wage_demand=option.wage_demand if payload.kind != DealKind.LOAN else option.wage,
-        wage_floor=_wage_target(player, origin, me) if payload.kind != DealKind.LOAN else None,
+        wage_floor=_wage_target(player, origin, me, demands)
+        if payload.kind != DealKind.LOAN
+        else None,
         fee=None,
         wage=None,
         years=None,

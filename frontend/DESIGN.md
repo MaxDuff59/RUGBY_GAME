@@ -277,6 +277,9 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   français, avec ses deux couleurs) ; un blason blanc (la fougère néo-zélandaise) est posé
   sur une pastille sombre. L'interface prend les couleurs de la sélection pour un
   sélectionneur, comme pour un club.
+- Difficulté (carrière de club) : sous les pastilles de carrière, « Difficulté » et trois
+  pastilles (Facile, Normal, Difficile), puis ce que change le niveau choisi ; les matchs ne
+  changent jamais. Un niveau autre que normal se rappelle au pied du menu.
 - Choix de la carrière : deux pastilles sous le nom, « Manager d'un club » et
   « Sélectionneur national » (absentes dans un monde sans sélections). Les sélections se
   choisissent comme les clubs : nom, niveau du XV, rendez-vous de la saison en petit.

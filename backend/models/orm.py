@@ -675,6 +675,8 @@ class CareerRow(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     manager_name: Mapped[str] = mapped_column(String(100))
     club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
+    # Niveau de difficulté (engine/difficulty.py) : easy, normal ou hard.
+    difficulty: Mapped[str] = mapped_column(String(6), default="normal")
 
     def to_domain(self) -> Career:
         return Career(id=self.id, manager_name=self.manager_name, club_id=self.club_id)

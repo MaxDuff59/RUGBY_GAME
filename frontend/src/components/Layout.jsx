@@ -10,6 +10,7 @@ import ClubCrest from "./ClubCrest.jsx";
 import Guide, { resetGuide } from "./Guide.jsx";
 import Inbox from "./Inbox.jsx";
 import NavIcon from "./NavIcon.jsx";
+import { DIFFICULTIES } from "../format.js";
 
 // `primary` : les entrées de la barre d'onglets du téléphone ; les autres passent
 // dans le volet « Plus ». `icon` : clé du pictogramme (NavIcon).
@@ -120,7 +121,10 @@ function Sidebar({ career, items }) {
         <div>
           {career.kind === "nation" ? "Sélectionneur" : "Manager"} : {career.manager_name}
         </div>
-        <div>Partie {chosenSlot()} · sauvegarde auto</div>
+        <div>
+          Partie {chosenSlot()} · sauvegarde auto
+          {career.difficulty && career.difficulty !== "normal" && ` · ${DIFFICULTIES[career.difficulty].label.toLowerCase()}`}
+        </div>
         {career.kind !== "nation" && (
           <button type="button" className="link-button sidebar__guide" onClick={resetGuide}>
             Revoir le guide

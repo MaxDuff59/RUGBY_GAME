@@ -277,6 +277,13 @@ export function formatPotential(player) {
 // Points d'attributs gagnés depuis le début de la saison : « +4 », ou « – ».
 export const formatGain = (points) => (points > 0 ? `+${points}` : "–");
 
+// Les niveaux de difficulté d'une carrière de club (engine/difficulty.py).
+export const DIFFICULTIES = {
+  easy: { label: "Facile", scope: "Direction patiente, recettes +20 %, recrues 10 % moins chères." },
+  normal: { label: "Normal", scope: "Le jeu tel qu'il est." },
+  hard: { label: "Difficile", scope: "Direction exigeante, recettes −15 %, recrues 12 % plus chères." },
+};
+
 // Les trophées de fin de saison (engine/awards.py) : libellé et valeur.
 export const AWARDS = {
   player: { label: "Joueur de la saison", format: (v) => `${formatNote(v)} de moyenne` },

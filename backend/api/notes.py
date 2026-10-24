@@ -22,6 +22,7 @@ from api import internationals
 from api.ledger import game_date
 from api.schemas import ClubNotesOut, FormOut, NoteOut, ObjectiveOut
 from engine.board import SACK_THRESHOLD, SACK_WARNING
+from engine.difficulty import rules
 from engine.freshness import team_freshness
 from engine.history import AffairBoosts, expected_ranks
 from engine.match_engine import team_strength
@@ -30,6 +31,7 @@ from engine.sponsors import deals_from, sponsor_mood
 from models import Club, Match, StaffRole
 from models.orm import (
     AffairRow,
+    CareerRow,
     ClubRow,
     MatchRow,
     PreseasonRankRow,
@@ -137,6 +139,10 @@ def club_notes(session: Session, club: Club) -> ClubNotesOut:
     season_ids = {m.id for m in history.this_season}
     day = game_date(session)
     lineup_now = [p.id for p in team_strength(club, day).lineup]
+    # La patience de la direction du club dirigé suit la difficulté (engine/difficulty.py).
+    career = session.scalars(select(CareerRow)).first()
+    mine = career is not None and career.club_id == club.id
+    threshold = rules(career.difficulty).sack_threshold if mine else SACK_THRESHOLD
 
     def out(note: Note) -> NoteOut:
         return NoteOut.from_note(note, club.id, names, season_ids)
@@ -169,6 +175,6 @@ def club_notes(session: Session, club: Club) -> ClubNotesOut:
         supporters=out(history.fervour(club.id)),
         objective=objective,
         form=FormOut(**effects, total=sum(effects.values())),
-        sack_threshold=SACK_THRESHOLD,
-        sack_warning=SACK_WARNING,
+        sack_threshold=threshold,
+        sack_warning=threshold + SACK_WARNING - SACK_THRESHOLD,
     )

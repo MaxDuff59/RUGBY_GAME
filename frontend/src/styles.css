@@ -1579,8 +1579,14 @@ select.tactics__select {
   max-width: 320px;
 }
 
-.field label {
+.field label,
+.field__label {
   font-weight: 600;
+}
+
+/* Le choix de la difficulté prend la largeur de ses pastilles et de sa phrase. */
+.field--wide {
+  max-width: 640px;
 }
 
 /* --- Pages de gestion -------------------------------------------------------- */

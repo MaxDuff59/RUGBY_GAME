@@ -1,10 +1,21 @@
-"""Les règlements des championnats côté API (engine/regulations.py) : ce qui bloque
-une signature, une prolongation ou une promotion."""
+"""Les règles côté API : celles des championnats (engine/regulations.py), qui bloquent
+une signature, une prolongation ou une promotion, et le niveau de difficulté de la
+carrière (engine/difficulty.py)."""
 
 from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
+from engine.difficulty import Rules, rules
 from engine.regulations import cap_breach
 from models import Club
+from models.orm import CareerRow
+
+
+def career_rules(session: Session) -> Rules:
+    """Les règles du niveau de difficulté de la carrière (normal sans carrière de club)."""
+    career = session.scalars(select(CareerRow)).first()
+    return rules(career.difficulty if career is not None else None)
 
 
 def _millions(euros: int) -> str:

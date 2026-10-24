@@ -133,6 +133,12 @@ def board_confidence(
     return confidence
 
 
-def should_sack(confidence: float, matches_played: int, regular_rounds: int) -> bool:
-    """La direction limoge-t-elle le manager après ce match ?"""
-    return confidence < SACK_THRESHOLD and matches_played >= SACK_GRACE * regular_rounds
+def should_sack(
+    confidence: float,
+    matches_played: int,
+    regular_rounds: int,
+    threshold: float = SACK_THRESHOLD,
+) -> bool:
+    """La direction limoge-t-elle le manager après ce match ? `threshold` : son seuil de
+    patience, selon la difficulté de la carrière (engine/difficulty.py)."""
+    return confidence < threshold and matches_played >= SACK_GRACE * regular_rounds

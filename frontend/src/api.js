@@ -64,8 +64,8 @@ export const api = {
   getPlayer: (playerId) => request(`/players/${playerId}`),
   getCareer: () => request("/career"),
   getLastDismissal: () => request("/career/dismissal"),
-  startCareer: (managerName, clubId) =>
-    post("/career", { manager_name: managerName, club_id: clubId }),
+  startCareer: (managerName, clubId, difficulty = "normal") =>
+    post("/career", { manager_name: managerName, club_id: clubId, difficulty }),
   // Carrière de sélectionneur : `nation` est le code de la sélection (ex. "FRA").
   startSelectorCareer: (managerName, nation) => post("/career", { manager_name: managerName, nation }),
 

@@ -55,6 +55,7 @@ def _career_out(row: CareerRow, club: Club) -> CareerOut:
         club_name=club.name,
         league=club.league,
         league_name=league_config(club.league).name,
+        difficulty=row.difficulty or "normal",
     )
 
 
@@ -90,7 +91,11 @@ def start_career(payload: CareerIn, session: SessionDep) -> CareerOut:
     for table in (CareerRow, SelectorRow, DismissalRow, LiveMatchRow, LiveInternationalRow):
         session.execute(delete(table))
     if club is not None:
-        row = CareerRow(manager_name=payload.manager_name, club_id=club.id)
+        row = CareerRow(
+            manager_name=payload.manager_name,
+            club_id=club.id,
+            difficulty=payload.difficulty.value,
+        )
     else:
         row = SelectorRow(manager_name=payload.manager_name, nation=nation.code)
     session.add(row)

@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from engine.awards import AwardKind
 from engine.crowd import Crowd
 from engine.development import OTHER_UNCERTAINTY, estimate
+from engine.difficulty import Difficulty
 from engine.economy import FacilityKind, TransactionCategory, market_value
 from engine.journal import Kind as ArticleKind
 from engine.journal import MoveKind
@@ -780,6 +781,7 @@ class CareerIn(BaseModel):
     manager_name: str = Field(min_length=1, max_length=100)
     club_id: int | None = None
     nation: str | None = None
+    difficulty: Difficulty = Difficulty.NORMAL  # carrière de club (engine/difficulty.py)
 
 
 class CareerOut(BaseModel):
@@ -793,6 +795,7 @@ class CareerOut(BaseModel):
     league: str
     league_name: str
     nation: str | None = None
+    difficulty: Difficulty = Difficulty.NORMAL
 
 
 # --- Championnats ----------------------------------------------------------------------

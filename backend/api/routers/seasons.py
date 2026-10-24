@@ -67,7 +67,8 @@ from data.leagues import DEFAULT_LEAGUE, PROMOTION, league_config, sort_codes
 from data.nations import NATIONS_BY_CODE, WINDOWS_BY_CODE
 from engine.awards import season_awards
 from engine.board import should_sack
-from engine.economy import SQUAD_MIN
+from engine.difficulty import rules
+from engine.economy import SQUAD_MIN, TransactionCategory
 from engine.journal import MoveKind
 from engine.matchday import Day, play_day
 from engine.offseason import club_offseason
@@ -337,6 +338,14 @@ class DayResult:
     cases: list[InjuryCase] = field(default_factory=list)
 
 
+# Les recettes d'un jour de match (billetterie, buvettes et boutique, sponsors).
+REVENUES = {
+    TransactionCategory.TICKETING,
+    TransactionCategory.HOSPITALITY,
+    TransactionCategory.SPONSORS,
+}
+
+
 def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayResult:
     """Joue tous les matchs du jour `day`, tous championnats confondus, et passe les
     écritures financières : charge le monde, laisse le moteur jouer la journée
@@ -471,13 +480,18 @@ def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayRes
         if (my_club_id is not None and in_my_club) or injury.player_id in watched:
             my_injuries.append((injury_row, injury))
 
+    # Les recettes du club dirigé suivent la difficulté de la carrière (engine/difficulty.py).
+    revenue = rules(career.difficulty).revenue if career is not None else 1.0
     for movement in report.movements:
+        amount = movement.amount
+        if movement.club_id == my_club_id and amount > 0 and movement.category in REVENUES:
+            amount = round(amount * revenue)
         record(
             session,
             rows_by_id[movement.club_id],
             movement.category,
             movement.label,
-            movement.amount,
+            amount,
             day,
             movement.matchday,
         )
@@ -789,7 +803,8 @@ def _board_verdict(session: Session, played: MatchdayOut) -> DismissalRow | None
         for m in history.this_season
         if m.stage == Stage.REGULAR and club_id in (m.home_club_id, m.away_club_id)
     )
-    if not should_sack(confidence, regular_played, 2 * (len(history.league_clubs(club_id)) - 1)):
+    rounds = 2 * (len(history.league_clubs(club_id)) - 1)
+    if not should_sack(confidence, regular_played, rounds, rules(career.difficulty).sack_threshold):
         return None
 
     dismissal = DismissalRow(

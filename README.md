@@ -131,7 +131,7 @@ parties ailleurs (ex. pour une instance de test).
 | `GET /career/history`, `POST /career/offers/{club_id}` | Parcours du manager (clubs, saisons, réputation) et offres de fin de saison ; accepter une offre |
 | `GET /career/dismissal` | Dernier limogeage, tant qu'aucune nouvelle carrière n'a commencé |
 | `GET /players/{id}` | Fiche d'un joueur : comparaison à son poste, note à chaque poste, saison (statistiques comprises), blessures |
-| `POST /career`, `GET /career` | Choisir son club, ou sa sélection (`nation`) ; tire aussi le calendrier de la 1re saison |
+| `POST /career`, `GET /career` | Choisir son club (et la difficulté : `easy`, `normal`, `hard`), ou sa sélection (`nation`) ; tire aussi le calendrier de la 1re saison |
 | `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | Compte : s'inscrire, se connecter (cookie de session), se déconnecter, qui suis-je |
 | `GET /saves`, `POST /saves/{n}/load`, `POST /saves/{n}/new`, `DELETE /saves/{n}` | Parties sauvegardées du compte : lister, charger, créer un monde neuf, supprimer |
 | `GET /photos/{nom}` | Photo d'un vrai joueur, depuis notre copie |
