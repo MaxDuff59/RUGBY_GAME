@@ -6718,3 +6718,161 @@ td > .tag:first-child,
     max-height: 70dvh;
   }
 }
+
+/* Contrat du manager (components/ManagerContract.jsx) : échéance, avis de la direction,
+   prolongation et départ. */
+.sidebar__contract {
+  display: block;
+  font-size: 13px;
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+}
+
+.manager-contract {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.manager-contract p {
+  margin: 0;
+}
+
+.manager-contract__until {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+  text-transform: uppercase;
+}
+
+.manager-contract__notes {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0 20px;
+}
+
+.manager-contract__notes > div {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.manager-contract__notes dt {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.manager-contract__notes dd {
+  margin: 4px 0 0;
+}
+
+.manager-contract__notes .num {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+}
+
+.manager-contract__no {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.manager-contract__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.manager-contract__years {
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.manager-contract__leave {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+
+/* --- Jeu complet (compte gratuit : une partie, deux saisons) ----------------------- */
+
+.full-game {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 0 0 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.full-game__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.full-game__body .eyebrow,
+.full-game__text {
+  margin: 0;
+}
+
+.full-game__text {
+  font-weight: 600;
+}
+
+.full-game__hint {
+  margin: 0;
+  font-size: 14px;
+}
+
+.full-game__action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.full-game__error {
+  margin: 0;
+}
+
+.full-game--inline {
+  margin: 8px 0;
+}
+
+.full-game--done {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  border-left-color: var(--win);
+}
+
+.full-game--done .eyebrow {
+  margin: 0;
+}
+
+/* L'écran des parties tient dans la fenêtre : les parties défilent sous la formule. */
+.start > .saves {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.start > .full-game {
+  margin: 0;
+}

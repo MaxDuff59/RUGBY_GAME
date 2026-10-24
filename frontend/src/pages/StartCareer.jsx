@@ -4,6 +4,7 @@ import { Link, Navigate, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useClubTheme } from "../clubs.js";
 import ClubCrest from "../components/ClubCrest.jsx";
+import { ActionError } from "../components/FullGame.jsx";
 import {
   DIFFICULTIES,
   formatLongDate,
@@ -13,8 +14,11 @@ import { useApi } from "../hooks/useApi.js";
 import { chosenSlot } from "../save.js";
 
 // Première page : on choisit son nom de manager, puis un club (un championnat, puis le
-// club que l'on dirige) ou une sélection nationale. Après un limogeage, on y revient
-// pour reprendre un autre club.
+// club que l'on dirige) ou une sélection nationale. Après un départ (limogé, parti de
+// soi-même, contrat échu), on y revient pour reprendre un club à sa portée.
+// Comment s'est fini le dernier passage du manager (`dismissal.reason`).
+const DEPARTURES = { dismissed: "Limogé", resigned: "Parti", expired: "Fin de contrat" };
+
 export default function StartCareer() {
   const navigate = useNavigate();
   const { data: clubs, error, loading } = useApi(useCallback(api.listClubs, []));
@@ -69,6 +73,9 @@ export default function StartCareer() {
 
   const chosen = kind === "nation" ? nationCode !== null : clubId !== null;
   const canSubmit = managerName.trim() !== "" && chosen && !submitting;
+  // Le même manager ne reprend qu'un club à sa portée ; un nouveau nom repart de zéro.
+  const outOfReach = (id) =>
+    dismissal?.reachable != null && managerName.trim() === dismissal.manager_name && !dismissal.reachable.includes(id);
   const hasNations = (nations.data?.length ?? 0) > 0;
   // Un seul championnat (monde inventé) : on passe directement aux clubs.
   const league =
@@ -83,12 +90,16 @@ export default function StartCareer() {
       {dismissal ? (
         <div>
           <p className="eyebrow">
-            <Link to="/parties">Parties</Link> · Limogé le {formatLongDate(dismissal.date)}
+            <Link to="/parties">Parties</Link> · {DEPARTURES[dismissal.reason]} le {formatLongDate(dismissal.date)}
           </p>
           <h1 className="title">Rebondis ailleurs</h1>
           <p className="muted" style={{ margin: "8px 0 0" }}>
-            La direction de {dismissal.club_name} a perdu confiance ({formatNote(dismissal.confidence)} / 20). Le
-            monde continue : choisis un autre club, dans le championnat de ton choix.
+            {dismissal.reason === "dismissed"
+              ? `La direction de ${dismissal.club_name} a perdu confiance (${formatNote(dismissal.confidence)} / 20).`
+              : dismissal.reason === "resigned"
+                ? `Tu as quitté ${dismissal.club_name} avant la fin de ton contrat.`
+                : `Ton contrat avec ${dismissal.club_name} s'est achevé.`}{" "}
+            Le monde continue : choisis un club à ta portée, pas plus prestigieux que le dernier, à ta réputation près.
           </p>
         </div>
       ) : (
@@ -184,14 +195,17 @@ export default function StartCareer() {
                     type="button"
                     className="club-option"
                     aria-pressed={club.id === clubId}
-                    disabled={club.id === dismissal?.club_id}
+                    disabled={club.id === dismissal?.club_id || outOfReach(club.id)}
                     onClick={() => setClubId(club.id)}
                   >
                     <span className="club-option__name with-crest">
                       <ClubCrest name={club.name} size={32} />
                       {club.name}
                     </span>
-                    <span className="num">Niveau {formatNote(club.level)} / 20</span>
+                    <span className="num">
+                      Niveau {formatNote(club.level)} / 20
+                      {outOfReach(club.id) && club.id !== dismissal.club_id && " · hors de portée"}
+                    </span>
                   </button>
                 </li>
               ))}
@@ -214,7 +228,7 @@ export default function StartCareer() {
         </div>
       )}
 
-      {submitError && <p className="status--error">{submitError.message}</p>}
+      <ActionError error={submitError} />
 
       <div>
         <button type="submit" className="button button--primary" disabled={!canSubmit}>

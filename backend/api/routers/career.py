@@ -2,16 +2,22 @@
 
 Une seule carrière à la fois pour l'instant : en créer une remplace la précédente.
 La première saison (et son calendrier) est tirée au démarrage de la carrière.
-Un manager limogé (voir seasons.py) reprend un autre club dans le même monde.
+Un manager limogé (voir seasons.py), ou parti de lui-même, reprend un autre club
+dans le même monde : un club à sa portée (engine/career.py).
 Un sélectionneur (`SelectorRow`, voir selection.py) ne dirige aucun club : tous
 sont alors menés par leur staff.
+
+Le manager d'un club est sous contrat (engine/manager_contract.py) : deux saisons
+pour commencer ; il demande à le prolonger, part de lui-même, ou accepte l'offre
+d'un autre club ou d'une sélection.
 """
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
 
-from api import careers, internationals
-from api.affairs import ignore_pending
+from api import careers, internationals, plans
+from api.auth import UserDep
 from api.deps import SessionDep, load_club
 from api.ledger import current_season, game_date
 from api.routers.seasons import FIRST_SEASON_YEAR, create_season
@@ -21,13 +27,17 @@ from api.schemas import (
     CareerOut,
     ClubRef,
     DismissalOut,
+    ExtensionIn,
+    ExtensionOut,
     JobOfferOut,
+    ManagerContractOut,
     ManagerSeasonOut,
     SpellOut,
 )
 from data.leagues import league_config
 from data.nations import NATIONS_BY_CODE
 from engine import career as career_rules
+from engine import manager_contract as terms
 from models import Club
 from models.orm import (
     CareerRow,
@@ -35,7 +45,6 @@ from models.orm import (
     DismissalRow,
     LiveInternationalRow,
     LiveMatchRow,
-    NegotiationRow,
     SelectorRow,
     SpellRow,
 )
@@ -56,6 +65,7 @@ def _career_out(row: CareerRow, club: Club) -> CareerOut:
         league=club.league,
         league_name=league_config(club.league).name,
         difficulty=row.difficulty or "normal",
+        contract_until=row.contract_until,
     )
 
 
@@ -74,10 +84,16 @@ def selector_out(row: SelectorRow) -> CareerOut:
 
 
 @router.post("", response_model=CareerOut, status_code=201)
-def start_career(payload: CareerIn, session: SessionDep) -> CareerOut:
-    """Démarre une carrière à la tête d'un club (`club_id`) ou d'une sélection (`nation`)."""
+def start_career(payload: CareerIn, session: SessionDep, user: UserDep) -> CareerOut:
+    """Démarre une carrière à la tête d'un club (`club_id`) ou d'une sélection (`nation`).
+
+    Dans un monde neuf, elle ouvre la première saison, qui compte dans celles du
+    compte (api/plans.py) ; reprendre un club dans le même monde n'en ouvre pas."""
     if (payload.club_id is None) == (payload.nation is None):
         raise HTTPException(status_code=400, detail="Choisis un club ou une sélection")
+    first_season = current_season(session) is None
+    if first_season:
+        plans.require_season(user)
     club = nation = None
     if payload.club_id is not None:
         club = load_club(session, payload.club_id)
@@ -88,6 +104,13 @@ def start_career(payload: CareerIn, session: SessionDep) -> CareerOut:
             raise HTTPException(status_code=404, detail=f"Sélection « {payload.nation} » inconnue")
         if not internationals.has_nations(session):
             raise HTTPException(status_code=400, detail="Ce monde n'a pas de sélections nationales")
+    if club is not None:
+        # Un manager parti sans autre club ne reprend qu'un club à sa portée.
+        reachable = careers.reachable(session, payload.manager_name)
+        if reachable is not None and club.id not in reachable:
+            raise HTTPException(
+                status_code=400, detail=f"{club.name} est hors de ta portée pour l'instant"
+            )
     for table in (CareerRow, SelectorRow, DismissalRow, LiveMatchRow, LiveInternationalRow):
         session.execute(delete(table))
     if club is not None:
@@ -101,11 +124,14 @@ def start_career(payload: CareerIn, session: SessionDep) -> CareerOut:
     session.add(row)
     session.commit()
 
-    if current_season(session) is None:
+    if first_season:
         create_season(session, FIRST_SEASON_YEAR)
+        plans.count_season(user)
     if club is not None:
-        # Son passage dans le club commence aujourd'hui (engine/career.py).
+        # Son passage dans le club commence aujourd'hui (engine/career.py), pour deux
+        # saisons (engine/manager_contract.py).
         careers.open_spell(session, payload.manager_name, club.id, game_date(session))
+        careers.sign(session, row, terms.FIRST_CONTRACT)
         session.commit()
 
     return _career_out(row, club) if club is not None else selector_out(row)
@@ -123,20 +149,60 @@ def get_career(session: SessionDep) -> CareerOut:
     return selector_out(human)
 
 
-@router.get("/history", response_model=CareerHistoryOut)
-def get_history(session: SessionDep) -> CareerHistoryOut:
-    """Le parcours du manager : ses clubs, ses saisons, sa réputation ; et, une fois la
-    saison de son championnat finie, les clubs qui veulent de lui."""
+def _club_career_or_404(session: Session) -> CareerRow:
     row = session.scalars(select(CareerRow)).first()
     if row is None:
         raise HTTPException(status_code=404, detail="Aucune carrière de club en cours")
+    return row
+
+
+@router.get("/history", response_model=CareerHistoryOut)
+def get_history(session: SessionDep) -> CareerHistoryOut:
+    """Le parcours du manager : ses clubs, ses saisons, sa réputation, son contrat ; et,
+    une fois la saison de son championnat finie, les clubs (et la sélection) qui
+    veulent de lui."""
+    row = _club_career_or_404(session)
     clubs = {club.id: club for club in session.scalars(select(ClubRow))}
     spells = careers.spells(session, row.manager_name)
     seasons = careers.manager_seasons(session, spells)
     value = careers.manager_reputation(seasons, spells)
+    contract = careers.contract(session, row)
+    length = terms.offer_length(value)
 
     def ref(club_id: int) -> ClubRef:
         return ClubRef(id=club_id, name=clubs[club_id].name)
+
+    offers = []
+    if careers.season_over(session):
+        market = careers.market(session)
+        offers = [
+            JobOfferOut(
+                club=ref(club_id),
+                league=clubs[club_id].league,
+                league_name=league_config(clubs[club_id].league).short_name,
+                level=round(level, 1),
+                balance=clubs[club_id].balance,
+                seasons=length,
+                indemnity=contract.indemnity,
+            )
+            for club_id, level in careers.offers(session, value, market).items()
+        ]
+        nation = careers.nation_offer(session, value, market)
+        if nation is not None:
+            code, level = nation
+            offers.append(
+                JobOfferOut(
+                    kind="nation",
+                    club=ClubRef(id=NATIONS_BY_CODE[code].id, name=NATIONS_BY_CODE[code].name),
+                    nation=code,
+                    league=SELECTOR_LEAGUE,
+                    league_name=SELECTOR_LEAGUE_NAME,
+                    level=round(level, 1),
+                    balance=None,
+                    seasons=None,
+                    indemnity=contract.indemnity,
+                )
+            )
 
     return CareerHistoryOut(
         manager_name=row.manager_name,
@@ -156,16 +222,8 @@ def get_history(session: SessionDep) -> CareerHistoryOut:
         spells=[
             SpellOut(club=ref(s.club_id), start=s.start, end=s.end, reason=s.reason) for s in spells
         ],
-        offers=[
-            JobOfferOut(
-                club=ref(club_id),
-                league=clubs[club_id].league,
-                league_name=league_config(clubs[club_id].league).short_name,
-                level=round(level, 1),
-                balance=clubs[club_id].balance,
-            )
-            for club_id, level in careers.offers(session, value).items()
-        ],
+        offers=offers,
+        contract_until=contract.until,
     )
 
 
@@ -173,32 +231,118 @@ def get_history(session: SessionDep) -> CareerHistoryOut:
 def accept_offer(club_id: int, session: SessionDep) -> CareerOut:
     """Le manager accepte l'offre d'un club : il le prend dès maintenant, la saison
     prochaine se jouera avec lui. Ses négociations en cours tombent, et les affaires
-    de son ancien club sont réglées par le staff."""
-    row = session.scalars(select(CareerRow)).first()
-    if row is None:
-        raise HTTPException(status_code=404, detail="Aucune carrière de club en cours")
+    de son ancien club sont réglées par le staff. Encore sous contrat, il coûte à son
+    nouveau club une indemnité, versée à l'ancien."""
+    row = _club_career_or_404(session)
     if club_id not in careers.offers(session):
         raise HTTPException(status_code=400, detail="Ce club ne t'a pas fait d'offre")
-    ignore_pending(session)
-    for negotiation in session.scalars(
-        select(NegotiationRow).where(
-            NegotiationRow.club_id == row.club_id, NegotiationRow.stage.in_(("club", "player"))
-        )
-    ):
-        negotiation.stage = "failed"
-        negotiation.closed_by = "me"
-        negotiation.message = "Négociation interrompue : le manager est parti dans un autre club."
-    day = game_date(session)
-    careers.close_spell(session, row.manager_name, day, "left")
-    session.add(SpellRow(manager_name=row.manager_name, club_id=club_id, start=day))
+    left = careers.contract(session, row).left
+    seasons = terms.offer_length(careers.reputation_of(session, row.manager_name))
+    old_club = session.get(ClubRow, row.club_id)
+    careers.leave_club(
+        session, row, "left", "Négociation interrompue : le manager est parti dans un autre club."
+    )
+    careers.pay_indemnity(session, old_club, left, session.get(ClubRow, club_id), row.manager_name)
+    session.add(SpellRow(manager_name=row.manager_name, club_id=club_id, start=game_date(session)))
     row.club_id = club_id
-    session.execute(delete(LiveMatchRow))
+    careers.sign(session, row, seasons)
     session.commit()
     return _career_out(row, load_club(session, club_id))
 
 
+@router.post("/offers/nation/{code}", response_model=CareerOut)
+def accept_nation_offer(code: str, session: SessionDep) -> CareerOut:
+    """Le manager accepte l'offre d'une sélection : il quitte son club (la fédération
+    verse l'indemnité s'il était encore sous contrat) et devient sélectionneur."""
+    row = _club_career_or_404(session)
+    offer = careers.nation_offer(session)
+    if offer is None or offer[0] != code.upper():
+        raise HTTPException(status_code=400, detail="Cette sélection ne t'a pas fait d'offre")
+    left = careers.contract(session, row).left
+    old_club = session.get(ClubRow, row.club_id)
+    careers.leave_club(
+        session, row, "nation", "Négociation interrompue : le manager est parti en sélection."
+    )
+    careers.pay_indemnity(session, old_club, left, None, row.manager_name)
+    selector = SelectorRow(manager_name=row.manager_name, nation=offer[0])
+    session.delete(row)
+    session.execute(delete(DismissalRow))
+    session.add(selector)
+    session.commit()
+    return selector_out(selector)
+
+
+def _contract_out(session: Session, row: CareerRow) -> ManagerContractOut:
+    contract = careers.contract(session, row)
+    return ManagerContractOut(
+        club=ClubRef(id=row.club_id, name=session.get(ClubRow, row.club_id).name),
+        until=contract.until,
+        seasons_left=contract.left,
+        expiring=contract.expiring,
+        board=round(contract.board, 1),
+        supporters=round(contract.supporters, 1),
+        renewal=contract.granted if contract.expiring else None,
+        max_ask=contract.max_ask,
+        blocked=contract.blocked,
+        matches_needed=contract.matches_needed,
+        retry_on=contract.retry_on,
+        indemnity=contract.indemnity,
+        resign_cost=0.0 if contract.expiring else -career_rules.PER_RESIGNATION,
+    )
+
+
+@router.get("/contract", response_model=ManagerContractOut)
+def get_contract(session: SessionDep) -> ManagerContractOut:
+    """Le contrat du manager : son échéance, ce qu'en pense la direction, et en fin de
+    contrat ce qu'elle propose."""
+    return _contract_out(session, _club_career_or_404(session))
+
+
+@router.post("/contract/extend", response_model=ExtensionOut)
+def extend_contract(payload: ExtensionIn, session: SessionDep) -> ExtensionOut:
+    """Demande à la direction de prolonger le contrat de `seasons` saisons : elle
+    accepte, propose moins, ou refuse (engine/manager_contract.py)."""
+    row = _club_career_or_404(session)
+    contract = careers.contract(session, row)
+    if contract.blocked is not None:
+        raise HTTPException(status_code=400, detail=BLOCKED[contract.blocked])
+    if payload.seasons > contract.max_ask:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Pas plus de {contract.max_ask} saison(s) de plus : contrat trop long",
+        )
+    reply = careers.extend(session, row, payload.seasons)
+    return ExtensionOut(
+        outcome=reply.outcome, seasons=reply.seasons, contract=_contract_out(session, row)
+    )
+
+
+# Pourquoi la direction n'entend pas de demande de prolongation (`Contract.blocked`).
+BLOCKED = {
+    "too_long": "Ton contrat court déjà sur le plus de saisons possible",
+    "too_soon": "La direction veut d'abord te voir à l'œuvre",
+    "refused": "La direction t'a déjà dit non : reviens à la charge plus tard",
+}
+
+
+@router.post("/leave", response_model=DismissalOut)
+def leave_club(session: SessionDep) -> DismissalOut:
+    """Le manager quitte son club sans autre club où aller : de lui-même (sa réputation
+    en pâtit) ou au bout de son contrat. Il choisira ensuite un club à sa portée."""
+    row = _club_career_or_404(session)
+    departure = careers.go_free(session, row)
+    return _departure_out(session, departure)
+
+
+def _departure_out(session: Session, row: DismissalRow) -> DismissalOut:
+    out = DismissalOut.model_validate(row)
+    out.reachable = careers.reachable(session, row.manager_name)
+    return out
+
+
 @router.get("/dismissal", response_model=DismissalOut | None)
 def get_last_dismissal(session: SessionDep) -> DismissalOut | None:
-    """Le dernier limogeage, tant qu'aucune nouvelle carrière n'a commencé (sinon null)."""
+    """Le dernier départ (limogé, parti, contrat échu), tant qu'aucune nouvelle carrière
+    n'a commencé (sinon null), et les clubs que le manager peut reprendre."""
     row = session.scalars(select(DismissalRow).order_by(DismissalRow.id.desc())).first()
-    return DismissalOut.model_validate(row) if row else None
+    return _departure_out(session, row) if row else None

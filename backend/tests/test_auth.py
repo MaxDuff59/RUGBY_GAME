@@ -20,7 +20,16 @@ def test_register_then_login(client):
         "/auth/register", json={"email": " Maxence@Example.com ", "password": "ballon-ovale"}
     )
     assert created.status_code == 201
-    assert created.json() == {"id": 1, "email": "maxence@example.com", "active_slot": None}
+    assert created.json() == {
+        "id": 1,
+        "email": "maxence@example.com",
+        "active_slot": None,
+        "premium": False,
+        "seasons_played": 0,
+        "seasons_left": 2,
+        "free_seasons": 2,
+        "free_saves": 1,
+    }
     assert auth.COOKIE in client.cookies
     assert client.get("/auth/me").json()["email"] == "maxence@example.com"
 

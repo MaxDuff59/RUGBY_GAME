@@ -163,11 +163,12 @@ def test_the_cup_is_played_with_the_real_leagues():
     from fastapi.testclient import TestClient
     from sqlalchemy.orm import sessionmaker
 
+    from api.auth import current_user
     from api.deps import get_session
     from api.main import app
     from database import seed_if_empty
     from models.orm import Base, ClubRow
-    from tests.conftest import test_engine
+    from tests.conftest import full_account, test_engine
 
     engine = test_engine()
     Base.metadata.create_all(engine)
@@ -181,6 +182,7 @@ def test_the_cup_is_played_with_the_real_leagues():
             yield session
 
     app.dependency_overrides[get_session] = override
+    app.dependency_overrides[current_user] = full_account
     try:
         client = TestClient(app)
         client.post("/career", json={"manager_name": "Max", "club_id": toulouse})

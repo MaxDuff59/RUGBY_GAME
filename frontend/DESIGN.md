@@ -263,6 +263,14 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   nouveau club) ou une phrase s'il n'y en a pas. Dans le palmarès, la carte « Notre
   histoire » a deux pastilles : « Le club » et « Ma carrière » (réputation, puis les
   saisons du manager, club par club, rang final et rang attendu).
+- Contrat du manager : une ligne « Contrat jusqu'en 2028 » au pied de la navigation
+  (volet « Plus » sur téléphone) ouvre la fenêtre « Mon contrat » : échéance en
+  capitales, notes de la direction et des supporters avec leur palier, l'indemnité de
+  départ, la phrase de la direction (en accent quand elle dit non), la demande de
+  prolongation (liste des durées et « Demander »), puis « Quitter le club » sous un trait,
+  qui passe par une confirmation prudente. Le même bloc ouvre l'étape « Carrière » du
+  bilan ; contrat échu, « Lancer la saison » reste grisé avec la phrase en accent. Après
+  un départ, la page de choix du club grise les clubs « hors de portée ».
 - Entraînement (page `/entrainement`, entrée du menu sous Effectif ; volet « Plus » sur
   téléphone) : à gauche, le rythme de la semaine en trois cartes (Légère, Normale,
   Intense : progression, fraîcheur, blessures, l'effet en vert quand il aide, en rouge

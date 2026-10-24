@@ -31,7 +31,6 @@ from api.schemas import (
 )
 from data.nations import NATIONS_BY_CODE, NATIONS_BY_ID, WINDOWS, WINDOWS_BY_CODE, Nation, Window
 from engine import internationals as rules
-from engine.match_engine import team_strength
 from engine.season import league_table
 from models import Match, Player
 from models.orm import CareerRow, InternationalRow, PlayerRow, SeasonRow
@@ -190,21 +189,15 @@ def get_internationals(session: SessionDep) -> InternationalsOut:
 @router.get("/nations", response_model=list[NationSummary])
 def list_nations(session: SessionDep) -> list[NationSummary]:
     """Les sélections que l'on peut diriger, avec leur vivier et le niveau de leur XV."""
-    if not internationals.has_nations(session):
-        return []
-    day = game_date(session)
-    pool = internationals.eligible_players(session)
     summaries = []
-    for nation in rules.selectable():
-        players = pool[nation.code]
-        team = team_strength(rules.national_team(nation, rules.pick_squad(players, day)), day)
-        level = (team.set_piece + team.pack + team.attack + team.defense) / 4
+    for code, (player_count, level) in internationals.nation_levels(session).items():
+        nation = NATIONS_BY_CODE[code]
         summaries.append(
             NationSummary(
                 id=nation.id,
                 code=nation.code,
                 name=nation.name,
-                player_count=len(players),
+                player_count=player_count,
                 level=round(level, 1),
                 # Ses rendez-vous de chaque saison (la Coupe du monde vient en plus).
                 competitions=[

@@ -5,7 +5,7 @@ import { api } from "../api.js";
 import ClubCrest from "../components/ClubCrest.jsx";
 import MatchList from "../components/MatchList.jsx";
 import Pitch from "../components/Pitch.jsx";
-import { AWARDS, STAGES, formatNote, formatRank } from "../format.js";
+import { AWARDS, STAGES, formatContractEnd, formatNote, formatRank } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { usePitchWidth } from "../hooks/usePitchWidth.js";
 import { SLOTS } from "../lineup.js";
@@ -268,7 +268,10 @@ function ManagerCareer({ career }) {
         <span className="num">{Math.round(data.reputation)}</span>
         <span>
           <strong>{data.label}</strong>
-          <span className="muted"> · réputation sur 100</span>
+          <span className="muted">
+            {" "}
+            · réputation sur 100 · sous contrat jusqu'en {formatContractEnd(data.contract_until)}
+          </span>
         </span>
       </p>
       <table className="table">

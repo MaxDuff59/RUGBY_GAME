@@ -17,7 +17,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from api import auth
+from api import auth, billing
 from api.routers import (
     academy,
     affairs,
@@ -67,6 +67,7 @@ def health() -> dict[str, str]:
 
 
 app.include_router(auth.router)
+app.include_router(billing.router)
 app.include_router(saves.router)
 app.include_router(clubs.router)
 app.include_router(leagues.router)

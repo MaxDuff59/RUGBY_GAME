@@ -396,7 +396,12 @@ ADDED_COLUMNS = {
         "progress": "FLOAT NOT NULL DEFAULT 0",
         "season_gain": "INTEGER NOT NULL DEFAULT 0",
     },
-    "careers": {"difficulty": "VARCHAR(6) NOT NULL DEFAULT 'normal'"},
+    "careers": {
+        "difficulty": "VARCHAR(6) NOT NULL DEFAULT 'normal'",
+        "contract_until": "INTEGER",
+        "extension_refused_on": "DATE",
+    },
+    "dismissals": {"reason": "VARCHAR(10) NOT NULL DEFAULT 'dismissed'"},
     "cup_pools": {"competition": "VARCHAR(16) NOT NULL DEFAULT 'champions_cup'"},
     "clubs": {
         "captain_id": "INTEGER",

@@ -32,6 +32,7 @@ from data.nations import (
 from engine import internationals as rules
 from engine.form import Form
 from engine.internationals import SquadKey
+from engine.match_engine import team_strength
 from engine.offseason import RETIREMENT_AGE, develop_player
 from engine.season import rng_for
 from models import ATTRIBUTE_NAMES, Club, Injury, Match, Player, Squad, Stage
@@ -57,6 +58,24 @@ def has_nations(session: Session) -> bool:
 def selector(session: Session) -> SelectorRow | None:
     """La carrière de sélectionneur en cours (None : carrière de club, ou aucune)."""
     return session.scalars(select(SelectorRow)).first()
+
+
+def nation_levels(session: Session) -> dict[str, tuple[int, float]]:
+    """Les sélections que l'on peut diriger : leur vivier (nombre de joueurs) et le
+    niveau de leur XV (sur 20) aujourd'hui, par code."""
+    if not has_nations(session):
+        return {}
+    day = game_date(session)
+    pool = eligible_players(session)
+    levels = {}
+    for nation in rules.selectable():
+        players = pool[nation.code]
+        team = team_strength(rules.national_team(nation, rules.pick_squad(players, day)), day)
+        levels[nation.code] = (
+            len(players),
+            (team.set_piece + team.pack + team.attack + team.defense) / 4,
+        )
+    return levels
 
 
 def test_rows(session: Session, season: SeasonRow) -> list[InternationalRow]:

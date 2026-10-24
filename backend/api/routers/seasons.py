@@ -25,7 +25,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from api import cup, internationals
+from api import cup, internationals, plans
 from api.affairs import (
     affair_out,
     draw_affair,
@@ -33,6 +33,7 @@ from api.affairs import (
     ignore_pending,
     settle_promises,
 )
+from api.auth import UserDep
 from api.deps import SessionDep, load_clubs
 from api.free_agents import age_free_agents, release, renew_pool
 from api.jokers import close_jokers, end_piges
@@ -990,7 +991,7 @@ def _board_verdict(session: Session, played: MatchdayOut) -> DismissalRow | None
 
 
 @router.post("/next", response_model=SeasonOut, status_code=201)
-def start_next_season(session: SessionDep) -> SeasonOut:
+def start_next_season(session: SessionDep, user: UserDep) -> SeasonOut:
     """Intersaison : fin des prêts, pré-contrats exécutés (les nôtres et ceux des
     concurrents), fins de contrat, puis les joueurs vieillissent, les plus âgés
     partent, les jeunes arrivent, les clubs IA complètent leur effectif parmi
@@ -1000,7 +1001,11 @@ def start_next_season(session: SessionDep) -> SeasonOut:
     d'abord ce qu'il leur reste. Puis le champion de Pro D2 monte en Top 14 et le
     dernier du Top 14 descend.
 
-    Refusée si l'effectif pro du club dirigé passerait sous le minimum."""
+    Refusée si l'effectif pro du club dirigé passerait sous le minimum, ou si le
+    contrat du manager s'achève sans qu'il ait prolongé, signé ailleurs ou quitté
+    le club (api/routers/career.py), ou si le compte gratuit a joué toutes ses
+    saisons (api/plans.py) : la nouvelle compte dans les siennes."""
+    plans.require_season(user)
     season = _current_or_404(session)
     if internationals.selector(session) is not None:
         # Un sélectionneur suit toute la saison du monde, jour par jour.
@@ -1010,6 +1015,14 @@ def start_next_season(session: SessionDep) -> SeasonOut:
         raise HTTPException(status_code=400, detail="La saison n'est pas terminée")
     career = session.scalars(select(CareerRow)).first()
     my_club_id = career.club_id if career is not None else None
+    if career is not None and (career.contract_until or season.year + 1) <= season.year:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Ton contrat s'achève avec la saison : prolonge-le, signe ailleurs "
+                "ou quitte le club."
+            ),
+        )
     if career is not None:
         contracts = contracts_overview(session, session.get(ClubRow, my_club_id))
         if contracts.squad_next < SQUAD_MIN:
@@ -1077,7 +1090,9 @@ def start_next_season(session: SessionDep) -> SeasonOut:
     internationals.offseason(session, rng)
     session.commit()
 
-    return _season_out(session, create_season(session, year, rng.randrange(SEED_RANGE)))
+    created = create_season(session, year, rng.randrange(SEED_RANGE))
+    plans.count_season(user)
+    return _season_out(session, created)
 
 
 def record_awards(session: Session, season: SeasonRow, finals: set[str] | None = None) -> None:

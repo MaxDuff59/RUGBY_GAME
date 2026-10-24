@@ -6,6 +6,11 @@ reste un fichier par emplacement et par joueur (voir database.py).
 
 Une session est un jeton aléatoire remis au navigateur (cookie) ; on n'en garde
 ici que l'empreinte, comme pour les mots de passe (scrypt, bibliothèque standard).
+
+Un compte gratuit garde une seule partie et joue deux saisons en tout. Les saisons
+se comptent sur le compte, pas dans la partie, dès qu'elles commencent : supprimer
+une carrière ne rend pas les saisons jouées. Le compte complet (payé une fois, voir
+api/billing.py) n'a plus de limite.
 """
 
 import datetime
@@ -16,12 +21,27 @@ import re
 import secrets
 from dataclasses import dataclass
 
-from sqlalchemy import DateTime, Engine, ForeignKey, Integer, String, create_engine, select
+from sqlalchemy import (
+    DateTime,
+    Engine,
+    ForeignKey,
+    Integer,
+    String,
+    create_engine,
+    inspect,
+    select,
+    text,
+    update,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 SESSION_DAYS = 30
 PASSWORD_MIN_LENGTH = 8
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+# Compte gratuit : une partie à la fois, deux saisons en tout.
+FREE_SAVES = 1
+FREE_SEASONS = 2
 
 # scrypt : paramètres recommandés (16 Mio de mémoire par calcul).
 _SCRYPT_N, _SCRYPT_R, _SCRYPT_P = 2**14, 8, 1
@@ -40,6 +60,11 @@ class UserRow(AccountsBase):
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime)
     # Emplacement de la partie chargée (None : passer par l'écran des parties).
     active_slot: Mapped[int | None] = mapped_column(Integer)
+    # Saisons commencées par ce compte, toutes parties confondues (supprimées comprises).
+    seasons_played: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Compte complet : date du paiement, et sa référence chez Stripe.
+    premium_at: Mapped[datetime.datetime | None] = mapped_column(DateTime)
+    payment_ref: Mapped[str | None] = mapped_column(String(255))
 
 
 class SessionRow(AccountsBase):
@@ -56,6 +81,13 @@ class User:
     id: int
     email: str
     active_slot: int | None
+    premium: bool = False
+    seasons_played: int = 0
+
+    @property
+    def seasons_left(self) -> int | None:
+        """Saisons qu'il reste à commencer (None : sans limite)."""
+        return None if self.premium else max(0, FREE_SEASONS - self.seasons_played)
 
 
 class AccountError(Exception):
@@ -83,7 +115,24 @@ def engine() -> Engine:
             url = url or f"sqlite:///{database.SAVES_DIR / 'users.db'}"
             _engine = create_engine(url, connect_args={"check_same_thread": False})
         AccountsBase.metadata.create_all(_engine)
+        _add_columns(_engine)
     return _engine
+
+
+# Colonnes ajoutées après coup : les comptes déjà créés les reçoivent au démarrage.
+_NEW_COLUMNS = {
+    "seasons_played": "INTEGER NOT NULL DEFAULT 0",
+    "premium_at": "TIMESTAMP",
+    "payment_ref": "VARCHAR(255)",
+}
+
+
+def _add_columns(engine: Engine) -> None:
+    existing = {column["name"] for column in inspect(engine).get_columns("users")}
+    with engine.begin() as connection:
+        for name, definition in _NEW_COLUMNS.items():
+            if name not in existing:
+                connection.execute(text(f"ALTER TABLE users ADD COLUMN {name} {definition}"))
 
 
 def reset() -> None:
@@ -138,7 +187,13 @@ def normalize_email(email: str) -> str:
 
 
 def _user(row: UserRow) -> User:
-    return User(id=row.id, email=row.email, active_slot=row.active_slot)
+    return User(
+        id=row.id,
+        email=row.email,
+        active_slot=row.active_slot,
+        premium=row.premium_at is not None,
+        seasons_played=row.seasons_played or 0,
+    )
 
 
 def register(email: str, password: str) -> User:
@@ -175,6 +230,58 @@ def set_active_slot(user_id: int, slot: int | None) -> None:
         if row is not None:
             row.active_slot = slot
             session.commit()
+
+
+def get(user_id: int) -> User | None:
+    with _session() as session:
+        row = session.get(UserRow, user_id)
+    return _user(row) if row is not None else None
+
+
+def find(email: str) -> User | None:
+    email = normalize_email(email)
+    with _session() as session:
+        row = session.scalars(select(UserRow).where(UserRow.email == email)).first()
+    return _user(row) if row is not None else None
+
+
+# --- Formule : gratuit ou complet -------------------------------------------------------
+
+
+def count_season(user_id: int) -> None:
+    """Une saison de plus commencée par le compte (en une seule requête : deux
+    saisons lancées en même temps en comptent bien deux)."""
+    with _session() as session:
+        session.execute(
+            update(UserRow)
+            .where(UserRow.id == user_id)
+            .values(seasons_played=UserRow.seasons_played + 1)
+        )
+        session.commit()
+
+
+def grant_premium(user_id: int, payment_ref: str | None = None) -> User | None:
+    """Passe le compte en version complète (sans effet s'il l'est déjà : Stripe peut
+    prévenir deux fois du même paiement)."""
+    with _session() as session:
+        row = session.get(UserRow, user_id)
+        if row is None:
+            return None
+        if row.premium_at is None:
+            row.premium_at, row.payment_ref = _now(), payment_ref
+            session.commit()
+        return _user(row)
+
+
+def revoke_premium(user_id: int) -> User | None:
+    """Repasse le compte en gratuit (remboursement) : ses saisons jouées restent comptées."""
+    with _session() as session:
+        row = session.get(UserRow, user_id)
+        if row is None:
+            return None
+        row.premium_at = row.payment_ref = None
+        session.commit()
+        return _user(row)
 
 
 # --- Sessions --------------------------------------------------------------------------

@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 
 import accounts
 import database
+from api.auth import current_user
 from api.deps import get_session
 from api.main import app
 from data.generator import SQUAD_COMPOSITION, generate_player
@@ -97,6 +98,12 @@ def strong_and_weak() -> tuple[Club, Club]:
 # --- API : base SQLite en mémoire (jamais sur les parties sauvegardées) ---------------------
 
 
+def full_account() -> accounts.User:
+    """Le compte des tests de l'API sur base injectée : jeu complet, ses saisons ne se
+    comptent pas (la formule gratuite a ses tests, tests/test_plans.py)."""
+    return accounts.User(id=1, email="maxence@example.com", active_slot=1, premium=True)
+
+
 @pytest.fixture
 def client() -> Iterator[TestClient]:
     engine = test_engine()
@@ -110,6 +117,7 @@ def client() -> Iterator[TestClient]:
             yield session
 
     app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[current_user] = full_account
     yield TestClient(app)
     app.dependency_overrides.clear()
 

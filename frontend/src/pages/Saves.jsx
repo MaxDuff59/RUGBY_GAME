@@ -1,10 +1,11 @@
-import { useCallback, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 
 import { api } from "../api.js";
 import { clubTheme } from "../clubs.js";
 import ClubCrest from "../components/ClubCrest.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
+import { ActionError, PlanCard, newSaveBlocked } from "../components/FullGame.jsx";
 import { formatLongDate, formatSavedAt } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { chooseSlot, leaveSlot } from "../save.js";
@@ -18,6 +19,29 @@ export default function Saves() {
   const confirm = useConfirm();
   const [busy, setBusy] = useState(null); // emplacement en cours d'ouverture
   const [error, setError] = useState(null);
+  // Retour de la page de paiement Stripe : ?paiement=ok&session_id=... ou ?paiement=annule.
+  const [params, setParams] = useSearchParams();
+  const [payment, setPayment] = useState(null); // { ok, text }
+  const paid = params.get("paiement");
+  const sessionId = params.get("session_id");
+  const setMe = me.setData;
+
+  useEffect(() => {
+    if (!paid) return;
+    setParams({}, { replace: true });
+    if (paid !== "ok" || !sessionId) {
+      setPayment({ ok: false, text: "Paiement annulé : rien n'a été débité." });
+      return;
+    }
+    setPayment({ ok: true, text: "Confirmation du paiement…" });
+    api
+      .confirmPayment(sessionId)
+      .then((user) => {
+        setMe(user);
+        setPayment({ ok: true, text: "Merci ! Le jeu complet est débloqué." });
+      })
+      .catch((err) => setPayment({ ok: false, text: err.message }));
+  }, [paid, sessionId, setParams, setMe]);
 
   async function open(slot, call, next) {
     setBusy(slot);
@@ -62,6 +86,9 @@ export default function Saves() {
   }
 
   const free = saves.data.find((save) => save.empty);
+  const occupied = saves.data.filter((save) => !save.empty).length;
+  // Compte gratuit : une partie, deux saisons en tout (components/FullGame.jsx).
+  const blocked = newSaveBlocked(me.data, occupied);
 
   return (
     <div className="start">
@@ -82,8 +109,8 @@ export default function Saves() {
           <button
             type="button"
             className="button button--primary"
-            disabled={!free || busy !== null}
-            title={free ? undefined : "Supprime une partie pour en commencer une nouvelle"}
+            disabled={!free || blocked !== null || busy !== null}
+            title={blocked ?? (free ? undefined : "Supprime une partie pour en commencer une nouvelle")}
             onClick={() => create(free.slot)}
           >
             Nouvelle carrière
@@ -91,7 +118,9 @@ export default function Saves() {
         </div>
       </header>
 
-      {error && <p className="status--error">{error.message}</p>}
+      {me.data && <PlanCard me={me.data} saves={occupied} />}
+      {payment && <p className={payment.ok ? "status" : "status--error"}>{payment.text}</p>}
+      <ActionError error={error} />
 
       <ul className="saves">
         {saves.data.map((save) => (
@@ -109,7 +138,13 @@ export default function Saves() {
               <>
                 <p className="save__club muted">Emplacement libre</p>
                 <div className="save__actions">
-                  <button type="button" className="button" disabled={busy !== null} onClick={() => create(save.slot)}>
+                  <button
+                    type="button"
+                    className="button"
+                    disabled={blocked !== null || busy !== null}
+                    title={blocked ?? undefined}
+                    onClick={() => create(save.slot)}
+                  >
                     {busy === save.slot ? "Création du monde…" : "Nouvelle carrière"}
                   </button>
                 </div>

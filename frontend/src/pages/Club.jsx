@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useOutletContext } from "react-router-d
 import { api } from "../api.js";
 import Affairs from "../components/Affairs.jsx";
 import ClubCrest from "../components/ClubCrest.jsx";
+import { ActionError } from "../components/FullGame.jsx";
 import FormPills, { recentForm } from "../components/FormPills.jsx";
 import MatchList from "../components/MatchList.jsx";
 import { NOTE_LINES, NoteLine } from "../components/NoteLine.jsx";
@@ -54,7 +55,7 @@ const HEADLINES = 4;
 // journal et les transferts. Sur téléphone, la vue de base garde le prochain match et le
 // classement ; vie du club, dernière journée et rapport de force ont chacun leur onglet.
 export default function Club() {
-  const { career } = useOutletContext();
+  const { career, onContract } = useOutletContext();
   const navigate = useNavigate();
   const location = useLocation();
   const phone = useMediaQuery(PHONE_QUERY);
@@ -216,12 +217,13 @@ export default function Club() {
 
   return (
     <>
-      {actionError && <p className="status--error">{actionError.message}</p>}
+      <ActionError error={actionError} />
       {showReview && (
         <SeasonReview
           clubId={myId}
           onClose={() => setShowReview(false)}
           onNextSeason={nextSeason}
+          onContract={onContract}
           busy={busy}
           error={actionError}
         />

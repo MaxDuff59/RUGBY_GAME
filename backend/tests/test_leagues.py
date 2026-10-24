@@ -7,12 +7,13 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from api.auth import current_user
 from api.deps import get_session
 from api.main import app
 from database import seed_if_empty
 from engine.economy import SQUAD_MIN
 from models.orm import Base, ClubRow
-from tests.conftest import test_engine
+from tests.conftest import full_account, test_engine
 
 
 @pytest.fixture
@@ -32,6 +33,7 @@ def two_leagues() -> Iterator[TestClient]:
             yield session
 
     app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[current_user] = full_account
     client = TestClient(app)
     client.post("/career", json={"manager_name": "Maxence", "club_id": 3})
     yield client

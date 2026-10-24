@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.orm import sessionmaker
 
+import accounts
 import database
 from api.main import app
 from api.routers.seasons import _play_matchday, create_season, season_rng
@@ -41,6 +42,7 @@ def test_nothing_is_loaded_at_first(saves):
 
 
 def test_each_slot_keeps_its_own_world(saves):
+    accounts.grant_premium(1)  # le compte gratuit n'a qu'une partie (tests/test_plans.py)
     start(saves, 1, "Maxence", "Stade Toulousain")
     saves.post("/seasons/current/play")
     start(saves, 2, "Alex", "Leinster Rugby")

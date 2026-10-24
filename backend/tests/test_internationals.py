@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
+from api.auth import current_user
 from api.deps import get_session
 from api.main import app
 from data.generator import (
@@ -439,6 +440,7 @@ def nations() -> Iterator[tuple[TestClient, sessionmaker]]:
             yield session
 
     app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[current_user] = conftest.full_account
     yield TestClient(app), TestSession
     app.dependency_overrides.clear()
 

@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 
 import { api } from "../api.js";
+import { ActionError } from "./FullGame.jsx";
 import {
   POSITIONS,
   formatContractEnd,
@@ -14,6 +15,7 @@ import {
 import { useApi } from "../hooks/useApi.js";
 import ClubCrest from "./ClubCrest.jsx";
 import { useConfirm } from "./ConfirmDialog.jsx";
+import ManagerContract from "./ManagerContract.jsx";
 import Modal from "./Modal.jsx";
 import { NOTE_LINES, NoteLine, formatChange, levelOf, startValue } from "./NoteLine.jsx";
 
@@ -38,18 +40,21 @@ const MOVEMENTS = {
 };
 
 // Bilan de fin de saison, en quatre étapes : résultats, notes de vie du club, carrière
-// du manager (sa réputation, et les clubs qui le veulent), puis joueurs en fin de
-// contrat (à prolonger, sinon ils partent libres). La dernière étape lance la saison
-// suivante ; accepter une offre recharge le jeu dans le nouveau club.
-export default function SeasonReview({ clubId, onClose, onNextSeason, busy, error }) {
+// du manager (son contrat, sa réputation, et les clubs ou sélections qui le veulent),
+// puis joueurs en fin de contrat (à prolonger, sinon ils partent libres). La dernière
+// étape lance la saison suivante, sauf si le contrat du manager s'achève sans suite ;
+// accepter une offre recharge le jeu dans le nouveau club.
+export default function SeasonReview({ clubId, onClose, onNextSeason, onContract, busy, error }) {
   const [step, setStep] = useState(0);
   const review = useApi(useCallback(api.getSeasonReview, []));
   const notes = useApi(useCallback(() => api.getClubNotes(clubId), [clubId]));
   const contracts = useApi(useCallback(api.getContracts, []));
   const career = useApi(useCallback(api.getCareerHistory, []));
+  const contract = useApi(useCallback(api.getManagerContract, []));
 
-  const loading = review.loading || notes.loading || contracts.loading || career.loading;
-  const failure = review.error || notes.error || contracts.error || career.error;
+  const loading = review.loading || notes.loading || contracts.loading || career.loading || contract.loading;
+  const failure = review.error || notes.error || contracts.error || career.error || contract.error;
+  const unsettled = contract.data?.expiring ?? false;
   const year = review.data?.year;
 
   return (
@@ -81,13 +86,28 @@ export default function SeasonReview({ clubId, onClose, onNextSeason, busy, erro
         {failure && <p className="status status--error">{failure.message}</p>}
         {!loading && !failure && step === 0 && <Results review={review.data} />}
         {!loading && !failure && step === 1 && <Notes notes={notes.data} />}
-        {!loading && !failure && step === 2 && <Career data={career.data} clubName={review.data.club.name} />}
+        {!loading && !failure && step === 2 && (
+          <Career
+            data={career.data}
+            clubName={review.data.club.name}
+            contract={contract.data}
+            onContract={(next) => {
+              contract.setData(next);
+              onContract?.(next);
+            }}
+          />
+        )}
         {!loading && !failure && step === CONTRACTS && <Contracts data={contracts.data} onChange={contracts.setData} />}
       </div>
 
-      {error && <p className="status--error">{error.message}</p>}
+      <ActionError error={error} />
       <div className="affair__actions">
-        {step === CONTRACTS && contracts.data && <SquadNext data={contracts.data} />}
+        {step === CONTRACTS && unsettled && (
+          <span className="club-note__warning">
+            Ton contrat s'achève : prolonge, signe ailleurs ou pars (étape Carrière).
+          </span>
+        )}
+        {step === CONTRACTS && !unsettled && contracts.data && <SquadNext data={contracts.data} />}
         {step > 0 && (
           <button type="button" className="button" onClick={() => setStep(step - 1)}>
             Précédent
@@ -101,7 +121,7 @@ export default function SeasonReview({ clubId, onClose, onNextSeason, busy, erro
           <button
             type="button"
             className="button button--primary"
-            disabled={busy || !contracts.data || contracts.data.squad_next < contracts.data.squad_min}
+            disabled={busy || unsettled || !contracts.data || contracts.data.squad_next < contracts.data.squad_min}
             onClick={onNextSeason}
           >
             {busy ? "Intersaison…" : `Lancer la saison ${year + 1}`}
@@ -114,24 +134,35 @@ export default function SeasonReview({ clubId, onClose, onNextSeason, busy, erro
 
 // --- 3. Carrière ------------------------------------------------------------------------
 
-// La réputation du manager et les clubs qui le veulent ; accepter recharge le jeu.
-function Career({ data, clubName }) {
+// Le contrat du manager, sa réputation, et les clubs (ou la sélection) qui le veulent ;
+// accepter une offre recharge le jeu.
+function Career({ data, clubName, contract, onContract }) {
   const confirm = useConfirm();
   const [error, setError] = useState(null);
 
   function accept(offer) {
+    const nation = offer.kind === "nation";
+    const rows = [{ label: "Niveau du XV", value: formatNote(offer.level), hint: "sur 20" }];
+    if (offer.balance !== null) rows.push({ label: "Trésorerie", value: formatMoney(offer.balance) });
+    if (offer.seasons) rows.push({ label: "Contrat", value: `${offer.seasons} saisons`, hint: "à partir de la prochaine" });
+    if (offer.indemnity > 0) {
+      rows.push({
+        label: "Indemnité",
+        value: formatMoney(offer.indemnity),
+        hint: nation ? `versée à ${clubName} par la fédération` : `versée à ${clubName} par ton nouveau club`,
+      });
+    }
     confirm.ask({
       eyebrow: `Offre · ${offer.league_name}`,
-      title: `Rejoindre ${offer.club.name}`,
-      text: `Tu quittes ${clubName} dès maintenant : la saison prochaine se jouera à la tête de ${offer.club.name}. Tes négociations en cours tombent.`,
-      rows: [
-        { label: "Niveau du XV", value: formatNote(offer.level), hint: "sur 20" },
-        { label: "Trésorerie", value: formatMoney(offer.balance) },
-      ],
+      title: nation ? `Sélectionneur : ${offer.club.name}` : `Rejoindre ${offer.club.name}`,
+      text: nation
+        ? `Tu quittes ${clubName} dès maintenant pour diriger ${offer.club.name} : plus de club à gérer, une liste à annoncer avant chaque rendez-vous. Tes négociations en cours tombent.`
+        : `Tu quittes ${clubName} dès maintenant : la saison prochaine se jouera à la tête de ${offer.club.name}. Tes négociations en cours tombent.`,
+      rows,
       confirmLabel: "Accepter l'offre",
       onConfirm: async () => {
         try {
-          await api.acceptOffer(offer.club.id);
+          await (nation ? api.acceptNationOffer(offer.nation) : api.acceptOffer(offer.club.id));
           window.location.assign("/");
         } catch (err) {
           setError(err);
@@ -145,6 +176,10 @@ function Career({ data, clubName }) {
   return (
     <>
       {confirm.dialog}
+      <section>
+        <h3 className="eyebrow">Mon contrat</h3>
+        <ManagerContract contract={contract} onChange={onContract} />
+      </section>
       <div className="review__hero">
         <p className="hero__title">{data.label}</p>
         <p className="hero__sub">
@@ -156,17 +191,20 @@ function Career({ data, clubName }) {
       {data.offers.length === 0 ? (
         <p className="muted">
           Aucun club plus prestigieux ne t'a appelé cette saison. Les titres, les phases finales et un classement
-          meilleur qu'attendu font grimper la réputation ; un limogeage la ruine.
+          meilleur qu'attendu font grimper la réputation ; un limogeage la ruine. Les sélections, elles, n'appellent
+          que les managers reconnus.
         </p>
       ) : (
         <ul className="career-offers">
           {data.offers.map((offer) => (
-            <li key={offer.club.id} className="career-offer">
+            <li key={`${offer.kind}-${offer.club.id}`} className="career-offer">
               <ClubCrest name={offer.club.name} size={40} />
               <div>
                 <p className="career-offer__name">{offer.club.name}</p>
                 <p className="muted">
-                  {offer.league_name} · XV {formatNote(offer.level)} · trésorerie {formatMoney(offer.balance)}
+                  {offer.league_name} · XV {formatNote(offer.level)}
+                  {offer.balance !== null && ` · trésorerie ${formatMoney(offer.balance)}`}
+                  {offer.seasons && ` · contrat de ${offer.seasons} saisons`}
                 </p>
               </div>
               <button type="button" className="button" onClick={() => accept(offer)}>

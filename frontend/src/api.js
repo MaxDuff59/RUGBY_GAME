@@ -45,6 +45,9 @@ export const api = {
   register: (email, password) => post("/auth/register", { email, password }),
   login: (email, password) => post("/auth/login", { email, password }),
   logout: () => post("/auth/logout"),
+  // Jeu complet (2 €, Stripe) : page de paiement, puis confirmation au retour.
+  checkout: () => post("/billing/checkout"),
+  confirmPayment: (sessionId) => post("/billing/confirm", { session_id: sessionId }),
 
   // Parties sauvegardées (trois emplacements par compte)
   listSaves: () => request("/saves"),
@@ -97,6 +100,11 @@ export const api = {
   getSeasonReview: () => request("/seasons/current/review"),
   getCareerHistory: () => request("/career/history"),
   acceptOffer: (clubId) => post(`/career/offers/${clubId}`),
+  acceptNationOffer: (code) => post(`/career/offers/nation/${code}`),
+  // Contrat du manager : échéance, prolongation demandée à la direction, départ.
+  getManagerContract: () => request("/career/contract"),
+  askExtension: (seasons) => post("/career/contract/extend", { seasons }),
+  leaveClub: () => post("/career/leave"),
   startNextSeason: () => post("/seasons/next"),
   getMatch: (matchId) => request(`/matches/${matchId}`),
 

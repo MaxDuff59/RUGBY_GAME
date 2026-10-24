@@ -49,6 +49,23 @@ class UserOut(BaseModel):
     id: int
     email: str
     active_slot: int | None
+    # Formule (accounts.py) : jeu complet, ou saisons qu'il reste au compte gratuit.
+    premium: bool
+    seasons_played: int
+    seasons_left: int | None
+    free_seasons: int = accounts.FREE_SEASONS
+    free_saves: int = accounts.FREE_SAVES
+
+
+def user_out(user: User) -> UserOut:
+    return UserOut(
+        id=user.id,
+        email=user.email,
+        active_slot=user.active_slot,
+        premium=user.premium,
+        seasons_played=user.seasons_played,
+        seasons_left=user.seasons_left,
+    )
 
 
 def _start_session(response: Response, user: User) -> UserOut:
@@ -61,7 +78,7 @@ def _start_session(response: Response, user: User) -> UserOut:
         secure=_secure_cookies(),
         path="/",
     )
-    return UserOut(id=user.id, email=user.email, active_slot=user.active_slot)
+    return user_out(user)
 
 
 # --- Frein sur les connexions (par IP, en mémoire : suffit pour une instance) -----------
@@ -122,4 +139,4 @@ def logout(request: Request, response: Response) -> Response:
 @router.get("/me", response_model=UserOut)
 def me(user: UserDep) -> UserOut:
     """Le compte connecté (401 sinon : l'interface montre alors l'écran de connexion)."""
-    return UserOut(id=user.id, email=user.email, active_slot=user.active_slot)
+    return user_out(user)

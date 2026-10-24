@@ -93,6 +93,14 @@ partie chargée. Les routes du jeu répondent 401 sans compte connecté et 409 t
 qu'aucune partie n'est chargée ; la partie chargée est retenue sur le compte,
 d'un navigateur à l'autre.
 
+Formule du compte (`backend/api/plans.py`) : un compte gratuit garde **une seule
+partie** et joue **deux saisons en tout**. Les saisons se comptent sur le compte
+dès qu'elles commencent (la première au choix du club, les suivantes à
+« Lancer la saison ») : supprimer une carrière ne rend pas ses saisons. Au-delà,
+l'API répond 402 et l'interface propose le **jeu complet, 2 € une fois** par
+Stripe Checkout (`backend/api/billing.py`) : trois parties et des saisons sans
+limite. Reprendre un club dans le même monde, après un renvoi, ne coûte pas de saison.
+
 Les photos des vrais joueurs (`GET /photos/{nom}`) viennent de Wikimedia
 Commons mais passent par l'API : récupérées une fois, gardées dans
 `backend/saves/photos/`, puis servies de là.
@@ -136,6 +144,8 @@ parties ailleurs (ex. pour une instance de test).
 | `PUT /clubs/{id}/captain` | Choisir le capitaine (`null` : le staff donne le brassard au meneur du XV) |
 | `GET /clubs/{id}/notes` | Vie du club sur 20 (moral, cohésion, fraîcheur, confiance de la direction, ferveur des supporters) et forme du jour |
 | `GET /career/history`, `POST /career/offers/{club_id}` | Parcours du manager (clubs, saisons, réputation) et offres de fin de saison ; accepter une offre |
+| `POST /career/offers/nation/{code}` | Accepter l'offre d'une sélection : le manager devient sélectionneur |
+| `GET /career/contract`, `POST /career/contract/extend`, `POST /career/leave` | Contrat du manager (échéance, avis de la direction), demande de prolongation, départ du club |
 | `GET /career/dismissal` | Dernier limogeage, tant qu'aucune nouvelle carrière n'a commencé |
 | `GET /players/{id}` | Fiche d'un joueur : comparaison à son poste, note à chaque poste, saison (statistiques comprises), blessures |
 | `POST /career`, `GET /career` | Choisir son club (et la difficulté : `easy`, `normal`, `hard`), ou sa sélection (`nation`) ; tire aussi le calendrier de la 1re saison |
@@ -490,10 +500,21 @@ Variables d'environnement de l'API :
 | `RUGBY_COOKIE_SECURE` | `1` derrière HTTPS (cookie de session marqué Secure) | `1` |
 | `RUGBY_STATIC_DIR` | Optionnel : un `dist/` de Vite servi par l'API elle-même (`api.main:site`, tout sur un seul port) | — |
 | `PORT` | Port d'écoute | `8000` |
+| `STRIPE_SECRET_KEY` | Clé secrète Stripe (`sk_live_…`, ou `sk_test_…` pour essayer) ; sans elle, le paiement est fermé (503) | — |
+| `STRIPE_WEBHOOK_SECRET` | Secret de signature du webhook (`whsec_…`) | — |
+| `STRIPE_PRICE_ID` | Optionnel : un prix créé dans Stripe, sinon 2 € fixés par l'API | — |
+| `RUGBY_PUBLIC_URL` | Optionnel : adresse de l'interface pour le retour de Stripe, sinon l'origine de la requête | — |
 
 En SQLite, une seule machine d'API à la fois (les parties sont des fichiers) ;
 avec Postgres, plusieurs instances peuvent tourner. Pas de réinitialisation de
 mot de passe (il faudrait un envoi d'e-mail).
+
+Paiement : dans le tableau de bord Stripe, ajouter un webhook vers
+`https://<API>/billing/webhook` (l'adresse Railway, sans `/api`) pour les
+événements `checkout.session.completed` et `checkout.session.async_payment_succeeded`,
+et reporter son secret dans `STRIPE_WEBHOOK_SECRET`. Au retour de la page de
+paiement, l'interface fait aussi confirmer la session (`POST /billing/confirm`) :
+le compte est débloqué aussitôt, même avant le webhook.
 
 ## Principe d'architecture
 

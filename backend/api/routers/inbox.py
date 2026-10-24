@@ -16,8 +16,9 @@ from api.ledger import current_season, game_date
 from api.routers.contracts import contracts_overview
 from api.routers.seasons import _phase, focus_league
 from api.schemas import InboxItemOut, InboxOut
+from data.nations import NATIONS_BY_CODE
 from engine.regulations import cap_room
-from models.orm import ClubRow, InjuryRow, NegotiationRow, PlayerRow
+from models.orm import CareerRow, ClubRow, InjuryRow, NegotiationRow, PlayerRow
 
 
 def _plural(count: int, word: str) -> str:
@@ -143,15 +144,51 @@ def _items(session: Session, me: ClubRow) -> list[InboxItemOut]:
                 )
             )
 
-    if finished:
-        offers = careers.offers(session)
-        if offers:
-            names = ", ".join(session.get(ClubRow, club_id).name for club_id in offers)
+    career = session.scalars(select(CareerRow)).first()
+    if career is not None and season is not None:
+        contract = careers.contract(session, career)
+        if contract.expiring:
+            stance = (
+                f"La direction te propose {_plural(contract.granted, 'saison')} de plus."
+                if contract.granted
+                else "La direction ne te renouvelle pas : signe ailleurs ou pars."
+            )
             items.append(
                 InboxItemOut(
                     kind="career",
-                    title=f"{_plural(len(offers), 'offre')} pour toi",
-                    detail=f"Ils veulent te confier leur équipe : {names}. Voir le bilan.",
+                    title="Ton contrat s'achève",
+                    detail=f"{stance} Voir le bilan.",
+                    link="/",
+                    urgent=True,
+                )
+            )
+        elif contract.left == 1 and contract.blocked is None:
+            items.append(
+                InboxItemOut(
+                    kind="career",
+                    title="Dernière saison de ton contrat",
+                    detail="Demande une prolongation à la direction, dans la vie du club.",
+                    link="/",
+                )
+            )
+
+    if finished and career is not None:
+        reputation = careers.reputation_of(session, career.manager_name)
+        clubs = careers.market(session)
+        names = [
+            session.get(ClubRow, club_id).name
+            for club_id in careers.offers(session, reputation, clubs)
+        ]
+        nation = careers.nation_offer(session, reputation, clubs)
+        if nation is not None:
+            names.append(NATIONS_BY_CODE[nation[0]].name)
+        if names:
+            who = ", ".join(names)
+            items.append(
+                InboxItemOut(
+                    kind="career",
+                    title=f"{_plural(len(names), 'offre')} pour toi",
+                    detail=f"Ils veulent te confier leur équipe : {who}. Voir le bilan.",
                     link="/",
                 )
             )

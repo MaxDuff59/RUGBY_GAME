@@ -5,13 +5,14 @@ La partie chargée se sauvegarde toute seule : chaque action est enregistrée
 aussitôt dans son fichier. L'emplacement chargé est retenu sur le compte.
 """
 
+import dataclasses
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path
 from sqlalchemy import select
 
 import accounts
-from api import internationals
+from api import internationals, plans
 from api.auth import UserDep
 from api.ledger import current_season, game_date
 from api.schemas import SaveOut
@@ -64,7 +65,7 @@ def _save_out(user: accounts.User, slot: int) -> SaveOut:
 
 def _activate(user: accounts.User, slot: int) -> accounts.User:
     accounts.set_active_slot(user.id, slot)
-    return accounts.User(id=user.id, email=user.email, active_slot=slot)
+    return dataclasses.replace(user, active_slot=slot)
 
 
 @router.get("", response_model=list[SaveOut])
@@ -88,11 +89,15 @@ def load_save(slot: Slot, user: UserDep) -> SaveOut:
 @router.post("/{slot}/new", response_model=SaveOut, status_code=201)
 def new_save(slot: Slot, user: UserDep) -> SaveOut:
     """Crée un monde neuf dans un emplacement libre et le charge ; la carrière se
-    choisit ensuite (`POST /career`)."""
+    choisit ensuite (`POST /career`). Le compte gratuit n'en garde qu'une, et
+    seulement s'il lui reste une saison à jouer (api/plans.py)."""
     if slot_exists(user.id, slot):
         raise HTTPException(
             status_code=409, detail="Cet emplacement est pris : supprime d'abord cette partie"
         )
+    plans.require_new_save(
+        user, sum(slot_exists(user.id, other) for other in range(1, SLOT_COUNT + 1))
+    )
     new_slot(user.id, slot)
     return _save_out(_activate(user, slot), slot)
 
@@ -103,5 +108,5 @@ def delete_save(slot: Slot, user: UserDep) -> list[SaveOut]:
     delete_slot(user.id, slot)
     if user.active_slot == slot:
         accounts.set_active_slot(user.id, None)
-        user = accounts.User(id=user.id, email=user.email, active_slot=None)
+        user = dataclasses.replace(user, active_slot=None)
     return list_saves(user)

@@ -819,6 +819,8 @@ class CareerOut(BaseModel):
     league_name: str
     nation: str | None = None
     difficulty: Difficulty = Difficulty.NORMAL
+    # Carrière de club : année où commence la dernière saison du contrat du manager.
+    contract_until: int | None = None
 
 
 # --- Championnats ----------------------------------------------------------------------
@@ -933,17 +935,54 @@ class SpellOut(BaseModel):
     club: ClubRef
     start: datetime.date
     end: datetime.date | None  # None : il y est encore
-    reason: Literal["dismissed", "left", "quit"] | None
+    reason: Literal["dismissed", "left", "nation", "resigned", "expired", "quit"] | None
 
 
 class JobOfferOut(BaseModel):
-    """Un club qui veut le manager, à la fin de la saison (engine/career.py)."""
+    """Un club (ou une sélection) qui veut le manager, à la fin de la saison
+    (engine/career.py)."""
 
+    # nation : une sélection ; `club` est alors son identifiant d'équipe et son nom.
+    kind: Literal["club", "nation"] = "club"
     club: ClubRef
+    nation: str | None = None  # code de la sélection
     league: str
     league_name: str
     level: float  # niveau du XV, sur 20
-    balance: int  # sa trésorerie
+    balance: int | None  # sa trésorerie (None pour une sélection)
+    seasons: int | None  # durée du contrat proposé (None pour une sélection)
+    indemnity: int  # versée au club du manager s'il part encore sous contrat
+
+
+class ManagerContractOut(BaseModel):
+    """Le contrat du manager et ce qu'en pense la direction (engine/manager_contract.py)."""
+
+    club: ClubRef
+    until: int  # année où commence sa dernière saison
+    seasons_left: int  # saisons encore à jouer (0 : il s'achève avec la saison finie)
+    expiring: bool
+    board: float  # confiance de la direction, sur 20
+    supporters: float
+    # En fin de contrat, les saisons que la direction propose d'elle-même (0 : elle ne
+    # le renouvelle pas) ; None en cours de contrat, où il faut demander.
+    renewal: int | None
+    max_ask: int  # saisons demandables d'un coup
+    blocked: Literal["too_long", "too_soon", "refused"] | None
+    matches_needed: int
+    retry_on: datetime.date | None
+    indemnity: int  # ce que verserait un club qui le recruterait maintenant
+    # Réputation perdue à partir de soi-même maintenant (0 en fin de contrat).
+    resign_cost: float
+
+
+class ExtensionIn(BaseModel):
+    seasons: int = Field(ge=1, le=3)
+
+
+class ExtensionOut(BaseModel):
+    outcome: Literal["accepted", "countered", "refused"]
+    seasons: int  # accordées, ou proposées par la direction
+    contract: ManagerContractOut
 
 
 class CareerHistoryOut(BaseModel):
@@ -953,6 +992,7 @@ class CareerHistoryOut(BaseModel):
     seasons: list[ManagerSeasonOut]  # de la plus récente à la plus ancienne
     spells: list[SpellOut]
     offers: list[JobOfferOut]  # une fois la saison du championnat finie
+    contract_until: int
 
 
 class InboxItemOut(BaseModel):
@@ -972,7 +1012,8 @@ class InboxOut(BaseModel):
 
 
 class DismissalOut(BaseModel):
-    """Limogeage du manager par la direction (engine/board.py)."""
+    """Départ du manager sans autre club : limogé par la direction (engine/board.py),
+    parti de lui-même ou au bout de son contrat."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -981,6 +1022,9 @@ class DismissalOut(BaseModel):
     club_name: str
     date: datetime.date
     confidence: float
+    reason: Literal["dismissed", "resigned", "expired"] = "dismissed"
+    # Les clubs qu'il peut reprendre (engine/career.py) ; None : tous.
+    reachable: list[int] | None = None
 
 
 class PlayOut(BaseModel):

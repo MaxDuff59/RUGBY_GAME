@@ -721,6 +721,11 @@ class CareerRow(Base):
     club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
     # Niveau de difficulté (engine/difficulty.py) : easy, normal ou hard.
     difficulty: Mapped[str] = mapped_column(String(6), default="normal")
+    # Contrat du manager (engine/manager_contract.py) : année où commence sa dernière
+    # saison (None : carrière d'avant les contrats, voir api/careers.py) ; date du
+    # dernier refus de la direction de le prolonger.
+    contract_until: Mapped[int | None] = mapped_column(default=None)
+    extension_refused_on: Mapped[datetime.date | None] = mapped_column(Date, default=None)
 
     def to_domain(self) -> Career:
         return Career(id=self.id, manager_name=self.manager_name, club_id=self.club_id)
@@ -855,14 +860,17 @@ class SpellRow(Base):
     club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
     start: Mapped[datetime.date] = mapped_column(Date)
     end: Mapped[datetime.date | None] = mapped_column(Date, default=None)
-    # dismissed : limogé ; left : parti pour un autre club ; quit : nouvelle carrière.
+    # dismissed : limogé ; left : parti pour un autre club ; nation : parti pour une
+    # sélection ; resigned : parti de lui-même avant la fin de son contrat ; expired :
+    # parti à la fin de son contrat ; quit : nouvelle carrière.
     reason: Mapped[str | None] = mapped_column(String(10), default=None)
 
 
 class DismissalRow(Base):
-    """Limogeage d'un manager par la direction de son club (engine/board.py).
+    """Départ d'un manager sans autre club où aller : limogé par la direction (engine/
+    board.py), parti de lui-même, ou au bout de son contrat (engine/manager_contract.py).
 
-    La carrière est supprimée ; le dernier limogeage s'affiche au choix du club suivant.
+    La carrière est supprimée ; le dernier départ s'affiche au choix du club suivant.
     """
 
     __tablename__ = "dismissals"
@@ -872,6 +880,8 @@ class DismissalRow(Base):
     club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
     date: Mapped[datetime.date] = mapped_column(Date)
     confidence: Mapped[float]
+    # dismissed : limogé ; resigned : parti en cours de contrat ; expired : contrat échu.
+    reason: Mapped[str] = mapped_column(String(10), default="dismissed")
 
     club: Mapped[ClubRow] = relationship()
 

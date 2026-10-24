@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useOutletContext } from "react-router-d
 
 import { api } from "../api.js";
 import ClubCrest from "../components/ClubCrest.jsx";
+import { ActionError } from "../components/FullGame.jsx";
 import MatchList from "../components/MatchList.jsx";
 import WindowBoard from "../components/WindowBoard.jsx";
 import {
@@ -130,7 +131,7 @@ export default function Selection() {
 
   return (
     <>
-      {actionError && <p className="status--error">{actionError.message}</p>}
+      <ActionError error={actionError} />
 
       <div className="hero-row">
         <section className="hero">

@@ -9,8 +9,9 @@ import { chosenSlot, leaveSlot } from "../save.js";
 import ClubCrest from "./ClubCrest.jsx";
 import Guide, { resetGuide } from "./Guide.jsx";
 import Inbox from "./Inbox.jsx";
+import { ManagerContractModal } from "./ManagerContract.jsx";
 import NavIcon from "./NavIcon.jsx";
-import { DIFFICULTIES } from "../format.js";
+import { DIFFICULTIES, formatContractEnd } from "../format.js";
 
 // `primary` : les entrées de la barre d'onglets du téléphone ; les autres passent
 // dans le volet « Plus ». `icon` : clé du pictogramme (NavIcon).
@@ -42,11 +43,14 @@ const SELECTOR_NAV_ITEMS = [
 
 // Cadre commun à toutes les pages : sur ordinateur, navigation à gauche et en-tête avec
 // le club ; sur téléphone (PHONE_QUERY), en-tête compact et barre d'onglets en bas.
-// Les pages reçoivent la carrière via useOutletContext(). Un sélectionneur
+// Les pages reçoivent la carrière via useOutletContext(), et `onContract` pour y
+// reporter le contrat du manager quand il change (prolongation). Un sélectionneur
 // (`career.kind === "nation"`) a sa propre navigation ; `career.club_id` et
 // `career.club_name` sont alors ceux de sa sélection.
 export default function Layout() {
-  const { data: career, error, loading } = useApi(useCallback(api.getCareer, []));
+  const { data: career, error, loading, setData } = useApi(useCallback(api.getCareer, []));
+  // Le contrat du manager se lit (et se prolonge) depuis le pied de la navigation.
+  const [contractOpen, setContractOpen] = useState(false);
   useClubTheme(career?.club_name);
   const phone = useMediaQuery(PHONE_QUERY);
 
@@ -59,10 +63,12 @@ export default function Layout() {
   if (error) return <p className="status status--error">{error.message}</p>;
 
   const items = career.kind === "nation" ? SELECTOR_NAV_ITEMS : NAV_ITEMS;
+  const openContract = () => setContractOpen(true);
+  const onContract = (contract) => setData({ ...career, contract_until: contract.until });
 
   return (
     <div className={phone ? "app app--phone" : "app"}>
-      {!phone && <Sidebar career={career} items={items} />}
+      {!phone && <Sidebar career={career} items={items} onContract={openContract} />}
 
       <main className="main">
         <header className="header">
@@ -76,10 +82,16 @@ export default function Layout() {
           {career.kind !== "nation" && <Inbox />}
         </header>
         {career.kind !== "nation" && <Guide />}
-        <Outlet context={{ career }} />
+        <Outlet context={{ career, onContract }} />
       </main>
 
-      {phone && <TabBar career={career} items={items} />}
+      {phone && <TabBar career={career} items={items} onContract={openContract} />}
+      {contractOpen && (
+        <ManagerContractModal
+          onClose={() => setContractOpen(false)}
+          onChange={onContract}
+        />
+      )}
     </div>
   );
 }
@@ -101,7 +113,17 @@ function LeaveButton({ className = "" }) {
 }
 
 // Ordinateur : colonne de navigation à gauche.
-function Sidebar({ career, items }) {
+// Le contrat du manager de club, en une ligne qui ouvre sa fenêtre.
+function ContractLink({ career, onContract, className = "" }) {
+  if (career.kind === "nation" || career.contract_until == null) return null;
+  return (
+    <button type="button" className={`link-button ${className}`} onClick={onContract}>
+      Contrat jusqu'en {formatContractEnd(career.contract_until)}
+    </button>
+  );
+}
+
+function Sidebar({ career, items, onContract }) {
   return (
     <nav className="sidebar" aria-label="Navigation principale">
       <div className="brand">
@@ -125,6 +147,7 @@ function Sidebar({ career, items }) {
           Partie {chosenSlot()} · sauvegarde auto
           {career.difficulty && career.difficulty !== "normal" && ` · ${DIFFICULTIES[career.difficulty].label.toLowerCase()}`}
         </div>
+        <ContractLink career={career} onContract={onContract} className="sidebar__contract" />
         {career.kind !== "nation" && (
           <button type="button" className="link-button sidebar__guide" onClick={resetGuide}>
             Revoir le guide
@@ -138,7 +161,7 @@ function Sidebar({ career, items }) {
 
 // Téléphone : barre d'onglets en bas de l'écran, pictogramme et libellé. Les entrées
 // secondaires et « Quitter la partie » sont dans le volet ouvert par « Plus ».
-function TabBar({ career, items }) {
+function TabBar({ career, items, onContract }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const { pathname } = useLocation();
   const primary = items.filter((item) => item.primary);
@@ -177,6 +200,7 @@ function TabBar({ career, items }) {
                 {career.kind === "nation" ? "Sélectionneur" : "Manager"} : {career.manager_name} · Partie{" "}
                 {chosenSlot()} · sauvegarde auto
               </div>
+              <ContractLink career={career} onContract={onContract} />
               {career.kind !== "nation" && (
                 <button type="button" className="link-button" onClick={resetGuide}>
                   Revoir le guide
