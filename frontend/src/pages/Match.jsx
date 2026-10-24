@@ -371,7 +371,7 @@ function Scoreboard({ live, playing, speed, setSpeed, notice, error, busy, finis
   return (
     <header className="scoreboard card">
       <Team side={live.home} mine={live.home.club.id === live.my_club_id} />
-      <span className="scoreboard__score">{live.home.score}</span>
+      <span className="scoreboard__score scoreboard__score--home">{live.home.score}</span>
       <div className="scoreboard__center">
         <Clock minute={live.minute} running={playing} interval={SPEEDS[speed].ms} />
         <span className="scoreboard__period">{period(live)}</span>

@@ -4576,6 +4576,23 @@ button.simulation__row:focus-visible {
 @media (max-width: 960px) {
   .scoreboard {
     grid-template-columns: minmax(0, 1fr) auto auto minmax(0, 1fr);
+    gap: 12px;
+    padding: 16px;
+  }
+  /* Sur un écran étroit, noms et scores rapetissent pour ne pas se chevaucher ; un
+     nom trop long passe à la ligne. */
+  .scoreboard__name {
+    font-size: 19px;
+    overflow-wrap: anywhere;
+  }
+  .scoreboard__score {
+    font-size: 54px;
+  }
+  /* Le chrono passe sous les scores : un tiret les sépare. */
+  .scoreboard__score--home::after {
+    content: "–";
+    margin-left: 12px;
+    color: var(--neutral-soft);
   }
   .scoreboard__center {
     grid-column: 1 / -1;
@@ -4606,6 +4623,17 @@ button.simulation__row:focus-visible {
   }
   .momentum__chart {
     height: 56px;
+  }
+}
+
+@media (max-width: 520px) {
+  .scoreboard__name {
+    font-size: 16px;
+    overflow-wrap: normal;
+    hyphens: auto;
+  }
+  .scoreboard__score {
+    font-size: 44px;
   }
 }
 
