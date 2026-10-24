@@ -572,6 +572,9 @@ class MatchOut(BaseModel):
     crowd: CrowdOut | None = None  # None : terrain neutre, ou match joué avant le public
     # Joueurs entrés en jeu, avec leurs statistiques (vide pour un match d'avant).
     players: list[MatchPlayerOut] = []
+    # Une barre par minute, positive quand l'équipe qui reçoit menace (engine/momentum.py) ;
+    # vide pour un match joué avant le graphique.
+    momentum: list[int] = []
 
     @classmethod
     def from_match(cls, match: Match, players: list[MatchPlayerOut] | None = None) -> "MatchOut":
@@ -594,6 +597,7 @@ class MatchOut(BaseModel):
             weather=match.weather,
             crowd=CrowdOut.of(match.spectators, match.atmosphere),
             players=players or [],
+            momentum=match.momentum,
         )
 
 

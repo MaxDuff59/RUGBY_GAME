@@ -472,6 +472,8 @@ class Match:
     atmosphere: float | None = None
     # Statistiques de chaque joueur entré en jeu (titulaires et remplaçants).
     stats: dict[int, PlayerMatchStats] = field(default_factory=dict)
+    # Momentum, une barre par minute (engine/momentum.py) ; vide pour un match d'avant.
+    momentum: list[int] = field(default_factory=list)
 
     def played_by(self, player_id: int) -> bool:
         return player_id in self.home_lineup or player_id in self.away_lineup

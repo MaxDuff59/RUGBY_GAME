@@ -429,6 +429,7 @@ def _write_result(row: MatchRow, match: Match) -> None:
     saved = MatchRow.from_domain(match)
     row.weather, row.stats = saved.weather, saved.stats
     row.spectators, row.atmosphere = saved.spectators, saved.atmosphere
+    row.momentum = saved.momentum
 
 
 @dataclass

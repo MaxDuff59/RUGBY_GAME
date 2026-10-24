@@ -1155,6 +1155,7 @@ class LiveMatch:
             stats=self.player_stats(),
             spectators=self.crowd.spectators if self.crowd else None,
             atmosphere=self.crowd.atmosphere if self.crowd else None,
+            momentum=list(self.momentum),
         )
 
     def player_stats(self) -> dict[int, PlayerMatchStats]:

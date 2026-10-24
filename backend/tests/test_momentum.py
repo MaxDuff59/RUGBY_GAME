@@ -59,3 +59,16 @@ def test_the_momentum_survives_a_saved_live_match():
     state = live.to_state()
     del state["momentum"]
     assert LiveMatch.from_state(home, away, state).momentum == [0] * 40
+
+
+def test_every_played_match_keeps_its_momentum(manager):
+    """Simulés ou joués en direct, les matchs gardent leur graphique pour leur fiche."""
+    played = manager.post("/seasons/current/play").json()["played"]
+    for summary in played["matches"]:
+        report = manager.get(f"/matches/{summary['id']}").json()
+        bars = report["momentum"]
+        assert len(bars) >= 80 and any(bars)
+        for event in report["events"]:
+            if event["type"] == "try":
+                home = event["club_id"] == report["home_club_id"]
+                assert bars[event["minute"] - 1] == (100 if home else -100)

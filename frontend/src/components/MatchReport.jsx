@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api.js";
 import ClubCrest from "./ClubCrest.jsx";
 import Modal from "./Modal.jsx";
+import Momentum from "./Momentum.jsx";
 import SortHeader from "./SortHeader.jsx";
 import WeatherIcon from "./WeatherIcon.jsx";
 import {
@@ -150,6 +151,20 @@ function Overview({ data, summary, myClubId }) {
 
   return (
     <div className="match-report__overview">
+      {data.momentum.length > 0 && (
+        <div className="match-report__momentum">
+          <Momentum
+            bars={data.momentum}
+            slots={Math.max(80, data.momentum.length)}
+            home={summary.home}
+            away={summary.away}
+            myId={myClubId}
+            finished
+            events={data.events}
+            nameOf={(e) => names[e.type === "substitution" ? e.other_player_id : e.player_id]}
+          />
+        </div>
+      )}
       <section className="match-report__duel" aria-label="Face à face">
         {TEAM_ROWS.map(({ key, label, lowerIsBetter }) => {
           const [h, a] = [home[key], away[key]];

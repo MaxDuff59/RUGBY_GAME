@@ -132,6 +132,7 @@ def _fill(match: Match, result: Match) -> None:
     match.home_lineup, match.away_lineup = list(result.home_lineup), list(result.away_lineup)
     match.weather, match.stats = result.weather, dict(result.stats)
     match.spectators, match.atmosphere = result.spectators, result.atmosphere
+    match.momentum = list(result.momentum)
 
 
 def play_day(

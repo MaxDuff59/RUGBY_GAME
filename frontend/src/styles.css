@@ -4375,10 +4375,50 @@ button.simulation__row:focus-visible {
   border-radius: 2px;
 }
 
+.momentum__plot {
+  min-width: 0;
+}
+
 .momentum__chart {
   display: block;
   width: 100%;
-  height: 84px;
+  height: 72px;
+}
+
+/* Repères : essais (rond à la couleur de l'équipe), cartons, remplacements (trait). */
+.momentum__marks {
+  position: relative;
+  height: 10px;
+}
+
+.momentum__mark {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.momentum__mark--try {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.momentum__mark--yellow,
+.momentum__mark--red {
+  width: 6px;
+  height: 9px;
+  border-radius: 1px;
+  background: #e0b000;
+}
+
+.momentum__mark--red {
+  background: var(--loss);
+}
+
+.momentum__mark--sub {
+  width: 2px;
+  height: 7px;
+  background: var(--neutral-soft);
 }
 
 .momentum__axis {
@@ -5974,6 +6014,15 @@ td > .tag:first-child,
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+/* Le momentum du match, sur toute la largeur de la fiche. */
+.match-report__momentum {
+  grid-column: 1 / -1;
+}
+
+.match-report__momentum .momentum {
+  margin-top: 0;
 }
 
 .match-report__overview {

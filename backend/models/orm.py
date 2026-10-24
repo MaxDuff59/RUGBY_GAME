@@ -505,6 +505,8 @@ class MatchRow(Base):
     # Public de l'équipe qui reçoit (engine/crowd.py), NULL sur terrain neutre.
     spectators: Mapped[int | None] = mapped_column(default=None)
     atmosphere: Mapped[float | None] = mapped_column(default=None)
+    # Momentum, une barre par minute (engine/momentum.py), une fois le match joué.
+    momentum: Mapped[list[int]] = mapped_column(JSON, default=list)
 
     season: Mapped[SeasonRow | None] = relationship(
         overlaps="matches,youth_matches,cup_matches", viewonly=True
@@ -535,6 +537,7 @@ class MatchRow(Base):
             stats=_stats_from_json(self.stats) if stats else {},
             spectators=self.spectators,
             atmosphere=self.atmosphere,
+            momentum=list(self.momentum or []),
         )
 
     @classmethod
@@ -558,6 +561,7 @@ class MatchRow(Base):
             stats=_stats_to_json(match.stats),
             spectators=match.spectators,
             atmosphere=match.atmosphere,
+            momentum=list(match.momentum),
         )
 
 
