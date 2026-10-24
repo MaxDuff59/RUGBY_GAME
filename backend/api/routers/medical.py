@@ -75,7 +75,8 @@ def injury_case(player: Player, injury: Injury, club: Club, day: datetime.date) 
 def _overview(session: Session, row: ClubRow) -> MedicalOverview:
     club = row.to_domain()
     day = game_date(session)
-    players = {p.id: p for p in club.players}
+    # Les espoirs se blessent aussi (matchs des espoirs, entraînement).
+    players = {p.id: p for p in [*club.players, *club.youths]}
     rows = session.scalars(
         select(InjuryRow)
         .join(PlayerRow)

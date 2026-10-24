@@ -300,3 +300,37 @@ def test_injuries_heal_over_the_season(manager):
     if injury["severity"] != "severe":
         assert found["injury"]["status"] in ("fragile", "healed")
         assert found["injury"]["weeks_left"] == 0
+
+
+def test_an_injured_youth_shows_up_at_the_infirmary(manager):
+    """Un espoir blessé (match des espoirs, entraînement) n'empêche pas d'ouvrir l'infirmerie."""
+    from datetime import timedelta
+
+    from sqlalchemy import select
+
+    from api.ledger import game_date
+    from models.orm import InjuryRow, PlayerRow
+    from tests.test_jokers import db
+
+    session = db()
+    day = game_date(session)
+    youth = session.scalars(
+        select(PlayerRow).where(PlayerRow.club_id == 3, PlayerRow.squad == "youth")
+    ).first()
+    session.add(
+        InjuryRow(
+            player_id=youth.id,
+            severity="light",
+            kind="entorse de la cheville",
+            source="match",
+            occurred_on=day - timedelta(days=1),
+            base_weeks=2,
+            return_date=day + timedelta(weeks=2),
+            protocol="standard",
+            protocol_chosen=True,
+        )
+    )
+    session.commit()
+    medical = manager.get("/medical")
+    assert medical.status_code == 200
+    assert youth.id in {c["player"]["id"] for c in medical.json()["injured"]}
