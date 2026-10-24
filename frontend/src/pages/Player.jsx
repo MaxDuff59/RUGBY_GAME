@@ -18,6 +18,8 @@ import {
   formatMoney,
   formatNote,
   formatPercent,
+  formatGain,
+  formatPotential,
   formatShortDate,
   formatSuspension,
   nationalityLabel,
@@ -176,6 +178,7 @@ export default function Player() {
           <Stat value={data.season.points} label="points" />
           <Stat value={formatMoney(player.wage)} label="salaire / saison" />
           <Stat value={formatMoney(player.value)} label="valeur" />
+          <Stat value={formatPotential(player)} label="potentiel estimé" />
           <div className="stat player-head__overall">
             <span className="player-head__note">{formatNote(player.overall)}</span>
             <span className="muted">note · meilleur que {Math.round(data.better_than.overall * 100)} % des {peerScope}</span>
@@ -248,7 +251,7 @@ export default function Player() {
             </div>
 
             <h3 className="eyebrow player-card__sub">Saison {data.season.year ?? ""}</h3>
-            <SeasonFacts season={data.season} />
+            <SeasonFacts season={data.season} gain={player.season_gain} />
 
             <h3 className="eyebrow player-card__sub">Blessures · {data.injuries.length}</h3>
             {data.injuries.length === 0 ? (
@@ -286,7 +289,7 @@ function Stat({ value, label }) {
 }
 
 // La saison du joueur : temps de jeu, points, puis ce que le staff relève à chaque match.
-function SeasonFacts({ season }) {
+function SeasonFacts({ season, gain }) {
   const attempts = season.tackles + season.missed_tackles;
   const tackling = attempts > 0 ? ` · ${Math.round((100 * season.tackles) / attempts)} %` : "";
   const cards = season.yellow_cards + season.red_cards;
@@ -295,6 +298,7 @@ function SeasonFacts({ season }) {
       <Fact label="Matchs joués" value={season.matches} />
       <Fact label="Minutes" value={season.minutes} />
       <Fact label="Note moyenne" value={season.rating !== null ? formatNote(season.rating) : "–"} />
+      <Fact label="Progrès" value={formatGain(gain)} />
       <Fact label="Essais" value={season.tries} />
       <Fact label="Points" value={season.points} />
       <Fact label="Ballons portés" value={season.carries} />

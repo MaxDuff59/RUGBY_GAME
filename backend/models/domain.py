@@ -161,6 +161,12 @@ class Player:
     suspended_matches: int = 0
     # Cartons jaunes de la saison qui comptent pour la suspension au cumul.
     yellow_cards: int = 0
+    # Progression (engine/development.py) : potentiel caché (note générale visée, None
+    # tant qu'il n'a pas été tiré), progrès en cours vers le prochain point d'attribut,
+    # et points d'attributs gagnés depuis le début de la saison.
+    potential: float | None = None
+    progress: float = 0.0
+    season_gain: int = 0
 
     def __post_init__(self) -> None:
         # On refuse tout attribut hors de l'échelle 1-20 dès la création.

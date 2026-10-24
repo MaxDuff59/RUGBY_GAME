@@ -8,6 +8,7 @@ from api.deps import SessionDep
 from api.ledger import current_season, game_date
 from api.routers.clubs import duty_out
 from api.schemas import ClubRef, InjuryOut, PeerOut, PlayerDetail, PlayerOut, PlayerSeasonStats
+from api.scouting import Knowledge
 from data.leagues import league_config
 from engine.match_engine import (
     RATING_FOR_POSITION,
@@ -141,7 +142,9 @@ def get_player(player_id: int, session: SessionDep) -> PlayerDetail:
     others = [p for p in everyone if p.id != player.id]
 
     return PlayerDetail(
-        player=PlayerOut.from_player(player, day, names, duty),
+        player=PlayerOut.from_player(
+            player, day, names, duty, Knowledge(session).uncertainty(player)
+        ),
         club=club,
         lineup_ids=lineup_ids,
         starter=player.id in lineup_ids,

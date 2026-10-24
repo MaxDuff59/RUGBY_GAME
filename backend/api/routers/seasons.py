@@ -440,6 +440,14 @@ def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayRes
         player, player_row = players[player_id], session.get(PlayerRow, player_id)
         player_row.suspended_matches = player.suspended_matches
         player_row.yellow_cards = player.yellow_cards
+    # Progression : chacun a avancé vers son potentiel (engine/development.py).
+    for player_id in report.developed:
+        player, player_row = players[player_id], session.get(PlayerRow, player_id)
+        for name in ATTRIBUTE_NAMES:
+            setattr(player_row, name, getattr(player, name))
+        player_row.potential = player.potential
+        player_row.progress = player.progress
+        player_row.season_gain = player.season_gain
 
     # Les matchs internationaux du jour, avec leur propre hasard : les clubs jouent
     # la même journée qu'il y en ait ou non.
@@ -873,6 +881,7 @@ def start_next_season(session: SessionDep) -> SeasonOut:
                 continue
             row.age = player.age
             row.yellow_cards = player.yellow_cards
+            row.season_gain = player.season_gain
             for name in ATTRIBUTE_NAMES:
                 setattr(row, name, getattr(player, name))
         for youth in moves.promoted:

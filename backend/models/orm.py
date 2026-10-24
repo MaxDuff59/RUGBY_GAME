@@ -170,6 +170,10 @@ class PlayerRow(Base):
     # Discipline (engine/discipline.py) : matchs de suspension à purger, jaunes de la saison.
     suspended_matches: Mapped[int] = mapped_column(default=0, server_default="0")
     yellow_cards: Mapped[int] = mapped_column(default=0, server_default="0")
+    # Progression (engine/development.py) : potentiel caché, progrès en cours, gains de la saison.
+    potential: Mapped[float | None] = mapped_column(default=None)
+    progress: Mapped[float] = mapped_column(default=0.0, server_default="0")
+    season_gain: Mapped[int] = mapped_column(default=0, server_default="0")
 
     club: Mapped[ClubRow | None] = relationship(
         foreign_keys=[club_id], overlaps="players,youths", viewonly=True
@@ -213,6 +217,9 @@ class PlayerRow(Base):
             nationality=self.nationality,
             suspended_matches=self.suspended_matches or 0,
             yellow_cards=self.yellow_cards or 0,
+            potential=self.potential,
+            progress=self.progress or 0.0,
+            season_gain=self.season_gain or 0,
         )
 
     @classmethod
@@ -232,6 +239,9 @@ class PlayerRow(Base):
             nationality=player.nationality,
             suspended_matches=player.suspended_matches,
             yellow_cards=player.yellow_cards,
+            potential=player.potential,
+            progress=player.progress,
+            season_gain=player.season_gain,
             **player.attributes,
         )
 

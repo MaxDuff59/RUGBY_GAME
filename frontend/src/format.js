@@ -265,6 +265,18 @@ export const MATCH_STATS = [
   { key: "lineout_steals", label: "Touches volées", one: "touche volée", short: "Vol." },
 ];
 
+// Potentiel estimé d'un joueur (engine/development.py) : « 14-16 » (trait d'union
+// insécable), ou « 15 » quand le club le connaît assez pour trancher. Le vrai
+// potentiel reste caché.
+export function formatPotential(player) {
+  const low = Math.round(player.potential_low);
+  const high = Math.round(player.potential_high);
+  return low === high ? String(low) : `${low}\u2011${high}`;
+}
+
+// Points d'attributs gagnés depuis le début de la saison : « +4 », ou « – ».
+export const formatGain = (points) => (points > 0 ? `+${points}` : "–");
+
 // Ce qu'un joueur suspendu doit encore purger (engine/discipline.py).
 export const formatSuspension = (matches) => `Suspendu ${matches} match${matches > 1 ? "s" : ""}`;
 

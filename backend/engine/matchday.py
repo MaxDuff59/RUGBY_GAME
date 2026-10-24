@@ -15,8 +15,9 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
 from data.leagues import League
-from engine import discipline
+from engine import development, discipline
 from engine.crowd import gate
+from engine.development import NO_TRAINING, Training
 from engine.economy import (
     CHAMPION_PRIZE,
     PLAYOFF_PRIZES,
@@ -80,6 +81,8 @@ class Day:
     fervour: Callable[[int], float] = lambda club_id: FANS_NEUTRAL
     # Recette par match des sponsors du maillot d'un club (engine/sponsors.py).
     shirt_revenue: Callable[[int], int] = lambda club_id: 0
+    # Semaine d'entraînement d'un club (engine/training.py) : rythme et thème de travail.
+    training: Callable[[int], Training] = lambda club_id: NO_TRAINING
 
 
 @dataclass
@@ -91,6 +94,10 @@ class DayReport:
     suspensions: list[discipline.Suspension] = field(default_factory=list)
     # Joueurs dont la suspension ou le compteur de jaunes a changé, à enregistrer.
     disciplined: set[int] = field(default_factory=set)
+    # Progression (engine/development.py) : joueurs qui ont avancé ce jour-là (à
+    # enregistrer), et les attributs gagnés par chacun.
+    developed: set[int] = field(default_factory=set)
+    gains: dict[int, list[str]] = field(default_factory=dict)
 
 
 def training_week(
@@ -202,6 +209,13 @@ def play_day(
         )
         report.disciplined.update(s.player_id for s in suspensions)
 
+        # Chacun progresse selon ce qu'il a fait du match (ou de la semaine).
+        for club in (home, away):
+            report.gains.update(
+                development.develop(club, match.stats, rng, training=world.training(club.id))
+            )
+            report.developed.update(p.id for p in club.players)
+
         for event in match.events:
             if event.type == EventType.INJURY:
                 club = clubs[event.club_id]
@@ -275,6 +289,9 @@ def play_day(
             weather=forecast(clubs[match.home_club_id], day),
         )
         _fill(match, result)
+        for club in (clubs[match.home_club_id], clubs[match.away_club_id]):
+            report.gains.update(development.develop(club, match.stats, rng, youth=True))
+            report.developed.update(p.id for p in club.youths)
 
     # Les salaires se versent à chaque journée de saison régulière du championnat,
     # à tous ses clubs.

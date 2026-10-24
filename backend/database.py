@@ -33,6 +33,7 @@ from data.generator import (
     roster_nationalities,
 )
 from data.nations import home_nation
+from engine.development import ceiling, initial_potential
 from engine.free_agents import newcomers
 from models import ATTRIBUTE_MAX, ATTRIBUTE_MIN, Position
 from models.orm import Base, ClubRow, PlayerRow, StaffRow
@@ -389,6 +390,9 @@ ADDED_COLUMNS = {
     "players": {
         "suspended_matches": "INTEGER NOT NULL DEFAULT 0",
         "yellow_cards": "INTEGER NOT NULL DEFAULT 0",
+        "potential": "FLOAT",
+        "progress": "FLOAT NOT NULL DEFAULT 0",
+        "season_gain": "INTEGER NOT NULL DEFAULT 0",
     },
     "clubs": {"captain_id": "INTEGER"},
 }
@@ -408,6 +412,19 @@ def _add_columns(engine: Engine) -> None:
                     connection.execute(text(f"ALTER TABLE {name} ADD COLUMN {column} {ddl}"))
 
 
+def _fill_potential(engine: Engine) -> None:
+    """Potentiel des joueurs qui n'en ont pas encore (parties d'avant la progression,
+    et joueurs créés depuis le dernier lancement) : tiré d'après leur âge et leur note."""
+    if not inspect(engine).has_table("players", schema=_schema_of(engine)):
+        return
+    with sessionmaker(bind=engine)() as session:
+        rows = session.scalars(select(PlayerRow).where(PlayerRow.potential.is_(None))).all()
+        for row in rows:
+            row.potential = initial_potential(row.to_domain())
+        if rows:
+            session.commit()
+
+
 def _migrate(engine: Engine) -> None:
     """Les quelques changements de schéma qu'on sait rattraper sans repartir de zéro
     (parties SQLite d'avant ces changements ; en Postgres les schémas naissent à jour,
@@ -417,6 +434,7 @@ def _migrate(engine: Engine) -> None:
     _add_nationality(engine)
     _add_international_stage(engine)
     _add_columns(engine)
+    _fill_potential(engine)
     if engine.dialect.name != "sqlite":
         return
     inspector = inspect(engine)
@@ -497,6 +515,8 @@ def seed_if_empty(
     rng = random.Random(seed)
     released: list = []  # vrais joueurs en surnombre dans leur club : agents libres
     clubs = generate_real_clubs(rng, released=released) if real else generate_clubs(club_count, rng)
+    for player in (p for club in clubs for p in club.players + club.youths):
+        ceiling(player)  # potentiel tiré d'après l'âge de départ (engine/development.py)
     session.add_all(ClubRow.from_domain(club) for club in clubs)
     # Staff disponible à l'embauche (3 candidats par poste), après ceux des clubs.
     first_id = sum(len(club.staff) for club in clubs) + 1
@@ -506,6 +526,8 @@ def seed_if_empty(
     last_id = max((p.id for c in clubs for p in c.players + c.youths + released), default=0)
     player_ids = itertools.count(last_id + 1)
     free_agents = released + newcomers(released, player_ids, FIRST_SEASON_YEAR, rng)
+    for player in free_agents:
+        ceiling(player)
     session.add_all(PlayerRow.from_domain(player) for player in free_agents)
     session.commit()
     return len(clubs)

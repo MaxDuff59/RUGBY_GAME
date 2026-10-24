@@ -305,8 +305,10 @@ def test_leaving_the_table_myself_is_forgiven_quickly(manager):
         manager.post("/seasons/current/play")
     target = manager.get(f"/transfers/{player_id}").json()
     assert target["talks_closed_until"] is None
+    # Sans rancune : le club demande le prix du jour (le joueur a pu progresser depuis).
+    asked = next(o for o in target["options"] if o["kind"] == "transfer")["fee_demand"]
     reopened = manager.post(f"/transfers/{player_id}/open", json={"kind": "transfer"}).json()
-    assert reopened["fee_demand"] == opened["fee_demand"] and reopened["patience"] == 6
+    assert reopened["fee_demand"] == asked and reopened["patience"] == 6
 
 
 def test_loan_returns_to_the_owner_at_the_end_of_the_season(manager):

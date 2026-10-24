@@ -20,6 +20,7 @@ from api.schemas import (
     PlayerOut,
     StrengthOut,
 )
+from api.scouting import Knowledge
 from engine.match_engine import SLOT_POSITIONS, team_strength
 from models.orm import ClubRow
 
@@ -54,6 +55,7 @@ def get_club(club_id: int, session: SessionDep) -> ClubDetail:
     day = game_date(session)
     names = {row.id: row.name for row in session.scalars(select(ClubRow))}
     duties = internationals.release_for_next_match(session, club)
+    knowledge = Knowledge(session)
     return ClubDetail(
         id=club.id,
         name=club.name,
@@ -62,7 +64,9 @@ def get_club(club_id: int, session: SessionDep) -> ClubDetail:
         strength=StrengthOut.from_team(team_strength(club, day)),
         # Les pros, puis les espoirs appelés en renfort pour un doublon.
         players=[
-            PlayerOut.from_player(p, day, names, duty_out(duties.get(p.id)))
+            PlayerOut.from_player(
+                p, day, names, duty_out(duties.get(p.id)), knowledge.uncertainty(p)
+            )
             for p in [*club.players, *club.cover]
         ],
         lineup_custom=any(player_id is not None for player_id in club.lineup_choice),

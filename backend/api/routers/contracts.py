@@ -40,6 +40,7 @@ from engine.contracts import (
     renewal_years,
     retires_next_season,
 )
+from engine.development import OWN_UNCERTAINTY
 from engine.economy import SQUAD_MAX, SQUAD_MIN
 from engine.free_agents import settle_contracts
 from engine.journal import MoveKind
@@ -136,7 +137,7 @@ def _situation(
 ) -> ContractOut | None:
     """Ce qui attend le joueur à l'intersaison, ou None s'il est sous contrat et reste."""
     common = {
-        "player": PlayerOut.from_player(player, day, names),
+        "player": PlayerOut.from_player(player, day, names, uncertainty=OWN_UNCERTAINTY),
         "playing_time": (
             "espoir" if player.squad == Squad.YOUTH else time_label(playing_time(player, club))
         ),
@@ -354,7 +355,7 @@ def rival_signings(
         incoming[rival.id] += 1
         signings.append(
             ContractOut(
-                player=PlayerOut.from_player(player, day, names),
+                player=PlayerOut.from_player(player, day, names, uncertainty=OWN_UNCERTAINTY),
                 status="signed_elsewhere",
                 playing_time="espoir"
                 if player.squad == Squad.YOUTH

@@ -7,14 +7,16 @@ from models import Facilities, Squad
 from tests.conftest import make_club
 
 
-def test_young_players_grow_and_old_ones_decline():
+def test_offseason_leaves_the_young_and_makes_the_old_decline():
+    """Les jeunes progressent en saison, match après match (engine/development.py) ;
+    l'intersaison ne fait plus que le déclin des anciens."""
     club = make_club(1, level=12, seed=3)
     club.facilities = Facilities(training_level=5)
     young = [p for p in club.players if p.age <= 20]
     old = [p for p in club.players if p.age >= 33]
     before = {p.id: p.overall for p in club.players}
     develop_players(club, random.Random(0))
-    assert young and all(p.overall > before[p.id] for p in young)
+    assert young and all(p.overall == before[p.id] for p in young)
     assert old and all(p.overall < before[p.id] for p in old)
     assert all(1 <= getattr(p, name) <= 20 for p in club.players for name in p.attributes)
 

@@ -13,8 +13,10 @@ import {
   POSITION_ORDER,
   POSITIONS,
   formatContractEnd,
+  formatGain,
   formatMoney,
   formatNote,
+  formatPotential,
   formatSuspension,
 } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
@@ -147,6 +149,8 @@ export default function Squad() {
                 {header("positionRank", "Poste", "asc", true)}
                 {header("age", "Âge", "asc")}
                 {header("overall", "Note")}
+                {header("potential_high", "Pot.", "desc", false, "Potentiel estimé")}
+                {header("season_gain", "Prog.", "desc", false, "Points d'attributs gagnés cette saison")}
                 {national && header("club_name", "Club", "asc", true)}
                 {!national && header("value", "Valeur")}
                 {!national && header("wage", "Salaire")}
@@ -200,6 +204,8 @@ export default function Squad() {
                   <td className="left">{POSITIONS[player.position].label}</td>
                   <td className="muted">{player.age}</td>
                   <td className="note">{formatNote(player.overall)}</td>
+                  <td>{formatPotential(player)}</td>
+                  <td className="muted">{formatGain(player.season_gain)}</td>
                   {national ? (
                     <td className="left">
                       {player.club_name ? (
@@ -235,7 +241,9 @@ export default function Squad() {
           </table>
           <p className="table__note">
             {ATTRIBUTES.map((attr) => `${attr.short} ${attr.label.toLowerCase()}`).join(" · ")}.
-            Attributs sur 20 ; en gras à partir de 15. Le numéro indique les titulaires.{" "}
+            Attributs sur 20 ; en gras à partir de 15. Le numéro indique les titulaires. Pot. :
+            potentiel estimé par le staff (la note qu'il peut atteindre) ; Prog. : points
+            d'attributs gagnés cette saison, match après match.{" "}
             {national
               ? "Le groupe est ta liste ; tant qu'elle n'est pas annoncée, celle que propose le staff. Les blessés ne sont pas alignés."
               : "Salaire par saison, contrat jusqu'en juin de l'année indiquée. Les blessés et les suspendus ne sont pas alignés : voir la page Médical. « En sélection » : retenu par sa sélection, qui joue le jour de notre prochain match (doublon) ; des espoirs complètent alors la feuille de match. C : le capitaine, qui calme les esprits tant qu'il est sur le terrain."}

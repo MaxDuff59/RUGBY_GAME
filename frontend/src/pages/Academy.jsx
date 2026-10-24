@@ -8,7 +8,16 @@ import { useConfirm } from "../components/ConfirmDialog.jsx";
 import Level from "../components/Level.jsx";
 import MatchList from "../components/MatchList.jsx";
 import SortHeader from "../components/SortHeader.jsx";
-import { ATTRIBUTES, POSITIONS, formatContractEnd, formatLongDate, formatMoney, formatNote } from "../format.js";
+import {
+  ATTRIBUTES,
+  POSITIONS,
+  formatContractEnd,
+  formatGain,
+  formatLongDate,
+  formatMoney,
+  formatNote,
+  formatPotential,
+} from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { useSort } from "../hooks/useSort.js";
 
@@ -209,6 +218,8 @@ function PlayerTable({ players, sort, starters, exitAge, action }) {
             {header("name", "Joueur", "asc", true)}
             {header("age", "Âge", "asc")}
             {header("overall", "Note")}
+            {header("potential_high", "Pot.", "desc", false, "Potentiel estimé par le staff")}
+            {header("season_gain", "Prog.", "desc", false, "Points d'attributs gagnés cette saison")}
             {header("wage", "Salaire")}
             {header("contract_until", "Contrat", "asc")}
             {ATTRIBUTES.map((attr) => (
@@ -238,6 +249,8 @@ function PlayerTable({ players, sort, starters, exitAge, action }) {
               </td>
               <td className="muted">{player.age}</td>
               <td className="note">{formatNote(player.overall)}</td>
+              <td>{formatPotential(player)}</td>
+              <td className="muted">{formatGain(player.season_gain)}</td>
               <td className="muted">{formatMoney(player.wage)}</td>
               <td className="muted">{formatContractEnd(player.contract_until)}</td>
               {ATTRIBUTES.map((attr) => {

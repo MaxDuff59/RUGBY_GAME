@@ -14,6 +14,7 @@ from api.deps import SessionDep, load_my_club_row
 from api.jokers import joker_ids, squad_count
 from api.ledger import current_season, game_date
 from api.schemas import AcademyOverview, PlayerOut, StandingOut, StrengthOut
+from engine.development import OWN_UNCERTAINTY
 from engine.economy import SQUAD_MAX, SQUAD_MIN, wage_for
 from engine.match_engine import team_strength
 from engine.offseason import youth_intake_size
@@ -85,9 +86,9 @@ def _overview(session: Session, me: ClubRow) -> AcademyOverview:
         squad_size=squad_count(session, me),
         squad_min=SQUAD_MIN,
         squad_max=SQUAD_MAX,
-        youths=[PlayerOut.from_player(p, day) for p in club.youths],
+        youths=[PlayerOut.from_player(p, day, uncertainty=OWN_UNCERTAINTY) for p in club.youths],
         eligible_pros=[
-            PlayerOut.from_player(p, day, names)
+            PlayerOut.from_player(p, day, names, uncertainty=OWN_UNCERTAINTY)
             for p in club.players
             if p.age <= YOUTH_MAX_AGE and p.loaned_from is None
         ],

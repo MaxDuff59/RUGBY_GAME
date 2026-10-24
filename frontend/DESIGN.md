@@ -225,6 +225,10 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   La fenêtre Plan de jeu propose trois choix de pénalité : au pied, en touche, jouées.
 - Fiche joueur, carte « Notes du moteur » : la saison en trois colonnes (matchs,
   minutes, note moyenne, essais, points, puis les statistiques relevées à chaque match).
+- Progression : colonnes « Pot. » (potentiel estimé, une fourchette « 14-16 » plus
+  étroite pour nos joueurs que pour les autres) et « Prog. » (points d'attributs gagnés
+  cette saison, « +3 ») dans l'effectif et au centre de formation ; sur la fiche joueur,
+  « potentiel estimé » parmi les chiffres de l'en-tête, « Progrès » dans sa saison.
 - Tableau d'effectif : 9 attributs (dont l'endurance, qui règle la barre d'énergie en match),
   gras à partir de 15, gris à 8 et moins.
 - Boutons et liens cliquables : 44 px de haut minimum.

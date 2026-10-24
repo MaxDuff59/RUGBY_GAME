@@ -10,6 +10,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from engine.crowd import Crowd
+from engine.development import OTHER_UNCERTAINTY, estimate
 from engine.economy import FacilityKind, TransactionCategory, market_value
 from engine.journal import Kind as ArticleKind
 from engine.journal import MoveKind
@@ -158,6 +159,11 @@ class PlayerOut(BaseModel):
     yellow_cards: int = 0
     # Ascendant sur le groupe, sur 20 (expérience et niveau) : l'étoffe d'un capitaine.
     leadership: float = 0.0
+    # Potentiel estimé par le club (engine/development.py) : une fourchette de note
+    # générale, d'autant plus étroite que le club connaît le joueur ; le vrai reste caché.
+    potential_low: float = 0.0
+    potential_high: float = 0.0
+    season_gain: int = 0  # points d'attributs gagnés depuis le début de la saison
 
     @classmethod
     def from_player(
@@ -166,14 +172,27 @@ class PlayerOut(BaseModel):
         day: datetime.date | None = None,
         club_names: dict[int, str] | None = None,
         duty: DutyOut | None = None,
+        uncertainty: float = OTHER_UNCERTAINTY,
     ) -> "PlayerOut":
+        """`uncertainty` : ce que le club sait du joueur (api/scouting.py), en points de
+        note de part et d'autre de son estimation du potentiel."""
         # Tous les champs viennent du joueur, sauf ceux qui se calculent.
-        computed = {"value", "injury", "loaned_from_name", "duty", "club_name", "leadership"}
+        computed = {
+            "value",
+            "injury",
+            "loaned_from_name",
+            "duty",
+            "club_name",
+            "leadership",
+            "potential_low",
+            "potential_high",
+        }
         fields = {name: getattr(player, name) for name in cls.model_fields if name not in computed}
         injury = None
         if day is not None and (player.is_injured(day) or player.is_fragile(day)):
             injury = InjuryOut.from_injury(player.injury, day)
         owner = (club_names or {}).get(player.loaned_from) if player.loaned_from else None
+        low, high = estimate(player, uncertainty)
         return cls(
             **fields,
             value=market_value(player),
@@ -182,6 +201,8 @@ class PlayerOut(BaseModel):
             loaned_from_name=owner,
             duty=duty,
             leadership=round(20 * leadership(player), 1),
+            potential_low=low,
+            potential_high=high,
         )
 
 

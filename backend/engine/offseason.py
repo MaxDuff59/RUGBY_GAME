@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from data.generator import FIRST_SEASON_YEAR, generate_youth_player, youth_level
 from data.nations import home_nation
-from engine import discipline
+from engine import development, discipline
 from engine.economy import SQUAD_MAX, wage_for
 from models import (
     ATTRIBUTE_MAX,
@@ -31,6 +31,8 @@ INTAKE_AGES = (16, 17)
 # d'entraînement pour les pros (+1 point à partir du niveau 3, +2 au niveau 5).
 GROWTH_BY_AGE = [(20, (2, 4)), (23, (1, 3)), (29, (0, 1)), (32, (0, 0)), (99, (-2, -1))]
 FACILITY_BONUS = {1: 0, 2: 0, 3: 1, 4: 1, 5: 2}
+# Au-delà de cet âge, un joueur décline à chaque intersaison.
+DECLINE_AGE = 32
 
 
 def age_players(club: Club) -> None:
@@ -55,7 +57,8 @@ def growth_points(player: Player, facility_level: int, rng: random.Random) -> in
 
 
 def develop_player(player: Player, facility_level: int, rng: random.Random) -> int:
-    """Fait progresser (ou décliner) un joueur ; renvoie les points gagnés."""
+    """Fait progresser (ou décliner) un joueur d'un coup ; renvoie les points gagnés.
+    Sert aux joueurs hors des championnats du jeu, et au déclin des plus âgés."""
     points = growth_points(player, facility_level, rng)
     step = 1 if points > 0 else -1
     for _ in range(abs(points)):
@@ -66,12 +69,12 @@ def develop_player(player: Player, facility_level: int, rng: random.Random) -> i
 
 
 def develop_players(club: Club, rng: random.Random | None = None) -> None:
-    """Progression de tout le club (à appeler après `age_players`)."""
+    """Déclin des plus âgés (à appeler après `age_players`). Les progrès des autres se
+    font au fil de la saison, match après match (engine/development.py)."""
     rng = rng or random.Random()
-    for player in club.players:
-        develop_player(player, club.facilities.training_level, rng)
-    for youth in club.youths:
-        develop_player(youth, club.facilities.academy_level, rng)
+    for player in club.players + club.youths:
+        if player.age > DECLINE_AGE:
+            develop_player(player, 1, rng)
 
 
 def youth_intake_size(academy_level: int) -> int:
@@ -140,6 +143,7 @@ def club_offseason(
     age_players(club)
     develop_players(club, rng)
     discipline.new_season([*club.players, *club.youths])
+    development.new_season([*club.players, *club.youths])
 
     retired = retirees(club)
     gone = {player.id for player in retired}
