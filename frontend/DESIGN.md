@@ -119,6 +119,9 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   jour à chaque journée (classement, vie du club, journal, transferts). À la fin : bilan,
   classement avant → après, blessés, signés ailleurs, sélections, affaires tranchées par
   le staff ; le bouton mène à l'affaire en attente ou au bilan de la saison s'il y en a.
+- Staff : sous les étoiles de chaque titulaire et de chaque candidat, ce que le poste apporte
+  (« +5 % conquête et paquet », « −4,5 pts de réussite au pied », « Sans effet » à 3 étoiles),
+  en vert (victoire) quand il aide, en rouge quand il coûte ; un poste vacant affiche aussi son manque.
 - Infrastructures : chaque carte a un bouton « Voir » qui ouvre une grande fenêtre
   (`Modal`) : à gauche la scène 3D (`Scene3D.jsx`, transformations CSS, pas de
   bibliothèque ; on glisse pour tourner, « Recentrer » remet la vue), à droite le panneau.

@@ -92,16 +92,29 @@ export const KEY_ATTRIBUTES = {
 };
 
 // Postes du staff, dans l'ordre d'affichage, avec ce qu'ils apporteront au jeu.
+// `effect` : ce que change chaque poste (engine/coaching.py), après « +5 % » ;
+// `points` : un effet en points de réussite plutôt qu'en pourcentage.
 export const STAFF_ROLES = {
-  FORWARDS_COACH: { label: "Entraîneur des avants", scope: "Mêlée et touche" },
-  ATTACK_COACH: { label: "Entraîneur de l'attaque", scope: "Jeu à la main, lignes arrières" },
-  DEFENCE_COACH: { label: "Entraîneur de la défense", scope: "Plaquage, organisation défensive" },
-  KICKING_COACH: { label: "Entraîneur du jeu au pied", scope: "Buteurs et jeu au pied" },
-  FITNESS_COACH: { label: "Préparateur physique", scope: "Vitesse, puissance, fatigue" },
-  ANALYST: { label: "Analyste", scope: "Préparation des matchs, recrutement" },
-  PHYSIO: { label: "Kinésithérapeute", scope: "Récupération" },
-  DOCTOR: { label: "Médecin", scope: "Blessures" },
+  FORWARDS_COACH: { label: "Entraîneur des avants", scope: "Mêlée, touche et paquet", effect: "conquête et paquet" },
+  ATTACK_COACH: { label: "Entraîneur de l'attaque", scope: "Jeu à la main, lignes arrières", effect: "attaque" },
+  DEFENCE_COACH: { label: "Entraîneur de la défense", scope: "Plaquage, organisation défensive", effect: "défense" },
+  KICKING_COACH: { label: "Entraîneur du jeu au pied", scope: "Buteurs", effect: "de réussite au pied", points: true },
+  FITNESS_COACH: { label: "Préparateur physique", scope: "Fraîcheur entre deux matchs", effect: "de récupération" },
+  ANALYST: { label: "Analyste vidéo", scope: "Préparation des matchs : occasions", effect: "de territoire" },
+  PHYSIO: { label: "Kinésithérapeute", scope: "Durée des convalescences", effect: "de convalescence" },
+  DOCTOR: { label: "Médecin", scope: "Rechutes des joueurs revenus de blessure", effect: "de rechutes" },
 };
+
+// Ce qu'apporte un membre du staff : 0.05 -> « +5 % attaque », -0.045 au pied ->
+// « −4,5 pts de réussite au pied ». Un entraîneur de 3 étoiles ne change rien.
+export function formatStaffEffect(role, value) {
+  const { effect, points } = STAFF_ROLES[role];
+  if (Math.abs(value) < 0.0005) return "Sans effet";
+  const sign = value > 0 ? "+" : "−";
+  const percent = Math.abs(value) * 100;
+  const amount = percent >= 10 ? integer.format(Math.round(percent)) : upToOneDecimal.format(percent);
+  return `${sign}${amount} ${points ? "pts" : "%"} ${effect}`;
+}
 
 export const FACILITIES = {
   stadium: { label: "Stade", unit: "places", scope: "Billetterie les jours de match" },

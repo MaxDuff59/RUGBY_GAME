@@ -2345,6 +2345,22 @@ select.tactics__select {
   color: var(--accent);
 }
 
+/* Page Staff : ce qu'un poste apporte, sous ses étoiles. */
+.staff-effect {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.staff-effect--up {
+  color: var(--win);
+}
+
+.staff-effect--down {
+  color: var(--loss);
+}
+
 /* --- Médical --------------------------------------------------------------------- */
 
 /* Étiquette d'état : blessé (accent), fragile (contour), guéri (gris) */

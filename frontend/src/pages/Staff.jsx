@@ -4,7 +4,7 @@ import { api } from "../api.js";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import Level from "../components/Level.jsx";
 import SortHeader from "../components/SortHeader.jsx";
-import { STAFF_ROLES, formatMoney } from "../format.js";
+import { STAFF_ROLES, formatMoney, formatStaffEffect } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { useSort } from "../hooks/useSort.js";
 
@@ -89,7 +89,10 @@ export default function Staff() {
                       <div className="muted">{STAFF_ROLES[slot.role].scope}</div>
                     </td>
                     <td className="left">{slot.member ? slot.member.name : <span className="muted">Poste vacant</span>}</td>
-                    <td className="left">{slot.member && <Level value={slot.member.level} />}</td>
+                    <td className="left">
+                      {slot.member && <Level value={slot.member.level} />}
+                      <Effect role={slot.role} value={slot.effect} />
+                    </td>
                     <td>{slot.member && formatMoney(slot.member.wage)}</td>
                     <td>
                       {slot.member && (
@@ -110,8 +113,9 @@ export default function Staff() {
               </tbody>
             </table>
             <p className="table__note">
-              Salaires par saison. Licencier coûte la moitié du salaire annuel. Clique sur un poste
-              pour voir les candidats.
+              Salaires par saison. Un entraîneur de 3 étoiles ne change rien au jeu ; un poste
+              vacant coûte plus cher qu'un entraîneur médiocre. Licencier coûte la moitié du
+              salaire annuel. Clique sur un poste pour voir les candidats.
             </p>
           </div>
         </section>
@@ -132,7 +136,10 @@ export default function Staff() {
                 {candidates.map((candidate) => (
                   <tr key={candidate.id}>
                     <td className="left" style={{ fontWeight: 600 }}>{candidate.name}</td>
-                    <td className="left"><Level value={candidate.level} /></td>
+                    <td className="left">
+                      <Level value={candidate.level} />
+                      <Effect role={candidate.role} value={candidate.effect} />
+                    </td>
                     <td>{formatMoney(candidate.wage)}</td>
                     <td>
                       <button
@@ -164,4 +171,12 @@ export default function Staff() {
       </div>
     </>
   );
+}
+
+// Ce que le poste apporte au club : en vert quand il aide, en rouge quand il coûte.
+function Effect({ role, value }) {
+  // Kiné et médecin réduisent une durée ou un risque : la baisse est une bonne nouvelle.
+  const good = role === "PHYSIO" || role === "DOCTOR" ? -value : value;
+  const tone = good > 0.0005 ? " staff-effect--up" : good < -0.0005 ? " staff-effect--down" : "";
+  return <div className={`staff-effect${tone}`}>{formatStaffEffect(role, value)}</div>;
 }

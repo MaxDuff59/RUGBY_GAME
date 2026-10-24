@@ -37,6 +37,8 @@ Principe :
    l'énergie ; le public (`engine/crowd.py`) fait l'avantage du terrain et siffle
    le buteur adverse ; le capitaine, tant qu'il est sur le terrain, calme les esprits
    (moins de cartons) et tire un peu l'équipe vers le haut.
+9. Le staff technique (`engine/coaching.py`) multiplie les notes collectives
+   (avants, attaque, défense) et le territoire (analyste), et règle le buteur.
 
 `LiveMatch` joue le match minute par minute : on peut l'arrêter, changer la
 tactique d'une équipe ou faire un remplacement, puis reprendre. `simulate_match`
@@ -55,6 +57,8 @@ from enum import StrEnum
 from itertools import accumulate
 
 from engine import team_talk
+from engine.coaching import Coaching
+from engine.coaching import coaching as coaching_of
 from engine.crowd import Crowd
 from engine.form import NEUTRAL_FORM, Form
 from engine.medical import MATCH_INJURY_CHANCE_PER_MINUTE
@@ -135,6 +139,7 @@ STRENGTH_EXPONENT = 1.0
 # (kicking 10 => 65 %, 15 => 80 %, 20 => 95 %).
 KICK_BASE = 0.35
 KICK_PER_POINT = 0.03
+KICK_MAX = 0.95  # même le meilleur buteur, bien entraîné, manque parfois
 # Une transformation se tente là où l'essai a été marqué, souvent excentrée.
 CONVERSION_PENALTY = 0.05
 
@@ -505,6 +510,15 @@ def collective_ratings(
     )
 
 
+def coach(ratings: Collective, coaching: Coaching) -> Collective:
+    """Les notes collectives travaillées par le staff technique (engine/coaching.py)."""
+    ratings.set_piece *= coaching.forwards
+    ratings.pack *= coaching.forwards
+    ratings.attack *= coaching.attack
+    ratings.defense *= coaching.defence
+    return ratings
+
+
 @dataclass
 class TeamStrength:
     """XV de départ, banc et notes collectives d'un club pour un match."""
@@ -596,10 +610,14 @@ def select_bench(
 def team_strength(
     club: Club, day: datetime.date | None = None, form: Form = NEUTRAL_FORM
 ) -> TeamStrength:
-    """XV de départ, banc et notes collectives ; `form` les module (neutre par défaut)."""
+    """XV de départ, banc et notes collectives ; `form` les module (neutre par défaut),
+    le staff technique aussi."""
     lineup = select_lineup(club, day)
     factor = form.factor([p.id for p in lineup])
-    ratings = collective_ratings(zip(SLOT_POSITIONS, lineup, strict=False), factor=factor)
+    ratings = coach(
+        collective_ratings(zip(SLOT_POSITIONS, lineup, strict=False), factor=factor),
+        coaching_of(club),
+    )
     return TeamStrength(
         club=club,
         lineup=lineup,
@@ -643,7 +661,7 @@ def kick_success_probability(kicking: int, is_conversion: bool = False) -> float
     probability = KICK_BASE + KICK_PER_POINT * kicking
     if is_conversion:
         probability -= CONVERSION_PENALTY
-    return min(probability, 0.95)
+    return min(probability, KICK_MAX)
 
 
 # --- Une équipe pendant le match ----------------------------------------------------------
@@ -688,6 +706,7 @@ class Side:
         self.tactics = tactics
         self.form = form
         self.factor = form.factor([p.id for p in lineup])  # forme du jour, fixée avant le match
+        self.coaching = coaching_of(club)  # staff technique (engine/coaching.py)
         self.substitutions = 0
         # Minute d'entrée de chaque joueur qui a joué (0 pour les titulaires) ; un
         # remplaçant entré ne peut plus entrer.
@@ -781,12 +800,16 @@ class Side:
             self.energy_left[player.id] = max(0.0, left)
 
     def collective(self, minute: int) -> Collective:
-        """Notes collectives des joueurs présents : énergie, forme, élan, infériorité, tactique."""
+        """Notes collectives des joueurs présents : énergie, forme, élan, infériorité,
+        staff et tactique."""
         factor = self.factor * (1 + self.spirit) * SHORT_HANDED_FACTOR ** self.missing(minute)
-        ratings = collective_ratings(
-            self.fielded(minute),
-            weight=lambda p: efficiency(self.energy(p)),
-            factor=factor,
+        ratings = coach(
+            collective_ratings(
+                self.fielded(minute),
+                weight=lambda p: efficiency(self.energy(p)),
+                factor=factor,
+            ),
+            self.coaching,
         )
         ratings.defense *= DEFENCE_EFFECTS[self.tactics.defence]["defense"]
         ratings.attack *= WEATHER_EFFECTS[self.weather].attack
@@ -802,7 +825,8 @@ class Side:
         plan = GAME_PLAN_EFFECTS[self.tactics.game_plan]["territory"]
         if self.tactics.game_plan == GamePlan.KICKING:
             plan *= WEATHER_EFFECTS[self.weather].kicking_plan
-        return plan * ratings.territory(kicker.kicking if kicker else 0)
+        analysis = self.coaching.analysis
+        return analysis * plan * ratings.territory(kicker.kicking if kicker else 0)
 
     # -- Discours ------------------------------------------------------------------------
 
@@ -1313,13 +1337,13 @@ class LiveMatch:
         return self.crowd.advantage if self.crowd else HOME_ADVANTAGE
 
     def _kick_probability(self, side: Side, kicker: Player, is_conversion: bool = False) -> float:
-        """Réussite d'un coup de pied au but : le vent, la pluie, et les sifflets du
-        public adverse pour l'équipe qui se déplace."""
+        """Réussite d'un coup de pied au but : l'entraîneur du jeu au pied, le vent, la
+        pluie, et les sifflets du public adverse pour l'équipe qui se déplace."""
         probability = kick_success_probability(kicker.kicking, is_conversion)
-        probability += WEATHER_EFFECTS[self.weather].kicking
+        probability += side.coaching.kicking + WEATHER_EFFECTS[self.weather].kicking
         if side is self.away and self.crowd is not None:
             probability -= self.crowd.hostility
-        return max(0.05, probability)
+        return min(max(0.05, probability), KICK_MAX)
 
     def _try(self, attacking: Side, defending: Side, minute: int, forwards: bool = False) -> None:
         """Un essai et sa transformation ; `forwards` : marqué au bout d'un maul,

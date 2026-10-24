@@ -143,7 +143,7 @@ parties ailleurs (ex. pour une instance de test).
 | `POST /live/advance`, `POST /live/tactics`, `POST /live/substitute` | Avancer le chrono ; changer la tactique ; faire un remplacement |
 | `POST /live/finish` | Finir la journée avec ce match (le staff joue les minutes restantes) |
 | `GET /finances` | Trésorerie, masse salariale et toutes les opérations |
-| `GET /staff`, `POST /staff/hire/{id}`, `POST /staff/{id}/fire` | Staff : voir, embaucher, licencier |
+| `GET /staff`, `POST /staff/hire/{id}`, `POST /staff/{id}/fire` | Staff : voir (avec ce que chaque poste apporte), embaucher, licencier |
 | `GET /facilities`, `POST /facilities/{kind}/upgrade` | Stade, centre d'entraînement, formation |
 | `POST /facilities/stadium/stands/{side}/amenities` | Installer un aménagement (panneau sponsor, buvette, boutique, loges, écran géant) dans une tribune ; il rapporte à chaque match |
 | `GET /transfers`, `GET /transfers/{id}`, `POST /transfers/{id}/open` | Marché, approche d'un joueur, ouverture d'une négociation |
@@ -279,6 +279,14 @@ Ce que le moteur ajoute au match :
 - une **note sur 10** par joueur, qui part de 6 et bouge avec ses actions
   (essai +1, coup de pied réussi ou raté, carton −1 / −2) et la domination de sa
   ligne minute après minute.
+- le **staff technique** (`engine/coaching.py`) : l'entraîneur des avants
+  multiplie la conquête et le paquet, celui de l'attaque l'attaque, celui de la
+  défense la défense, l'analyste vidéo le territoire, de +5 % (5 étoiles) à −5 %
+  (1 étoile) et −7,5 % pour un poste vacant ; l'entraîneur du jeu au pied ajoute
+  de +3 à −4,5 points de réussite au buteur. Un entraîneur de 3 étoiles ne change
+  rien (une sélection ou les espoirs, sans staff à eux, jouent à ce niveau). À
+  effectif égal, un staff technique à 5 étoiles gagne ~58 % de ses matchs contre
+  un staff à 3 étoiles, et des postes vacants ~38 %.
 
 `POST /live/finish` (ou « Simuler la journée ») joue ce qu'il reste par le staff
 et termine la journée comme d'habitude : autres matchs, billetterie, salaires,

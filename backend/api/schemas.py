@@ -885,12 +885,14 @@ class StaffMemberOut(BaseModel):
     role: StaffRole
     level: int
     wage: int
+    effect: float = 0.0  # ce qu'il apporte (engine/coaching.py `effect`)
 
 
 class StaffSlotOut(BaseModel):
     role: StaffRole
     member: StaffMemberOut | None
     severance: int | None  # indemnité si on licencie le titulaire
+    effect: float  # ce que le poste apporte aujourd'hui (vacant compris)
 
 
 class StaffOverview(BaseModel):

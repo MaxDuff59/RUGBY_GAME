@@ -11,8 +11,9 @@ from sqlalchemy.orm import Session
 from api.deps import SessionDep, load_my_club_row
 from api.ledger import game_date, record
 from api.schemas import StaffMemberOut, StaffOverview, StaffSlotOut
+from engine.coaching import effect
 from engine.economy import TransactionCategory, severance
-from models import StaffRole
+from models import StaffMember, StaffRole
 from models.orm import ClubRow, StaffRow
 
 router = APIRouter(prefix="/staff", tags=["staff"])
@@ -28,17 +29,27 @@ def _overview(session: Session, club: ClubRow) -> StaffOverview:
     return StaffOverview(
         balance=club.balance,
         slots=[_slot(role, by_role.get(role)) for role in StaffRole],
-        candidates=[StaffMemberOut.model_validate(row.to_domain()) for row in candidates],
+        candidates=[_member_out(row.to_domain()) for row in candidates],
     )
 
 
+def _member_out(member: StaffMember) -> StaffMemberOut:
+    out = StaffMemberOut.model_validate(member)
+    out.effect = effect(member.role, member.level)
+    return out
+
+
 def _slot(role: StaffRole, row: StaffRow | None) -> StaffSlotOut:
-    """Emplacement d'un poste : son titulaire (ou personne) et l'indemnité de licenciement."""
+    """Emplacement d'un poste : son titulaire (ou personne), l'indemnité de licenciement
+    et ce que le poste apporte au club."""
     if row is None:
-        return StaffSlotOut(role=role, member=None, severance=None)
+        return StaffSlotOut(role=role, member=None, severance=None, effect=effect(role, 0))
     member = row.to_domain()
     return StaffSlotOut(
-        role=role, member=StaffMemberOut.model_validate(member), severance=severance(member)
+        role=role,
+        member=_member_out(member),
+        severance=severance(member),
+        effect=effect(role, member.level),
     )
 
 
