@@ -145,6 +145,7 @@ parties ailleurs (ex. pour une instance de test).
 | `POST /live/finish` | Finir la journée avec ce match (le staff joue les minutes restantes) |
 | `GET /finances` | Trésorerie, masse salariale et toutes les opérations |
 | `GET /staff`, `POST /staff/hire/{id}`, `POST /staff/{id}/fire` | Staff : voir (avec ce que chaque poste apporte), embaucher, licencier |
+| `GET /inbox` | À traiter : affaires, blessés sans protocole, négociations, fins de contrat, offres… |
 | `GET /honours` | Palmarès : champions et trophées de chaque saison, histoire du club dirigé, records |
 | `GET /training`, `PUT /training` | Semaine d'entraînement : rythme (léger, normal, intense) et thème ; qui progresse |
 | `GET /facilities`, `POST /facilities/{kind}/upgrade` | Stade, centre d'entraînement, formation |

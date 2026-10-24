@@ -895,6 +895,22 @@ class CareerHistoryOut(BaseModel):
     offers: list[JobOfferOut]  # une fois la saison du championnat finie
 
 
+class InboxItemOut(BaseModel):
+    """Ce qui attend une décision du manager (api/routers/inbox.py)."""
+
+    kind: Literal[
+        "affair", "medical", "transfer", "discipline", "finances", "contract", "academy", "career"
+    ]
+    title: str
+    detail: str
+    link: str  # la page où le régler
+    urgent: bool = False  # à régler avant la prochaine journée
+
+
+class InboxOut(BaseModel):
+    items: list[InboxItemOut]  # le plus pressant d'abord
+
+
 class DismissalOut(BaseModel):
     """Limogeage du manager par la direction (engine/board.py)."""
 

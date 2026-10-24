@@ -7,6 +7,8 @@ import { useApi } from "../hooks/useApi.js";
 import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
 import { chosenSlot, leaveSlot } from "../save.js";
 import ClubCrest from "./ClubCrest.jsx";
+import Guide, { resetGuide } from "./Guide.jsx";
+import Inbox from "./Inbox.jsx";
 import NavIcon from "./NavIcon.jsx";
 
 // `primary` : les entrées de la barre d'onglets du téléphone ; les autres passent
@@ -70,7 +72,9 @@ export default function Layout() {
               <div className="muted">{career.league_name}</div>
             </div>
           </div>
+          {career.kind !== "nation" && <Inbox />}
         </header>
+        {career.kind !== "nation" && <Guide />}
         <Outlet context={{ career }} />
       </main>
 
@@ -117,6 +121,11 @@ function Sidebar({ career, items }) {
           {career.kind === "nation" ? "Sélectionneur" : "Manager"} : {career.manager_name}
         </div>
         <div>Partie {chosenSlot()} · sauvegarde auto</div>
+        {career.kind !== "nation" && (
+          <button type="button" className="link-button sidebar__guide" onClick={resetGuide}>
+            Revoir le guide
+          </button>
+        )}
         <LeaveButton className="sidebar__leave" />
       </div>
     </nav>
@@ -164,6 +173,11 @@ function TabBar({ career, items }) {
                 {career.kind === "nation" ? "Sélectionneur" : "Manager"} : {career.manager_name} · Partie{" "}
                 {chosenSlot()} · sauvegarde auto
               </div>
+              {career.kind !== "nation" && (
+                <button type="button" className="link-button" onClick={resetGuide}>
+                  Revoir le guide
+                </button>
+              )}
               <LeaveButton />
             </div>
           </div>

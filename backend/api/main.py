@@ -27,6 +27,7 @@ from api.routers import (
     facilities,
     finances,
     honours,
+    inbox,
     internationals,
     journal,
     leagues,
@@ -86,6 +87,7 @@ app.include_router(internationals.router)
 app.include_router(selection.router)
 app.include_router(journal.router)
 app.include_router(honours.router)
+app.include_router(inbox.router)
 app.include_router(photos.router)
 
 

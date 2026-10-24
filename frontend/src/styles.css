@@ -6354,3 +6354,145 @@ td > .tag:first-child,
 .honours__history .panel__head .eyebrow {
   white-space: nowrap;
 }
+
+/* --- Guide de la première saison --------------------------------------------------------- */
+
+.guide {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 12px 18px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.guide .eyebrow {
+  margin: 0;
+}
+
+.guide__text {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  max-width: 980px;
+}
+
+.guide__actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.sidebar__guide {
+  align-self: flex-start;
+  font-size: 13px;
+}
+
+@media (max-width: 960px) {
+  .guide {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+}
+
+/* --- À traiter (en-tête) ------------------------------------------------------------------ */
+
+.inbox {
+  position: relative;
+}
+
+.inbox__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 8px 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inbox__button:hover {
+  border-color: var(--ink);
+}
+
+.inbox__count {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 13px;
+  background: var(--line-soft);
+  font-size: 13px;
+}
+
+.inbox__button--urgent .inbox__count {
+  background: var(--accent);
+  color: #fff;
+}
+
+.inbox__panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 9;
+  width: min(420px, calc(100vw - 32px));
+  max-height: 70vh;
+  overflow-y: auto;
+  border-color: var(--ink);
+}
+
+.inbox__empty {
+  margin: 0;
+  padding: 16px 18px;
+}
+
+.inbox__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.inbox__item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 18px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inbox__item:hover {
+  background: var(--line-soft);
+}
+
+.inbox__item--urgent {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.inbox__title {
+  font-weight: 600;
+}
+
+.inbox__detail {
+  font-size: 13px;
+  line-height: 1.4;
+}

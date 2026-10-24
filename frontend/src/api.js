@@ -115,6 +115,7 @@ export const api = {
   getStaff: () => request("/staff"),
   getTraining: () => request("/training"),
   getHonours: () => request("/honours"),
+  getInbox: () => request("/inbox"),
   setTraining: (change) => request("/training", { method: "PUT", body: change }),
   hireStaff: (staffId) => post(`/staff/hire/${staffId}`),
   fireStaff: (staffId) => post(`/staff/${staffId}/fire`),
