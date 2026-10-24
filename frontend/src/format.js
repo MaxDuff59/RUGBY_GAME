@@ -277,6 +277,15 @@ export function formatPotential(player) {
 // Points d'attributs gagnés depuis le début de la saison : « +4 », ou « – ».
 export const formatGain = (points) => (points > 0 ? `+${points}` : "–");
 
+// Les trophées de fin de saison (engine/awards.py) : libellé et valeur.
+export const AWARDS = {
+  player: { label: "Joueur de la saison", format: (v) => `${formatNote(v)} de moyenne` },
+  revelation: { label: "Révélation", format: (v) => `${formatNote(v)} de moyenne` },
+  tries: { label: "Meilleur marqueur", format: (v) => `${v} essai${v > 1 ? "s" : ""}` },
+  points: { label: "Meilleur réalisateur", format: (v) => `${v} pts` },
+  tackles: { label: "Plaqueur de la saison", format: (v) => `${v} plaquages` },
+};
+
 // La semaine d'entraînement (engine/training.py) : son rythme et son thème.
 export const TRAINING_INTENSITIES = {
   light: { label: "Légère", scope: "On récupère : plus frais au coup d'envoi, moins de blessés." },

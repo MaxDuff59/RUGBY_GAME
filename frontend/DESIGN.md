@@ -229,6 +229,14 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   étroite pour nos joueurs que pour les autres) et « Prog. » (points d'attributs gagnés
   cette saison, « +3 ») dans l'effectif et au centre de formation ; sur la fiche joueur,
   « potentiel estimé » parmi les chiffres de l'en-tête, « Progrès » dans sa saison.
+- Palmarès (page `/palmares`, dernière entrée du menu ; volet « Plus » sur téléphone) :
+  liste déroulante du championnat (le nôtre d'abord), puis trois colonnes. À gauche, les
+  champions (les clubs titrés et leur nombre de titres, puis une ligne par saison, la
+  saison choisie marquée d'un filet accent, et sa finale) et « Notre histoire » (rang,
+  phases finales, « Champion » en accent). Au centre, les trophées de la saison (joueur
+  de la saison, révélation, meilleur marqueur, réalisateur, plaqueur : libellé, blason,
+  nom, valeur) et les records en pastilles (essais, points, en une saison, larges
+  victoires). À droite, l'équipe type sur le terrain. Ce qui est à nous en accent.
 - Entraînement (page `/entrainement`, entrée du menu sous Effectif ; volet « Plus » sur
   téléphone) : à gauche, le rythme de la semaine en trois cartes (Légère, Normale,
   Intense : progression, fraîcheur, blessures, l'effet en vert quand il aide, en rouge

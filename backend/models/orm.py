@@ -326,6 +326,27 @@ class SuspensionRow(Base):
     reason: Mapped[str] = mapped_column(String(14))
 
 
+class AwardRow(Base):
+    """Un trophée de fin de saison (engine/awards.py), inscrit à l'intersaison.
+
+    Le nom et le poste du joueur sont recopiés : il peut avoir raccroché depuis.
+    """
+
+    __tablename__ = "awards"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    year: Mapped[int]
+    league: Mapped[str] = mapped_column(String(12))
+    kind: Mapped[str] = mapped_column(String(12))  # `AwardKind`
+    # Équipe type : la place (poste) ; None pour les autres trophées.
+    slot: Mapped[str | None] = mapped_column(String(12), default=None)
+    player_id: Mapped[int]
+    player_name: Mapped[str] = mapped_column(String(101))
+    position: Mapped[str] = mapped_column(String(12))
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
+    value: Mapped[float]
+
+
 class StaffRow(Base):
     __tablename__ = "staff"
 

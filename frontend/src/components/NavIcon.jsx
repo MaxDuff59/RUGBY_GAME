@@ -28,6 +28,13 @@ const PATHS = {
       <path d="M9 7V4.5h6V7M12 11v5M9.5 13.5h5" />
     </>
   ),
+  // Palmarès : une coupe à deux anses sur son socle
+  palmares: (
+    <>
+      <path d="M7.5 4h9v5.5a4.5 4.5 0 0 1-9 0V4z" />
+      <path d="M7.5 6H4.5v1.5A3 3 0 0 0 7.6 10.5M16.5 6h3v1.5a3 3 0 0 1-3.1 3M12 14v3.5M8.5 20h7l-.8-2.5h-5.4z" />
+    </>
+  ),
   // Entraînement : un plot d'entraînement sur sa base
   entrainement: (
     <>

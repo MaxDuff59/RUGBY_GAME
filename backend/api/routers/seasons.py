@@ -65,6 +65,7 @@ from api.schemas import (
 from data.generator import FIRST_SEASON_YEAR
 from data.leagues import DEFAULT_LEAGUE, PROMOTION, league_config, sort_codes
 from data.nations import NATIONS_BY_CODE, WINDOWS_BY_CODE
+from engine.awards import season_awards
 from engine.board import should_sack
 from engine.economy import SQUAD_MIN
 from engine.journal import MoveKind
@@ -92,6 +93,7 @@ from models import (
     StandingRow,
 )
 from models.orm import (
+    AwardRow,
     CareerRow,
     ClubRow,
     DismissalRow,
@@ -844,6 +846,7 @@ def start_next_season(session: SessionDep) -> SeasonOut:
 
     _finish_world(session, season)
     session.expire_all()
+    record_awards(session, season)
     promoted, relegated = _promotion(season)
     if promoted is not None and relegated is not None:
         lower, upper = PROMOTION
@@ -895,6 +898,32 @@ def start_next_season(session: SessionDep) -> SeasonOut:
     session.commit()
 
     return _season_out(session, create_season(session, year, rng.randrange(SEED_RANGE)))
+
+
+def record_awards(session: Session, season: SeasonRow) -> None:
+    """Les trophées de chaque championnat de la saison (engine/awards.py), inscrits avant
+    les retraites de l'intersaison, avec le nom des joueurs."""
+    if session.scalar(select(func.count(AwardRow.id)).where(AwardRow.year == season.year)):
+        return
+    players = {row.id: row for row in session.scalars(select(PlayerRow))}
+    domain = {pid: row.to_domain() for pid, row in players.items()}
+    for league in _season_league_codes(season):
+        for award in season_awards(_league_domain(season, league), domain):
+            row = players[award.player_id]
+            session.add(
+                AwardRow(
+                    year=season.year,
+                    league=league,
+                    kind=award.kind.value,
+                    slot=award.position.value if award.position else None,
+                    player_id=award.player_id,
+                    player_name=f"{row.first_name} {row.last_name}",
+                    position=row.position,
+                    club_id=award.club_id,
+                    value=award.value,
+                )
+            )
+    session.commit()
 
 
 def _offseason_moves(

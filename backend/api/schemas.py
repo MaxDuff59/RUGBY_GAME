@@ -9,6 +9,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from engine.awards import AwardKind
 from engine.crowd import Crowd
 from engine.development import OTHER_UNCERTAINTY, estimate
 from engine.economy import FacilityKind, TransactionCategory, market_value
@@ -1352,6 +1353,95 @@ class SeasonReviewOut(BaseModel):
     balance_start: int
     balance_end: int
     scorers: list[ScorerOut]  # meilleurs marqueurs pros, trois au plus
+
+
+# --- Palmarès, trophées et records (api/routers/honours.py) ---------------------------
+
+
+class AwardOut(BaseModel):
+    """Un trophée de fin de saison (engine/awards.py)."""
+
+    kind: AwardKind
+    slot: Position | None = None  # équipe type : la place
+    player_id: int
+    name: str
+    position: Position
+    club: ClubRef
+    value: float  # note moyenne, essais, points ou plaquages
+    active: bool  # le joueur a encore une fiche (il n'a pas raccroché)
+
+
+class SeasonHonoursOut(BaseModel):
+    year: int
+    champion: ClubRef | None  # None : saison pas finie
+    runner_up: ClubRef | None
+    final: MatchSummary | None
+    awards: list[AwardOut]
+
+
+class TitlesOut(BaseModel):
+    club: ClubRef
+    titles: int
+    years: list[int]
+
+
+class LeagueHonoursOut(BaseModel):
+    code: str
+    name: str
+    short_name: str
+    titles: list[TitlesOut]  # les clubs titrés, du plus titré au moins titré
+    seasons: list[SeasonHonoursOut]  # de la plus récente à la plus ancienne
+
+
+class ClubSeasonOut(BaseModel):
+    """Une saison du club dirigé."""
+
+    year: int
+    league: str
+    league_name: str
+    rank: int | None  # saison régulière (None tant qu'elle n'a pas commencé)
+    club_count: int
+    # none : pas de phases finales ; quarter, barrage, semi, final : éliminé à ce tour ;
+    # champion ; running : saison en cours.
+    playoffs: Literal["none", "quarter", "barrage", "semi", "final", "champion", "running"]
+    played: int
+    won: int
+    points_for: int
+    points_against: int
+
+
+class RecordLineOut(BaseModel):
+    player_id: int
+    name: str
+    club: ClubRef | None
+    value: int
+    year: int | None = None  # record d'une saison : laquelle
+    active: bool
+
+
+class RecordMatchOut(BaseModel):
+    match: MatchSummary
+    year: int
+    league: str
+
+
+class RecordsOut(BaseModel):
+    """Les records de tous les championnats, depuis la première saison."""
+
+    tries: list[RecordLineOut]  # essais en carrière
+    points: list[RecordLineOut]  # points en carrière
+    season_tries: list[RecordLineOut]  # essais en une saison
+    season_points: list[RecordLineOut]  # points en une saison
+    biggest_wins: list[RecordMatchOut]  # plus larges victoires
+    seasons: int  # saisons comptées
+
+
+class HonoursOut(BaseModel):
+    club: ClubRef | None  # le club dirigé
+    league: str | None  # son championnat (celui qu'on montre d'abord)
+    leagues: list[LeagueHonoursOut]
+    club_history: list[ClubSeasonOut]
+    records: RecordsOut
 
 
 # --- Sélections nationales (engine/internationals.py) -----------------------------------

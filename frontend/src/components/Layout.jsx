@@ -24,6 +24,7 @@ const NAV_ITEMS = [
   { to: "/infrastructures", label: "Infrastructures", icon: "infrastructures" },
   { to: "/finances", label: "Finances", icon: "finances" },
   { to: "/international", label: "Sélections", icon: "selections" },
+  { to: "/palmares", label: "Palmarès", icon: "palmares" },
   // La page Match (/match) n'a pas d'entrée ici : on y va par « Jouer le match », page Club.
 ];
 

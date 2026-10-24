@@ -6143,3 +6143,156 @@ td > .tag:first-child,
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* --- Palmarès -------------------------------------------------------------------------- */
+
+.honours {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 20px;
+  min-height: 0;
+}
+
+.honours__column {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  min-height: 0;
+}
+
+.honours__team {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+}
+
+.honours__titles {
+  margin: 0;
+  padding: 12px 18px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+
+.honours__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.honours__title--mine,
+.honours__mine,
+.honours__mine a {
+  color: var(--accent);
+}
+
+.honours__list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+
+.honours__season {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.honours__season:hover {
+  background: var(--line-soft);
+}
+
+.honours__season--active {
+  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--line-soft);
+}
+
+.honours__year {
+  font-family: var(--font-display);
+  font-size: 18px;
+}
+
+.honours__awards-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 18px;
+}
+
+.honours__awards-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "kind kind" "who value";
+  gap: 2px 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.honours__awards-list .eyebrow {
+  grid-area: kind;
+  margin: 0;
+}
+
+.honours__winner {
+  grid-area: who;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.honours__winner a,
+.honours__records-list a {
+  color: inherit;
+}
+
+.honours__value {
+  grid-area: value;
+  font-weight: 600;
+}
+
+.honours__chips {
+  flex: none;
+  padding: 10px 18px 6px;
+}
+
+.honours__records-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 18px;
+}
+
+.honours__records-list li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 14px;
+}
+
+@media (max-width: 960px) {
+  .honours,
+  .honours__column {
+    display: flex;
+    flex-direction: column;
+  }
+  .honours .panel {
+    max-height: 70dvh;
+  }
+}
