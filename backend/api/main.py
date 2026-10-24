@@ -37,6 +37,7 @@ from api.routers import (
     photos,
     players,
     saves,
+    scouting,
     seasons,
     selection,
     staff,
@@ -88,6 +89,7 @@ app.include_router(selection.router)
 app.include_router(journal.router)
 app.include_router(honours.router)
 app.include_router(inbox.router)
+app.include_router(scouting.router)
 app.include_router(photos.router)
 
 

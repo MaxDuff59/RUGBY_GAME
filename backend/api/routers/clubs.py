@@ -17,7 +17,6 @@ from api.schemas import (
     FacilitiesOut,
     LineupIn,
     NationOut,
-    PlayerOut,
     StrengthOut,
 )
 from api.scouting import Knowledge
@@ -64,9 +63,7 @@ def get_club(club_id: int, session: SessionDep) -> ClubDetail:
         strength=StrengthOut.from_team(team_strength(club, day)),
         # Les pros, puis les espoirs appelés en renfort pour un doublon.
         players=[
-            PlayerOut.from_player(
-                p, day, names, duty_out(duties.get(p.id)), knowledge.uncertainty(p)
-            )
+            knowledge.player_out(p, day, names, duty_out(duties.get(p.id)))
             for p in [*club.players, *club.cover]
         ],
         lineup_custom=any(player_id is not None for player_id in club.lineup_choice),

@@ -237,6 +237,11 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   de la saison, révélation, meilleur marqueur, réalisateur, plaqueur : libellé, blason,
   nom, valeur) et les records en pastilles (essais, points, en une saison, larges
   victoires). À droite, l'équipe type sur le terrain. Ce qui est à nous en accent.
+- Recruteurs : un joueur d'un autre club non supervisé se voit estimé (attributs à deux
+  points près, et tout ce qui s'en déduit). Sa fiche et l'approche d'un transfert portent
+  l'étiquette grise « Estimation » suivie du lien « Superviser · 15 k€ » ; puis « Rapport
+  attendu · demandé le … », puis « Supervisé » (vert). Au marché, sa note est précédée
+  d'un « ≈ » gris.
 - À traiter : à droite de l'en-tête, un bouton « À traiter » et son compte (pastille en
   accent quand l'un d'eux presse). Il ouvre une liste (bordure noire, pas d'ombre) : un
   titre et une phrase par élément, filet accent à gauche pour ce qui presse ; chaque

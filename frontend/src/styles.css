@@ -6502,3 +6502,12 @@ td > .tag:first-child,
   font-size: 13px;
   line-height: 1.4;
 }
+
+/* --- Recruteurs : ce que le club sait d'un joueur ------------------------------------------ */
+
+.scout {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}

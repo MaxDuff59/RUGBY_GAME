@@ -7,7 +7,7 @@ from api import internationals
 from api.deps import SessionDep
 from api.ledger import current_season, game_date
 from api.routers.clubs import duty_out
-from api.schemas import ClubRef, InjuryOut, PeerOut, PlayerDetail, PlayerOut, PlayerSeasonStats
+from api.schemas import ClubRef, InjuryOut, PeerOut, PlayerDetail, PlayerSeasonStats
 from api.scouting import Knowledge
 from data.leagues import league_config
 from engine.match_engine import (
@@ -110,7 +110,10 @@ def get_player(player_id: int, session: SessionDep) -> PlayerDetail:
         raise HTTPException(status_code=404, detail=f"Joueur {player_id} introuvable")
     day = game_date(session)
     names = {club.id: club.name for club in session.scalars(select(ClubRow))}
-    player = row.to_domain()
+    knowledge = Knowledge(session)
+    truth = row.to_domain()
+    # Tout se lit sur le joueur tel que le club le voit : vrai, ou estimé sans rapport.
+    player = knowledge.view(truth)
 
     lineup_ids: list[int] = []
     club = None
@@ -136,15 +139,13 @@ def get_player(player_id: int, session: SessionDep) -> PlayerDetail:
     )
     if league is not None:
         query = query.where(ClubRow.league == league)
-    everyone = [p.to_domain() for p in session.scalars(query)]
+    everyone = [knowledge.view(p.to_domain()) for p in session.scalars(query)]
     if player.id not in {p.id for p in everyone}:
         everyone.append(player)
     others = [p for p in everyone if p.id != player.id]
 
     return PlayerDetail(
-        player=PlayerOut.from_player(
-            player, day, names, duty, Knowledge(session).uncertainty(player)
-        ),
+        player=knowledge.player_out(truth, day, names, duty),
         club=club,
         lineup_ids=lineup_ids,
         starter=player.id in lineup_ids,

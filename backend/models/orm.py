@@ -326,6 +326,18 @@ class SuspensionRow(Base):
     reason: Mapped[str] = mapped_column(String(14))
 
 
+class ScoutReportRow(Base):
+    """Une supervision d'un joueur par les recruteurs du club (engine/scouting.py),
+    demandée le jour `requested_on` ; le rapport est rendu au soir de cette journée."""
+
+    __tablename__ = "scout_reports"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
+    player_id: Mapped[int]  # sans clé étrangère : le joueur peut raccrocher
+    requested_on: Mapped[datetime.date] = mapped_column(Date)
+
+
 class AwardRow(Base):
     """Un trophée de fin de saison (engine/awards.py), inscrit à l'intersaison.
 

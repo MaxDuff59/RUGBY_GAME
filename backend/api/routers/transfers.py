@@ -43,11 +43,11 @@ from api.schemas import (
     OfferIn,
     OfferOut,
     OpenNegotiationIn,
-    PlayerOut,
     PlayerRef,
     TransfersOverview,
     TransferTargetOut,
 )
+from api.scouting import Knowledge
 from data.leagues import league_config, sort_codes
 from engine.economy import SQUAD_MAX, SQUAD_MIN, TransactionCategory, sale_price
 from engine.free_agents import free_agent_wage, seasons_without_club
@@ -210,6 +210,7 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
         memory[row.player_id] = (grudges, closed_until)
     signed = _signed_elsewhere(session, me.id)
     demands = career_rules(session).demands
+    knowledge = Knowledge(session)
     listings = []
     for row in others:
         club = row.to_domain()
@@ -221,7 +222,7 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
             gone = signed.get(player.id)
             listings.append(
                 ListingOut(
-                    player=PlayerOut.from_player(player, day, names),
+                    player=knowledge.player_out(player, day, names),
                     club_id=club.id,
                     club_name=club.name,
                     club_level=level,
@@ -245,7 +246,7 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
         grudges, closed_until = memory.get(player.id, (0, None))
         listings.append(
             ListingOut(
-                player=PlayerOut.from_player(player, day, names),
+                player=knowledge.player_out(player, day, names),
                 club_id=None,
                 club_name=None,
                 club_level=None,
@@ -470,7 +471,7 @@ def approach(player_id: int, session: SessionDep) -> TransferTargetOut:
     grudges, closed_until = _memory(session, me_row.id, player_id, game_date(session))
     slots = joker_slots(session, me_row, game_date(session)) if origin is None else []
     return TransferTargetOut(
-        player=PlayerOut.from_player(player, game_date(session)),
+        player=Knowledge(session).player_out(player, game_date(session)),
         club=ClubRef(id=origin.id, name=origin.name) if origin else None,
         club_level=round(club_level(origin), 1) if origin else None,
         my_level=round(club_level(me), 1),

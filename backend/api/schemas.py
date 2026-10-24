@@ -164,6 +164,10 @@ class PlayerOut(BaseModel):
     # Ascendant sur le groupe, sur 20 (expérience et niveau) : l'étoffe d'un capitaine.
     leadership: float = 0.0
     jiff: bool = False  # issu des filières de formation françaises (engine/regulations.py)
+    # Ce que le club sait de lui (api/scouting.py) : own (notre joueur), report
+    # (supervisé), pending (rapport attendu), estimate (attributs estimés), all (sélectionneur).
+    scouting: Literal["own", "report", "pending", "estimate", "all"] = "own"
+    report_on: datetime.date | None = None  # supervision demandée ce jour-là
     # Potentiel estimé par le club (engine/development.py) : une fourchette de note
     # générale, d'autant plus étroite que le club connaît le joueur ; le vrai reste caché.
     potential_low: float = 0.0
@@ -178,6 +182,8 @@ class PlayerOut(BaseModel):
         club_names: dict[int, str] | None = None,
         duty: DutyOut | None = None,
         uncertainty: float = OTHER_UNCERTAINTY,
+        scouting: str = "own",
+        report_on: datetime.date | None = None,
     ) -> "PlayerOut":
         """`uncertainty` : ce que le club sait du joueur (api/scouting.py), en points de
         note de part et d'autre de son estimation du potentiel."""
@@ -192,6 +198,8 @@ class PlayerOut(BaseModel):
             "potential_low",
             "potential_high",
             "jiff",
+            "scouting",
+            "report_on",
         }
         fields = {name: getattr(player, name) for name in cls.model_fields if name not in computed}
         injury = None
@@ -210,6 +218,8 @@ class PlayerOut(BaseModel):
             potential_low=low,
             potential_high=high,
             jiff=is_jiff(player),
+            scouting=scouting,
+            report_on=report_on,
         )
 
 

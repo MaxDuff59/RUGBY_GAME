@@ -6,6 +6,7 @@ import ClubCrest from "../components/ClubCrest.jsx";
 import Pitch from "../components/Pitch.jsx";
 import PlayerAvatar from "../components/PlayerAvatar.jsx";
 import Radar from "../components/Radar.jsx";
+import ScoutBadge from "../components/ScoutBadge.jsx";
 import Swarm from "../components/Swarm.jsx";
 import {
   ATTRIBUTES,
@@ -142,6 +143,12 @@ export default function Player() {
                 ? `contrat jusqu'en juin ${formatContractEnd(player.contract_until)}`
                 : `sans contrat (dernier en ${formatLastSeason(player.contract_until)})`}
             {player.loaned_from_name && ` · prêté par ${player.loaned_from_name}`}
+            {player.scouting !== "own" && player.scouting !== "all" && (
+              <>
+                {" · "}
+                <ScoutBadge player={player} onScouted={() => detail.reload()} />
+              </>
+            )}
             {player.duty && (
               <>
                 {" · "}

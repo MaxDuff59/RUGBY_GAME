@@ -4,6 +4,7 @@ import { Link, useLocation, useOutletContext } from "react-router-dom";
 import { api } from "../api.js";
 import ClubCrest from "../components/ClubCrest.jsx";
 import PlayerAvatar from "../components/PlayerAvatar.jsx";
+import ScoutBadge from "../components/ScoutBadge.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import Level from "../components/Level.jsx";
 import Modal from "../components/Modal.jsx";
@@ -346,7 +347,10 @@ export default function Transfers() {
                       )}
                     </td>
                     <td className="muted">{player.age}</td>
-                    <td className="note">{formatNote(player.overall)}</td>
+                    <td className="note" title={player.scouting === "estimate" ? "Estimée : aucun recruteur ne l'a supervisé" : undefined}>
+                      {player.scouting === "estimate" && <span className="muted">≈ </span>}
+                      {formatNote(player.overall)}
+                    </td>
                     <td>{formatMoney(player.value)}</td>
                     <td className="muted">{formatMoney(player.wage)}</td>
                     <td className={listing.precontract || listing.free_agent ? "cell--strong" : "muted"}>
@@ -637,7 +641,10 @@ function ListingItem({ listing, jokerPossible, onApproach }) {
           <span className="badges">{listingBadges(listing, jokerPossible)}</span>
         </span>
         <span className="market-item__side">
-          <span className="note">{formatNote(player.overall)}</span>
+          <span className="note">
+            {player.scouting === "estimate" && <span className="muted">≈ </span>}
+            {formatNote(player.overall)}
+          </span>
           <span className="market-item__price">{formatMoney(player.value)}</span>
         </span>
       </button>
@@ -829,6 +836,7 @@ function Negotiation({ playerId, squadFull, onClose, onChange }) {
               {POSITIONS[player.position].label} · {player.age} ans · note {formatNote(player.overall)} ·{" "}
               {free ? "Agent libre" : club.name}
             </div>
+            <ScoutBadge player={player} onScouted={() => target.reload()} />
           </div>
         </div>
         <button type="button" className="button button--small" onClick={onClose}>

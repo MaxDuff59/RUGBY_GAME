@@ -13,7 +13,7 @@ const TIPS = {
   "/entrainement":
     "Le rythme de la semaine arbitre entre fraîcheur et progrès ; le thème oriente les progrès et donne un petit plus au match suivant. Ils valent jusqu'à ce que tu les changes.",
   "/transferts":
-    "Les joueurs en dernière année de contrat (pré-contrat), les prêts et les agents libres coûtent bien moins cher qu'un transfert. Attention au plafond salarial de ton championnat.",
+    "Les joueurs en dernière année de contrat (pré-contrat), les prêts et les agents libres coûtent bien moins cher qu'un transfert. Les notes marquées ≈ sont estimées : supervise un joueur pour connaître sa vraie valeur. Attention au plafond salarial de ton championnat.",
   "/medical":
     "Chaque blessé attend son protocole : prudent (plus long, peu de rechutes), normal, ou accéléré (retour plus tôt, rechute plus fréquente, et ça se paie).",
   "/formation":
