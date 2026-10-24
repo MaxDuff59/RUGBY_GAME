@@ -5,8 +5,10 @@ import { api } from "../api.js";
 import ClubCrest from "../components/ClubCrest.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import Modal from "../components/Modal.jsx";
+import WeatherIcon from "../components/WeatherIcon.jsx";
 import {
   EVENTS,
+  MATCH_STATS,
   POSITION_SHORT,
   POSITIONS,
   STAGES,
@@ -14,6 +16,7 @@ import {
   TALK_MOMENTS,
   TALK_OUTCOMES,
   TALKS,
+  WEATHER,
   formatLongDate,
   formatNote,
 } from "../format.js";
@@ -350,6 +353,10 @@ function Scoreboard({ live, playing, speed, setSpeed, notice, error, busy, finis
           {label} · {formatLongDate(live.date)}
           {live.neutral && " · terrain neutre"}
         </span>
+        <span className="muted scoreboard__weather" title={WEATHER[live.weather].scope}>
+          <WeatherIcon weather={live.weather} />
+          {WEATHER[live.weather].label}
+        </span>
         {live.home.shootout !== null && (
           <span className="scoreboard__shootout num">
             Tirs au but {live.home.shootout} – {live.away.shootout}
@@ -533,8 +540,13 @@ function Mark({ type }) {
 
 // --- Composition d'une équipe --------------------------------------------------------------
 
+// Colonnes de la vue « Statistiques » d'une composition.
+const LIVE_STATS = ["carries", "tackles", "missed_tackles", "line_breaks"];
+
 function Lineup({ side, mine, paused, busy, onSubstitute }) {
   const [outgoing, setOutgoing] = useState(null); // joueur qu'on va remplacer
+  const [stats, setStats] = useState(false); // statistiques à la place de l'énergie
+  const columns = stats ? 4 + LIVE_STATS.length : 5;
   const canManage = mine && paused && !busy;
   const byNumber = Object.fromEntries(side.players.filter((p) => p.slot_number !== null).map((p) => [p.slot_number, p]));
   const slots = Array.from({ length: 15 }, (_, i) => i + 1).map((number) => byNumber[number] ?? null);
@@ -555,9 +567,12 @@ function Lineup({ side, mine, paused, busy, onSubstitute }) {
     <section className={`card live-lineup${mine ? " live-lineup--mine" : ""}`}>
       <div className="live-card__head">
         <span className="eyebrow">{mine ? "Notre XV" : side.club.name}</span>
-        <span className="muted">
+        <span className="muted live-lineup__meta">
           {side.substitutions_left} remplacement{side.substitutions_left > 1 ? "s" : ""} restant
           {side.substitutions_left > 1 ? "s" : ""}
+          <button type="button" className="chip chip--small" aria-pressed={stats} onClick={() => setStats(!stats)}>
+            Statistiques
+          </button>
         </span>
       </div>
 
@@ -578,7 +593,18 @@ function Lineup({ side, mine, paused, busy, onSubstitute }) {
             <th scope="col" className="left">N°</th>
             <th scope="col" className="left">Joueur</th>
             <th scope="col" className="left">Poste</th>
-            <th scope="col" title="Énergie restante">Énergie</th>
+            {stats ? (
+              LIVE_STATS.map((key) => {
+                const { label, short } = MATCH_STATS.find((stat) => stat.key === key);
+                return (
+                  <th key={key} scope="col" title={label}>
+                    {short}
+                  </th>
+                );
+              })
+            ) : (
+              <th scope="col" title="Énergie restante">Énergie</th>
+            )}
             <th scope="col" title="Note du match sur 10">Note</th>
           </tr>
         </thead>
@@ -589,13 +615,16 @@ function Lineup({ side, mine, paused, busy, onSubstitute }) {
               number={index + 1}
               player={player}
               kickerId={side.kicker_id}
+              captainId={side.captain_id}
+              stats={stats}
+              columns={columns}
               selectable={canManage && player?.status === "field"}
               selected={player?.id === outgoing}
               onSelect={() => setOutgoing(player.id === outgoing ? null : player.id)}
             />
           ))}
           <tr>
-            <th colSpan={5} className="table__group">
+            <th colSpan={columns} className="table__group">
               Banc
             </th>
           </tr>
@@ -605,6 +634,9 @@ function Lineup({ side, mine, paused, busy, onSubstitute }) {
               number={player.number}
               player={player}
               kickerId={side.kicker_id}
+              captainId={side.captain_id}
+              stats={stats}
+              columns={columns}
               bench
               incoming={Boolean(canManage && outgoing && player.status === "bench")}
               onSelect={() => substitute(player)}
@@ -617,12 +649,24 @@ function Lineup({ side, mine, paused, busy, onSubstitute }) {
   );
 }
 
-function PlayerRow({ number, player, kickerId, bench = false, selectable = false, selected = false, incoming = false, onSelect }) {
+function PlayerRow({
+  number,
+  player,
+  kickerId,
+  captainId,
+  stats,
+  columns,
+  bench = false,
+  selectable = false,
+  selected = false,
+  incoming = false,
+  onSelect,
+}) {
   if (!player) {
     return (
       <tr className="live-row live-row--empty">
         <td className="left jersey">{number}</td>
-        <td className="left muted" colSpan={4}>
+        <td className="left muted" colSpan={columns - 1}>
           Place vide
         </td>
       </tr>
@@ -660,14 +704,27 @@ function PlayerRow({ number, player, kickerId, bench = false, selectable = false
           {player.last_name}
           {player.yellow > 0 && !player.red && <span className="card-mark card-mark--yellow_card" title="Carton jaune" />}
           {player.red && <span className="card-mark card-mark--red_card" title="Carton rouge" />}
+          {player.id === captainId && (
+            <span className="live-row__captain" title="Capitaine : moins de cartons, l'équipe un peu plus sereine tant qu'il est sur le terrain">
+              C
+            </span>
+          )}
           {player.id === kickerId && <span className="muted live-row__kicker" title="Buteur">B</span>}
         </span>
         <Status player={player} incoming={incoming} />
       </td>
       <td className="left muted">{POSITION_SHORT[player.slot ?? player.position]}</td>
-      <td>
-        <Energy value={player.energy} frozen={player.slot_number === null} />
-      </td>
+      {stats ? (
+        LIVE_STATS.map((key) => (
+          <td key={key} className={`num${!player.stats || player.stats[key] === 0 ? " muted" : ""}`}>
+            {player.stats ? player.stats[key] : "–"}
+          </td>
+        ))
+      ) : (
+        <td>
+          <Energy value={player.energy} frozen={player.slot_number === null} />
+        </td>
+      )}
       <td className={`note${player.rating !== null && player.rating >= 7.5 ? " cell--strong" : ""}`}>
         {player.rating !== null ? formatNote(player.rating) : <span className="muted">–</span>}
       </td>

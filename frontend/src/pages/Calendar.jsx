@@ -4,6 +4,8 @@ import { useOutletContext } from "react-router-dom";
 import { api } from "../api.js";
 import ClubCrest from "../components/ClubCrest.jsx";
 import MatchList from "../components/MatchList.jsx";
+import MatchReport from "../components/MatchReport.jsx";
+import WeatherIcon from "../components/WeatherIcon.jsx";
 import {
   STAGES,
   addDays,
@@ -165,7 +167,7 @@ function WeekView({ current, matchdays, international, myId }) {
           </div>
           <div className="card">
             {day.matches.length > 0 ? (
-              <MatchList matches={day.matches} myClubId={null} />
+              <MatchList matches={day.matches} myClubId={null} reports={false} />
             ) : (
               <p className="table__note">Les affiches seront connues à la fin du tour précédent.</p>
             )}
@@ -250,6 +252,7 @@ function MyMatchLine({ match, myId }) {
 // --- Saison -----------------------------------------------------------------------
 
 function SeasonView({ matchdays, international, myId }) {
+  const [open, setOpen] = useState(null); // fiche du match ouverte
   // Nos journées, et entre elles les samedis où seules les sélections jouent.
   const clubDates = new Set(matchdays.map((md) => md.date));
   const rows = [
@@ -267,6 +270,7 @@ function SeasonView({ matchdays, international, myId }) {
             <th scope="col" className="left">Date</th>
             <th scope="col" className="left">Adversaire</th>
             <th scope="col" className="left">Lieu</th>
+            <th scope="col">Météo</th>
             <th scope="col">Score</th>
             <th scope="col">Résultat</th>
             {withTests && <th scope="col" className="left">Sélections</th>}
@@ -279,7 +283,7 @@ function SeasonView({ matchdays, international, myId }) {
                 <tr key={`test-${date}`} className="table__row--bench">
                   <td className="left jersey">–</td>
                   <td className="left muted">{formatShortDate(date)}</td>
-                  <td className="left muted" colSpan={4}>Pas de match de championnat</td>
+                  <td className="left muted" colSpan={5}>Pas de match de championnat</td>
                   <td className="left">
                     {test.window.short_name} <span className="muted">· {test.label}</span>
                   </td>
@@ -293,7 +297,7 @@ function SeasonView({ matchdays, international, myId }) {
                 <tr key={md.matchday}>
                   <td className="left jersey">{matchdayLabel(md)}</td>
                   <td className="left muted">{formatShortDate(md.date)}</td>
-                  <td className="left muted" colSpan={4}>Sans nous</td>
+                  <td className="left muted" colSpan={5}>Sans nous</td>
                   {withTests && (
                     <td className="left muted">{doublon && `${doublon.window.short_name} · ${doublon.label}`}</td>
                   )}
@@ -318,8 +322,17 @@ function SeasonView({ matchdays, international, myId }) {
                   </span>
                 </td>
                 <td className="left muted">{match.neutral ? "Terrain neutre" : home ? "Domicile" : "Extérieur"}</td>
+                <td className="muted">
+                  <WeatherIcon weather={match.weather} />
+                </td>
                 <td>
-                  {played ? `${mine} – ${theirs}` : "–"}
+                  {played ? (
+                    <button type="button" className="link-button num" onClick={() => setOpen(match)}>
+                      {mine} – {theirs}
+                    </button>
+                  ) : (
+                    "–"
+                  )}
                   {note && <span className="muted"> {note}</span>}
                 </td>
                 <td>
@@ -342,6 +355,7 @@ function SeasonView({ matchdays, international, myId }) {
           })}
         </tbody>
       </table>
+      {open && <MatchReport summary={open} myClubId={myId} onClose={() => setOpen(null)} />}
     </div>
   );
 }

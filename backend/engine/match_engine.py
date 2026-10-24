@@ -22,7 +22,10 @@ Principe :
    minutes à 14, `RED_CARD` : exclusion) qui donne une pénalité à l'adversaire.
    La blessure elle-même (gravité, durée) est tirée par `engine/medical.py`.
 5. Chaque joueur reçoit une note sur 10 qui évolue avec le match : ses actions
-   (essai, coup de pied, carton) et la domination de sa ligne.
+   (essai, coup de pied, carton, plaquages, franchissements...) et la
+   domination de sa ligne. Chaque minute se joue aussi en temps de jeu
+   (ballons portés, plaquages, touches) : ces statistiques de chaque joueur
+   (`PlayerMatchStats`) suivent le rapport de force sans décider du score.
 6. La forme du jour (`engine/form.py` : moral, cohésion, fraîcheur) multiplie
    les notes collectives (et fixe l'énergie de départ de chaque joueur), et la
    fatigue augmente le risque de blessure. En direct, les discours du manager
@@ -30,6 +33,9 @@ Principe :
    de la nervosité qui fait monter (ou baisser) le risque de carton.
 7. En phase finale, une égalité après 80 minutes mène à une prolongation
    (2 x 10 minutes), puis si besoin à une séance de tirs au but.
+8. La météo (`engine/weather.py`) pèse sur l'attaque, les coups de pied et
+   l'énergie ; le capitaine, tant qu'il est sur le terrain, calme les esprits
+   (moins de cartons) et tire un peu l'équipe vers le haut.
 
 `LiveMatch` joue le match minute par minute : on peut l'arrêter, changer la
 tactique d'une équipe ou faire un remplacement, puis reprendre. `simulate_match`
@@ -45,18 +51,23 @@ import random
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from enum import StrEnum
+from itertools import accumulate
 
 from engine import team_talk
 from engine.form import NEUTRAL_FORM, Form
 from engine.medical import MATCH_INJURY_CHANCE_PER_MINUTE
+from engine.weather import EFFECTS as WEATHER_EFFECTS
+from engine.weather import Weather
 from models import (
     EXTRA_TIME_MINUTES,
+    MATCH_STAT_NAMES,
     REGULATION_MINUTES,
     Club,
     EventType,
     Match,
     MatchEvent,
     Player,
+    PlayerMatchStats,
     Position,
 )
 
@@ -130,6 +141,15 @@ SHOOTOUT_KICKERS = 5
 # La pression de la séance coûte un peu de réussite par rapport à une pénalité.
 SHOOTOUT_PRESSURE = 0.05
 
+# Au bout d'un maul, le talonneur (qui a lancé et se glisse au fond) et la
+# troisième ligne aplatissent le plus souvent.
+MAUL_SCORER_WEIGHT = {
+    Position.PROP: 0.6,
+    Position.HOOKER: 3.0,
+    Position.LOCK: 0.8,
+    Position.BACK_ROW: 2.0,
+}
+
 # Probabilité de marquer l'essai selon le poste (les ailiers finissent les actions).
 TRY_SCORER_WEIGHT = {
     Position.PROP: 0.5,
@@ -166,7 +186,8 @@ class PenaltyChoice(StrEnum):
     """Que faire d'une pénalité en position : tenter les 3 points, ou jouer l'essai."""
 
     KICK = "kick"
-    PLAY = "play"
+    PLAY = "play"  # jouée à la main, vite, par les lignes arrières
+    TOUCH = "touch"  # en touche, puis maul ou pick-and-go des avants
 
 
 @dataclass(frozen=True)
@@ -210,6 +231,82 @@ DEFENCE_EFFECTS = {
 # Pénalité jouée à la main : chance d'essai entre équipes égales (contre 3 points
 # quasi assurés au pied : le pari paie surtout quand l'attaque domine).
 PLAY_PENALTY_TRY_RATE = 0.38
+# Pénalité en touche : l'essai se joue entre les deux paquets (conquête et
+# domination des avants contre celles de l'adversaire).
+TOUCH_PENALTY_TRY_RATE = 0.38
+
+# --- Capitaine ----------------------------------------------------------------------
+
+# Le meneur (de 0 à 1) d'un joueur tient à son expérience (l'âge) et à son niveau.
+LEADERSHIP_AGE_FROM, LEADERSHIP_AGE_SPAN = 19, 13
+LEADERSHIP_AGE_SHARE = 0.6
+# Un capitaine meneur à 1 sur le terrain : 30 % de cartons en moins, notes
+# collectives +3 %.
+CAPTAIN_CARDS = 0.30
+CAPTAIN_BOOST = 0.03
+
+# --- Temps de jeu : ballons portés, plaquages, touches -------------------------------
+
+# Chaque minute, les deux équipes se disputent des temps de jeu ; la possession
+# suit le territoire. Par équipe et par match : ~130 ballons portés, ~120 plaquages
+# réussis, ~15 manqués, ~5 franchissements et ~4 ballons grattés.
+PHASES_PER_MINUTE = 3
+TACKLE_SUCCESS = 0.86  # entre un plaqueur et un porteur de même niveau
+TACKLE_SWING = 0.10  # écart maximal selon le duel
+TACKLE_ASSIST = 0.35  # un second plaqueur vient aider
+# Un plaquage manqué peut laisser filer le porteur (selon l'attaque et la défense).
+LINE_BREAK_ON_MISS = 0.25
+TURNOVER_PER_PHASE = 0.045
+# Touches : ~13 lancers par équipe ; le lanceur garde son ballon ~88 % du temps.
+LINEOUT_PER_MINUTE = 0.33
+LINEOUT_KEEP = 0.88
+LINEOUT_SWING = 0.10
+
+# Qui porte, plaque, gratte ou saute, selon le poste.
+CARRY_WEIGHT = {
+    Position.PROP: 1.0,
+    Position.HOOKER: 1.0,
+    Position.LOCK: 1.2,
+    Position.BACK_ROW: 1.6,
+    Position.SCRUM_HALF: 0.5,
+    Position.FLY_HALF: 0.7,
+    Position.CENTRE: 1.4,
+    Position.WING: 1.1,
+    Position.FULLBACK: 1.1,
+}
+TACKLE_WEIGHT = {
+    Position.PROP: 1.0,
+    Position.HOOKER: 1.2,
+    Position.LOCK: 1.4,
+    Position.BACK_ROW: 1.8,
+    Position.SCRUM_HALF: 0.8,
+    Position.FLY_HALF: 0.9,
+    Position.CENTRE: 1.3,
+    Position.WING: 0.6,
+    Position.FULLBACK: 0.5,
+}
+TURNOVER_WEIGHT = {
+    Position.PROP: 0.6,
+    Position.HOOKER: 1.5,
+    Position.LOCK: 0.8,
+    Position.BACK_ROW: 3.0,
+    Position.SCRUM_HALF: 0.3,
+    Position.FLY_HALF: 0.2,
+    Position.CENTRE: 0.8,
+    Position.WING: 0.2,
+    Position.FULLBACK: 0.3,
+}
+JUMPER_WEIGHT = {Position.LOCK: 3.0, Position.BACK_ROW: 1.0}
+
+# Ce que rapporte chaque statistique à la note sur 10 du joueur.
+STAT_RATING = {
+    "tackles": 0.02,
+    "missed_tackles": -0.06,
+    "line_breaks": 0.15,
+    "turnovers": 0.2,
+    "lineouts_won": 0.02,
+    "lineout_steals": 0.15,
+}
 
 # --- Cartons ---------------------------------------------------------------------------
 
@@ -307,6 +404,19 @@ RATING_FOR_POSITION = {
     Position.WING: lambda p: 0.6 * p.pace + 0.4 * p.handling,
     Position.FULLBACK: lambda p: 0.4 * attacking_rating(p) + 0.3 * p.kicking + 0.3 * p.pace,
 }
+
+
+def leadership(p: Player) -> float:
+    """Ascendant d'un joueur sur le groupe, de 0 à 1 : son expérience, puis son niveau."""
+    experience = min(max(p.age - LEADERSHIP_AGE_FROM, 0) / LEADERSHIP_AGE_SPAN, 1.0)
+    level = p.overall / 20
+    return LEADERSHIP_AGE_SHARE * experience + (1 - LEADERSHIP_AGE_SHARE) * level
+
+
+def captain_of(club: Club, lineup: list[Player]) -> Player | None:
+    """Le capitaine du XV : celui du manager s'il est titulaire, sinon le plus grand meneur."""
+    chosen = next((p for p in lineup if p.id == club.captain_id), None)
+    return chosen or max(lineup, key=leadership, default=None)
 
 
 def _average(values: list[float]) -> float:
@@ -587,6 +697,11 @@ class Side:
         # Énergie restante de ceux qui ont joué ; les autres sont à leur énergie de départ.
         self.energy_left: dict[int, float] = {}
         self.kicker_id = max(lineup, key=lambda p: p.kicking).id if lineup else None
+        captain = captain_of(club, lineup)
+        self.captain_id = captain.id if captain else None
+        self.weather = Weather.CLEAR  # posée par le match
+        # Statistiques de chaque joueur entré en jeu (MATCH_STAT_NAMES -> nombre).
+        self.stats: dict[int, dict[str, int]] = {}
         # Discours du manager (engine/team_talk.py) : l'élan multiplie les notes
         # collectives, la nervosité le risque de carton ; les deux s'estompent.
         self.spirit = 0.0
@@ -637,11 +752,22 @@ class Side:
             return self.energy_left[player.id]
         return start_energy(self.form.player_freshness(player.id))
 
+    def captain(self, minute: int) -> Player | None:
+        """Le capitaine, s'il est sur le terrain à cette minute."""
+        slot = self.slot_of(self.captain_id) if self.captain_id is not None else None
+        return slot.player if slot is not None and slot.present(minute) else None
+
+    def captaincy(self, minute: int) -> float:
+        """Ascendant du capitaine présent (0 s'il est sorti, exclu ou au banc des pénalités)."""
+        captain = self.captain(minute)
+        return leadership(captain) if captain else 0.0
+
     def effort(self, minute: int) -> float:
         """Multiplicateur de la dépense d'énergie à cette minute : infériorité
-        numérique et agressivité défensive."""
+        numérique, agressivité défensive et chaleur."""
         short_handed = 1 + SHORT_HANDED_EFFORT * self.missing(minute)
-        return short_handed * DEFENCE_EFFECTS[self.tactics.defence]["effort"]
+        defence = DEFENCE_EFFECTS[self.tactics.defence]["effort"]
+        return short_handed * defence * WEATHER_EFFECTS[self.weather].drain
 
     def spend_energy(self, minute: int) -> None:
         """Une minute de jeu : chaque joueur présent dépense selon son endurance."""
@@ -660,11 +786,19 @@ class Side:
             factor=factor,
         )
         ratings.defense *= DEFENCE_EFFECTS[self.tactics.defence]["defense"]
+        ratings.attack *= WEATHER_EFFECTS[self.weather].attack
+        boost = 1 + CAPTAIN_BOOST * self.captaincy(minute)
+        ratings.set_piece *= boost
+        ratings.pack *= boost
+        ratings.attack *= boost
+        ratings.defense *= boost
         return ratings
 
     def territory(self, minute: int, ratings: Collective) -> float:
         kicker = self.kicker(minute)
         plan = GAME_PLAN_EFFECTS[self.tactics.game_plan]["territory"]
+        if self.tactics.game_plan == GamePlan.KICKING:
+            plan *= WEATHER_EFFECTS[self.weather].kicking_plan
         return plan * ratings.territory(kicker.kicking if kicker else 0)
 
     # -- Discours ------------------------------------------------------------------------
@@ -779,6 +913,15 @@ class Side:
         )
         return self.substitute(slot.player.id, incoming.id, minute)
 
+    # -- Statistiques ---------------------------------------------------------------------
+
+    def count(self, player_id: int, stat: str) -> None:
+        """Une action de plus pour le joueur ; elle compte aussi dans sa note."""
+        line = self.stats.setdefault(player_id, dict.fromkeys(MATCH_STAT_NAMES, 0))
+        line[stat] += 1
+        if stat in STAT_RATING:
+            self.rate(player_id, STAT_RATING[stat])
+
     # -- Notes sur 10 ---------------------------------------------------------------------
 
     def rate(self, player_id: int, delta: float) -> None:
@@ -823,6 +966,8 @@ class Side:
             "ratings": {str(k): v for k, v in self.ratings.items()},
             "energy_left": {str(k): v for k, v in self.energy_left.items()},
             "kicker_id": self.kicker_id,
+            "captain_id": self.captain_id,
+            "stats": {str(k): dict(v) for k, v in self.stats.items()},
             "spirit": self.spirit,
             "heat": self.heat,
             "talks": [heard.to_dict() for heard in self.talks],
@@ -862,6 +1007,10 @@ class Side:
         side.ratings = {int(k): v for k, v in state["ratings"].items()}
         side.energy_left = {int(k): v for k, v in state["energy_left"].items()}
         side.kicker_id = state["kicker_id"]
+        # Un match sauvegardé avant les capitaines et les statistiques garde le
+        # capitaine désigné à sa reprise, et ses statistiques partent de zéro.
+        side.captain_id = state.get("captain_id", side.captain_id)
+        side.stats = {int(k): dict(v) for k, v in state.get("stats", {}).items()}
         # Un match sauvegardé avant les discours n'en a pas.
         side.spirit = state.get("spirit", 0.0)
         side.heat = state.get("heat", 0.0)
@@ -896,6 +1045,7 @@ class LiveMatch:
         home_tactics: Tactics = DEFAULT_TACTICS,
         away_tactics: Tactics = DEFAULT_TACTICS,
         auto: Iterable[int] | None = None,
+        weather: Weather = Weather.CLEAR,
     ) -> None:
         self.rng = rng or random.Random()
         self.matchday = matchday
@@ -907,6 +1057,8 @@ class LiveMatch:
         away_team = team_strength(away, day, away_form)
         self.home = Side(home, home_team.lineup, home_team.bench, home_form, home_tactics)
         self.away = Side(away, away_team.lineup, away_team.bench, away_form, away_tactics)
+        self.weather = weather
+        self.home.weather = self.away.weather = weather
         self.events: list[MatchEvent] = []
         self.minute = 0  # dernière minute jouée
         self.extra_time = False
@@ -953,7 +1105,22 @@ class LiveMatch:
             date=self.day,
             home_lineup=[p.id for p in self.home.lineup],
             away_lineup=[p.id for p in self.away.lineup],
+            weather=self.weather.value,
+            stats=self.player_stats(),
         )
+
+    def player_stats(self) -> dict[int, PlayerMatchStats]:
+        """Statistiques, minutes et note de chaque joueur entré en jeu, à cette minute."""
+        stats = {}
+        for side in self.sides:
+            for player_id, entered in side.entered_at.items():
+                line = side.stats.get(player_id, {})
+                stats[player_id] = PlayerMatchStats(
+                    minutes=max(0, side.off.get(player_id, self.minute) - entered),
+                    rating=round(side.ratings.get(player_id, RATING_START), 1),
+                    **line,
+                )
+        return stats
 
     # -- Ordres du manager ------------------------------------------------------------------
 
@@ -1063,14 +1230,16 @@ class LiveMatch:
         home_ratings = self.home.collective(minute)
         away_ratings = self.away.collective(minute)
         self._drift_ratings(minute, home_ratings, away_ratings)
-
-        if rng.random() >= CHANCE_PER_MINUTE:
-            return
         advantage = 1.0 if self.neutral else HOME_ADVANTAGE
         home_share = _win_probability(
             self.home.territory(minute, home_ratings) * advantage,
             self.away.territory(minute, away_ratings),
         )
+        self._phases(minute, home_share, home_ratings, away_ratings)
+        self._lineout(minute)
+
+        if rng.random() >= CHANCE_PER_MINUTE:
+            return
         if rng.random() < home_share:
             self._chance(self.home, self.away, home_ratings, away_ratings, minute)
         else:
@@ -1102,6 +1271,7 @@ class LiveMatch:
         if not present:
             return
         cards = DEFENCE_EFFECTS[side.tactics.defence]["cards"] * (1 + side.heat)
+        cards *= 1 - CAPTAIN_CARDS * side.captaincy(minute)
         roll = rng.random()
         if roll < RED_CHANCE_PER_MINUTE * cards:
             red = True
@@ -1123,18 +1293,28 @@ class LiveMatch:
         kicker = side.kicker(minute)
         if kicker is None:
             return
-        success = self.rng.random() < kick_success_probability(kicker.kicking)
+        success = self.rng.random() < self._kick_probability(kicker)
         event_type = EventType.PENALTY_GOAL if success else EventType.PENALTY_MISSED
         self.events.append(MatchEvent(minute, event_type, side.club.id, kicker.id))
         side.rate(kicker.id, RATING_EVENT[event_type])
 
-    def _try(self, attacking: Side, defending: Side, minute: int) -> None:
-        """Un essai et sa transformation."""
+    def _kick_probability(self, kicker: Player, is_conversion: bool = False) -> float:
+        """Réussite d'un coup de pied au but, le vent et la pluie compris."""
+        probability = kick_success_probability(kicker.kicking, is_conversion)
+        return max(0.05, probability + WEATHER_EFFECTS[self.weather].kicking)
+
+    def _try(self, attacking: Side, defending: Side, minute: int, forwards: bool = False) -> None:
+        """Un essai et sa transformation ; `forwards` : marqué au bout d'un maul,
+        par un avant (le talonneur et la troisième ligne le plus souvent)."""
         rng = self.rng
         present = attacking.on_field(minute)
-        weights = [
-            TRY_SCORER_WEIGHT[s.position] * (s.player.pace + s.player.power) for s in present
-        ]
+        if forwards:
+            present = [s for s in present if s.position.is_forward] or present
+            weights = [MAUL_SCORER_WEIGHT.get(s.position, 1.0) * s.player.power for s in present]
+        else:
+            weights = [
+                TRY_SCORER_WEIGHT[s.position] * (s.player.pace + s.player.power) for s in present
+            ]
         scorer = rng.choices([s.player for s in present], weights=weights)[0]
         self.events.append(MatchEvent(minute, EventType.TRY, attacking.club.id, scorer.id))
         attacking.rate_present(minute, RATING_TEAM_SCORED)
@@ -1142,7 +1322,7 @@ class LiveMatch:
         defending.rate_present(minute, RATING_TEAM_CONCEDED)
 
         kicker = attacking.kicker(minute)
-        converted = rng.random() < kick_success_probability(kicker.kicking, is_conversion=True)
+        converted = rng.random() < self._kick_probability(kicker, is_conversion=True)
         conversion = EventType.CONVERSION if converted else EventType.CONVERSION_MISSED
         self.events.append(MatchEvent(minute, conversion, attacking.club.id, kicker.id))
         attacking.rate(kicker.id, RATING_EVENT[conversion])
@@ -1160,17 +1340,23 @@ class LiveMatch:
         plan = GAME_PLAN_EFFECTS[attacking.tactics.game_plan]
         their_plan = GAME_PLAN_EFFECTS[defending.tactics.game_plan]
         their_defence = DEFENCE_EFFECTS[defending.tactics.defence]
+        weather = WEATHER_EFFECTS[self.weather]
+        hands = weather.hands if attacking.tactics.game_plan == GamePlan.HANDS else 1.0
         # Les probabilités valent TRY_RATE / PENALTY_RATE entre équipes égales
-        # (_win_probability = 0.5) et varient avec l'écart de niveau et la tactique.
+        # (_win_probability = 0.5) et varient avec l'écart de niveau, la tactique et la météo.
         try_probability = (
-            2 * TRY_RATE * _win_probability(att.attack, dfn.defense) * plan["tries"]
-        ) * their_plan["conceded"]
+            (2 * TRY_RATE * _win_probability(att.attack, dfn.defense) * plan["tries"])
+            * their_plan["conceded"]
+            * weather.tries
+            * hands
+        )
         penalty_probability = (
             2
             * PENALTY_RATE
             * _win_probability(att.forward_dominance, dfn.forward_dominance)
             * plan["penalties"]
             * their_defence["fouls"]
+            * weather.penalties
         )
         roll = rng.random()
 
@@ -1188,11 +1374,18 @@ class LiveMatch:
                 if scored:
                     self._try(attacking, defending, minute)
                 return
+            if attacking.tactics.penalties == PenaltyChoice.TOUCH:
+                maul = rng.random() < 2 * TOUCH_PENALTY_TRY_RATE * _win_probability(
+                    att.forward_dominance, dfn.forward_dominance
+                )
+                if maul:
+                    self._try(attacking, defending, minute, forwards=True)
+                return
             self._penalty_kick(attacking, minute)
             return
 
         # 3) Drop de l'ouvreur (on ne garde que les drops réussis, les ratés sont anecdotiques).
-        if roll < try_probability + penalty_probability + DROP_RATE:
+        if roll < try_probability + penalty_probability + DROP_RATE * weather.drops:
             fly_half = next(
                 (s.player for s in attacking.on_field(minute) if s.position == Position.FLY_HALF),
                 None,
@@ -1205,6 +1398,74 @@ class LiveMatch:
                 attacking.rate(drop_kicker.id, RATING_EVENT[EventType.DROP_GOAL])
 
         # 4) L'action ne donne rien.
+
+    def _phases(self, minute: int, home_share: float, home: Collective, away: Collective) -> None:
+        """Les temps de jeu de la minute : qui porte le ballon, qui plaque, qui
+        manque son plaquage et laisse filer, qui gratte. La possession suit le
+        territoire (`home_share`)."""
+        rng = self.rng
+        lines = {}
+        for side in self.sides:
+            present = side.on_field(minute)
+            if not present:
+                return
+            players = [s.player for s in present]
+            lines[side.club.id] = (
+                players,
+                list(accumulate(CARRY_WEIGHT[s.position] * s.player.power for s in present)),
+                list(accumulate(TACKLE_WEIGHT[s.position] * s.player.tackling for s in present)),
+                list(accumulate(TURNOVER_WEIGHT[s.position] * s.player.power for s in present)),
+            )
+        ratings = {self.home.club.id: home, self.away.club.id: away}
+        for _ in range(PHASES_PER_MINUTE):
+            attacking, defending = (
+                (self.home, self.away) if rng.random() < home_share else (self.away, self.home)
+            )
+            carriers, carry_weights, _, _ = lines[attacking.club.id]
+            tacklers, _, tackle_weights, turnover_weights = lines[defending.club.id]
+            carrier = rng.choices(carriers, cum_weights=carry_weights)[0]
+            tackler = rng.choices(tacklers, cum_weights=tackle_weights)[0]
+            attacking.count(carrier.id, "carries")
+            duel = _win_probability(
+                defending_rating(tackler) * efficiency(defending.energy(tackler)),
+                carrying_rating(carrier) * efficiency(attacking.energy(carrier)),
+            )
+            if rng.random() < TACKLE_SUCCESS + TACKLE_SWING * (2 * duel - 1):
+                defending.count(tackler.id, "tackles")
+                if rng.random() < TACKLE_ASSIST:
+                    helper = rng.choices(tacklers, cum_weights=tackle_weights)[0]
+                    if helper is not tackler:
+                        defending.count(helper.id, "tackles")
+                if rng.random() < TURNOVER_PER_PHASE:
+                    poacher = rng.choices(tacklers, cum_weights=turnover_weights)[0]
+                    defending.count(poacher.id, "turnovers")
+                continue
+            defending.count(tackler.id, "missed_tackles")
+            att, dfn = ratings[attacking.club.id], ratings[defending.club.id]
+            if rng.random() < 2 * LINE_BREAK_ON_MISS * _win_probability(att.attack, dfn.defense):
+                attacking.count(carrier.id, "line_breaks")
+
+    def _lineout(self, minute: int) -> None:
+        """Une touche, parfois : le lanceur la garde le plus souvent, sinon l'adversaire la vole."""
+        rng = self.rng
+        if rng.random() >= LINEOUT_PER_MINUTE:
+            return
+        throwing, other = (self.home, self.away) if rng.random() < 0.5 else (self.away, self.home)
+        ours = [s for s in throwing.on_field(minute) if s.position in JUMPER_WEIGHT]
+        theirs = [s for s in other.on_field(minute) if s.position in JUMPER_WEIGHT]
+        if not ours or not theirs:
+            return
+        duel = _win_probability(
+            _average([lineout_rating(s.player) for s in ours]),
+            _average([lineout_rating(s.player) for s in theirs]),
+        )
+        side, jumpers, stat = (
+            (throwing, ours, "lineouts_won")
+            if rng.random() < LINEOUT_KEEP + LINEOUT_SWING * (2 * duel - 1)
+            else (other, theirs, "lineout_steals")
+        )
+        weights = [JUMPER_WEIGHT[s.position] * s.player.lineout for s in jumpers]
+        side.count(rng.choices([s.player for s in jumpers], weights=weights)[0].id, stat)
 
     def _drift_ratings(self, minute: int, home: Collective, away: Collective) -> None:
         """Chaque minute, la ligne qui domine son duel gagne un peu, l'autre perd,
@@ -1241,7 +1502,7 @@ class LiveMatch:
         while True:
             side, turn = kicks % 2, kicks // 2
             kicker = kickers[side][turn % len(kickers[side])]
-            scored = rng.random() < kick_success_probability(kicker.kicking) - SHOOTOUT_PRESSURE
+            scored = rng.random() < self._kick_probability(kicker) - SHOOTOUT_PRESSURE
             goals[side] += scored
             event_type = EventType.SHOOTOUT_GOAL if scored else EventType.SHOOTOUT_MISSED
             self.events.append(MatchEvent(minute, event_type, teams[side].club.id, kicker.id))
@@ -1268,6 +1529,7 @@ class LiveMatch:
             "minute": self.minute,
             "extra_time": self.extra_time,
             "finished": self.finished,
+            "weather": self.weather.value,
             "rng": [version, list(internal), gauss],
             "events": [
                 {
@@ -1309,6 +1571,8 @@ class LiveMatch:
         ]
         live.home = Side.from_state(home, state["home"])
         live.away = Side.from_state(away, state["away"])
+        live.weather = Weather(state.get("weather", Weather.CLEAR))
+        live.home.weather = live.away.weather = live.weather
         return live
 
 
@@ -1324,6 +1588,7 @@ def simulate_match(
     knockout: bool = False,
     home_tactics: Tactics = DEFAULT_TACTICS,
     away_tactics: Tactics = DEFAULT_TACTICS,
+    weather: Weather = Weather.CLEAR,
 ) -> Match:
     """Simule un match complet et renvoie un `Match` joué (score + événements).
 
@@ -1334,6 +1599,7 @@ def simulate_match(
     `home_form` / `away_form` : forme du jour de chaque club (neutre par défaut).
     `knockout` : match à élimination directe, qui ne peut pas finir sur un nul
     (prolongation, puis tirs au but). Les deux bancs sont gérés par le staff.
+    `weather` : le temps du match (engine/weather.py), sec par défaut.
     """
     live = LiveMatch(
         home,
@@ -1347,5 +1613,6 @@ def simulate_match(
         knockout=knockout,
         home_tactics=home_tactics,
         away_tactics=away_tactics,
+        weather=weather,
     )
     return live.play_to_end()

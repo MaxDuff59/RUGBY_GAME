@@ -78,7 +78,7 @@ function Day({ window, date, myId }) {
       <div className="matches__stage">
         {windowDayLabel(window, date)} · {formatLongDate(date)}
       </div>
-      <MatchList matches={matches} myClubId={myId} />
+      <MatchList matches={matches} myClubId={myId} reports={false} />
     </div>
   );
 }

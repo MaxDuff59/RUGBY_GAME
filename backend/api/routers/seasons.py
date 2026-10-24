@@ -101,6 +101,7 @@ from models.orm import (
     NegotiationRow,
     PlayerRow,
     SeasonRow,
+    SuspensionRow,
     TransactionRow,
 )
 
@@ -318,6 +319,8 @@ def _write_result(row: MatchRow, match: Match) -> None:
     row.home_score, row.away_score = match.home_score, match.away_score
     row.events = MatchRow.from_domain(match).events
     row.home_lineup, row.away_lineup = list(match.home_lineup), list(match.away_lineup)
+    saved = MatchRow.from_domain(match)
+    row.weather, row.stats = saved.weather, saved.stats
 
 
 @dataclass
@@ -420,6 +423,22 @@ def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayRes
         session.add(injury_row)
         if club_id == my_club_id or injury.player_id in watched:
             my_injuries.append((injury_row, injury))
+
+    # Discipline : les peines prononcées, puis ce que chacun a encore à purger.
+    for suspension in report.suspensions:
+        session.add(
+            SuspensionRow(
+                player_id=suspension.player_id,
+                club_id=suspension.club_id,
+                date=day,
+                matches=suspension.matches,
+                reason=suspension.reason.value,
+            )
+        )
+    for player_id in report.disciplined:
+        player, player_row = players[player_id], session.get(PlayerRow, player_id)
+        player_row.suspended_matches = player.suspended_matches
+        player_row.yellow_cards = player.yellow_cards
 
     # Les matchs internationaux du jour, avec leur propre hasard : les clubs jouent
     # la même journée qu'il y en ait ou non.
@@ -852,6 +871,7 @@ def start_next_season(session: SessionDep) -> SeasonOut:
                 session.delete(row)
                 continue
             row.age = player.age
+            row.yellow_cards = player.yellow_cards
             for name in ATTRIBUTE_NAMES:
                 setattr(row, name, getattr(player, name))
         for youth in moves.promoted:

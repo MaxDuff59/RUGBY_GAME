@@ -376,14 +376,42 @@ def _add_international_stage(engine: Engine) -> None:
         )
 
 
+# Colonnes ajoutées après coup, SQLite comme Postgres, avec leur valeur pour les
+# parties d'avant : la météo et les statistiques des matchs (les matchs déjà joués
+# n'en ont pas), la discipline des joueurs et le capitaine choisi par le manager.
+ADDED_COLUMNS = {
+    "matches": {"weather": "VARCHAR(8)", "stats": "JSON NOT NULL DEFAULT '{}'"},
+    "players": {
+        "suspended_matches": "INTEGER NOT NULL DEFAULT 0",
+        "yellow_cards": "INTEGER NOT NULL DEFAULT 0",
+    },
+    "clubs": {"captain_id": "INTEGER"},
+}
+
+
+def _add_columns(engine: Engine) -> None:
+    inspector = inspect(engine)
+    schema = _schema_of(engine)
+    for table, columns in ADDED_COLUMNS.items():
+        if not inspector.has_table(table, schema=schema):
+            continue
+        present = {c["name"] for c in inspector.get_columns(table, schema=schema)}
+        name = f'"{schema}"."{table}"' if schema else table
+        with engine.begin() as connection:
+            for column, ddl in columns.items():
+                if column not in present:
+                    connection.execute(text(f"ALTER TABLE {name} ADD COLUMN {column} {ddl}"))
+
+
 def _migrate(engine: Engine) -> None:
     """Les quelques changements de schéma qu'on sait rattraper sans repartir de zéro
     (parties SQLite d'avant ces changements ; en Postgres les schémas naissent à jour,
-    sauf pour la graine des saisons, la nationalité des joueurs et le tour des matchs
-    internationaux)."""
+    sauf pour la graine des saisons, la nationalité des joueurs, le tour des matchs
+    internationaux et `ADDED_COLUMNS`)."""
     _add_season_seed(engine)
     _add_nationality(engine)
     _add_international_stage(engine)
+    _add_columns(engine)
     if engine.dialect.name != "sqlite":
         return
     inspector = inspect(engine)

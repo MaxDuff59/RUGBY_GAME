@@ -251,6 +251,7 @@ class Kind(StrEnum):
     TRANSFER = "transfer"
     MARKET = "market"  # ce qui se prépare : fins de contrat, joueurs sans club
     INJURY = "injury"
+    DISCIPLINE = "discipline"  # suspensions de la commission de discipline
     SELECTION = "selection"
     CLUB = "club"  # coulisses : un manager remercié
 
@@ -280,6 +281,7 @@ LEADER_WEIGHT = 40.0
 MOVE_WEIGHT = 16.0
 MARKET_WEIGHT = 8.0
 INJURY_WEIGHT = 12.0
+SUSPENSION_WEIGHT = 10.0
 SQUAD_WEIGHT = 32.0
 TITLE_WEIGHT = 55.0
 DISMISSAL_WEIGHT = 60.0
@@ -811,6 +813,39 @@ def injury_article(player: Person, club: Team | None, injury: Injury) -> Article
         ),
         weight=INJURY_WEIGHT + _star(player.overall, 4) + min(weeks, 16) * 0.8,
         teams=[club] if club is not None else [],
+        player=player,
+    )
+
+
+_SUSPENSION_CAUSES = {
+    "red_card": "après son carton rouge",
+    "second_yellow": "après son second carton jaune du match",
+    "yellow_cards": "pour son troisième carton jaune de la saison",
+}
+
+
+def suspension_article(
+    key: int, player: Person, club: Team, matches: int, reason: str, day: datetime.date
+) -> Article:
+    """Une suspension prononcée par la commission de discipline (engine/discipline.py)."""
+    title = _pick(
+        [
+            f"{player.name} suspendu {_plural(matches, 'match')}",
+            f"{cap(club.subject)} privé{'s' if club.plural else ''} de {player.name}",
+        ],
+        key,
+    )
+    return Article(
+        key=f"suspension-{key}",
+        kind=Kind.DISCIPLINE,
+        date=day,
+        title=title,
+        body=(
+            f"La commission de discipline a suspendu {player.noun} de {club.subject} "
+            f"{_plural(matches, 'match')} {_SUSPENSION_CAUSES[reason]}."
+        ),
+        weight=SUSPENSION_WEIGHT + _star(player.overall, 4) + min(matches, 6),
+        teams=[club],
         player=player,
     )
 

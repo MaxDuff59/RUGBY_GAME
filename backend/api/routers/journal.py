@@ -48,6 +48,7 @@ from models.orm import (
     NegotiationRow,
     PlayerRow,
     SeasonRow,
+    SuspensionRow,
 )
 
 router = APIRouter(prefix="/journal", tags=["journal"])
@@ -69,6 +70,8 @@ MOVE_ARTICLES = 14
 SQUAD_ARTICLES = 4
 INJURY_ARTICLES = 6
 INJURY_MIN_DAYS = 21  # une blessure fait une nouvelle à partir de trois semaines d'absence
+SUSPENSION_DAYS = 10
+SUSPENSION_ARTICLES = 3
 # Marché : on tire quelques noms parmi les mieux notés, pas les mêmes d'une semaine à l'autre.
 CONTRACT_POOL, CONTRACT_ARTICLES = 12, 3
 FREE_AGENT_POOL, FREE_AGENT_ARTICLES = 8, 2
@@ -451,6 +454,29 @@ def _injury_articles(
     return _keep(articles, INJURY_ARTICLES)
 
 
+def _suspension_articles(
+    session: Session, teams: dict[int, Team], reader: _Reader, today: datetime.date
+) -> list[Article]:
+    """Les suspensions de la semaine passée (engine/discipline.py)."""
+    rows = session.execute(
+        select(SuspensionRow, PlayerRow)
+        .join(PlayerRow, SuspensionRow.player_id == PlayerRow.id)
+        .where(SuspensionRow.date >= today - datetime.timedelta(days=SUSPENSION_DAYS))
+    )
+    articles = []
+    for suspension, player in rows:
+        article = journal.suspension_article(
+            suspension.id,
+            _person(player),
+            teams[suspension.club_id],
+            suspension.matches,
+            suspension.reason,
+            suspension.date,
+        )
+        articles.append(journal.favour(article, reader.manages(suspension.club_id)))
+    return _keep(articles, SUSPENSION_ARTICLES)
+
+
 def _squad_articles(
     session: Session,
     calls: list[CallUpRow],
@@ -594,6 +620,7 @@ def get_journal(session: SessionDep) -> JournalOut:
         *_move_articles(moves, reader, today, quiet),
         *_market_articles(market, season, teams, reader, today),
         *_injury_articles(session, teams, reader, listed, today),
+        *_suspension_articles(session, teams, reader, today),
         *_squad_articles(session, calls, names, teams, reader, today),
         *_dismissal_articles(session, teams, today),
     ]

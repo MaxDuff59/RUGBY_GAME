@@ -9,6 +9,7 @@ from api.deps import SessionDep, load_club, load_my_club_row
 from api.ledger import game_date
 from api.notes import club_notes
 from api.schemas import (
+    CaptainIn,
     ClubDetail,
     ClubNotesOut,
     ClubSummary,
@@ -65,6 +66,7 @@ def get_club(club_id: int, session: SessionDep) -> ClubDetail:
             for p in [*club.players, *club.cover]
         ],
         lineup_custom=any(player_id is not None for player_id in club.lineup_choice),
+        captain_choice=club.captain_id,
     )
 
 
@@ -100,6 +102,8 @@ def set_lineup(club_id: int, lineup: LineupIn, session: SessionDep) -> ClubDetai
             raise HTTPException(status_code=400, detail="Ce joueur n'est pas dans ton effectif")
         if player.is_injured(day):
             raise HTTPException(status_code=400, detail=f"{player.name} est blessé")
+        if player.is_suspended:
+            raise HTTPException(status_code=400, detail=f"{player.name} est suspendu")
         if player_id in club.called_up:
             raise HTTPException(
                 status_code=400, detail=f"{player.name} est retenu en sélection pour ce match"
@@ -113,6 +117,18 @@ def set_lineup(club_id: int, lineup: LineupIn, session: SessionDep) -> ClubDetai
 def reset_lineup(club_id: int, session: SessionDep) -> ClubDetail:
     """Rend la composition du XV au staff."""
     _my_club_row(session, club_id).lineup_choice = []
+    session.commit()
+    return get_club(club_id, session)
+
+
+@router.put("/{club_id}/captain", response_model=ClubDetail)
+def set_captain(club_id: int, payload: CaptainIn, session: SessionDep) -> ClubDetail:
+    """Le manager choisit son capitaine (un pro de l'effectif) ; il porte le brassard
+    chaque fois qu'il est titulaire, sinon le staff le confie au meneur du XV."""
+    row = _my_club_row(session, club_id)
+    if payload.player_id is not None and payload.player_id not in {p.id for p in row.players}:
+        raise HTTPException(status_code=400, detail="Ce joueur n'est pas dans ton effectif")
+    row.captain_id = payload.player_id
     session.commit()
     return get_club(club_id, session)
 

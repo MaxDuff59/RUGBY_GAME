@@ -23,7 +23,7 @@ const SECTIONS = [
   { key: "results", label: "Résultats", keep: (article) => ["result", "standing"].includes(article.kind), scores: "last" },
   { key: "fixtures", label: "À venir", keep: (article) => article.kind === "preview", scores: "next" },
   { key: "transfers", label: "Transferts", keep: (article) => ["transfer", "market"].includes(article.kind), moves: true },
-  { key: "medical", label: "Infirmerie", keep: (article) => article.kind === "injury" },
+  { key: "medical", label: "Absences", keep: (article) => ["injury", "discipline"].includes(article.kind) },
   { key: "nations", label: "Sélections", keep: (article) => article.international },
 ];
 
@@ -193,7 +193,7 @@ function Scores({ competitions, focus, myId, forced = null }) {
       </div>
       <div className="panel__body">
         {round ? (
-          <MatchList matches={round.matches} myClubId={myId} />
+          <MatchList matches={round.matches} myClubId={myId} reports={!competition.international} />
         ) : (
           <p className="table__note">Aucun match dans cette compétition pour l'instant.</p>
         )}

@@ -1,10 +1,12 @@
 """Un jour de match : la semaine d'entraînement, les matchs, puis l'argent.
 
-`play_day` joue tous les matchs d'une date, tous championnats confondus. Il
-remplit les matchs reçus (score, événements, XV de départ), attache les
-blessures aux joueurs, et rend compte de ce qui s'est passé (`DayReport`) : à
-l'appelant de l'enregistrer (api/routers/seasons.py) ou de le garder en mémoire
-(engine/world.py). Aucune dépendance à FastAPI ni à la base de données.
+`play_day` joue tous les matchs d'une date, tous championnats confondus, chacun
+sous le temps du jour (engine/weather.py). Il remplit les matchs reçus (score,
+événements, XV de départ, statistiques), attache les blessures et les
+suspensions (engine/discipline.py) aux joueurs, et rend compte de ce qui
+s'est passé (`DayReport`) : à l'appelant de l'enregistrer
+(api/routers/seasons.py) ou de le garder en mémoire (engine/world.py). Aucune
+dépendance à FastAPI ni à la base de données.
 """
 
 import datetime
@@ -13,6 +15,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
 from data.leagues import League
+from engine import discipline
 from engine.economy import (
     CHAMPION_PRIZE,
     PLAYOFF_PRIZES,
@@ -28,6 +31,7 @@ from engine.form import Form
 from engine.match_engine import simulate_match
 from engine.medical import new_injury, training_injuries
 from engine.supporters import NEUTRAL as FANS_NEUTRAL
+from engine.weather import forecast
 from models import Club, EventType, Injury, InjurySource, Match, Stage
 
 STAGE_LABELS = {
@@ -83,6 +87,9 @@ class DayReport:
     # (club, blessure) : à l'entraînement puis en match, dans l'ordre.
     injuries: list[tuple[int, Injury]] = field(default_factory=list)
     movements: list[Movement] = field(default_factory=list)
+    suspensions: list[discipline.Suspension] = field(default_factory=list)
+    # Joueurs dont la suspension ou le compteur de jaunes a changé, à enregistrer.
+    disciplined: set[int] = field(default_factory=set)
 
 
 def training_week(
@@ -104,6 +111,14 @@ def training_week(
         for injury in training_injuries(club, day, rng, decided, risk):
             injuries.append((club.id, injury))
     return injuries
+
+
+def _fill(match: Match, result: Match) -> None:
+    """Reporte sur le match du calendrier ce que le moteur a joué."""
+    match.home_score, match.away_score = result.home_score, result.away_score
+    match.events = list(result.events)
+    match.home_lineup, match.away_lineup = list(result.home_lineup), list(result.away_lineup)
+    match.weather, match.stats = result.weather, dict(result.stats)
 
 
 def play_day(
@@ -156,11 +171,20 @@ def play_day(
             home_form=world.forms[home.id],
             away_form=world.forms[away.id],
             knockout=stage.is_playoff,
+            weather=forecast(home, day),
         )
-        match.home_score, match.away_score = result.home_score, result.away_score
-        match.events = list(result.events)
-        match.home_lineup, match.away_lineup = list(result.home_lineup), list(result.away_lineup)
+        _fill(match, result)
         report.played.append(match)
+
+        # Les suspendus ont purgé ce match ; la commission juge ensuite les cartons du jour.
+        for club in (home, away):
+            report.disciplined.update(p.id for p in discipline.serve(club))
+        suspensions = discipline.sanctions(match, players, rng)
+        report.suspensions += suspensions
+        report.disciplined.update(
+            e.player_id for e in match.events if e.type == EventType.YELLOW_CARD
+        )
+        report.disciplined.update(s.player_id for s in suspensions)
 
         for event in match.events:
             if event.type == EventType.INJURY:
@@ -230,10 +254,9 @@ def play_day(
             clubs[match.away_club_id].youth_team(),
             rng=rng,
             matchday=match.matchday,
+            weather=forecast(clubs[match.home_club_id], day),
         )
-        match.home_score, match.away_score = result.home_score, result.away_score
-        match.events = list(result.events)
-        match.home_lineup, match.away_lineup = list(result.home_lineup), list(result.away_lineup)
+        _fill(match, result)
 
     # Les salaires se versent à chaque journée de saison régulière du championnat,
     # à tous ses clubs.

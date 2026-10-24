@@ -47,6 +47,7 @@ from api.schemas import (
 )
 from data.nations import NATIONS_BY_CODE
 from engine.match_engine import LiveMatch, Tactics, staff_tactics, team_strength
+from engine.weather import forecast
 from models import Stage
 from models.orm import CareerRow, ClubRow, LiveInternationalRow, LiveMatchRow, SelectorRow
 
@@ -155,6 +156,7 @@ def start_live(session: SessionDep) -> LiveOut:
         home_tactics=opponent_tactics if home is opponent else Tactics(),
         away_tactics=opponent_tactics if away is opponent else Tactics(),
         auto={opponent.id},
+        weather=forecast(home, day),
     )
     row = LiveMatchRow(
         match_id=match_row.id,

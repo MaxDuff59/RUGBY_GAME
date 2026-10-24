@@ -59,6 +59,7 @@ export const api = {
   // XV choisi par le manager : un identifiant (ou null) par place, dans l'ordre de lineup_ids.
   setLineup: (clubId, playerIds) => request(`/clubs/${clubId}/lineup`, { method: "PUT", body: { player_ids: playerIds } }),
   resetLineup: (clubId) => del(`/clubs/${clubId}/lineup`),
+  setCaptain: (clubId, playerId) => request(`/clubs/${clubId}/captain`, { method: "PUT", body: { player_id: playerId } }),
   getClubNotes: (clubId) => request(`/clubs/${clubId}/notes`),
   getPlayer: (playerId) => request(`/players/${playerId}`),
   getCareer: () => request("/career"),

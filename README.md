@@ -126,9 +126,10 @@ parties ailleurs (ex. pour une instance de test).
 | Route | Rôle |
 |---|---|
 | `GET /clubs`, `GET /clubs/{id}` | Clubs, effectif complet et notes collectives du XV |
+| `PUT /clubs/{id}/captain` | Choisir le capitaine (`null` : le staff donne le brassard au meneur du XV) |
 | `GET /clubs/{id}/notes` | Vie du club sur 20 (moral, cohésion, fraîcheur, confiance de la direction, ferveur des supporters) et forme du jour |
 | `GET /career/dismissal` | Dernier limogeage, tant qu'aucune nouvelle carrière n'a commencé |
-| `GET /players/{id}` | Fiche d'un joueur : comparaison à son poste, note à chaque poste, saison, blessures |
+| `GET /players/{id}` | Fiche d'un joueur : comparaison à son poste, note à chaque poste, saison (statistiques comprises), blessures |
 | `POST /career`, `GET /career` | Choisir son club, ou sa sélection (`nation`) ; tire aussi le calendrier de la 1re saison |
 | `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | Compte : s'inscrire, se connecter (cookie de session), se déconnecter, qui suis-je |
 | `GET /saves`, `POST /saves/{n}/load`, `POST /saves/{n}/new`, `DELETE /saves/{n}` | Parties sauvegardées du compte : lister, charger, créer un monde neuf, supprimer |
@@ -137,7 +138,7 @@ parties ailleurs (ex. pour une instance de test).
 | `GET /seasons/current?league=` | Calendrier daté, classement, prochaine journée, phases finales (du championnat du club dirigé par défaut) |
 | `POST /seasons/current/play` | Joue la journée suivante (matchs, billetterie, sponsors, salaires) |
 | `POST /seasons/next` | Intersaison : âges, retraites, jeunes, nouveau calendrier |
-| `GET /matches/{id}`, `POST /matches/simulate` | Détail d'un match joué ; match amical |
+| `GET /matches/{id}`, `POST /matches/simulate` | Détail d'un match joué (météo, statistiques de chaque joueur) ; match amical |
 | `POST /live`, `GET /live` | Lancer (ou reprendre) le match du club dirigé en direct, minute par minute |
 | `POST /live/advance`, `POST /live/tactics`, `POST /live/substitute` | Avancer le chrono ; changer la tactique ; faire un remplacement |
 | `POST /live/finish` | Finir la journée avec ce match (le staff joue les minutes restantes) |

@@ -21,6 +21,7 @@ from models.domain import (
     Match,
     MatchEvent,
     Player,
+    PlayerMatchStats,
     Position,
     Protocol,
     Squad,
@@ -52,6 +53,8 @@ class ClubRow(Base):
     # XV choisi par le manager : un identifiant de joueur (ou null) par place, dans
     # l'ordre de SLOT_POSITIONS (engine/match_engine.py). Vide : le staff compose.
     lineup_choice: Mapped[list] = mapped_column(JSON, default=list)
+    # Capitaine choisi par le manager (NULL : le staff désigne le meneur du XV).
+    captain_id: Mapped[int | None] = mapped_column(default=None)
     # Maillots dessinés par le manager, par tenue : {"home": {...}, "away": {...},
     # "third": {...}} (motif, trois couleurs, sponsor). Une tenue absente prend le maillot
     # aux couleurs du club, que l'interface compose elle-même. À réassigner en entier.
@@ -94,6 +97,7 @@ class ClubRow(Base):
             facilities=self.facilities(),
             league=self.league,
             lineup_choice=list(self.lineup_choice or []),
+            captain_id=self.captain_id,
         )
 
     def facilities(self) -> Facilities:
@@ -163,6 +167,9 @@ class PlayerRow(Base):
     photo: Mapped[str | None] = mapped_column(String(300))
     # Nationalité sportive (data/nations.py), None si elle est inconnue.
     nationality: Mapped[str | None] = mapped_column(String(3))
+    # Discipline (engine/discipline.py) : matchs de suspension à purger, jaunes de la saison.
+    suspended_matches: Mapped[int] = mapped_column(default=0, server_default="0")
+    yellow_cards: Mapped[int] = mapped_column(default=0, server_default="0")
 
     club: Mapped[ClubRow | None] = relationship(
         foreign_keys=[club_id], overlaps="players,youths", viewonly=True
@@ -204,6 +211,8 @@ class PlayerRow(Base):
             squad=Squad(self.squad),
             photo=self.photo,
             nationality=self.nationality,
+            suspended_matches=self.suspended_matches or 0,
+            yellow_cards=self.yellow_cards or 0,
         )
 
     @classmethod
@@ -221,6 +230,8 @@ class PlayerRow(Base):
             squad=player.squad.value,
             photo=player.photo,
             nationality=player.nationality,
+            suspended_matches=player.suspended_matches,
+            yellow_cards=player.yellow_cards,
             **player.attributes,
         )
 
@@ -284,6 +295,20 @@ class InjuryRow(Base):
         self.protocol_chosen = injury.protocol_chosen
         self.return_date = injury.return_date
         self.relapse_risk = injury.relapse_risk
+
+
+class SuspensionRow(Base):
+    """Une suspension prononcée après un match (engine/discipline.py) : son dossier.
+    Ce qu'il reste à purger vit sur le joueur (`PlayerRow.suspended_matches`)."""
+
+    __tablename__ = "suspensions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id"))
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
+    date: Mapped[datetime.date] = mapped_column(Date)
+    matches: Mapped[int]
+    reason: Mapped[str] = mapped_column(String(14))
 
 
 class StaffRow(Base):
@@ -378,6 +403,14 @@ def _events_to_json(events: list[MatchEvent]) -> list[dict]:
     ]
 
 
+def _stats_from_json(data: dict | None) -> dict[int, PlayerMatchStats]:
+    return {int(k): PlayerMatchStats.from_dict(v) for k, v in (data or {}).items()}
+
+
+def _stats_to_json(stats: dict[int, PlayerMatchStats]) -> dict:
+    return {str(k): line.to_dict() for k, line in stats.items()}
+
+
 class MatchRow(Base):
     __tablename__ = "matches"
 
@@ -400,6 +433,10 @@ class MatchRow(Base):
     # XV de départ (identifiants de joueurs), pour les statistiques individuelles.
     home_lineup: Mapped[list[int]] = mapped_column(JSON, default=list)
     away_lineup: Mapped[list[int]] = mapped_column(JSON, default=list)
+    # Temps du match (engine/weather.py) et statistiques de chaque joueur entré en
+    # jeu ({identifiant: PlayerMatchStats.to_dict()}), une fois le match joué.
+    weather: Mapped[str | None] = mapped_column(String(8), default=None)
+    stats: Mapped[dict] = mapped_column(JSON, default=dict)
 
     season: Mapped[SeasonRow | None] = relationship(overlaps="matches,youth_matches", viewonly=True)
 
@@ -422,6 +459,8 @@ class MatchRow(Base):
             home_lineup=list(self.home_lineup or []),
             away_lineup=list(self.away_lineup or []),
             league=self.league,
+            weather=self.weather,
+            stats=_stats_from_json(self.stats),
         )
 
     @classmethod
@@ -441,6 +480,8 @@ class MatchRow(Base):
             events=_events_to_json(match.events),
             home_lineup=list(match.home_lineup),
             away_lineup=list(match.away_lineup),
+            weather=match.weather,
+            stats=_stats_to_json(match.stats),
         )
 
 

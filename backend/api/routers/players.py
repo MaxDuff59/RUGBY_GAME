@@ -18,7 +18,7 @@ from engine.match_engine import (
     scrum_rating,
     team_strength,
 )
-from models import ATTRIBUTE_NAMES, EventType, Player, Squad
+from models import ATTRIBUTE_NAMES, MATCH_STAT_NAMES, EventType, Player, Squad
 from models.orm import CareerRow, ClubRow, PlayerRow
 
 router = APIRouter(prefix="/players", tags=["joueurs"])
@@ -76,15 +76,28 @@ def _season_stats(session, player_id: int) -> PlayerSeasonStats:
     )
     if season is None:
         return stats
+    ratings = []
     for row in [*season.matches, *season.youth_matches]:
         match = row.to_domain()
-        if not match.is_played or not match.played_by(player_id):
+        line = match.stats.get(player_id)
+        if not match.is_played or not (line or match.played_by(player_id)):
             continue
         stats.matches += 1
         for event in match.events:
             if event.player_id == player_id and event.type in _SCORING:
                 setattr(stats, _SCORING[event.type], getattr(stats, _SCORING[event.type]) + 1)
                 stats.points += event.points
+            elif event.player_id == player_id and event.type == EventType.YELLOW_CARD:
+                stats.yellow_cards += 1
+            elif event.player_id == player_id and event.type == EventType.RED_CARD:
+                stats.red_cards += 1
+        if line is not None:
+            stats.minutes += line.minutes
+            for name in MATCH_STAT_NAMES:
+                setattr(stats, name, getattr(stats, name) + getattr(line, name))
+            if line.rating is not None:
+                ratings.append(line.rating)
+    stats.rating = round(sum(ratings) / len(ratings), 1) if ratings else None
     return stats
 
 

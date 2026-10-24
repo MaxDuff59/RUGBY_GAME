@@ -48,6 +48,7 @@ from engine.freshness import squad_freshness
 from engine.match_engine import RATING_FOR_POSITION, simulate_match
 from engine.medical import new_injury
 from engine.season import generate_fixtures, seeding
+from engine.weather import forecast
 from models import (
     Club,
     EventType,
@@ -456,6 +457,7 @@ def play_tests(
             home_form=forms.get(home.id, Form()),
             away_form=forms.get(away.id, Form()),
             knockout=match.stage.is_playoff,
+            weather=forecast(home, day),
         )
         match.home_score, match.away_score = result.home_score, result.away_score
         match.events = list(result.events)

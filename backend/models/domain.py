@@ -157,6 +157,10 @@ class Player:
     photo: str | None = None
     # Nationalité sportive, en trois lettres (data/nations.py) ; None si elle est inconnue.
     nationality: str | None = None
+    # Matchs de club encore à purger après un carton (engine/discipline.py).
+    suspended_matches: int = 0
+    # Cartons jaunes de la saison qui comptent pour la suspension au cumul.
+    yellow_cards: int = 0
 
     def __post_init__(self) -> None:
         # On refuse tout attribut hors de l'échelle 1-20 dès la création.
@@ -194,6 +198,10 @@ class Player:
     def is_fragile(self, day: datetime.date | None) -> bool:
         """Revenu de blessure depuis peu : risque de rechute."""
         return day is not None and self.injury is not None and self.injury.is_fragile(day)
+
+    @property
+    def is_suspended(self) -> bool:
+        return self.suspended_matches > 0
 
 
 class StaffRole(StrEnum):
@@ -284,16 +292,18 @@ class Club:
     # joueurs retenus en sélection le jour du match, et les espoirs qui les suppléent.
     called_up: set[int] = field(default_factory=set)
     cover: list[Player] = field(default_factory=list)
+    # Capitaine choisi par le manager (None : le staff désigne le meneur du XV).
+    captain_id: int | None = None
 
     def players_at(self, position: Position) -> list[Player]:
         """Joueurs de l'effectif à un poste donné."""
         return [p for p in self.players if p.position == position]
 
     def available_players(self, day: datetime.date | None) -> list[Player]:
-        """Joueurs aptes à jouer à cette date : ni blessés, ni retenus en sélection ;
-        un jour de doublon, les espoirs appelés en renfort en sont."""
+        """Joueurs aptes à jouer à cette date : ni blessés, ni suspendus, ni retenus en
+        sélection ; un jour de doublon, les espoirs appelés en renfort en sont."""
         squad = [p for p in self.players if p.id not in self.called_up] + self.cover
-        return [p for p in squad if not p.is_injured(day)]
+        return [p for p in squad if not p.is_injured(day) and not p.is_suspended]
 
     def staff_level(self, role: StaffRole) -> int:
         """Niveau (1 à 5) du membre du staff à ce poste, 0 si le poste est vacant."""
@@ -377,6 +387,45 @@ class MatchEvent:
         return EVENT_POINTS[self.type]
 
 
+# Statistiques comptées par le moteur pour chaque joueur, dans cet ordre.
+MATCH_STAT_NAMES = (
+    "carries",  # ballons portés
+    "line_breaks",  # franchissements
+    "tackles",  # plaquages réussis
+    "missed_tackles",  # plaquages manqués
+    "turnovers",  # ballons grattés
+    "lineouts_won",  # touches prises sur son lancer
+    "lineout_steals",  # touches volées sur le lancer adverse
+)
+
+
+@dataclass
+class PlayerMatchStats:
+    """Ce qu'un joueur a fait pendant un match."""
+
+    minutes: int = 0
+    rating: float | None = None  # note sur 10 à la fin du match
+    carries: int = 0
+    line_breaks: int = 0
+    tackles: int = 0
+    missed_tackles: int = 0
+    turnovers: int = 0
+    lineouts_won: int = 0
+    lineout_steals: int = 0
+
+    def to_dict(self) -> dict:
+        return {
+            "minutes": self.minutes,
+            "rating": self.rating,
+            **{name: getattr(self, name) for name in MATCH_STAT_NAMES},
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "PlayerMatchStats":
+        known = {"minutes", "rating", *MATCH_STAT_NAMES}
+        return cls(**{key: value for key, value in data.items() if key in known})
+
+
 class Stage(StrEnum):
     """Étape de la saison à laquelle appartient un match."""
 
@@ -408,6 +457,9 @@ class Match:
     home_lineup: list[int] = field(default_factory=list)
     away_lineup: list[int] = field(default_factory=list)
     league: str = "top14"  # code du championnat (data/leagues.py)
+    weather: str | None = None  # engine/weather.py, connu une fois le match joué
+    # Statistiques de chaque joueur entré en jeu (titulaires et remplaçants).
+    stats: dict[int, PlayerMatchStats] = field(default_factory=dict)
 
     def played_by(self, player_id: int) -> bool:
         return player_id in self.home_lineup or player_id in self.away_lineup

@@ -22,6 +22,7 @@ from api.schemas import (
     LiveOut,
     LivePlayerOut,
     LiveSideOut,
+    PlayerMatchStatsOut,
     TacticsOut,
     TalkHeardOut,
     TalkOptionOut,
@@ -36,7 +37,7 @@ from engine.match_engine import (
 )
 from engine.matchday import training_week
 from engine.team_talk import TALKS
-from models import Club, EventType, Injury, Stage
+from models import MATCH_STAT_NAMES, Club, EventType, Injury, Stage
 from models.orm import (
     InjuryRow,
     InternationalRow,
@@ -149,6 +150,11 @@ def _player_out(side: Side, index: int, minute: int) -> LivePlayerOut:
     else:
         status = "bench"
     rating = side.ratings.get(player.id)
+    stats = None
+    if player.id in side.entered_at:
+        line = {**dict.fromkeys(MATCH_STAT_NAMES, 0), **side.stats.get(player.id, {})}
+        minutes = side.off.get(player.id, minute) - side.entered_at[player.id]
+        stats = PlayerMatchStatsOut(minutes=max(0, minutes), rating=round(rating, 1), **line)
     return LivePlayerOut(
         id=player.id,
         name=player.name,
@@ -167,6 +173,7 @@ def _player_out(side: Side, index: int, minute: int) -> LivePlayerOut:
         overall=round(player.overall, 1),
         kicking=player.kicking,
         energy=round(side.energy(player), 2),
+        stats=stats,
     )
 
 
@@ -190,6 +197,7 @@ def _side_out(live: LiveMatch, side: Side, name: str) -> LiveSideOut:
         substitutions_left=side.substitutions_left(),
         missing=side.missing(minute),
         kicker_id=kicker.id if kicker else None,
+        captain_id=side.captain_id,
         strength={
             "set_piece": round(ratings.set_piece, 1),
             "pack": round(ratings.pack, 1),
@@ -239,6 +247,7 @@ def live_out(live: Live, names: dict[int, str], my_club_id: int) -> LiveOut:
         half_time=HALF_TIME,
         extra_time=match.extra_time,
         finished=match.finished,
+        weather=match.weather,
         home=_side_out(match, match.home, names[match.home.club.id]),
         away=_side_out(match, match.away, names[match.away.club.id]),
         events=[

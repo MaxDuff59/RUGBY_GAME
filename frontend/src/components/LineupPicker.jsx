@@ -17,7 +17,7 @@ export default function LineupPicker({ entry, players, jerseys, onPick, onOpen, 
   const { slot, player } = entry;
 
   const candidates = players
-    .filter((p) => p.id !== player.id && p.injury?.status !== "active")
+    .filter((p) => p.id !== player.id && p.injury?.status !== "active" && !p.suspended_matches)
     .sort((a, b) => b.overall - a.overall);
   const groups = [
     { label: "Au poste", players: candidates.filter((p) => p.position === slot.position) },

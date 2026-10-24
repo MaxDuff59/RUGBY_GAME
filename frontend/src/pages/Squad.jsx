@@ -15,6 +15,7 @@ import {
   formatContractEnd,
   formatMoney,
   formatNote,
+  formatSuspension,
 } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { usePitchWidth } from "../hooks/usePitchWidth.js";
@@ -41,6 +42,7 @@ export default function Squad() {
   // Place du terrain touchée : on choisit qui la prend.
   const [picking, setPicking] = useState(null);
   const [resetting, setResetting] = useState(false);
+  const [captainError, setCaptainError] = useState(null);
 
   if (loading) return <p className="status">Chargement de l'effectif…</p>;
   if (error) return <p className="status status--error">{error.message}</p>;
@@ -68,6 +70,16 @@ export default function Squad() {
     });
     const choice = lineupChoice(next);
     setData(await (national ? api.setSelectionLineup(choice) : api.setLineup(club.id, choice)));
+  }
+
+  // Capitaine : un pro de l'effectif, ou "" pour laisser le staff désigner le meneur du XV.
+  async function chooseCaptain(value) {
+    setCaptainError(null);
+    try {
+      setData(await api.setCaptain(club.id, value === "" ? null : Number(value)));
+    } catch (err) {
+      setCaptainError(err);
+    }
   }
 
   async function resetLineup() {
@@ -99,6 +111,8 @@ export default function Squad() {
               Rendre la main au staff
             </button>
           )}
+          {!national && <CaptainPicker club={club} starters={starters} onChoose={chooseCaptain} />}
+          {captainError && <span className="status--error">{captainError.message}</span>}
         </div>
       </header>
 
@@ -115,8 +129,8 @@ export default function Squad() {
               x: slot.x,
               y: slot.y,
               number: slot.number,
-              label: player.last_name,
-              title: `${player.name} · ${POSITIONS[player.position].label}`,
+              label: player.id === club.strength.captain_id ? `${player.last_name} (C)` : player.last_name,
+              title: `${player.name} · ${POSITIONS[player.position].label}${player.id === club.strength.captain_id ? " · capitaine" : ""}`,
               entry: { slot, player },
             }))}
             onPick={(marker) => setPicking(marker.entry)}
@@ -170,7 +184,17 @@ export default function Squad() {
                       <PlayerAvatar src={player.photo} size={26} />
                       <InjuryIcon injury={player.injury} />
                       {player.name}
+                      {player.id === club.strength.captain_id && (
+                        <span className="captain-badge" title="Capitaine">
+                          C
+                        </span>
+                      )}
                       <DutyTag player={player} />
+                      {player.suspended_matches > 0 && (
+                        <span className="tag tag--injured" title="Suspendu par la commission de discipline : il ne peut pas jouer">
+                          {formatSuspension(player.suspended_matches)}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="left">{POSITIONS[player.position].label}</td>
@@ -214,7 +238,7 @@ export default function Squad() {
             Attributs sur 20 ; en gras à partir de 15. Le numéro indique les titulaires.{" "}
             {national
               ? "Le groupe est ta liste ; tant qu'elle n'est pas annoncée, celle que propose le staff. Les blessés ne sont pas alignés."
-              : "Salaire par saison, contrat jusqu'en juin de l'année indiquée. Les blessés ne sont pas alignés : voir la page Médical. « En sélection » : retenu par sa sélection, qui joue le jour de notre prochain match (doublon) ; des espoirs complètent alors la feuille de match."}
+              : "Salaire par saison, contrat jusqu'en juin de l'année indiquée. Les blessés et les suspendus ne sont pas alignés : voir la page Médical. « En sélection » : retenu par sa sélection, qui joue le jour de notre prochain match (doublon) ; des espoirs complètent alors la feuille de match. C : le capitaine, qui calme les esprits tant qu'il est sur le terrain."}
           </p>
         </div>
       </div>
@@ -222,7 +246,7 @@ export default function Squad() {
       {picking && (
         <LineupPicker
           entry={picking}
-          players={club.players.filter((player) => !player.duty?.away)}
+          players={club.players.filter((player) => !player.duty?.away && !player.suspended_matches)}
           jerseys={jerseys}
           onPick={(candidate) => replace(picking, candidate)}
           onOpen={open}
@@ -284,6 +308,26 @@ function DutyTag({ player }) {
     );
   }
   return null;
+}
+
+// Le capitaine : celui du manager, ou « Choix du staff », qui donne le brassard au plus
+// grand meneur du XV (expérience et niveau, sur 20 à côté de chaque nom).
+function CaptainPicker({ club, starters, onChoose }) {
+  const staffPick = starters.reduce((best, p) => (best === null || p.leadership > best.leadership ? p : best), null);
+  const options = [...club.players].filter((p) => p.squad !== "youth").sort((a, b) => b.leadership - a.leadership);
+  return (
+    <label className="captain-picker">
+      <span className="muted">Capitaine</span>
+      <select className="input tactics__select" value={club.captain_choice ?? ""} onChange={(event) => onChoose(event.target.value)}>
+        <option value="">Choix du staff{staffPick ? ` · ${staffPick.name}` : ""}</option>
+        {options.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name} · meneur {formatNote(p.leadership)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 }
 
 function Stat({ value, label }) {

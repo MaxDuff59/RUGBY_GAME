@@ -15,6 +15,7 @@ const KINDS = {
   transfer: "Transfert",
   market: "Mercato",
   injury: "Infirmerie",
+  discipline: "Discipline",
   selection: "Sélections",
   club: "Coulisses",
 };

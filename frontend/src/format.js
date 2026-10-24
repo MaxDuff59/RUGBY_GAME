@@ -219,6 +219,28 @@ export const EVENTS = {
   shootout_missed: "Tir au but manqué",
 };
 
+// Le temps d'un match (engine/weather.py) et ce qu'il change au jeu.
+export const WEATHER = {
+  clear: { label: "Temps sec", scope: "Rien ne gêne le jeu" },
+  rain: { label: "Pluie", scope: "Ballon glissant : moins d'essais, le jeu au pied et les avants en profitent" },
+  wind: { label: "Vent", scope: "Coups de pied au but plus durs, drops rares" },
+  heat: { label: "Chaleur", scope: "Les joueurs se vident plus vite : l'endurance compte double" },
+};
+
+// Statistiques d'un joueur sur un match (PlayerMatchStats), dans l'ordre d'affichage.
+export const MATCH_STATS = [
+  { key: "carries", label: "Ballons portés", short: "Port." },
+  { key: "line_breaks", label: "Franchissements", short: "Franch." },
+  { key: "tackles", label: "Plaquages réussis", short: "Plaq." },
+  { key: "missed_tackles", label: "Plaquages manqués", short: "Manq." },
+  { key: "turnovers", label: "Ballons grattés", short: "Gratt." },
+  { key: "lineouts_won", label: "Touches prises", short: "Touch." },
+  { key: "lineout_steals", label: "Touches volées", short: "Vol." },
+];
+
+// Ce qu'un joueur suspendu doit encore purger (engine/discipline.py).
+export const formatSuspension = (matches) => `Suspendu ${matches} match${matches > 1 ? "s" : ""}`;
+
 // Les trois curseurs de la tactique, avec leurs options dans l'ordre d'affichage.
 export const TACTICS = [
   {
@@ -244,7 +266,8 @@ export const TACTICS = [
     label: "Pénalités",
     options: [
       { key: "kick", label: "Au pied", scope: "Trois points face aux perches" },
-      { key: "play", label: "Jouées", scope: "On tente l'essai, rien si ça échoue" },
+      { key: "touch", label: "En touche", scope: "Touche puis maul : l'essai se joue entre les deux paquets" },
+      { key: "play", label: "Jouées", scope: "Vite à la main par les arrières, rien si ça échoue" },
     ],
   },
 ];

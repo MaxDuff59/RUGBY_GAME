@@ -315,7 +315,7 @@ export default function Selection() {
             {lastDay && <span className="muted">{formatLongDate(lastDay.date)}</span>}
           </div>
           <div className="card">
-            {lastDay && lastDay.tests.length > 0 && <MatchList matches={lastDay.tests} myClubId={myId} />}
+            {lastDay && lastDay.tests.length > 0 && <MatchList matches={lastDay.tests} myClubId={myId} reports={false} />}
             {lastDay && lastDay.tests.length === 0 && (
               <p className="table__note">
                 Pas de match international ce jour-là · {lastDay.club_matches} match{lastDay.club_matches > 1 ? "s" : ""} de clubs.

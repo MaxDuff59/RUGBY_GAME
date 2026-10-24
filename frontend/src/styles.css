@@ -5683,3 +5683,326 @@ td > .tag:first-child,
     min-width: 0;
   }
 }
+
+/* --- Météo, capitaine, suspensions ------------------------------------------------- */
+
+.weather-icon {
+  flex: none;
+  vertical-align: -3px;
+}
+
+.match__note .weather-icon {
+  margin-left: 4px;
+  vertical-align: -2px;
+  color: var(--ink-muted);
+}
+
+.match__note .weather-icon:first-child {
+  margin-left: 0;
+}
+
+.scoreboard__weather {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+/* Brassard : un « C » cerclé devant le nom, en noir (en accent dans notre XV). */
+.captain-badge,
+.live-row__captain {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.live-lineup--mine .live-row__captain {
+  color: var(--accent);
+}
+
+.live-lineup__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.captain-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.captain-picker .tactics__select {
+  max-width: 280px;
+}
+
+/* --- Fiche d'un match joué (MatchReport) ------------------------------------------ */
+
+.match--link {
+  cursor: pointer;
+}
+
+.match--link:hover .match__open {
+  text-decoration: underline;
+}
+
+.match__open {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.modal.match-report {
+  gap: 18px;
+  overflow: hidden;
+}
+
+.match-report__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.match-report__head .eyebrow {
+  margin: 0;
+}
+
+.match-report__score {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+}
+
+/* Les blasons côté score : le nom du club qui reçoit à leur gauche, l'autre à leur droite. */
+.match-report__team {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 26px;
+  line-height: 1;
+  text-transform: uppercase;
+  text-align: right;
+}
+
+.match-report__team--away {
+  flex-direction: row;
+  text-align: left;
+}
+
+.match-report__team--mine {
+  color: var(--accent);
+}
+
+.match-report__points {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 56px;
+  line-height: 1;
+  text-align: center;
+}
+
+.match-report__weather {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.match-report .chips .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.match-report__overview {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 32px;
+  overflow: auto;
+}
+
+.match-report__duel {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Une statistique face à face : les deux chiffres, le libellé, et la part de chacun. */
+.duel {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 56px;
+  align-items: center;
+  row-gap: 6px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.duel__value {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 20px;
+  color: var(--ink-muted);
+}
+
+.duel__value:last-of-type {
+  text-align: right;
+}
+
+.duel__value--lead {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.duel__label {
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.duel__bar {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  height: 6px;
+}
+
+.duel__half {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--neutral-soft);
+}
+
+.duel__half--home {
+  background: var(--ink);
+}
+
+.duel__half--mine {
+  background: var(--accent);
+}
+
+.match-report__side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.match-report__side .eyebrow {
+  margin: 0;
+}
+
+.match-report__best {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.match-report__best-name {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.match-report__best-name a {
+  color: inherit;
+}
+
+.match-report__rating {
+  margin-left: auto;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 28px;
+}
+
+.match-report__best-line {
+  margin: 0;
+  font-size: 13px;
+}
+
+.match-report__events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.match-report__events li {
+  display: grid;
+  grid-template-columns: 34px 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+
+.match-report__table {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.match-report__table a {
+  color: inherit;
+}
+
+.match-report__high {
+  font-weight: 700;
+}
+
+@media (max-width: 960px) {
+  .match-report__team {
+    flex-direction: column;
+    align-items: flex-end;
+    font-size: 18px;
+  }
+  .match-report__team--away {
+    align-items: flex-start;
+  }
+  .match-report__points {
+    font-size: 40px;
+  }
+  .match-report__overview {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+}
+
+/* Fiche joueur : la saison en trois colonnes serrées, sous les notes du moteur. */
+.situation.season-facts {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+
+.season-facts .eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}

@@ -12,11 +12,19 @@ from pydantic import BaseModel, ConfigDict, Field
 from engine.economy import FacilityKind, TransactionCategory, market_value
 from engine.journal import Kind as ArticleKind
 from engine.journal import MoveKind
-from engine.match_engine import Defence, GamePlan, PenaltyChoice, TeamStrength
+from engine.match_engine import (
+    Defence,
+    GamePlan,
+    PenaltyChoice,
+    TeamStrength,
+    captain_of,
+    leadership,
+)
 from engine.notes import Note
 from engine.sponsors import Placement
 from engine.team_talk import Moment, Outcome
 from engine.transfers import DealKind
+from engine.weather import Weather, forecast_at
 from models import (
     AmenityKind,
     EventType,
@@ -144,6 +152,11 @@ class PlayerOut(BaseModel):
     injury: InjuryOut | None = None
     # Retenu en sélection (renseigné sur l'effectif d'un club) ; None sinon.
     duty: DutyOut | None = None
+    # Discipline (engine/discipline.py) : matchs de suspension à purger, jaunes de la saison.
+    suspended_matches: int = 0
+    yellow_cards: int = 0
+    # Ascendant sur le groupe, sur 20 (expérience et niveau) : l'étoffe d'un capitaine.
+    leadership: float = 0.0
 
     @classmethod
     def from_player(
@@ -154,7 +167,7 @@ class PlayerOut(BaseModel):
         duty: DutyOut | None = None,
     ) -> "PlayerOut":
         # Tous les champs viennent du joueur, sauf ceux qui se calculent.
-        computed = {"value", "injury", "loaned_from_name", "duty", "club_name"}
+        computed = {"value", "injury", "loaned_from_name", "duty", "club_name", "leadership"}
         fields = {name: getattr(player, name) for name in cls.model_fields if name not in computed}
         injury = None
         if day is not None and (player.is_injured(day) or player.is_fragile(day)):
@@ -167,11 +180,13 @@ class PlayerOut(BaseModel):
             club_name=(club_names or {}).get(player.club_id),
             loaned_from_name=owner,
             duty=duty,
+            leadership=round(20 * leadership(player), 1),
         )
 
 
 class PlayerSeasonStats(BaseModel):
-    """Statistiques individuelles sur la saison en cours (matchs où il était titulaire)."""
+    """Statistiques individuelles sur la saison en cours (matchs où il était titulaire,
+    ou entré en jeu pour les matchs qui comptent les statistiques)."""
 
     year: int | None
     matches: int
@@ -180,6 +195,17 @@ class PlayerSeasonStats(BaseModel):
     penalties: int
     drops: int
     points: int
+    minutes: int = 0
+    rating: float | None = None  # note moyenne sur 10, sur les matchs qui en ont une
+    carries: int = 0
+    line_breaks: int = 0
+    tackles: int = 0
+    missed_tackles: int = 0
+    turnovers: int = 0
+    lineouts_won: int = 0
+    lineout_steals: int = 0
+    yellow_cards: int = 0
+    red_cards: int = 0
 
 
 class PeerOut(BaseModel):
@@ -235,9 +261,11 @@ class StrengthOut(BaseModel):
     kicking: int
     kicker_id: int
     lineup_ids: list[int]
+    captain_id: int | None = None  # capitaine du XV : celui du manager s'il est titulaire
 
     @classmethod
     def from_team(cls, team: TeamStrength) -> "StrengthOut":
+        captain = captain_of(team.club, team.lineup)
         return cls(
             set_piece=round(team.set_piece, 1),
             pack=round(team.pack, 1),
@@ -246,6 +274,7 @@ class StrengthOut(BaseModel):
             kicking=team.kicker.kicking,
             kicker_id=team.kicker.id,
             lineup_ids=[p.id for p in team.lineup],
+            captain_id=captain.id if captain else None,
         )
 
 
@@ -275,12 +304,20 @@ class ClubDetail(BaseModel):
     players: list[PlayerOut]
     # XV choisi par le manager (sinon composé par le staff).
     lineup_custom: bool = False
+    # Capitaine choisi par le manager (None : le staff désigne le meneur du XV).
+    captain_choice: int | None = None
 
 
 class LineupIn(BaseModel):
     """XV voulu par le manager : un joueur (ou null) par place, dans l'ordre de lineup_ids."""
 
     player_ids: list[int | None]
+
+
+class CaptainIn(BaseModel):
+    """Capitaine voulu par le manager ; null rend le choix au staff."""
+
+    player_id: int | None
 
 
 class NoteStepOut(BaseModel):
@@ -383,6 +420,31 @@ class MatchEventOut(BaseModel):
     points: int
 
 
+class PlayerMatchStatsOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    minutes: int
+    rating: float | None
+    carries: int
+    line_breaks: int
+    tackles: int
+    missed_tackles: int
+    turnovers: int
+    lineouts_won: int
+    lineout_steals: int
+
+
+class MatchPlayerOut(BaseModel):
+    """Un joueur entré en jeu et ce qu'il a fait du match."""
+
+    id: int
+    name: str | None  # None : joueur parti à la retraite depuis
+    position: Position | None
+    club_id: int
+    number: int | None  # maillot des titulaires (1 à 15), None pour un remplaçant
+    stats: PlayerMatchStatsOut
+
+
 class MatchOut(BaseModel):
     """Un match avec le détail de ses événements."""
 
@@ -402,9 +464,12 @@ class MatchOut(BaseModel):
     home_shootout: int | None
     away_shootout: int | None
     events: list[MatchEventOut]
+    weather: Weather | None = None  # None : match joué avant la météo
+    # Joueurs entrés en jeu, avec leurs statistiques (vide pour un match d'avant).
+    players: list[MatchPlayerOut] = []
 
     @classmethod
-    def from_match(cls, match: Match) -> "MatchOut":
+    def from_match(cls, match: Match, players: list[MatchPlayerOut] | None = None) -> "MatchOut":
         return cls(
             id=match.id,
             home_club_id=match.home_club_id,
@@ -421,6 +486,8 @@ class MatchOut(BaseModel):
             home_shootout=shootout_score(match, match.home_club_id),
             away_shootout=shootout_score(match, match.away_club_id),
             events=[MatchEventOut.model_validate(e) for e in match.events],
+            weather=match.weather,
+            players=players or [],
         )
 
 
@@ -465,6 +532,8 @@ class LivePlayerOut(BaseModel):
     # Énergie de 0 à 1 : celle du coup d'envoi (selon sa fraîcheur) moins ses minutes
     # de jeu ; figée à sa sortie. Un remplaçant sur le banc montre celle qu'il aurait.
     energy: float
+    # Ballons portés, plaquages, touches... depuis son entrée (None s'il n'a pas joué).
+    stats: PlayerMatchStatsOut | None = None
 
 
 class TalkHeardOut(BaseModel):
@@ -499,6 +568,7 @@ class LiveSideOut(BaseModel):
     substitutions_left: int
     missing: int  # joueurs en moins sur le terrain (cartons, blessés sans remplaçant)
     kicker_id: int | None  # buteur du moment
+    captain_id: int | None  # capitaine du XV (il ne compte que sur le terrain)
     strength: dict[str, float]  # notes collectives du moment : set_piece, pack, attack, defense
     spirit: float  # élan donné par les discours (+0,05 = notes collectives +5 %)
     heat: float  # nervosité (+0,5 = 50 % de cartons en plus)
@@ -531,6 +601,7 @@ class LiveOut(BaseModel):
     half_time: int
     extra_time: bool
     finished: bool
+    weather: Weather
     home: LiveSideOut
     away: LiveSideOut
     events: list[LiveEventOut]  # dans l'ordre du match
@@ -566,6 +637,8 @@ class MatchSummary(BaseModel):
     # Tirs au but réussis, si la prolongation n'a pas suffi.
     home_shootout: int | None = None
     away_shootout: int | None = None
+    # Le temps du match ; pour un match à venir, la prévision (qui ne se trompe pas).
+    weather: Weather | None = None
 
     @classmethod
     def from_match(cls, match: Match, names: dict[int, str]) -> "MatchSummary":
@@ -582,6 +655,11 @@ class MatchSummary(BaseModel):
             extra_time=match.went_to_extra_time,
             home_shootout=shootout_score(match, match.home_club_id),
             away_shootout=shootout_score(match, match.away_club_id),
+            weather=match.weather
+            if match.is_played
+            else forecast_at(
+                match.home_club_id, names[match.home_club_id], match.league, match.date
+            ),
         )
 
 

@@ -187,6 +187,34 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   à côté) et sa note sur 10 (gras à partir de 7,5), puis le banc (sortis en gris avec la minute). Notre carte accepte les remplacements en pause : on
   clique un joueur du terrain, puis « Faire entrer » sur un remplaçant. Les deux rangées
   défilent dans leur carte ; la page tient dans l'écran.
+- Météo (`WeatherIcon`) : pictogramme au trait dans la couleur du texte (soleil, nuage et
+  pluie, rafales, thermomètre), libellé et effet en info-bulle. Sous le score de chaque
+  affiche (`MatchList`, la prévision pour un match à venir), dans la colonne « Météo » de
+  l'onglet Saison du calendrier, sous la date dans le tableau d'affichage du match en direct.
+- Fiche d'un match joué (`MatchReport`, grande fenêtre) : un score se clique dans les
+  affiches et dans l'onglet Saison (pas pour les matchs internationaux). En tête la
+  journée et la date, les deux clubs en capitales (blasons côté score, le nôtre en
+  accent), le score en très grand, le temps qu'il faisait. Deux pastilles : « Le match » —
+  à gauche les statistiques face à face (essais, pénalités, ballons portés, franchissements,
+  plaquages réussis et manqués, ballons grattés, touches, cartons : les deux chiffres, le
+  meilleur en noir, et une barre partagée, la nôtre en accent, sinon noir contre gris), à
+  droite l'homme du match (meilleure note) et les faits de jeu ; « Les joueurs » — une
+  pastille par équipe, puis le tableau triable (numéro, minutes, note, sept statistiques ;
+  « R » pour un remplaçant). Les deux zones défilent dans la fenêtre.
+- Capitaine : un « C » cerclé après le nom (effectif, compositions du match en direct, en
+  accent dans notre XV) et « (C) » sur le terrain de l'effectif. Liste déroulante
+  « Capitaine » sous la phrase de composition : « Choix du staff · nom », puis les pros du
+  plus grand au plus petit meneur (sur 20). Le meneur a aussi sa barre dans les notes du
+  moteur de la fiche joueur.
+- Suspension : étiquette rouge « Suspendu 2 matchs » après le nom (effectif, fiche
+  joueur) ; un suspendu ne s'aligne pas et n'apparaît pas dans le choix d'une place.
+  Le journal la publie sous la rubrique « Discipline », filtre « Absences » (avec les
+  blessures).
+- Match en direct : la pastille « Statistiques » de chaque composition remplace la
+  colonne d'énergie par ballons portés, plaquages, plaquages manqués et franchissements.
+  La fenêtre Plan de jeu propose trois choix de pénalité : au pied, en touche, jouées.
+- Fiche joueur, carte « Notes du moteur » : la saison en trois colonnes (matchs,
+  minutes, note moyenne, essais, points, puis les statistiques relevées à chaque match).
 - Tableau d'effectif : 9 attributs (dont l'endurance, qui règle la barre d'énergie en match),
   gras à partir de 15, gris à 8 et moins.
 - Boutons et liens cliquables : 44 px de haut minimum.

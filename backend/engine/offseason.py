@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from data.generator import FIRST_SEASON_YEAR, generate_youth_player, youth_level
 from data.nations import home_nation
+from engine import discipline
 from engine.economy import SQUAD_MAX, wage_for
 from models import (
     ATTRIBUTE_MAX,
@@ -127,9 +128,10 @@ def club_offseason(
     season_year: int = FIRST_SEASON_YEAR,
     promotes_youths: bool = True,
 ) -> ClubOffseason:
-    """L'intersaison d'un club, dans l'ordre : tout le monde vieillit et progresse,
-    les plus âgés raccrochent, les espoirs trop âgés passent pros ou partent, de
-    nouveaux espoirs arrivent. L'effectif du club est mis à jour.
+    """L'intersaison d'un club, dans l'ordre : tout le monde vieillit et progresse
+    (et repart sans carton jaune au compteur), les plus âgés raccrochent, les
+    espoirs trop âgés passent pros ou partent, de nouveaux espoirs arrivent.
+    L'effectif du club est mis à jour.
 
     `promotes_youths` : le club garde ses meilleurs espoirs sortants tant qu'il a
     de la place (clubs IA) ; sinon ils partent tous (le manager a dû promouvoir
@@ -137,6 +139,7 @@ def club_offseason(
     """
     age_players(club)
     develop_players(club, rng)
+    discipline.new_season([*club.players, *club.youths])
 
     retired = retirees(club)
     gone = {player.id for player in retired}

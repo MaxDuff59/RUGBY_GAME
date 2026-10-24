@@ -19,6 +19,7 @@ import {
   formatNote,
   formatPercent,
   formatShortDate,
+  formatSuspension,
   nationalityLabel,
 } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
@@ -154,6 +155,12 @@ export default function Player() {
                 <span className="tag tag--injured">Blessé</span> retour le {formatShortDate(player.injury.return_date)}
               </>
             )}
+            {player.suspended_matches > 0 && (
+              <>
+                {" · "}
+                <span className="tag tag--injured">{formatSuspension(player.suspended_matches)}</span>
+              </>
+            )}
             {player.injury?.status === "fragile" && (
               <>
                 {" · "}
@@ -232,15 +239,16 @@ export default function Player() {
               ))}
             </div>
 
-            <h3 className="eyebrow player-card__sub">Saison {data.season.year ?? ""}</h3>
-            <div className="situation">
-              <Fact label="Matchs joués" value={data.season.matches} />
-              <Fact label="Essais" value={data.season.tries} />
-              <Fact label="Transformations" value={data.season.conversions} />
-              <Fact label="Pénalités" value={data.season.penalties} />
-              <Fact label="Drops" value={data.season.drops} />
-              <Fact label="Points" value={data.season.points} />
+            <div className="strength__row" title="Ascendant sur le groupe : son expérience, puis son niveau. Le staff donne le brassard au plus grand meneur du XV.">
+              <span className="strength__label">Meneur</span>
+              <div className="meter">
+                <div className="meter__fill" style={{ width: `${(player.leadership / 20) * 100}%` }} />
+              </div>
+              <span className="strength__value num">{formatNote(player.leadership)}</span>
             </div>
+
+            <h3 className="eyebrow player-card__sub">Saison {data.season.year ?? ""}</h3>
+            <SeasonFacts season={data.season} />
 
             <h3 className="eyebrow player-card__sub">Blessures · {data.injuries.length}</h3>
             {data.injuries.length === 0 ? (
@@ -273,6 +281,28 @@ function Stat({ value, label }) {
     <div className="stat">
       <span className="big-num">{value}</span>
       <span className="muted">{label}</span>
+    </div>
+  );
+}
+
+// La saison du joueur : temps de jeu, points, puis ce que le staff relève à chaque match.
+function SeasonFacts({ season }) {
+  const attempts = season.tackles + season.missed_tackles;
+  const tackling = attempts > 0 ? ` · ${Math.round((100 * season.tackles) / attempts)} %` : "";
+  const cards = season.yellow_cards + season.red_cards;
+  return (
+    <div className="situation season-facts">
+      <Fact label="Matchs joués" value={season.matches} />
+      <Fact label="Minutes" value={season.minutes} />
+      <Fact label="Note moyenne" value={season.rating !== null ? formatNote(season.rating) : "–"} />
+      <Fact label="Essais" value={season.tries} />
+      <Fact label="Points" value={season.points} />
+      <Fact label="Ballons portés" value={season.carries} />
+      <Fact label="Franchissements" value={season.line_breaks} />
+      <Fact label="Plaquages" value={`${season.tackles}${tackling}`} />
+      <Fact label="Ballons grattés" value={season.turnovers} />
+      <Fact label="Touches gagnées" value={season.lineouts_won + season.lineout_steals} />
+      <Fact label="Cartons" value={cards > 0 ? `${season.yellow_cards} J · ${season.red_cards} R` : "0"} />
     </div>
   );
 }

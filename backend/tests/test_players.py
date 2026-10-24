@@ -29,8 +29,9 @@ def test_player_season_stats_count_matches_played(manager):
     manager.post("/seasons/current/play")
     club = manager.get("/clubs/3").json()
     played = [manager.get(f"/players/{p['id']}").json()["season"] for p in club["players"]]
-    # Le XV titulaire de la première journée a joué un match ; les autres zéro.
-    assert sum(s["matches"] for s in played) == 15
+    # Le XV titulaire de la première journée a joué un match, comme les remplaçants
+    # entrés en jeu (huit au plus) ; les autres zéro.
+    assert 15 <= sum(s["matches"] for s in played) <= 23
     assert all(s["points"] >= 0 and s["tries"] <= s["matches"] * 5 for s in played)
 
 
