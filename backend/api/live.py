@@ -249,7 +249,10 @@ def live_out(live: Live, names: dict[int, str], my_club_id: int) -> LiveOut:
         extra_time=match.extra_time,
         finished=match.finished,
         weather=match.weather,
-        crowd=CrowdOut.of(match.crowd.spectators, match.crowd.atmosphere) if match.crowd else None,
+        # Le public du moment : son ambiance suit le score.
+        crowd=CrowdOut.of(match.crowd.spectators, match.atmosphere, match.mood)
+        if match.crowd
+        else None,
         home=_side_out(match, match.home, names[match.home.club.id]),
         away=_side_out(match, match.away, names[match.away.club.id]),
         events=[

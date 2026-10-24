@@ -56,6 +56,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from itertools import accumulate
 
+from engine import crowd as crowds
 from engine import team_talk
 from engine.coaching import Coaching
 from engine.coaching import coaching as coaching_of
@@ -124,6 +125,9 @@ DROP_RATE = 0.02  # un drop réussi dans 2 % des cas
 # ... et rien du tout (ballon perdu, en-avant...) le reste du temps.
 # Calibrage (sur 4000 matchs simulés, cartons compris) : ~49 points et ~4,7 essais
 # par match, ~60 % de victoires à domicile, ~2 % de nuls, proche du Top 14.
+
+# Les points qui font réagir le public (engine/crowd.py).
+CROWD_SCORES = {EventType.TRY, EventType.PENALTY_GOAL, EventType.DROP_GOAL}
 
 # Bonus multiplicatif sur le territoire de l'équipe à domicile (l'avantage du
 # terrain est fort au rugby), quand on ne sait rien du public (match amical,
@@ -1088,6 +1092,7 @@ class LiveMatch:
         self.weather = weather
         self.home.weather = self.away.weather = weather
         self.crowd = None if neutral else crowd  # public de l'équipe qui reçoit
+        self.roar = 0.0  # élan du public, qui réagit au score (engine/crowd.py)
         self.events: list[MatchEvent] = []
         self.minute = 0  # dernière minute jouée
         self.extra_time = False
@@ -1230,7 +1235,9 @@ class LiveMatch:
         if self.finished:
             return
         minute = self.minute + 1
+        before = len(self.events)
         self._play_minute(minute)
+        self._crowd_reacts(self.events[before:])
         self.minute = minute
         if minute == MATCH_MINUTES:
             if self.knockout and self.level():
@@ -1329,12 +1336,47 @@ class LiveMatch:
         self.events.append(MatchEvent(minute, event_type, side.club.id, kicker.id))
         side.rate(kicker.id, RATING_EVENT[event_type])
 
+    # -- Le public ---------------------------------------------------------------------
+
+    def _crowd_reacts(self, events: list[MatchEvent]) -> None:
+        """Le public de l'équipe qui reçoit réagit aux points de la minute."""
+        if self.crowd is None:
+            return
+        home = self.home.club.id
+        scored = [
+            "try" if e.type == EventType.TRY else "kick"
+            for e in events
+            if e.club_id == home and e.type in CROWD_SCORES
+        ]
+        conceded = sum(1 for e in events if e.club_id != home and e.type == EventType.TRY)
+        self.roar = crowds.roar_after(self.roar, self.crowd.atmosphere, scored, conceded)
+
+    @property
+    def margin(self) -> int:
+        """Points d'avance de l'équipe qui reçoit."""
+        return self.score(self.home.club.id) - self.score(self.away.club.id)
+
+    @property
+    def atmosphere(self) -> float | None:
+        """L'ambiance du moment (None sans public à soi : terrain neutre, match amical)."""
+        if self.crowd is None:
+            return None
+        return crowds.live_atmosphere(self.crowd.atmosphere, self.roar, self.margin, self.minute)
+
+    @property
+    def mood(self) -> str | None:
+        """Ce que fait le stade en ce moment (engine/crowd.py, `Mood`)."""
+        if self.crowd is None:
+            return None
+        return crowds.mood(self.roar, self.margin, self.minute)
+
     @property
     def home_advantage(self) -> float:
-        """Multiplicateur du territoire de l'équipe qui reçoit : l'ambiance du stade."""
+        """Multiplicateur du territoire de l'équipe qui reçoit : l'ambiance du moment."""
         if self.neutral:
             return 1.0
-        return self.crowd.advantage if self.crowd else HOME_ADVANTAGE
+        atmosphere = self.atmosphere
+        return crowds.advantage(atmosphere) if atmosphere is not None else HOME_ADVANTAGE
 
     def _kick_probability(self, side: Side, kicker: Player, is_conversion: bool = False) -> float:
         """Réussite d'un coup de pied au but : l'entraîneur du jeu au pied, le vent, la
@@ -1342,7 +1384,7 @@ class LiveMatch:
         probability = kick_success_probability(kicker.kicking, is_conversion)
         probability += side.coaching.kicking + WEATHER_EFFECTS[self.weather].kicking
         if side is self.away and self.crowd is not None:
-            probability -= self.crowd.hostility
+            probability -= crowds.hostility(self.atmosphere)
         return min(max(0.05, probability), KICK_MAX)
 
     def _try(self, attacking: Side, defending: Side, minute: int, forwards: bool = False) -> None:
@@ -1574,6 +1616,7 @@ class LiveMatch:
             "finished": self.finished,
             "weather": self.weather.value,
             "crowd": self.crowd.to_dict() if self.crowd else None,
+            "roar": self.roar,
             "rng": [version, list(internal), gauss],
             "events": [
                 {
@@ -1617,6 +1660,7 @@ class LiveMatch:
         live.away = Side.from_state(away, state["away"])
         live.weather = Weather(state.get("weather", Weather.CLEAR))
         live.crowd = Crowd.from_dict(state["crowd"]) if state.get("crowd") else None
+        live.roar = state.get("roar", 0.0)
         live.home.weather = live.away.weather = live.weather
         return live
 

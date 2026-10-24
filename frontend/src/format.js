@@ -246,6 +246,14 @@ export const formatCrowd = (crowd) => `${integer.format(crowd.spectators)} spect
 export const crowdEffect = (crowd) =>
   `Ambiance ${Math.round(crowd.atmosphere * 100)} / 100 : le territoire de l'équipe qui reçoit ×${oneDecimal.format(crowd.advantage)}, et les sifflets gênent le buteur adverse.`;
 
+// Ce que fait le stade pendant le match (engine/crowd.py, `Mood`).
+export const CROWD_MOODS = {
+  roaring: "Le stade s'enflamme",
+  tense: "Le stade pousse",
+  subdued: "Le stade s'éteint",
+  silent: "Le stade se tait",
+};
+
 // Statistiques d'un joueur sur un match (PlayerMatchStats), dans l'ordre d'affichage.
 export const MATCH_STATS = [
   { key: "carries", label: "Ballons portés", one: "ballon porté", short: "Port." },

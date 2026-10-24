@@ -17,6 +17,7 @@ import {
   TALK_OUTCOMES,
   TALKS,
   WEATHER,
+  CROWD_MOODS,
   crowdEffect,
   formatCrowd,
   formatLongDate,
@@ -365,6 +366,14 @@ function Scoreboard({ live, playing, speed, setSpeed, notice, error, busy, finis
             </span>
           )}
         </span>
+        {live.crowd?.mood && (
+          <span
+            className={`scoreboard__mood scoreboard__mood--${live.crowd.mood}${live.home.club.id === live.my_club_id ? " scoreboard__mood--ours" : ""}`}
+            title={crowdEffect(live.crowd)}
+          >
+            {CROWD_MOODS[live.crowd.mood]} · {live.home.club.name}
+          </span>
+        )}
         {live.home.shootout !== null && (
           <span className="scoreboard__shootout num">
             Tirs au but {live.home.shootout} – {live.away.shootout}

@@ -198,6 +198,9 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   ambiance, Bouillant, Chaudron), l'effet sur le match en info-bulle. Dans le tableau
   d'affichage du match en direct, à la suite de la météo ; dans la fiche d'un match, sous
   la météo, avec l'avantage du terrain (« ×1,3 »). Rien sur terrain neutre.
+  En direct, l'ambiance suit le score, et une ligne en capitales sous la météo dit ce
+  que fait le stade (« Le stade s'enflamme · Section Paloise », pousse, s'éteint, se
+  tait) : noir, en accent quand c'est notre public qui pousse, gris quand il s'éteint.
 - Fiche d'un match joué (`MatchReport`, grande fenêtre) : un score se clique dans les
   affiches et dans l'onglet Saison (pas pour les matchs internationaux). En tête la
   journée et la date, les deux clubs en capitales (blasons côté score, le nôtre en

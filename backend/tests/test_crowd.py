@@ -2,9 +2,20 @@
 
 import random
 
-from engine.crowd import Crowd, atmosphere, gate, label_for, tradition
+from engine.crowd import (
+    Crowd,
+    Mood,
+    atmosphere,
+    gate,
+    label_for,
+    live_atmosphere,
+    mood,
+    roar_after,
+    score_effect,
+    tradition,
+)
 from engine.match_engine import HOME_ADVANTAGE, LiveMatch, kick_success_probability, simulate_match
-from models import Club
+from models import Club, EventType, MatchEvent
 
 COLD = Crowd(spectators=3_000, capacity=12_000, atmosphere=0.2)
 CAULDRON = Crowd(spectators=14_500, capacity=14_500, atmosphere=1.0)
@@ -85,3 +96,53 @@ def test_the_kickoff_crowd_is_the_one_that_pays(manager):
         spectators = f"{crowd['spectators']:,}".replace(",", " ")
         labels = [t["label"] for t in manager.get("/finances").json()["transactions"]]
         assert any(spectators in label for label in labels if label.startswith("Billetterie"))
+
+
+# --- Le public réagit au score -------------------------------------------------------------
+
+
+def test_a_home_try_sets_the_stadium_alight_then_it_calms_down():
+    roar = roar_after(0.0, 0.7, ["try"], 0)
+    assert roar > roar_after(0.0, 0.7, ["kick"], 0) > 0
+    assert roar_after(0.0, 1.0, ["try"], 0) > roar_after(0.0, 0.2, ["try"], 0)  # un chaudron
+    assert 0 < roar_after(roar, 0.7, [], 0) < roar  # l'élan retombe
+    assert roar_after(0.0, 0.7, [], 1) < 0  # un essai encaissé refroidit
+
+
+def test_the_score_weighs_on_the_crowd():
+    assert score_effect(-20, 30) < score_effect(-10, 30) < score_effect(0, 30) == 0
+    assert score_effect(-3, 75) > 0  # fin de match serrée : le stade pousse
+    assert mood(0.0, -20, 30) == Mood.SILENT
+    assert mood(0.1, 5, 30) == Mood.ROARING
+    assert mood(0.0, 3, 75) == Mood.TENSE
+    assert mood(0.0, 0, 30) is None
+    assert live_atmosphere(0.9, 0.3, 0, 30) == 1.0  # bornée
+
+
+def _event(live, club, kind, minute=10):
+    return MatchEvent(minute, kind, club.id, live.home.lineup[0].id)
+
+
+def test_live_crowd_follows_the_match(even_clubs):
+    home, away = even_clubs
+    crowd = Crowd(10_000, 12_000, 0.6)
+    live = LiveMatch(home, away, crowd=crowd)
+    assert live.atmosphere == crowd.atmosphere and live.mood is None
+    # Un essai de l'équipe qui reçoit : le stade s'enflamme, l'avantage du terrain monte.
+    live.events.append(_event(live, home, EventType.TRY))
+    live._crowd_reacts(live.events[-1:])
+    assert live.mood == Mood.ROARING
+    assert live.home_advantage > crowd.advantage
+    # Menée de loin, l'équipe qui reçoit n'a plus son public.
+    live.roar = 0.0
+    live.events += [_event(live, away, EventType.TRY) for _ in range(5)]
+    assert live.mood == Mood.SILENT
+    assert live.home_advantage < crowd.advantage
+
+
+def test_the_roar_survives_a_saved_live_match(even_clubs):
+    home, away = even_clubs
+    live = LiveMatch(home, away, rng=random.Random(4), crowd=CAULDRON)
+    live.roar = 0.2
+    resumed = LiveMatch.from_state(home, away, live.to_state())
+    assert resumed.roar == 0.2

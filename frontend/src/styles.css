@@ -6022,3 +6022,27 @@ td > .tag:first-child,
   font-size: 10px;
   letter-spacing: 0.08em;
 }
+
+/* Ce que fait le stade pendant le match : il s'enflamme ou pousse (noir, en accent
+   quand c'est notre public), s'éteint ou se tait (gris). */
+.scoreboard__mood {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.scoreboard__mood--roaring,
+.scoreboard__mood--tense {
+  color: var(--ink);
+}
+
+.scoreboard__mood--ours.scoreboard__mood--roaring,
+.scoreboard__mood--ours.scoreboard__mood--tense {
+  color: var(--accent);
+}
+
+.scoreboard__mood--subdued,
+.scoreboard__mood--silent {
+  color: var(--ink-muted);
+}

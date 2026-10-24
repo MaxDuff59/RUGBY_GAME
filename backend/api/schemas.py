@@ -442,9 +442,14 @@ class CrowdOut(BaseModel):
     atmosphere: float  # de 0 à 1
     label: str  # « Chaudron », « Bouillant », « Bonne ambiance », « Tiède », « Stade clairsemé »
     advantage: float  # multiplicateur du territoire de l'équipe qui reçoit
+    # En direct, ce que fait le stade : roaring (il s'enflamme), tense (il pousse, fin de
+    # match serrée), subdued (il s'éteint), silent (il se tait) ; None sinon.
+    mood: str | None = None
 
     @classmethod
-    def of(cls, spectators: int | None, atmosphere: float | None) -> "CrowdOut | None":
+    def of(
+        cls, spectators: int | None, atmosphere: float | None, mood: str | None = None
+    ) -> "CrowdOut | None":
         if spectators is None or atmosphere is None:
             return None
         crowd = Crowd(spectators, 0, atmosphere)
@@ -453,6 +458,7 @@ class CrowdOut(BaseModel):
             atmosphere=round(atmosphere, 2),
             label=crowd.label,
             advantage=round(crowd.advantage, 2),
+            mood=mood,
         )
 
 
