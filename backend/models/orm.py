@@ -797,6 +797,22 @@ class PreseasonRankRow(Base):
     rank: Mapped[int]
 
 
+class SpellRow(Base):
+    """Un passage du manager dans un club (engine/career.py) : de sa prise de fonction
+    à son départ (limogé, parti ailleurs, ou carrière abandonnée) ; ouvert tant qu'il
+    y est. Les passages restent d'une carrière à l'autre pour un même manager."""
+
+    __tablename__ = "spells"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    manager_name: Mapped[str] = mapped_column(String(100))
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
+    start: Mapped[datetime.date] = mapped_column(Date)
+    end: Mapped[datetime.date | None] = mapped_column(Date, default=None)
+    # dismissed : limogé ; left : parti pour un autre club ; quit : nouvelle carrière.
+    reason: Mapped[str | None] = mapped_column(String(10), default=None)
+
+
 class DismissalRow(Base):
     """Limogeage d'un manager par la direction de son club (engine/board.py).
 

@@ -12,10 +12,13 @@ import {
   formatSignedMoney,
 } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
+import ClubCrest from "./ClubCrest.jsx";
+import { useConfirm } from "./ConfirmDialog.jsx";
 import Modal from "./Modal.jsx";
 import { NOTE_LINES, NoteLine, formatChange, levelOf, startValue } from "./NoteLine.jsx";
 
-const STEPS = ["Résultats", "Vie du club", "Contrats"];
+const STEPS = ["Résultats", "Vie du club", "Carrière", "Contrats"];
+const CONTRACTS = STEPS.length - 1;
 
 // La fraîcheur se mesure avant chaque match : sans objet pour un bilan.
 const REVIEW_NOTES = NOTE_LINES.filter((line) => line.key !== "freshness");
@@ -34,17 +37,19 @@ const MOVEMENTS = {
   relegated: "Dernier du Top 14 : le club descend en Pro D2 la saison prochaine.",
 };
 
-// Bilan de fin de saison, en trois étapes : résultats, notes de vie du club, puis
-// joueurs en fin de contrat (à prolonger, sinon ils partent libres). La dernière
-// étape lance la saison suivante.
+// Bilan de fin de saison, en quatre étapes : résultats, notes de vie du club, carrière
+// du manager (sa réputation, et les clubs qui le veulent), puis joueurs en fin de
+// contrat (à prolonger, sinon ils partent libres). La dernière étape lance la saison
+// suivante ; accepter une offre recharge le jeu dans le nouveau club.
 export default function SeasonReview({ clubId, onClose, onNextSeason, busy, error }) {
   const [step, setStep] = useState(0);
   const review = useApi(useCallback(api.getSeasonReview, []));
   const notes = useApi(useCallback(() => api.getClubNotes(clubId), [clubId]));
   const contracts = useApi(useCallback(api.getContracts, []));
+  const career = useApi(useCallback(api.getCareerHistory, []));
 
-  const loading = review.loading || notes.loading || contracts.loading;
-  const failure = review.error || notes.error || contracts.error;
+  const loading = review.loading || notes.loading || contracts.loading || career.loading;
+  const failure = review.error || notes.error || contracts.error || career.error;
   const year = review.data?.year;
 
   return (
@@ -76,12 +81,13 @@ export default function SeasonReview({ clubId, onClose, onNextSeason, busy, erro
         {failure && <p className="status status--error">{failure.message}</p>}
         {!loading && !failure && step === 0 && <Results review={review.data} />}
         {!loading && !failure && step === 1 && <Notes notes={notes.data} />}
-        {!loading && !failure && step === 2 && <Contracts data={contracts.data} onChange={contracts.setData} />}
+        {!loading && !failure && step === 2 && <Career data={career.data} clubName={review.data.club.name} />}
+        {!loading && !failure && step === CONTRACTS && <Contracts data={contracts.data} onChange={contracts.setData} />}
       </div>
 
       {error && <p className="status--error">{error.message}</p>}
       <div className="affair__actions">
-        {step === 2 && contracts.data && <SquadNext data={contracts.data} />}
+        {step === CONTRACTS && contracts.data && <SquadNext data={contracts.data} />}
         {step > 0 && (
           <button type="button" className="button" onClick={() => setStep(step - 1)}>
             Précédent
@@ -103,6 +109,74 @@ export default function SeasonReview({ clubId, onClose, onNextSeason, busy, erro
         )}
       </div>
     </Modal>
+  );
+}
+
+// --- 3. Carrière ------------------------------------------------------------------------
+
+// La réputation du manager et les clubs qui le veulent ; accepter recharge le jeu.
+function Career({ data, clubName }) {
+  const confirm = useConfirm();
+  const [error, setError] = useState(null);
+
+  function accept(offer) {
+    confirm.ask({
+      eyebrow: `Offre · ${offer.league_name}`,
+      title: `Rejoindre ${offer.club.name}`,
+      text: `Tu quittes ${clubName} dès maintenant : la saison prochaine se jouera à la tête de ${offer.club.name}. Tes négociations en cours tombent.`,
+      rows: [
+        { label: "Niveau du XV", value: formatNote(offer.level), hint: "sur 20" },
+        { label: "Trésorerie", value: formatMoney(offer.balance) },
+      ],
+      confirmLabel: "Accepter l'offre",
+      onConfirm: async () => {
+        try {
+          await api.acceptOffer(offer.club.id);
+          window.location.assign("/");
+        } catch (err) {
+          setError(err);
+        }
+      },
+    });
+  }
+
+  const seasons = data.seasons.filter((s) => s.rank !== null).length;
+  const titles = data.seasons.filter((s) => s.champion).length;
+  return (
+    <>
+      {confirm.dialog}
+      <div className="review__hero">
+        <p className="hero__title">{data.label}</p>
+        <p className="hero__sub">
+          Réputation {Math.round(data.reputation)} / 100 · {seasons} saison{seasons > 1 ? "s" : ""} · {titles} titre
+          {titles > 1 ? "s" : ""}
+        </p>
+      </div>
+      {error && <p className="status--error">{error.message}</p>}
+      {data.offers.length === 0 ? (
+        <p className="muted">
+          Aucun club plus prestigieux ne t'a appelé cette saison. Les titres, les phases finales et un classement
+          meilleur qu'attendu font grimper la réputation ; un limogeage la ruine.
+        </p>
+      ) : (
+        <ul className="career-offers">
+          {data.offers.map((offer) => (
+            <li key={offer.club.id} className="career-offer">
+              <ClubCrest name={offer.club.name} size={40} />
+              <div>
+                <p className="career-offer__name">{offer.club.name}</p>
+                <p className="muted">
+                  {offer.league_name} · XV {formatNote(offer.level)} · trésorerie {formatMoney(offer.balance)}
+                </p>
+              </div>
+              <button type="button" className="button" onClick={() => accept(offer)}>
+                Accepter
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 }
 

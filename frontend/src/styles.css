@@ -6296,3 +6296,61 @@ td > .tag:first-child,
     max-height: 70dvh;
   }
 }
+
+/* --- Carrière du manager : offres de fin de saison ------------------------------------ */
+
+.career-offers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.career-offer {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.career-offer p {
+  margin: 0;
+}
+
+.career-offer__name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+  text-transform: uppercase;
+}
+
+.honours__reputation {
+  margin: 0;
+  padding: 12px 18px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.honours__reputation .num {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.honours__history .panel__head .chips {
+  flex-wrap: nowrap;
+}
+
+.honours__history .panel__head .chip {
+  white-space: nowrap;
+}
+
+.honours__history .panel__head .eyebrow {
+  white-space: nowrap;
+}

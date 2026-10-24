@@ -128,6 +128,7 @@ parties ailleurs (ex. pour une instance de test).
 | `GET /clubs`, `GET /clubs/{id}` | Clubs, effectif complet et notes collectives du XV |
 | `PUT /clubs/{id}/captain` | Choisir le capitaine (`null` : le staff donne le brassard au meneur du XV) |
 | `GET /clubs/{id}/notes` | Vie du club sur 20 (moral, cohésion, fraîcheur, confiance de la direction, ferveur des supporters) et forme du jour |
+| `GET /career/history`, `POST /career/offers/{club_id}` | Parcours du manager (clubs, saisons, réputation) et offres de fin de saison ; accepter une offre |
 | `GET /career/dismissal` | Dernier limogeage, tant qu'aucune nouvelle carrière n'a commencé |
 | `GET /players/{id}` | Fiche d'un joueur : comparaison à son poste, note à chaque poste, saison (statistiques comprises), blessures |
 | `POST /career`, `GET /career` | Choisir son club, ou sa sélection (`nation`) ; tire aussi le calendrier de la 1re saison |

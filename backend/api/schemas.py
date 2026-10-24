@@ -847,6 +847,43 @@ class SaveOut(BaseModel):
     saved_at: datetime.datetime | None = None  # dernière sauvegarde (automatique)
 
 
+class ManagerSeasonOut(BaseModel):
+    """Une saison du manager, dans le club qu'il dirigeait."""
+
+    year: int
+    club: ClubRef
+    rank: int | None  # saison régulière (None : saison en cours)
+    expected: int | None  # rang attendu par la direction
+    playoffs: bool
+    champion: bool
+
+
+class SpellOut(BaseModel):
+    club: ClubRef
+    start: datetime.date
+    end: datetime.date | None  # None : il y est encore
+    reason: Literal["dismissed", "left", "quit"] | None
+
+
+class JobOfferOut(BaseModel):
+    """Un club qui veut le manager, à la fin de la saison (engine/career.py)."""
+
+    club: ClubRef
+    league: str
+    league_name: str
+    level: float  # niveau du XV, sur 20
+    balance: int  # sa trésorerie
+
+
+class CareerHistoryOut(BaseModel):
+    manager_name: str
+    reputation: float  # de 0 à 100
+    label: str  # « Espoir du banc »... « Star du banc »
+    seasons: list[ManagerSeasonOut]  # de la plus récente à la plus ancienne
+    spells: list[SpellOut]
+    offers: list[JobOfferOut]  # une fois la saison du championnat finie
+
+
 class DismissalOut(BaseModel):
     """Limogeage du manager par la direction (engine/board.py)."""
 

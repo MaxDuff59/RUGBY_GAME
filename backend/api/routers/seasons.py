@@ -103,6 +103,7 @@ from models.orm import (
     NegotiationRow,
     PlayerRow,
     SeasonRow,
+    SpellRow,
     SuspensionRow,
     TransactionRow,
 )
@@ -806,6 +807,10 @@ def _board_verdict(session: Session, played: MatchdayOut) -> DismissalRow | None
         negotiation.stage = "failed"
         negotiation.closed_by = "me"
         negotiation.message = "Négociation interrompue : le manager a été limogé."
+    for spell in session.scalars(
+        select(SpellRow).where(SpellRow.manager_name == career.manager_name, SpellRow.end.is_(None))
+    ):
+        spell.end, spell.reason = played.date, "dismissed"
     session.delete(career)
     session.commit()
     return dismissal

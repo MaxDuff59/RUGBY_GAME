@@ -95,6 +95,8 @@ export const api = {
     request(league ? `/seasons/current?league=${encodeURIComponent(league)}` : "/seasons/current"),
   playMatchday: () => post("/seasons/current/play"),
   getSeasonReview: () => request("/seasons/current/review"),
+  getCareerHistory: () => request("/career/history"),
+  acceptOffer: (clubId) => post(`/career/offers/${clubId}`),
   startNextSeason: () => post("/seasons/next"),
   getMatch: (matchId) => request(`/matches/${matchId}`),
 

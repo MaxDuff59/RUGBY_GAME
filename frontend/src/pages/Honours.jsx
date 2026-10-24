@@ -195,7 +195,10 @@ function teamMarkers(awards) {
     .filter(Boolean);
 }
 
+// L'histoire du club dirigé, ou celle du manager (ses clubs, sa réputation).
 function ClubHistory({ club, history }) {
+  const [view, setView] = useState("club");
+  const career = useApi(useCallback(api.getCareerHistory, []));
   return (
     <section className="card panel honours__history">
       <div className="panel__head">
@@ -203,9 +206,22 @@ function ClubHistory({ club, history }) {
           <ClubCrest name={club.name} size={18} />
           Notre histoire
         </span>
+        <div className="chips" role="group" aria-label="Histoire">
+          {[
+            ["club", "Le club"],
+            ["manager", "Ma carrière"],
+          ].map(([key, label]) => (
+            <button key={key} type="button" className="chip chip--small" aria-pressed={view === key} onClick={() => setView(key)}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="panel__body">
-        <table className="table">
+        {view === "manager" ? (
+          <ManagerCareer career={career} />
+        ) : (
+          <table className="table">
           <thead>
             <tr>
               <th scope="col" className="left">Saison</th>
@@ -227,8 +243,53 @@ function ClubHistory({ club, history }) {
             ))}
           </tbody>
         </table>
+        )}
       </div>
     </section>
+  );
+}
+
+function ManagerCareer({ career }) {
+  if (career.loading) return <p className="status">Chargement…</p>;
+  if (career.error) return <p className="table__note">{career.error.message}</p>;
+  const data = career.data;
+  return (
+    <>
+      <p className="honours__reputation">
+        <span className="num">{Math.round(data.reputation)}</span>
+        <span>
+          <strong>{data.label}</strong>
+          <span className="muted"> · réputation sur 100</span>
+        </span>
+      </p>
+      <table className="table">
+        <thead>
+          <tr>
+            <th scope="col" className="left">Saison</th>
+            <th scope="col" className="left">Club</th>
+            <th scope="col" title="Rang final / rang attendu par la direction">Rang</th>
+            <th scope="col" className="left">Bilan</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.seasons.map((s) => (
+            <tr key={`${s.year}-${s.club.id}`}>
+              <td className="left num">{s.year}</td>
+              <td className="left">
+                <span className="with-crest">
+                  <ClubCrest name={s.club.name} size={18} />
+                  {s.club.name}
+                </span>
+              </td>
+              <td className="num">{s.rank ? `${formatRank(s.rank)} (${formatRank(s.expected)} attendu)` : "–"}</td>
+              <td className={`left${s.champion ? " honours__mine" : " muted"}`}>
+                {s.champion ? "Champion" : s.rank === null ? "En cours" : s.playoffs ? "Phases finales" : "–"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
   );
 }
 

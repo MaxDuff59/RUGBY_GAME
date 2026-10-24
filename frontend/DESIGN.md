@@ -237,6 +237,14 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   de la saison, révélation, meilleur marqueur, réalisateur, plaqueur : libellé, blason,
   nom, valeur) et les records en pastilles (essais, points, en une saison, larges
   victoires). À droite, l'équipe type sur le terrain. Ce qui est à nous en accent.
+- Carrière du manager : une étape « Carrière » dans le bilan de fin de saison (entre
+  « Vie du club » et « Contrats ») : le palier de réputation en grand titre (« Espoir du
+  banc »… « Star du banc »), réputation sur 100, saisons et titres, puis les clubs qui
+  font une offre (blason, nom en capitales, championnat, niveau du XV, trésorerie,
+  « Accepter » qui passe par la fenêtre de confirmation et recharge le jeu dans le
+  nouveau club) ou une phrase s'il n'y en a pas. Dans le palmarès, la carte « Notre
+  histoire » a deux pastilles : « Le club » et « Ma carrière » (réputation, puis les
+  saisons du manager, club par club, rang final et rang attendu).
 - Entraînement (page `/entrainement`, entrée du menu sous Effectif ; volet « Plus » sur
   téléphone) : à gauche, le rythme de la semaine en trois cartes (Légère, Normale,
   Intense : progression, fraîcheur, blessures, l'effet en vert quand il aide, en rouge
