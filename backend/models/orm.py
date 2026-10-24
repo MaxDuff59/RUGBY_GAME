@@ -437,6 +437,9 @@ class MatchRow(Base):
     # jeu ({identifiant: PlayerMatchStats.to_dict()}), une fois le match joué.
     weather: Mapped[str | None] = mapped_column(String(8), default=None)
     stats: Mapped[dict] = mapped_column(JSON, default=dict)
+    # Public de l'équipe qui reçoit (engine/crowd.py), NULL sur terrain neutre.
+    spectators: Mapped[int | None] = mapped_column(default=None)
+    atmosphere: Mapped[float | None] = mapped_column(default=None)
 
     season: Mapped[SeasonRow | None] = relationship(overlaps="matches,youth_matches", viewonly=True)
 
@@ -461,6 +464,8 @@ class MatchRow(Base):
             league=self.league,
             weather=self.weather,
             stats=_stats_from_json(self.stats),
+            spectators=self.spectators,
+            atmosphere=self.atmosphere,
         )
 
     @classmethod
@@ -482,6 +487,8 @@ class MatchRow(Base):
             away_lineup=list(match.away_lineup),
             weather=match.weather,
             stats=_stats_to_json(match.stats),
+            spectators=match.spectators,
+            atmosphere=match.atmosphere,
         )
 
 

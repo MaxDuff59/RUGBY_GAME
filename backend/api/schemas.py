@@ -9,6 +9,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from engine.crowd import Crowd
 from engine.economy import FacilityKind, TransactionCategory, market_value
 from engine.journal import Kind as ArticleKind
 from engine.journal import MoveKind
@@ -434,6 +435,27 @@ class PlayerMatchStatsOut(BaseModel):
     lineout_steals: int
 
 
+class CrowdOut(BaseModel):
+    """Le public de l'équipe qui reçoit (engine/crowd.py)."""
+
+    spectators: int
+    atmosphere: float  # de 0 à 1
+    label: str  # « Chaudron », « Bouillant », « Bonne ambiance », « Tiède », « Stade clairsemé »
+    advantage: float  # multiplicateur du territoire de l'équipe qui reçoit
+
+    @classmethod
+    def of(cls, spectators: int | None, atmosphere: float | None) -> "CrowdOut | None":
+        if spectators is None or atmosphere is None:
+            return None
+        crowd = Crowd(spectators, 0, atmosphere)
+        return cls(
+            spectators=spectators,
+            atmosphere=round(atmosphere, 2),
+            label=crowd.label,
+            advantage=round(crowd.advantage, 2),
+        )
+
+
 class MatchPlayerOut(BaseModel):
     """Un joueur entré en jeu et ce qu'il a fait du match."""
 
@@ -465,6 +487,7 @@ class MatchOut(BaseModel):
     away_shootout: int | None
     events: list[MatchEventOut]
     weather: Weather | None = None  # None : match joué avant la météo
+    crowd: CrowdOut | None = None  # None : terrain neutre, ou match joué avant le public
     # Joueurs entrés en jeu, avec leurs statistiques (vide pour un match d'avant).
     players: list[MatchPlayerOut] = []
 
@@ -487,6 +510,7 @@ class MatchOut(BaseModel):
             away_shootout=shootout_score(match, match.away_club_id),
             events=[MatchEventOut.model_validate(e) for e in match.events],
             weather=match.weather,
+            crowd=CrowdOut.of(match.spectators, match.atmosphere),
             players=players or [],
         )
 
@@ -602,6 +626,7 @@ class LiveOut(BaseModel):
     extra_time: bool
     finished: bool
     weather: Weather
+    crowd: "CrowdOut | None"  # public de l'équipe qui reçoit (None sur terrain neutre)
     home: LiveSideOut
     away: LiveSideOut
     events: list[LiveEventOut]  # dans l'ordre du match

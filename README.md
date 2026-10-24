@@ -138,7 +138,7 @@ parties ailleurs (ex. pour une instance de test).
 | `GET /seasons/current?league=` | Calendrier daté, classement, prochaine journée, phases finales (du championnat du club dirigé par défaut) |
 | `POST /seasons/current/play` | Joue la journée suivante (matchs, billetterie, sponsors, salaires) |
 | `POST /seasons/next` | Intersaison : âges, retraites, jeunes, nouveau calendrier |
-| `GET /matches/{id}`, `POST /matches/simulate` | Détail d'un match joué (météo, statistiques de chaque joueur) ; match amical |
+| `GET /matches/{id}`, `POST /matches/simulate` | Détail d'un match joué (météo, public, statistiques de chaque joueur) ; match amical |
 | `POST /live`, `GET /live` | Lancer (ou reprendre) le match du club dirigé en direct, minute par minute |
 | `POST /live/advance`, `POST /live/tactics`, `POST /live/substitute` | Avancer le chrono ; changer la tactique ; faire un remplacement |
 | `POST /live/finish` | Finir la journée avec ce match (le staff joue les minutes restantes) |

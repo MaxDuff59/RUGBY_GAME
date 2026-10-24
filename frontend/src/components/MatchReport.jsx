@@ -11,6 +11,8 @@ import {
   MATCH_STATS,
   POSITION_SHORT,
   WEATHER,
+  crowdEffect,
+  formatCrowd,
   formatLongDate,
   formatNote,
   matchdayLabel,
@@ -59,6 +61,12 @@ export default function MatchReport({ summary, myClubId, onClose }) {
           <WeatherIcon weather={weather} size={18} />
           <strong>{WEATHER[weather].label}</strong>
           <span className="muted">{WEATHER[weather].scope}</span>
+        </p>
+      )}
+      {data?.crowd && (
+        <p className="match-report__weather" title={crowdEffect(data.crowd)}>
+          <strong>{formatCrowd(data.crowd)}</strong>
+          <span className="muted">avantage du terrain ×{formatNote(data.crowd.advantage)}</span>
         </p>
       )}
 
@@ -201,7 +209,7 @@ function highlights(stats) {
   const picks = MATCH_STATS.filter(({ key }) => key !== "missed_tackles" && stats[key] > 0)
     .sort((a, b) => stats[b.key] - stats[a.key])
     .slice(0, 3);
-  return picks.map(({ key, label }) => `${stats[key]} ${label.toLowerCase()}`).join(" · ");
+  return picks.map(({ key, label, one }) => `${stats[key]} ${stats[key] === 1 ? one : label.toLowerCase()}`).join(" · ");
 }
 
 function PlayerTable({ players, onLeave }) {

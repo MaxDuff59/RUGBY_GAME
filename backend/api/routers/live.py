@@ -32,6 +32,7 @@ from api.routers.internationals import NATION_NAMES
 from api.routers.seasons import (
     _current_or_404,
     _ensure_next_stage,
+    _seeding,
     focus_league,
     play_next_matchday,
     season_rng,
@@ -46,6 +47,7 @@ from api.schemas import (
     TalkIn,
 )
 from data.nations import NATIONS_BY_CODE
+from engine.crowd import gate
 from engine.match_engine import LiveMatch, Tactics, staff_tactics, team_strength
 from engine.weather import forecast
 from models import Stage
@@ -143,6 +145,12 @@ def start_live(session: SessionDep) -> LiveOut:
     home, away = clubs[match_row.home_club_id], clubs[match_row.away_club_id]
     opponent = away if home.id == my_club_id else home
     opponent_tactics = staff_tactics(team_strength(opponent, day, forms[opponent.id]))
+    # Le public est là dès le coup d'envoi ; la billetterie de la journée le reprend.
+    crowd = None
+    if not match_row.neutral:
+        seeding = _seeding(season, league)
+        fervour = history.fervour(home.id).value
+        crowd = gate(home, seeding.index(home.id) + 1, len(seeding), stage.is_playoff, rng, fervour)
     live = LiveMatch(
         home,
         away,
@@ -157,6 +165,7 @@ def start_live(session: SessionDep) -> LiveOut:
         away_tactics=opponent_tactics if away is opponent else Tactics(),
         auto={opponent.id},
         weather=forecast(home, day),
+        crowd=crowd,
     )
     row = LiveMatchRow(
         match_id=match_row.id,

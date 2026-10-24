@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from api import internationals
 from api.schemas import (
     ClubRef,
+    CrowdOut,
     LiveEventOut,
     LiveOut,
     LivePlayerOut,
@@ -248,6 +249,7 @@ def live_out(live: Live, names: dict[int, str], my_club_id: int) -> LiveOut:
         extra_time=match.extra_time,
         finished=match.finished,
         weather=match.weather,
+        crowd=CrowdOut.of(match.crowd.spectators, match.crowd.atmosphere) if match.crowd else None,
         home=_side_out(match, match.home, names[match.home.club.id]),
         away=_side_out(match, match.away, names[match.away.club.id]),
         events=[

@@ -321,6 +321,7 @@ def _write_result(row: MatchRow, match: Match) -> None:
     row.home_lineup, row.away_lineup = list(match.home_lineup), list(match.away_lineup)
     saved = MatchRow.from_domain(match)
     row.weather, row.stats = saved.weather, saved.stats
+    row.spectators, row.atmosphere = saved.spectators, saved.atmosphere
 
 
 @dataclass

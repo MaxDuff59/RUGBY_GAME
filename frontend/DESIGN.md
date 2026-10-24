@@ -191,6 +191,10 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   pluie, rafales, thermomètre), libellé et effet en info-bulle. Sous le score de chaque
   affiche (`MatchList`, la prévision pour un match à venir), dans la colonne « Météo » de
   l'onglet Saison du calendrier, sous la date dans le tableau d'affichage du match en direct.
+- Public : « 17 715 spectateurs · Chaudron » (paliers : Stade clairsemé, Tiède, Bonne
+  ambiance, Bouillant, Chaudron), l'effet sur le match en info-bulle. Dans le tableau
+  d'affichage du match en direct, à la suite de la météo ; dans la fiche d'un match, sous
+  la météo, avec l'avantage du terrain (« ×1,3 »). Rien sur terrain neutre.
 - Fiche d'un match joué (`MatchReport`, grande fenêtre) : un score se clique dans les
   affiches et dans l'onglet Saison (pas pour les matchs internationaux). En tête la
   journée et la date, les deux clubs en capitales (blasons côté score, le nôtre en

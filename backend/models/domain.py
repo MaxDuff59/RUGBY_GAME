@@ -458,6 +458,9 @@ class Match:
     away_lineup: list[int] = field(default_factory=list)
     league: str = "top14"  # code du championnat (data/leagues.py)
     weather: str | None = None  # engine/weather.py, connu une fois le match joué
+    # Public de l'équipe qui reçoit (engine/crowd.py) : spectateurs et ambiance (0 à 1).
+    spectators: int | None = None
+    atmosphere: float | None = None
     # Statistiques de chaque joueur entré en jeu (titulaires et remplaçants).
     stats: dict[int, PlayerMatchStats] = field(default_factory=dict)
 

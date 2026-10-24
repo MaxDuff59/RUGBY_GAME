@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 
 from data.leagues import League
 from engine import discipline
+from engine.crowd import gate
 from engine.economy import (
     CHAMPION_PRIZE,
     PLAYOFF_PRIZES,
@@ -119,6 +120,7 @@ def _fill(match: Match, result: Match) -> None:
     match.events = list(result.events)
     match.home_lineup, match.away_lineup = list(result.home_lineup), list(result.away_lineup)
     match.weather, match.stats = result.weather, dict(result.stats)
+    match.spectators, match.atmosphere = result.spectators, result.atmosphere
 
 
 def play_day(
@@ -161,18 +163,32 @@ def play_day(
         config = world.leagues[match.league]
         order = world.seeding[match.league]
         home, away = clubs[match.home_club_id], clubs[match.away_club_id]
-        result = finished(match) or simulate_match(
-            home,
-            away,
-            rng=rng,
-            matchday=matchday,
-            neutral=match.neutral,
-            day=day,
-            home_form=world.forms[home.id],
-            away_form=world.forms[away.id],
-            knockout=stage.is_playoff,
-            weather=forecast(home, day),
-        )
+        result = finished(match)
+        if result is None:
+            # Le public arrive avant le coup d'envoi : il fait l'avantage du terrain.
+            crowd = None
+            if not match.neutral:
+                crowd = gate(
+                    home,
+                    rank_of[home.id],
+                    len(order),
+                    stage.is_playoff,
+                    rng,
+                    world.fervour(home.id),
+                )
+            result = simulate_match(
+                home,
+                away,
+                rng=rng,
+                matchday=matchday,
+                neutral=match.neutral,
+                day=day,
+                home_form=world.forms[home.id],
+                away_form=world.forms[away.id],
+                knockout=stage.is_playoff,
+                weather=forecast(home, day),
+                crowd=crowd,
+            )
         _fill(match, result)
         report.played.append(match)
 
@@ -199,15 +215,17 @@ def play_day(
                 )
                 report.injuries.append((club.id, injury))
 
-        spectators = attendance(
-            home.facilities.stadium_capacity,
-            rank_of[home.id],
-            len(order),
-            stage.is_playoff,
-            rng,
-            fervour=world.fervour(home.id),
-            bonus=attendance_bonus(home.facilities),
-        )
+        spectators = match.spectators
+        if spectators is None:  # terrain neutre : la recette revient au club qui reçoit
+            spectators = attendance(
+                home.facilities.stadium_capacity,
+                rank_of[home.id],
+                len(order),
+                stage.is_playoff,
+                rng,
+                fervour=world.fervour(home.id),
+                bonus=attendance_bonus(home.facilities),
+            )
         pay(
             home,
             TransactionCategory.TICKETING,

@@ -227,15 +227,21 @@ export const WEATHER = {
   heat: { label: "Chaleur", scope: "Les joueurs se vident plus vite : l'endurance compte double" },
 };
 
+// Le public d'un match (engine/crowd.py) : « 14 500 spectateurs · Chaudron », et en
+// info-bulle ce qu'il pèse sur le match.
+export const formatCrowd = (crowd) => `${integer.format(crowd.spectators)} spectateurs · ${crowd.label}`;
+export const crowdEffect = (crowd) =>
+  `Ambiance ${Math.round(crowd.atmosphere * 100)} / 100 : le territoire de l'équipe qui reçoit ×${oneDecimal.format(crowd.advantage)}, et les sifflets gênent le buteur adverse.`;
+
 // Statistiques d'un joueur sur un match (PlayerMatchStats), dans l'ordre d'affichage.
 export const MATCH_STATS = [
-  { key: "carries", label: "Ballons portés", short: "Port." },
-  { key: "line_breaks", label: "Franchissements", short: "Franch." },
-  { key: "tackles", label: "Plaquages réussis", short: "Plaq." },
-  { key: "missed_tackles", label: "Plaquages manqués", short: "Manq." },
-  { key: "turnovers", label: "Ballons grattés", short: "Gratt." },
-  { key: "lineouts_won", label: "Touches prises", short: "Touch." },
-  { key: "lineout_steals", label: "Touches volées", short: "Vol." },
+  { key: "carries", label: "Ballons portés", one: "ballon porté", short: "Port." },
+  { key: "line_breaks", label: "Franchissements", one: "franchissement", short: "Franch." },
+  { key: "tackles", label: "Plaquages réussis", one: "plaquage réussi", short: "Plaq." },
+  { key: "missed_tackles", label: "Plaquages manqués", one: "plaquage manqué", short: "Manq." },
+  { key: "turnovers", label: "Ballons grattés", one: "ballon gratté", short: "Gratt." },
+  { key: "lineouts_won", label: "Touches prises", one: "touche prise", short: "Touch." },
+  { key: "lineout_steals", label: "Touches volées", one: "touche volée", short: "Vol." },
 ];
 
 // Ce qu'un joueur suspendu doit encore purger (engine/discipline.py).

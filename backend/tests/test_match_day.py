@@ -63,7 +63,7 @@ def test_wind_spoils_goal_kicks(even_clubs):
     home, away = even_clubs
     live = LiveMatch(home, away, weather=Weather.WIND)
     kicker = max(home.players, key=lambda p: p.kicking)
-    assert live._kick_probability(kicker) < kick_success_probability(kicker.kicking)
+    assert live._kick_probability(live.home, kicker) < kick_success_probability(kicker.kicking)
 
 
 def test_heat_drains_energy_faster(even_clubs):

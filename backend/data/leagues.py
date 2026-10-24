@@ -128,6 +128,69 @@ SUPER_RUGBY = [
     RealClub("Moana Pasifika", "Auckland", "North Harbour Stadium", 25_000, 9.5, 0.2),
 ]
 
+# Tradition du public de chaque stade, de 0 à 1 (0,5 par défaut, et pour les clubs
+# inventés) : les chaudrons poussent leur équipe plus fort (engine/crowd.py).
+STADIUM_TRADITION = {
+    # Top 14
+    "USA Perpignan": 1.0,
+    "ASM Clermont Auvergne": 0.95,
+    "RC Toulon": 0.95,
+    "Aviron Bayonnais": 0.9,
+    "Stade Rochelais": 0.9,
+    "Castres Olympique": 0.85,
+    "Stade Toulousain": 0.8,
+    "Union Bordeaux-Bègles": 0.75,
+    "Section Paloise": 0.75,
+    "US Montauban": 0.7,
+    "LOU Rugby": 0.45,
+    "Montpellier Hérault Rugby": 0.4,
+    "Stade Français Paris": 0.35,
+    "Racing 92": 0.3,
+    # Pro D2
+    "CA Brive": 0.85,
+    "AS Béziers Hérault": 0.8,
+    "Stade Montois": 0.75,
+    "SU Agen": 0.75,
+    "Biarritz Olympique": 0.75,
+    "Stade Aurillacois": 0.7,
+    "US Dax": 0.7,
+    "Oyonnax Rugby": 0.7,
+    "RC Vannes": 0.7,
+    "FC Grenoble": 0.6,
+    "Provence Rugby": 0.4,
+    # Premiership
+    "Gloucester Rugby": 0.9,
+    "Leicester Tigers": 0.85,
+    "Northampton Saints": 0.75,
+    "Exeter Chiefs": 0.75,
+    "Bath Rugby": 0.7,
+    "Bristol Bears": 0.6,
+    "Harlequins": 0.55,
+    "Saracens": 0.4,
+    # URC
+    "Munster Rugby": 0.95,
+    "Bulls": 0.9,
+    "Ulster Rugby": 0.8,
+    "Connacht Rugby": 0.75,
+    "Glasgow Warriors": 0.75,
+    "Stormers": 0.75,
+    "Sharks": 0.75,
+    "Lions": 0.75,
+    "Leinster Rugby": 0.7,
+    "Benetton Rugby": 0.6,
+    "Zebre Parma": 0.4,
+    # Super Rugby
+    "Fijian Drua": 1.0,
+    "Crusaders": 0.8,
+    "Chiefs": 0.75,
+    "Hurricanes": 0.7,
+    "Highlanders": 0.7,
+    "Blues": 0.6,
+    "Moana Pasifika": 0.6,
+    "Brumbies": 0.55,
+    "Queensland Reds": 0.55,
+}
+
 LEAGUES = [
     League(
         code="top14",

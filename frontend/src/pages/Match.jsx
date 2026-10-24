@@ -17,6 +17,8 @@ import {
   TALK_OUTCOMES,
   TALKS,
   WEATHER,
+  crowdEffect,
+  formatCrowd,
   formatLongDate,
   formatNote,
 } from "../format.js";
@@ -356,6 +358,12 @@ function Scoreboard({ live, playing, speed, setSpeed, notice, error, busy, finis
         <span className="muted scoreboard__weather" title={WEATHER[live.weather].scope}>
           <WeatherIcon weather={live.weather} />
           {WEATHER[live.weather].label}
+          {live.crowd && (
+            <span title={crowdEffect(live.crowd)}>
+              {" · "}
+              {formatCrowd(live.crowd)}
+            </span>
+          )}
         </span>
         {live.home.shootout !== null && (
           <span className="scoreboard__shootout num">

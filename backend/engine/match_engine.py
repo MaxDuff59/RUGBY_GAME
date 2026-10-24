@@ -34,7 +34,8 @@ Principe :
 7. En phase finale, une égalité après 80 minutes mène à une prolongation
    (2 x 10 minutes), puis si besoin à une séance de tirs au but.
 8. La météo (`engine/weather.py`) pèse sur l'attaque, les coups de pied et
-   l'énergie ; le capitaine, tant qu'il est sur le terrain, calme les esprits
+   l'énergie ; le public (`engine/crowd.py`) fait l'avantage du terrain et siffle
+   le buteur adverse ; le capitaine, tant qu'il est sur le terrain, calme les esprits
    (moins de cartons) et tire un peu l'équipe vers le haut.
 
 `LiveMatch` joue le match minute par minute : on peut l'arrêter, changer la
@@ -54,6 +55,7 @@ from enum import StrEnum
 from itertools import accumulate
 
 from engine import team_talk
+from engine.crowd import Crowd
 from engine.form import NEUTRAL_FORM, Form
 from engine.medical import MATCH_INJURY_CHANCE_PER_MINUTE
 from engine.weather import EFFECTS as WEATHER_EFFECTS
@@ -119,8 +121,9 @@ DROP_RATE = 0.02  # un drop réussi dans 2 % des cas
 # Calibrage (sur 4000 matchs simulés, cartons compris) : ~49 points et ~4,7 essais
 # par match, ~60 % de victoires à domicile, ~2 % de nuls, proche du Top 14.
 
-# Bonus multiplicatif sur le territoire de l'équipe à domicile
-# (l'avantage du terrain est fort au rugby).
+# Bonus multiplicatif sur le territoire de l'équipe à domicile (l'avantage du
+# terrain est fort au rugby), quand on ne sait rien du public (match amical,
+# match de sélections). Sinon, il suit l'ambiance du stade (engine/crowd.py).
 HOME_ADVANTAGE = 1.25
 
 # Plus l'exposant est grand, plus l'écart de niveau pèse sur le résultat
@@ -1046,6 +1049,7 @@ class LiveMatch:
         away_tactics: Tactics = DEFAULT_TACTICS,
         auto: Iterable[int] | None = None,
         weather: Weather = Weather.CLEAR,
+        crowd: Crowd | None = None,
     ) -> None:
         self.rng = rng or random.Random()
         self.matchday = matchday
@@ -1059,6 +1063,7 @@ class LiveMatch:
         self.away = Side(away, away_team.lineup, away_team.bench, away_form, away_tactics)
         self.weather = weather
         self.home.weather = self.away.weather = weather
+        self.crowd = None if neutral else crowd  # public de l'équipe qui reçoit
         self.events: list[MatchEvent] = []
         self.minute = 0  # dernière minute jouée
         self.extra_time = False
@@ -1107,6 +1112,8 @@ class LiveMatch:
             away_lineup=[p.id for p in self.away.lineup],
             weather=self.weather.value,
             stats=self.player_stats(),
+            spectators=self.crowd.spectators if self.crowd else None,
+            atmosphere=self.crowd.atmosphere if self.crowd else None,
         )
 
     def player_stats(self) -> dict[int, PlayerMatchStats]:
@@ -1230,7 +1237,7 @@ class LiveMatch:
         home_ratings = self.home.collective(minute)
         away_ratings = self.away.collective(minute)
         self._drift_ratings(minute, home_ratings, away_ratings)
-        advantage = 1.0 if self.neutral else HOME_ADVANTAGE
+        advantage = self.home_advantage
         home_share = _win_probability(
             self.home.territory(minute, home_ratings) * advantage,
             self.away.territory(minute, away_ratings),
@@ -1293,15 +1300,26 @@ class LiveMatch:
         kicker = side.kicker(minute)
         if kicker is None:
             return
-        success = self.rng.random() < self._kick_probability(kicker)
+        success = self.rng.random() < self._kick_probability(side, kicker)
         event_type = EventType.PENALTY_GOAL if success else EventType.PENALTY_MISSED
         self.events.append(MatchEvent(minute, event_type, side.club.id, kicker.id))
         side.rate(kicker.id, RATING_EVENT[event_type])
 
-    def _kick_probability(self, kicker: Player, is_conversion: bool = False) -> float:
-        """Réussite d'un coup de pied au but, le vent et la pluie compris."""
+    @property
+    def home_advantage(self) -> float:
+        """Multiplicateur du territoire de l'équipe qui reçoit : l'ambiance du stade."""
+        if self.neutral:
+            return 1.0
+        return self.crowd.advantage if self.crowd else HOME_ADVANTAGE
+
+    def _kick_probability(self, side: Side, kicker: Player, is_conversion: bool = False) -> float:
+        """Réussite d'un coup de pied au but : le vent, la pluie, et les sifflets du
+        public adverse pour l'équipe qui se déplace."""
         probability = kick_success_probability(kicker.kicking, is_conversion)
-        return max(0.05, probability + WEATHER_EFFECTS[self.weather].kicking)
+        probability += WEATHER_EFFECTS[self.weather].kicking
+        if side is self.away and self.crowd is not None:
+            probability -= self.crowd.hostility
+        return max(0.05, probability)
 
     def _try(self, attacking: Side, defending: Side, minute: int, forwards: bool = False) -> None:
         """Un essai et sa transformation ; `forwards` : marqué au bout d'un maul,
@@ -1322,7 +1340,7 @@ class LiveMatch:
         defending.rate_present(minute, RATING_TEAM_CONCEDED)
 
         kicker = attacking.kicker(minute)
-        converted = rng.random() < self._kick_probability(kicker, is_conversion=True)
+        converted = rng.random() < self._kick_probability(attacking, kicker, is_conversion=True)
         conversion = EventType.CONVERSION if converted else EventType.CONVERSION_MISSED
         self.events.append(MatchEvent(minute, conversion, attacking.club.id, kicker.id))
         attacking.rate(kicker.id, RATING_EVENT[conversion])
@@ -1502,7 +1520,8 @@ class LiveMatch:
         while True:
             side, turn = kicks % 2, kicks // 2
             kicker = kickers[side][turn % len(kickers[side])]
-            scored = rng.random() < self._kick_probability(kicker) - SHOOTOUT_PRESSURE
+            probability = self._kick_probability(teams[side], kicker) - SHOOTOUT_PRESSURE
+            scored = rng.random() < probability
             goals[side] += scored
             event_type = EventType.SHOOTOUT_GOAL if scored else EventType.SHOOTOUT_MISSED
             self.events.append(MatchEvent(minute, event_type, teams[side].club.id, kicker.id))
@@ -1530,6 +1549,7 @@ class LiveMatch:
             "extra_time": self.extra_time,
             "finished": self.finished,
             "weather": self.weather.value,
+            "crowd": self.crowd.to_dict() if self.crowd else None,
             "rng": [version, list(internal), gauss],
             "events": [
                 {
@@ -1572,6 +1592,7 @@ class LiveMatch:
         live.home = Side.from_state(home, state["home"])
         live.away = Side.from_state(away, state["away"])
         live.weather = Weather(state.get("weather", Weather.CLEAR))
+        live.crowd = Crowd.from_dict(state["crowd"]) if state.get("crowd") else None
         live.home.weather = live.away.weather = live.weather
         return live
 
@@ -1589,6 +1610,7 @@ def simulate_match(
     home_tactics: Tactics = DEFAULT_TACTICS,
     away_tactics: Tactics = DEFAULT_TACTICS,
     weather: Weather = Weather.CLEAR,
+    crowd: Crowd | None = None,
 ) -> Match:
     """Simule un match complet et renvoie un `Match` joué (score + événements).
 
@@ -1599,7 +1621,8 @@ def simulate_match(
     `home_form` / `away_form` : forme du jour de chaque club (neutre par défaut).
     `knockout` : match à élimination directe, qui ne peut pas finir sur un nul
     (prolongation, puis tirs au but). Les deux bancs sont gérés par le staff.
-    `weather` : le temps du match (engine/weather.py), sec par défaut.
+    `weather` : le temps du match (engine/weather.py), sec par défaut. `crowd` : le
+    public de l'équipe qui reçoit (engine/crowd.py), qui fait l'avantage du terrain.
     """
     live = LiveMatch(
         home,
@@ -1614,5 +1637,6 @@ def simulate_match(
         home_tactics=home_tactics,
         away_tactics=away_tactics,
         weather=weather,
+        crowd=crowd,
     )
     return live.play_to_end()
