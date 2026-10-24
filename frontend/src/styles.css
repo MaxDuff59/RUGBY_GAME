@@ -6511,3 +6511,41 @@ td > .tag:first-child,
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* --- Coupe d'Europe (calendrier) ------------------------------------------------------- */
+
+.cup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  min-height: 0;
+}
+
+.cup__pools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 18px;
+  padding: 6px 12px;
+  align-content: start;
+}
+
+/* Sous les deux qualifiés, un filet. */
+.cup__cut td {
+  border-bottom: 2px solid var(--ink);
+}
+
+@media (max-width: 1280px) {
+  .cup__pools {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 960px) {
+  .cup {
+    display: flex;
+    flex-direction: column;
+  }
+  .cup .panel {
+    max-height: 70dvh;
+  }
+}

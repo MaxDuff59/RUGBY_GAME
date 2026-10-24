@@ -841,6 +841,32 @@ class StandingOut(BaseModel):
     league_points: int
 
 
+class CupRowOut(BaseModel):
+    """Une ligne du classement d'une poule de la Coupe d'Europe."""
+
+    club: ClubRef
+    played: int
+    won: int
+    points_difference: int
+    league_points: int
+
+
+class CupPoolOut(BaseModel):
+    pool: str  # A, B, C, D
+    table: list[CupRowOut]  # du premier au dernier
+
+
+class CupOut(BaseModel):
+    """La Coupe d'Europe de la saison (engine/europe.py)."""
+
+    name: str
+    pools: list[CupPoolOut]
+    matches: list[MatchSummary]  # poules puis phases finales, dans l'ordre des dates
+    # pools : poules en cours ; knockout : phases finales ; finished : finale jouée.
+    phase: Literal["pools", "knockout", "finished"]
+    champion: ClubRef | None
+
+
 class SeasonOut(BaseModel):
     year: int
     league: LeagueOut  # le championnat affiché
@@ -854,6 +880,7 @@ class SeasonOut(BaseModel):
     standings: list[StandingOut]  # saison régulière seulement
     matches: list[MatchSummary]  # tout le calendrier, phases finales comprises
     champion: ClubRef | None
+    cup: CupOut | None = None  # la Coupe d'Europe, dans un monde qui en a une
 
 
 class SaveOut(BaseModel):

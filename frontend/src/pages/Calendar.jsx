@@ -26,6 +26,7 @@ const VIEWS = [
   { key: "week", label: "Semaine" },
   { key: "month", label: "Mois" },
   { key: "season", label: "Saison" },
+  { key: "cup", label: "Coupe d'Europe", cup: true },
 ];
 
 const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -47,6 +48,8 @@ export default function Calendar() {
   const [cursor, setCursor] = useState(null);
 
   const matchdays = useMemo(() => groupByMatchday(season.data?.matches ?? []), [season.data]);
+  // La Coupe d'Europe, journée par journée (poules, puis tours à élimination directe).
+  const cupDays = useMemo(() => groupByMatchday(season.data?.cup?.matches ?? []), [season.data]);
 
   if (season.loading) return <p className="status">Chargement…</p>;
   if (season.error) return <p className="status status--error">{season.error.message}</p>;
@@ -72,7 +75,7 @@ export default function Calendar() {
           </p>
         </div>
         <div className="chips" role="group" aria-label="Vue">
-          {VIEWS.map((v) => (
+          {VIEWS.filter((v) => !v.cup || data.cup).map((v) => (
             <button key={v.key} type="button" className="chip" aria-pressed={view === v.key} onClick={() => setView(v.key)}>
               {v.label}
             </button>
@@ -80,7 +83,7 @@ export default function Calendar() {
         </div>
       </header>
 
-      {view !== "season" && (
+      {(view === "week" || view === "month") && (
         <div className="calendar-nav">
           <button type="button" className="button button--small" onClick={() => (view === "week" ? shift(-7) : shift(0, -1))}>
             ← {view === "week" ? "Semaine précédente" : "Mois précédent"}
@@ -97,7 +100,9 @@ export default function Calendar() {
         </div>
       )}
 
-      {view === "week" && <WeekView current={current} matchdays={matchdays} international={international} myId={myId} />}
+      {view === "week" && (
+        <WeekView current={current} matchdays={matchdays} cupDays={cupDays} international={international} myId={myId} />
+      )}
       {view === "month" && (
         <MonthView
           current={current}
@@ -110,14 +115,15 @@ export default function Calendar() {
           }}
         />
       )}
-      {view === "season" && <SeasonView matchdays={matchdays} international={international} myId={myId} />}
+      {view === "season" && <SeasonView matchdays={matchdays} cupDays={cupDays} international={international} myId={myId} />}
+      {view === "cup" && data.cup && <CupView cup={data.cup} cupDays={cupDays} myId={myId} />}
     </>
   );
 }
 
 // --- Semaine ----------------------------------------------------------------------
 
-function WeekView({ current, matchdays, international, myId }) {
+function WeekView({ current, matchdays, cupDays, international, myId }) {
   const monday = startOfWeek(current);
   const sunday = addDays(monday, 6);
   const within = (iso) => {
@@ -125,11 +131,12 @@ function WeekView({ current, matchdays, international, myId }) {
     return day >= monday && day <= sunday;
   };
   const inWeek = matchdays.filter((md) => within(md.date));
+  const cupWeek = cupDays.filter((md) => within(md.date));
   const testDays = [...international.values()].filter((day) => within(day.date));
 
   return (
     <>
-      {inWeek.length === 0 && (
+      {inWeek.length === 0 && cupWeek.length === 0 && (
         <div className="card card--padded">
           <p className="eyebrow">Trêve</p>
           <p style={{ margin: "8px 0 0" }}>
@@ -157,6 +164,17 @@ function WeekView({ current, matchdays, international, myId }) {
           </section>
         );
       })}
+      {cupWeek.map((md) => (
+        <section key={`cup-${md.matchday}`} className="section fill">
+          <div className="section__head">
+            <h2 className="eyebrow">Coupe d'Europe · {md.stage === "regular" ? `Poules, journée ${md.matchday}` : STAGES[md.stage]}</h2>
+            <span className="muted">{formatLongDate(md.date)}</span>
+          </div>
+          <div className="card">
+            <MatchList matches={md.matches} myClubId={myId} />
+          </div>
+        </section>
+      ))}
       {testDays.map((day) => (
         <section key={day.date} className="section fill">
           <div className="section__head">
@@ -251,12 +269,18 @@ function MyMatchLine({ match, myId }) {
 
 // --- Saison -----------------------------------------------------------------------
 
-function SeasonView({ matchdays, international, myId }) {
+function SeasonView({ matchdays, cupDays, international, myId }) {
   const [open, setOpen] = useState(null); // fiche du match ouverte
   // Nos journées, et entre elles les samedis où seules les sélections jouent.
   const clubDates = new Set(matchdays.map((md) => md.date));
+  // Nos matchs de coupe s'intercalent, à leur date.
+  const cupRows = cupDays
+    .map((md) => ({ md, match: md.matches.find((m) => m.home.id === myId || m.away.id === myId) }))
+    .filter(({ match }) => match)
+    .map(({ md, match }) => ({ date: md.date, md: { ...md, matches: [match], cup: true } }));
   const rows = [
     ...matchdays.map((md) => ({ date: md.date, md })),
+    ...cupRows,
     ...[...international.values()].filter((day) => !clubDates.has(day.date)).map((test) => ({ date: test.date, test })),
   ].sort((a, b) => a.date.localeCompare(b.date));
   const withTests = international.size > 0;
@@ -294,7 +318,7 @@ function SeasonView({ matchdays, international, myId }) {
             const match = md.matches.find((m) => m.home.id === myId || m.away.id === myId);
             if (!match) {
               return (
-                <tr key={md.matchday}>
+                <tr key={`${md.cup ? "cup-" : ""}${md.matchday}`}>
                   <td className="left jersey">{matchdayLabel(md)}</td>
                   <td className="left muted">{formatShortDate(md.date)}</td>
                   <td className="left muted" colSpan={5}>Sans nous</td>
@@ -312,8 +336,8 @@ function SeasonView({ matchdays, international, myId }) {
             const result = played ? matchResult(match, myId) : null;
             const note = played ? scoreNote(match, myId) : null;
             return (
-              <tr key={md.matchday}>
-                <td className="left jersey">{matchdayLabel(md)}</td>
+              <tr key={`${md.cup ? "cup-" : ""}${md.matchday}`}>
+                <td className="left jersey">{md.cup ? `Coupe · ${matchdayLabel(md)}` : matchdayLabel(md)}</td>
                 <td className="left muted">{formatShortDate(md.date)}</td>
                 <td className="left" style={{ fontWeight: 600 }}>
                   <span className="with-crest">
@@ -356,6 +380,76 @@ function SeasonView({ matchdays, international, myId }) {
         </tbody>
       </table>
       {open && <MatchReport summary={open} myClubId={myId} onClose={() => setOpen(null)} />}
+    </div>
+  );
+}
+
+// --- Coupe d'Europe ---------------------------------------------------------------
+
+// La Coupe d'Europe : à gauche les quatre poules (les deux premiers, qualifiés, au-dessus
+// d'un filet), à droite les journées, poules puis phases finales, la plus récente
+// jouée en tête ; notre club en accent.
+function CupView({ cup, cupDays, myId }) {
+  const ordered = [...cupDays].reverse();
+  return (
+    <div className="cup fill">
+      <section className="card panel">
+        <div className="panel__head">
+          <span className="eyebrow">Poules</span>
+          <span className="muted">{cup.champion ? `Vainqueur : ${cup.champion.name}` : "Les deux premiers vont en quarts"}</span>
+        </div>
+        <div className="panel__body cup__pools">
+          {cup.pools.map((pool) => (
+            <table key={pool.pool} className="table cup__pool">
+              <thead>
+                <tr>
+                  <th scope="col" className="left">Poule {pool.pool}</th>
+                  <th scope="col">J</th>
+                  <th scope="col">G</th>
+                  <th scope="col">Diff</th>
+                  <th scope="col">Pts</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pool.table.map((row, index) => (
+                  <tr
+                    key={row.club.id}
+                    className={`${row.club.id === myId ? "table__row--mine" : ""}${index === 1 ? " cup__cut" : ""}`}
+                  >
+                    <td className="left">
+                      <span className="with-crest">
+                        <ClubCrest name={row.club.name} size={18} />
+                        {row.club.name}
+                      </span>
+                    </td>
+                    <td className="num">{row.played}</td>
+                    <td className="num">{row.won}</td>
+                    <td className="num">{row.points_difference > 0 ? `+${row.points_difference}` : row.points_difference}</td>
+                    <td className="num" style={{ fontWeight: 700 }}>
+                      {row.league_points}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ))}
+        </div>
+      </section>
+      <section className="card panel">
+        <div className="panel__head">
+          <span className="eyebrow">Matchs</span>
+        </div>
+        <div className="panel__body">
+          {ordered.map((md) => (
+            <div key={md.matchday}>
+              <div className="matches__stage">
+                {md.stage === "regular" ? `Poules · journée ${md.matchday}` : STAGES[md.stage]} · {formatLongDate(md.date)}
+              </div>
+              <MatchList matches={md.matches} myClubId={myId} />
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

@@ -326,6 +326,17 @@ class SuspensionRow(Base):
     reason: Mapped[str] = mapped_column(String(14))
 
 
+class CupPoolRow(Base):
+    """Un club dans une poule de la Coupe d'Europe d'une saison (engine/europe.py)."""
+
+    __tablename__ = "cup_pools"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    season_id: Mapped[int] = mapped_column(ForeignKey("seasons.id"))
+    pool: Mapped[str] = mapped_column(String(1))
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id"))
+
+
 class ScoutReportRow(Base):
     """Une supervision d'un joueur par les recruteurs du club (engine/scouting.py),
     demandée le jour `requested_on` ; le rapport est rendu au soir de cette journée."""
@@ -413,13 +424,20 @@ class SeasonRow(Base):
     # Les matchs des pros et ceux des espoirs partagent la table, séparés par `squad`.
     matches: Mapped[list["MatchRow"]] = relationship(
         primaryjoin="and_(MatchRow.season_id == SeasonRow.id, MatchRow.squad == 'pro')",
-        overlaps="youth_matches,season",
+        overlaps="youth_matches,season,cup_matches",
         order_by="MatchRow.id",
         lazy="selectin",
     )
     youth_matches: Mapped[list["MatchRow"]] = relationship(
         primaryjoin="and_(MatchRow.season_id == SeasonRow.id, MatchRow.squad == 'youth')",
-        overlaps="matches,season",
+        overlaps="matches,season,cup_matches",
+        order_by="MatchRow.id",
+        lazy="selectin",
+    )
+    # La Coupe d'Europe (engine/europe.py) : ses matchs à part, `squad` = 'cup'.
+    cup_matches: Mapped[list["MatchRow"]] = relationship(
+        primaryjoin="and_(MatchRow.season_id == SeasonRow.id, MatchRow.squad == 'cup')",
+        overlaps="matches,youth_matches,season",
         order_by="MatchRow.id",
         lazy="selectin",
     )
@@ -489,7 +507,9 @@ class MatchRow(Base):
     spectators: Mapped[int | None] = mapped_column(default=None)
     atmosphere: Mapped[float | None] = mapped_column(default=None)
 
-    season: Mapped[SeasonRow | None] = relationship(overlaps="matches,youth_matches", viewonly=True)
+    season: Mapped[SeasonRow | None] = relationship(
+        overlaps="matches,youth_matches,cup_matches", viewonly=True
+    )
 
     @property
     def is_played(self) -> bool:

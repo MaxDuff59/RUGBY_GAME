@@ -14,7 +14,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from api import internationals
+from api import cup, internationals
 from api.deps import SessionDep
 from api.free_agents import free_agent_rows
 from api.ledger import current_season, game_date
@@ -32,8 +32,8 @@ from api.schemas import (
 )
 from data.leagues import league_config, sort_codes
 from data.nations import NATIONS, NATIONS_BY_CODE, WINDOWS_BY_CODE, Window
+from engine import europe, journal
 from engine import internationals as rules
-from engine import journal
 from engine.free_agents import seasons_without_club
 from engine.journal import Article, Move, MoveKind, Person, Team
 from engine.offseason import RETIREMENT_AGE
@@ -106,6 +106,7 @@ class _Competition:
     name: str
     matches: list[Match]
     window: Window | None = None  # fenêtre internationale ; None pour un championnat
+    pools: dict[str, list[int]] | None = None  # Coupe d'Europe : ses poules (api/cup.py)
 
     @property
     def international(self) -> bool:
@@ -129,6 +130,8 @@ class _Competition:
             return journal.STAGE_TITLES[match.stage]
         if self.window is not None and not self.window.has_table:
             return f"Test {match.matchday}"
+        if self.pools is not None:
+            return f"Poules, journée {match.matchday}"
         return f"Journée {match.matchday}"
 
 
@@ -144,6 +147,15 @@ def _competitions(session: Session, season: SeasonRow) -> list[_Competition]:
     tests: dict[str, list[Match]] = {}
     for row in internationals.test_rows(session, season):
         tests.setdefault(row.competition, []).append(row.to_domain())
+    if season.cup_matches:
+        out.append(
+            _Competition(
+                europe.CODE,
+                cup.LEAGUE.short_name,
+                cup.matches(season),
+                pools=cup.pools(session, season),
+            )
+        )
     for code, matches in tests.items():
         window = WINDOWS_BY_CODE[code]
         out.append(_Competition(code, window.name, matches, window))
@@ -201,9 +213,13 @@ def _match_articles(
     for c in competitions:
         home = reader.follows(c)
         # Un grand championnat fait plus de bruit qu'un petit.
-        prestige = 0.0 if c.international else league_config(c.code).prize_factor * PRESTIGE
+        config = cup.LEAGUE if c.pools is not None else league_config(c.code)
+        prestige = 0.0 if c.international else config.prize_factor * PRESTIGE
         world_cup = c.window is not None and c.window.format == "world_cup"
-        has_table = c.window is None or (c.window.has_table and not world_cup)
+        # Pas de classement général pour une coupe à poules (la Coupe d'Europe, le Mondial).
+        has_table = (c.window is None and c.pools is None) or (
+            c.window is not None and c.window.has_table and not world_cup
+        )
         table = journal.table_of(c.matches) if has_table else None
         runs = journal.streaks(c.matches)
 
@@ -230,9 +246,15 @@ def _match_articles(
             kept += _keep(previews, PREVIEWS_KEPT)
 
         last = recent.get(c.code)
-        winner = rules.champion(c.window, c.matches) if c.window is not None else None
+        if c.window is not None:
+            winner = rules.champion(c.window, c.matches)
+        elif c.pools is not None:
+            winner = europe.champion(c.pools, c.matches)
+        else:
+            winner = None
         if winner is not None and last:
-            crowned = journal.title_article(c.code, c.name, teams[winner], last[0].date)
+            write = journal.cup_title_article if c.pools is not None else journal.title_article
+            crowned = write(c.code, c.name, teams[winner], last[0].date)
             kept.append(journal.favour(crowned, winner == reader.team, home))
         elif table is not None and last and last[0].stage == Stage.REGULAR:
             point = journal.table_article(

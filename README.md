@@ -109,6 +109,13 @@ stades, et des joueurs (pros et espoirs) et un staff inventés à leur niveau :
 | URC (Irlande, Écosse, Italie, Afrique du Sud) | 12 | 22 journées | quarts 1-8, 2-7, 3-6, 4-5, demies selon le tableau, finale chez le mieux classé |
 | Super Rugby Pacific | 11 | 22 journées, de février à juillet | qualifications 1-6, 2-5, 3-4, demies avec le meilleur perdant repêché, finale chez le mieux classé |
 
+La Coupe d'Europe (`engine/europe.py`) réunit les huit premiers du Top 14, de la
+Premiership et de l'URC (la première saison : les huit meilleurs effectifs) : quatre
+poules de six, quatre journées en décembre et janvier, puis quarts (avril), demies et
+finale (mai, terrain neutre). Les trois championnats laissent ses week-ends libres ; ses
+matchs se jouent avec les journées, par le staff, et s'affichent dans le calendrier
+(vue « Coupe d'Europe »), le journal et le palmarès.
+
 Chaque championnat se joue en aller-retour avec son propre calendrier
 (`engine/calendar.py`) : jouer la journée joue d'abord, date par date, les
 matchs des autres championnats tombés avant (ou le même jour). Les objectifs de

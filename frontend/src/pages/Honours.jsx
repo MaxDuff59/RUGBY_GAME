@@ -62,10 +62,10 @@ export default function Honours() {
             {data.club && <ClubHistory club={data.club} history={data.club_history} />}
           </div>
           <div className="honours__column">
-            <Awards season={season} myId={data.club?.id} />
+            <Awards season={season} myId={data.club?.id} cup={league.code === "champions_cup"} />
             <Records records={data.records} myId={data.club?.id} />
           </div>
-          <Team season={season} />
+          <Team season={season} cup={league.code === "champions_cup"} />
         </div>
       )}
     </>
@@ -123,7 +123,7 @@ function Seasons({ league, season, myId, onPick }) {
 }
 
 // Les trophées de la saison choisie.
-function Awards({ season, myId }) {
+function Awards({ season, myId, cup }) {
   const singles = (season?.awards ?? []).filter((a) => a.kind !== "team");
   return (
     <section className="card panel">
@@ -132,7 +132,11 @@ function Awards({ season, myId }) {
       </div>
       <div className="panel__body">
         {singles.length === 0 ? (
-          <p className="table__note">Les trophées se remettent à la fin de la saison, après la finale.</p>
+          <p className="table__note">
+            {cup
+              ? "La Coupe d'Europe ne remet pas de trophées individuels : ils se jouent en championnat."
+              : "Les trophées se remettent à la fin de la saison, après la finale."}
+          </p>
         ) : (
           <ul className="honours__awards-list">
             {singles.map((award) => (
@@ -156,7 +160,7 @@ function Awards({ season, myId }) {
 }
 
 // L'équipe type de la saison choisie, sur le terrain, à la hauteur de la colonne.
-function Team({ season }) {
+function Team({ season, cup }) {
   const ref = useRef(null);
   const team = useMemo(() => teamMarkers(season?.awards ?? []), [season]);
   const width = usePitchWidth(ref, team.length > 0);
@@ -166,7 +170,9 @@ function Team({ season }) {
       {team.length > 0 ? (
         <Pitch markers={team} style={{ width: width ?? "100%", maxWidth: "100%", margin: "0 auto" }} />
       ) : (
-        <p className="table__note">Elle se compose à la fin de la saison.</p>
+        <p className="table__note">
+          {cup ? "Pas d'équipe type en coupe : elle se compose en championnat." : "Elle se compose à la fin de la saison."}
+        </p>
       )}
     </section>
   );

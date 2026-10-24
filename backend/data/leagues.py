@@ -200,8 +200,18 @@ LEAGUES = [
         playoffs=PlayoffFormat.TOP6,
         neutral_final=True,
         start=(9, 1),
-        # Tournées d'automne, Noël, Tournoi des Six Nations.
-        breaks=(((11, 7), 3), ((12, 20), 2), ((2, 20), 3)),
+        # Tournées d'automne, Coupe d'Europe (poules en décembre et janvier, quarts,
+        # demies, finale), Noël, Tournoi des Six Nations.
+        breaks=(
+            ((11, 7), 3),
+            ((12, 6), 2),
+            ((12, 20), 2),
+            ((1, 10), 2),
+            ((2, 20), 3),
+            ((4, 4), 1),
+            ((5, 2), 1),
+            ((5, 23), 1),
+        ),
         clubs=TOP14,
     ),
     League(
@@ -224,8 +234,17 @@ LEAGUES = [
         playoffs=PlayoffFormat.TOP4,
         neutral_final=True,  # à Twickenham
         start=(9, 26),
-        # Tournées d'automne, Coupe d'Europe (décembre, janvier, avril), Six Nations.
-        breaks=(((11, 1), 4), ((12, 6), 2), ((1, 10), 2), ((2, 1), 5), ((4, 4), 2)),
+        # Tournées d'automne, Coupe d'Europe (décembre, janvier, quarts, demies et
+        # finale), Six Nations.
+        breaks=(
+            ((11, 1), 4),
+            ((12, 6), 2),
+            ((1, 10), 2),
+            ((2, 1), 5),
+            ((4, 4), 2),
+            ((5, 2), 1),
+            ((5, 23), 1),
+        ),
         prize_factor=0.8,
         clubs=PREMIERSHIP,
     ),
@@ -237,7 +256,17 @@ LEAGUES = [
         playoffs=PlayoffFormat.TOP8,
         neutral_final=False,
         start=(9, 26),
-        breaks=(((11, 1), 4), ((12, 6), 2), ((1, 10), 2), ((2, 1), 3)),
+        # Tournées d'automne, Coupe d'Europe (décembre, janvier, quarts, demies et
+        # finale), Six Nations.
+        breaks=(
+            ((11, 1), 4),
+            ((12, 6), 2),
+            ((1, 10), 2),
+            ((2, 1), 3),
+            ((4, 4), 1),
+            ((5, 2), 1),
+            ((5, 23), 1),
+        ),
         prize_factor=0.7,
         clubs=URC,
     ),

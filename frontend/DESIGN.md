@@ -314,6 +314,13 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   d'abord (finale, demies, quarts), puis un classement par poule avec un filet sous les
   deux qualifiés, puis les matchs de poule. Sur terrain neutre : « Terrain neutre » à la
   place de domicile / extérieur.
+- Coupe d'Europe (calendrier) : une quatrième pastille « Coupe d'Europe » quand le monde
+  en a une. À gauche, les quatre poules (deux par ligne), un filet noir sous les deux
+  qualifiés, notre club en accent ; à droite, les journées, la plus récente en tête
+  (poules, quarts, demies, finale) en affiches cliquables. Dans la vue Semaine, une
+  section par journée de coupe ; dans la vue Saison, nos matchs de coupe s'intercalent à
+  leur date (« Coupe · J1 »). Le palmarès la range après les championnats (vainqueurs et
+  finales, sans trophées individuels).
 - Calendrier du club et sélections : la colonne « Sélections » de l'onglet Saison porte,
   sur une journée jouée un samedi international, l'étiquette « Doublon » (contour), la
   fenêtre et le nombre de nos absents une fois les listes annoncées (leurs noms en

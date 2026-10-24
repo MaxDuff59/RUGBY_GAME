@@ -670,6 +670,20 @@ def table_article(
     )
 
 
+def cup_title_article(code: str, competition: str, winner: Team, day: datetime.date) -> Article:
+    """Une coupe de clubs (la Coupe d'Europe) s'achève sur sa finale."""
+    return Article(
+        key=f"title-{code}",
+        kind=Kind.RESULT,
+        date=day,
+        title=f"{competition} : {winner.subject} {winner.verb('soulève', 'soulèvent')} le trophée",
+        body=f"{winner.does('remporte', 'remportent')} la finale et règne sur l'Europe.",
+        weight=TITLE_WEIGHT,
+        competition=competition,
+        teams=[winner],
+    )
+
+
 def title_article(code: str, competition: str, winner: Team, day: datetime.date) -> Article:
     """Une fenêtre internationale s'achève sur un vainqueur."""
     return Article(

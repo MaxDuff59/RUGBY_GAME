@@ -12,6 +12,7 @@ from fastapi import APIRouter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from api import cup
 from api.deps import SessionDep
 from api.routers.seasons import (
     _champion_id,
@@ -35,6 +36,7 @@ from api.schemas import (
     TitlesOut,
 )
 from data.leagues import league_config, sort_codes
+from engine import europe
 from engine.awards import AwardKind, season_awards
 from models import EventType, Player, Position, Stage
 from models.orm import AwardRow, CareerRow, ClubRow, MoveRow, PlayerRow, SeasonRow
@@ -146,8 +148,37 @@ def _leagues(
                     awards=awards,
                 )
             )
+    # La Coupe d'Europe, à la suite des championnats (ni trophées individuels, ni poules).
+    for season in seasons:
+        if not season.cup_matches:
+            continue
+        champion_id = cup.champion(session, season)
+        final_row = next(
+            (m for m in season.cup_matches if m.stage == Stage.FINAL.value and m.is_played), None
+        )
+        final = runner_up = None
+        if final_row is not None:
+            final = MatchSummary.from_match(final_row.to_domain(), clubs)
+            loser = (
+                final_row.away_club_id
+                if champion_id == final_row.home_club_id
+                else final_row.home_club_id
+            )
+            runner_up = ClubRef(id=loser, name=clubs[loser])
+        by_league[europe.CODE].append(
+            SeasonHonoursOut(
+                year=season.year,
+                champion=ClubRef(id=champion_id, name=clubs[champion_id]) if champion_id else None,
+                runner_up=runner_up,
+                final=final,
+                awards=[],
+            )
+        )
+
     out = []
-    for code in sort_codes(by_league):
+    for code in [*sort_codes(c for c in by_league if c != europe.CODE), europe.CODE]:
+        if code not in by_league:
+            continue
         history = sorted(by_league[code], key=lambda s: s.year, reverse=True)
         years: dict[int, list[int]] = defaultdict(list)
         for entry in history:
@@ -158,7 +189,7 @@ def _leagues(
             for cid, ys in years.items()
         ]
         titles.sort(key=lambda t: (-t.titles, -max(t.years)))
-        config = league_config(code)
+        config = cup.LEAGUE if code == europe.CODE else league_config(code)
         out.append(
             LeagueHonoursOut(
                 code=code,

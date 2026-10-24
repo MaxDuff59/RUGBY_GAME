@@ -222,7 +222,8 @@ def test_clubs_start_later_and_skip_the_november_break_in_a_world_cup_year():
     november = [day for day in shifted if day.month == 11]
     assert len(november) == 4 and len([day for day in usual if day.month == 11]) == 1
     assert (shifted[-1] - usual[-1]).days in range(360, 368)
-    assert playoffs[-1] == datetime.date(2028, 5, 13)
+    # La finale tombe début juillet : les week-ends de la Coupe d'Europe s'ajoutent aux trêves.
+    assert playoffs[-1] == datetime.date(2028, 7, 1)
     # Le Super Rugby, de février à juillet, ne bouge pas.
     southern = LEAGUES_BY_CODE["super_rugby"]
     assert season_dates(2027, 22, southern.start, southern.breaks)[0][0] == datetime.date(

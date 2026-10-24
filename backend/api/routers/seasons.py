@@ -25,7 +25,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from api import internationals
+from api import cup, internationals
 from api.affairs import (
     affair_out,
     draw_affair,
@@ -48,6 +48,9 @@ from api.schemas import (
     CalledPlayer,
     CallUpNotice,
     ClubRef,
+    CupOut,
+    CupPoolOut,
+    CupRowOut,
     DismissalOut,
     InjuryCase,
     LeagueOut,
@@ -65,6 +68,7 @@ from api.schemas import (
 from data.generator import FIRST_SEASON_YEAR
 from data.leagues import DEFAULT_LEAGUE, PROMOTION, league_config, sort_codes
 from data.nations import NATIONS_BY_CODE, WINDOWS_BY_CODE
+from engine import europe
 from engine.awards import season_awards
 from engine.board import should_sack
 from engine.difficulty import rules
@@ -257,6 +261,43 @@ def _season_out(session: Session, season: SeasonRow, league: str | None = None) 
         standings=standings,
         matches=[_summary(m, names) for m in matches],
         champion=ClubRef(id=champion_id, name=names[champion_id]) if champion_id else None,
+        cup=_cup_out(session, season, names),
+    )
+
+
+def _cup_out(session: Session, season: SeasonRow, names: dict[int, str]) -> CupOut | None:
+    """La Coupe d'Europe de la saison : poules, matchs, phase et champion."""
+    if not season.cup_matches:
+        return None
+    pool_map = cup.pools(session, season)
+    domain = cup.matches(season)
+    tables = europe.pool_tables(pool_map, domain)
+    played = [m for m in domain if m.stage == Stage.REGULAR and m.is_played]
+    standings = league_table(played).standings if played else {}
+    pools = []
+    for letter, order in tables.items():
+        rows = []
+        for club_id in order:
+            line = standings.get(club_id)
+            rows.append(
+                CupRowOut(
+                    club=ClubRef(id=club_id, name=names[club_id]),
+                    played=line.played if line else 0,
+                    won=line.won if line else 0,
+                    points_difference=line.points_difference if line else 0,
+                    league_points=line.league_points if line else 0,
+                )
+            )
+        pools.append(CupPoolOut(pool=letter, table=rows))
+    champion_id = europe.champion(pool_map, domain)
+    knockout = any(m.stage != Stage.REGULAR for m in domain)
+    rows = sorted(season.cup_matches, key=lambda m: (m.date, m.id))
+    return CupOut(
+        name=cup.LEAGUE.short_name,
+        pools=pools,
+        matches=[_summary(row, names) for row in rows],
+        phase="finished" if champion_id else "knockout" if knockout else "pools",
+        champion=ClubRef(id=champion_id, name=names[champion_id]) if champion_id else None,
     )
 
 
@@ -284,10 +325,28 @@ def create_season(session: Session, year: int, seed: int | None = None) -> Seaso
     session.add(season)
     session.commit()
     # Figé maintenant, avant que l'effectif ne bouge : l'objectif de la direction en dépend.
-    ensure_preseason_ranks(session, season)
+    preseason = ensure_preseason_ranks(session, season)
+    if cup.has_cup(session):
+        _draw_cup(session, season, preseason)
     # Calendrier international, et les listes déjà dues au premier jour de la saison.
     _prepare_day(session, season)
     return season
+
+
+def _draw_cup(session: Session, season: SeasonRow, preseason: dict[int, int]) -> None:
+    """La Coupe d'Europe de la saison : les clubs de chaque championnat qualificatif dans
+    l'ordre de la saison régulière précédente, ou, la première saison, de leur effectif."""
+    previous = session.scalars(select(SeasonRow).where(SeasonRow.year == season.year - 1)).first()
+    leagues = {row.id: row.league for row in _club_rows(session)}
+    ranked = {}
+    for league in europe.LEAGUES:
+        members = [club_id for club_id, code in leagues.items() if code == league]
+        if previous is not None and league in _season_league_codes(previous):
+            order = [c for c in _seeding(previous, league) if c in members]
+            ranked[league] = order + [c for c in members if c not in order]
+        else:
+            ranked[league] = sorted(members, key=lambda c: preseason.get(c, len(members)))
+    cup.create_cup(session, season, ranked, season_rng(season, "cup"))
 
 
 def _ensure_next_stage(session: Session, season: SeasonRow, league: str) -> None:
@@ -307,9 +366,10 @@ def _prepare_day(session: Session, season: SeasonRow) -> datetime.date | None:
     dues ; renvoie le prochain jour de match, clubs et sélections confondus."""
     for league in _season_league_codes(season):
         _ensure_next_stage(session, season, league)
+    cup.ensure_next_round(session, season)
     internationals.ensure_calendar(session, season)
     internationals.ensure_next_round(session, season)
-    dates = [m.date for m in season.matches if not m.is_played]
+    dates = [m.date for m in [*season.matches, *season.cup_matches] if not m.is_played]
     next_test = internationals.next_test_date(session, season)
     if next_test is not None:
         dates.append(next_test)
@@ -360,17 +420,24 @@ def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayRes
     staff et compte tel quel ; la semaine d'entraînement a alors déjà eu lieu.
     """
     session.expire_all()  # blessures et effectifs des jours précédents
-    todays = sorted(
+    league_rows = sorted(
         (m for m in season.matches if not m.is_played and m.date == day),
         key=lambda m: (m.league, m.id),
     )
+    # La Coupe d'Europe joue ses week-ends à part, que les championnats laissent libres.
+    cup_rows = [m for m in season.cup_matches if not m.is_played and m.date == day]
+    todays = league_rows + cup_rows
     youth_rows = [m for m in season.youth_matches if m.date == day and not m.is_played]
-    leagues = sorted({m.league for m in todays})
+    leagues = sorted({m.league for m in league_rows})
+    cup_clubs = {club for m in cup_rows for club in (m.home_club_id, m.away_club_id)}
     career = session.scalars(select(CareerRow)).first()
     my_club_id = career.club_id if career is not None else None
 
-    # Seuls les clubs des championnats du jour (et le club dirigé) sont chargés.
-    rows_by_id = {row.id: row for row in _club_rows(session) if row.league in leagues}
+    # Seuls les clubs des championnats du jour, ceux de la coupe (et le club dirigé)
+    # sont chargés.
+    rows_by_id = {
+        row.id: row for row in _club_rows(session) if row.league in leagues or row.id in cup_clubs
+    }
     wanted = set(rows_by_id) | ({my_club_id} if my_club_id is not None else set())
     clubs = load_clubs(session, wanted)
     players = {p.id: p for club in clubs.values() for p in [*club.players, *club.youths]}
@@ -401,9 +468,12 @@ def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayRes
         date=day,
         clubs=clubs,
         forms={club_id: history.form(clubs[club_id], day) for club_id in rows_by_id},
-        leagues={league: league_config(league) for league in leagues},
-        seeding={league: _seeding(season, league) for league in leagues},
-        regular_matchdays={league: _regular_matchday_count(season, league) for league in leagues},
+        leagues={league: league_config(league) for league in leagues}
+        | ({europe.CODE: cup.LEAGUE} if cup_rows else {}),
+        seeding={league: _seeding(season, league) for league in leagues}
+        | ({europe.CODE: cup.seeding(session, season)} if cup_rows else {}),
+        regular_matchdays={league: _regular_matchday_count(season, league) for league in leagues}
+        | ({europe.CODE: europe.POOL_ROUNDS} if cup_rows else {}),
         managed_club_id=my_club_id,
         fervour=lambda club_id: history.fervour(club_id).value,
         shirt_revenue=lambda club_id: jersey_revenue(deals_from(rows_by_id[club_id].sponsors)),
