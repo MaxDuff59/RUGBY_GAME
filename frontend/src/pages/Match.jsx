@@ -92,6 +92,28 @@ export default function Match() {
     return () => clearTimeout(timer);
   }, [playing, live, speed, tick]);
 
+  // La barre d'espace met en pause et relance, comme le bouton du tableau d'affichage ;
+  // pas pendant une saisie, ni quand une fenêtre est ouverte (plan, discours, confirmation).
+  const canToggle = Boolean(live) && !live.finished && !finishing && panel === null;
+  useEffect(() => {
+    if (!canToggle) return undefined;
+    const onKey = (event) => {
+      if (event.code !== "Space" || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.target.closest?.("input, textarea, select, [contenteditable]")) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      // Sinon l'espace « cliquerait » aussi le bouton qui a le focus, ou ferait défiler.
+      event.preventDefault();
+      if (playing) {
+        setPlaying(false);
+      } else {
+        setNotice(null);
+        setPlaying(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [canToggle, playing]);
+
   async function act(call) {
     setBusy(true);
     setError(null);
@@ -386,7 +408,12 @@ function Scoreboard({ live, playing, speed, setSpeed, notice, error, busy, finis
             </button>
           ) : (
             <>
-              <button type="button" className="button button--primary scoreboard__play" onClick={playing ? onPause : onPlay}>
+              <button
+                type="button"
+                className="button button--primary scoreboard__play"
+                title="Barre d'espace"
+                onClick={playing ? onPause : onPlay}
+              >
                 {playing ? "Pause" : live.minute === 0 ? "Coup d'envoi" : "Reprendre"}
               </button>
               <div className="chips" role="group" aria-label="Vitesse du chrono">
