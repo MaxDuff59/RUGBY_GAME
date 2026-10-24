@@ -162,6 +162,8 @@ export default function Match() {
       title: "Laisser le staff finir ?",
       text: "Le reste du match se joue sans toi : le staff gère le banc. La journée se termine ensuite comme d'habitude.",
       confirmLabel: "Terminer le match",
+      // La barre d'espace sert à relancer le chrono : tapée par réflexe, elle annule.
+      cautious: true,
       onConfirm: finish,
     });
   };

@@ -9,6 +9,8 @@ import Modal from "./Modal.jsx";
 // avant/après, `{ label, from, to, hint }`.
 // `onConfirm` renvoie une promesse : la fenêtre attend, affiche l'erreur
 // éventuelle et reste ouverte, ou se ferme quand l'action a réussi.
+// `cautious` : le focus va sur « Annuler » plutôt que sur l'action, pour qu'une touche
+// tapée par réflexe (espace, Entrée) ne la déclenche pas.
 export default function ConfirmDialog({
   eyebrow,
   title,
@@ -17,6 +19,7 @@ export default function ConfirmDialog({
   warning,
   confirmLabel = "Confirmer",
   cancelLabel = "Annuler",
+  cautious = false,
   onConfirm,
   onClose,
 }) {
@@ -50,10 +53,10 @@ export default function ConfirmDialog({
       {error && <p className="status--error" style={{ margin: 0 }}>{error.message}</p>}
 
       <div className="confirm__actions">
-        <button type="button" className="button" disabled={busy} onClick={onClose}>
+        <button type="button" className="button" disabled={busy} autoFocus={cautious} onClick={onClose}>
           {cancelLabel}
         </button>
-        <button type="button" className="button button--primary" disabled={busy} autoFocus onClick={confirm}>
+        <button type="button" className="button button--primary" disabled={busy} autoFocus={!cautious} onClick={confirm}>
           {busy ? "Un instant…" : confirmLabel}
         </button>
       </div>
