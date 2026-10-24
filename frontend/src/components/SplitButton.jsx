@@ -8,6 +8,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 // bouton, ou au-dessus quand la place manque en bas (bord de l'écran, barre d'onglets).
 export default function SplitButton({ children, onClick, disabled = false, options = [], menuLabel, menuTitle }) {
   const [open, setOpen] = useState(false);
+  // Le bouton lâche le focus une fois cliqué : sinon la touche Entrée le relancerait
+  // (une journée simulée de plus à chaque Entrée sur le tableau de bord).
+  const act = (event) => {
+    event.currentTarget.blur();
+    onClick(event);
+  };
   const [above, setAbove] = useState(false);
   const root = useRef(null);
   const menu = useRef(null);
@@ -34,7 +40,7 @@ export default function SplitButton({ children, onClick, disabled = false, optio
 
   if (options.length === 0) {
     return (
-      <button type="button" className="button" disabled={disabled} onClick={onClick}>
+      <button type="button" className="button" disabled={disabled} onClick={act}>
         {children}
       </button>
     );
@@ -42,7 +48,7 @@ export default function SplitButton({ children, onClick, disabled = false, optio
 
   return (
     <div className="split" ref={root}>
-      <button type="button" className="button split__main" disabled={disabled} onClick={onClick}>
+      <button type="button" className="button split__main" disabled={disabled} onClick={act}>
         {children}
       </button>
       <button
