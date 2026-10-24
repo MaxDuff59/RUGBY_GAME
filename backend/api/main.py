@@ -20,8 +20,11 @@ from fastapi.staticfiles import StaticFiles
 from api import auth, billing
 from api.routers import (
     academy,
+    admin,
+    admin_players,
     affairs,
     career,
+    catalog,
     clubs,
     contracts,
     facilities,
@@ -92,6 +95,9 @@ app.include_router(honours.router)
 app.include_router(inbox.router)
 app.include_router(scouting.router)
 app.include_router(photos.router)
+app.include_router(catalog.router)
+app.include_router(admin.router)
+app.include_router(admin_players.router)
 
 
 def make_site(api: FastAPI, static_dir: Path) -> FastAPI:

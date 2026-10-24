@@ -1,0 +1,765 @@
+/* Backoffice (/backoffice) : mêmes cartes, pastilles et tableaux que le jeu. La page tient
+   dans la fenêtre ; les listes défilent dans leur carte. */
+
+.admin {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  padding: 40px 40px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.admin__head .title {
+  font-size: 48px;
+}
+
+.admin__account {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.admin__back {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  margin: 0 40px;
+}
+
+.admin__body {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin__split {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.admin__split--even {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.admin__split--clubs {
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+}
+
+.admin__split--players {
+  grid-template-columns: minmax(340px, 460px) minmax(0, 1fr);
+}
+
+.admin__panel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.admin__panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 18px 20px 6px;
+}
+
+.admin__panel-head .eyebrow {
+  margin: 0;
+}
+
+.admin__scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.admin__empty {
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  text-align: center;
+}
+
+.admin__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.admin__link:hover {
+  color: var(--ink);
+}
+
+.admin__mono {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+}
+
+/* --- Vue d'ensemble ---------------------------------------------------------- */
+
+.admin__overview {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin__tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.admin__crests {
+  display: inline-flex;
+  gap: 2px;
+  margin-right: 10px;
+  vertical-align: middle;
+}
+
+/* --- Listes ------------------------------------------------------------------ */
+
+.admin__tools {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 16px 8px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.admin__tools .chips--scroll {
+  margin: 0;
+  padding: 0 0 2px;
+}
+
+.admin__table td {
+  vertical-align: middle;
+}
+
+.admin .table td:not(.left) {
+  white-space: nowrap;
+}
+
+.admin__row {
+  cursor: pointer;
+}
+
+.admin__row:hover {
+  background: var(--line-soft);
+}
+
+.admin__row--on,
+.admin__row--on:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.admin__row--on .admin__plan {
+  color: #fff;
+  border-color: #fff;
+}
+
+.admin__email {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin__tag {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.admin__plan {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--ink-muted);
+}
+
+.admin__plan--full {
+  border-color: var(--ink);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.admin__group {
+  padding: 4px 8px 8px;
+}
+
+.admin__group-title {
+  margin: 12px 8px 6px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.admin__group-count {
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.admin__group-empty {
+  margin: 0 8px 4px;
+}
+
+/* Championnat incomplet ou archivé : hors des nouvelles parties */
+.admin__warn {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px dashed var(--ink-muted);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.admin__row--on .admin__warn {
+  color: #fff;
+  border-color: #fff;
+}
+
+.admin__tools-row {
+  display: flex;
+  gap: 8px;
+}
+
+.admin__tools-row .input {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.admin__roles {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+
+.admin__clubs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.admin__club {
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin__club:hover {
+  background: var(--line-soft);
+}
+
+.admin__club[aria-pressed="true"] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.admin__club-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.admin__swatches {
+  display: inline-flex;
+  flex: none;
+}
+
+.admin__swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+}
+
+.admin__swatch + .admin__swatch {
+  margin-left: -4px;
+}
+
+/* Club retouché depuis le backoffice */
+.admin__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+/* Club créé : rond creux */
+.admin__dot--new {
+  background: transparent;
+  border: 1.5px solid var(--ink);
+}
+
+.admin__club[aria-pressed="true"] .admin__dot {
+  background: #fff;
+}
+
+.admin__club[aria-pressed="true"] .admin__dot--new {
+  background: transparent;
+  border-color: #fff;
+}
+
+/* --- Fiches ------------------------------------------------------------------ */
+
+.admin__detail-head {
+  padding: 20px 24px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.admin__detail-head .admin__link {
+  align-self: flex-start;
+}
+
+.admin__detail-head p {
+  margin: 0;
+}
+
+.admin__name {
+  margin: 2px 0 4px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 28px;
+  line-height: 1;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+/* Une adresse e-mail garde ses minuscules. */
+.admin__name--plain {
+  text-transform: none;
+  font-size: 24px;
+}
+
+.admin__club-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.admin__club-head > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.admin__reset {
+  flex: none;
+  min-height: 36px;
+  font-size: 13px;
+}
+
+.admin__tab {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin__tab[hidden] {
+  display: none;
+}
+
+.admin__detail-body {
+  padding: 4px 24px 20px;
+}
+
+.admin__block {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin__block:last-child {
+  border-bottom: 0;
+}
+
+.admin__block h3 {
+  margin: 0;
+}
+
+.admin__note {
+  margin: -6px 0 0;
+}
+
+.admin__facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px 24px;
+}
+
+.admin__facts dt {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.admin__facts dd {
+  margin: 2px 0 0;
+  font-weight: 500;
+}
+
+.admin__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin__slots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.admin__slot {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.admin__slot-club {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 20px;
+}
+
+/* Couleurs, maillots, blason */
+.admin__look {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.admin__jerseys {
+  display: flex;
+  gap: 8px;
+}
+
+.admin__colors {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 220px;
+}
+
+.admin__colors--row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+
+.admin__color {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin__color input[type="color"] {
+  width: 40px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.admin__logo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+.admin__logo-text {
+  flex: 1 1 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.admin__file {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.admin__file input {
+  display: none;
+}
+
+.admin__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px 20px;
+}
+
+.admin__field {
+  max-width: none;
+}
+
+.admin__field input[type="range"] {
+  min-height: 44px;
+  accent-color: var(--ink);
+}
+
+.admin__hint {
+  font-size: 12px;
+}
+
+.admin__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--line);
+}
+
+.admin__footer .status--error {
+  margin: 0 auto 0 0;
+}
+
+.admin__spacer {
+  flex: 1 1 auto;
+}
+
+/* Effectif */
+.admin__roster-head {
+  padding: 14px 24px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin__roster-head .admin__note {
+  margin: 0;
+}
+
+.admin__roster-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.admin__counts {
+  font-size: 12px;
+}
+
+.admin__roster .table td {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.admin__cell {
+  width: 100%;
+  min-width: 110px;
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+select.admin__cell {
+  padding-right: 30px;
+}
+
+/* Joueurs */
+.admin__person {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.admin__person-name {
+  font-weight: 500;
+}
+
+.admin__person-meta {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.admin__player-club {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 170px;
+}
+
+.admin__player-club-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin__more {
+  margin: 0;
+  padding: 12px 16px;
+  font-size: 13px;
+}
+
+.admin__ratings {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 6px 28px;
+}
+
+.admin__rating {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 64px;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.admin__rating input[type="range"] {
+  accent-color: var(--ink);
+}
+
+.admin__rating--key .admin__rating-label {
+  font-weight: 700;
+}
+
+.admin__rating-value {
+  min-height: 34px;
+  padding: 0 4px;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.admin__rating-value::-webkit-inner-spin-button,
+.admin__rating-value::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* --- Téléphone : une colonne, la fiche remplace la liste ------------------------ */
+
+@media (max-width: 960px) {
+  .admin {
+    padding: 20px 16px 16px;
+    gap: 14px;
+  }
+
+  .admin__back {
+    margin: 0 16px;
+  }
+
+  .admin__head .title {
+    font-size: 36px;
+  }
+
+  .admin__split,
+  .admin__split--even,
+  .admin__split--clubs,
+  .admin__split--players {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin__overview {
+    overflow-y: auto;
+  }
+
+  .admin__overview .admin__split {
+    flex: none;
+  }
+
+  .admin__overview .admin__panel {
+    max-height: 420px;
+  }
+
+  .admin__overview .admin__scroll {
+    flex: 0 1 auto;
+  }
+
+  .admin__tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .admin__tiles .tile {
+    padding: 14px 16px;
+  }
+
+  .admin__wide {
+    display: none;
+  }
+
+  .admin__email {
+    max-width: 160px;
+  }
+
+  /* Le blason suffit à reconnaître le club. */
+  .admin__player-club-name {
+    display: none;
+  }
+
+  .admin__detail-head,
+  .admin__detail-body,
+  .admin__roster-head,
+  .admin__footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}

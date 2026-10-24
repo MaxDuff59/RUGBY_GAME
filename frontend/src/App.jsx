@@ -4,6 +4,7 @@ import { Route, Routes, useNavigate, useOutletContext } from "react-router-dom";
 import { UNAUTHORIZED_EVENT } from "./api.js";
 import Layout from "./components/Layout.jsx";
 import Academy from "./pages/Academy.jsx";
+import Admin from "./pages/Admin.jsx";
 import Calendar from "./pages/Calendar.jsx";
 import Club from "./pages/Club.jsx";
 import Facilities from "./pages/Facilities.jsx";
@@ -42,6 +43,7 @@ export default function App() {
       <Route path="/connexion" element={<Login />} />
       <Route path="/parties" element={<Saves />} />
       <Route path="/start" element={<StartCareer />} />
+      <Route path="/backoffice" element={<Admin />} />
       <Route element={<Layout />}>
         <Route index element={<Home />} />
         <Route path="/journal" element={<Journal />} />

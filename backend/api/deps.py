@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+import catalog
 from api.auth import UserDep
 from database import NoSaveLoaded, open_slot, slot_exists
 from models import Club
@@ -19,6 +20,7 @@ def get_session(user: UserDep) -> Iterator[Session]:
     slot = user.active_slot
     if slot is None or not slot_exists(user.id, slot):
         raise NoSaveLoaded
+    catalog.ensure_synced()  # championnats créés depuis le backoffice
     with open_slot(user.id, slot) as session:
         yield session
 

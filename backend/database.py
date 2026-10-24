@@ -32,6 +32,7 @@ from data.generator import (
     generate_staff_candidates,
     roster_nationalities,
 )
+from data.leagues import LEAGUES
 from data.nations import home_nation
 from engine.development import ceiling, initial_potential
 from engine.free_agents import newcomers
@@ -232,7 +233,9 @@ def new_slot(user_id: int, slot: int, seed: int | None = None) -> None:
     init_db(engine)
     _checked.add((user_id, slot))
     with session_for(user_id, slot) as session:
-        seed_if_empty(session, seed=seed)
+        import catalog  # import tardif : la base des comptes sert aussi au catalogue
+
+        seed_if_empty(session, seed=seed, leagues=catalog.leagues(), rosters=catalog.rosters())
     if uses_postgres():
         _resync_sequences(engine)
 
@@ -539,11 +542,16 @@ def seed_if_empty(
     club_count: int = DEFAULT_CLUB_COUNT,
     seed: int | None = None,
     real: bool = True,
+    leagues: list | None = None,
+    rosters: dict | None = None,
 ) -> int:
     """Remplit la base si elle est vide : les vrais clubs des cinq championnats
     (avec leurs vrais joueurs quand data/rosters.json les connaît, voir
     data/generator.py), ou `club_count` clubs fictifs dans un seul championnat avec
     `real=False`, et un premier vivier d'agents libres.
+
+    `leagues` et `rosters` remplacent data/leagues.py et data/rosters.json (clubs
+    retouchés depuis le backoffice, voir catalog.py).
 
     Renvoie le nombre de clubs créés (0 si la base contenait déjà des clubs).
     """
@@ -551,7 +559,10 @@ def seed_if_empty(
         return 0
     rng = random.Random(seed)
     released: list = []  # vrais joueurs en surnombre dans leur club : agents libres
-    clubs = generate_real_clubs(rng, released=released) if real else generate_clubs(club_count, rng)
+    if real:
+        clubs = generate_real_clubs(rng, leagues or LEAGUES, rosters, released)
+    else:
+        clubs = generate_clubs(club_count, rng)
     for player in (p for club in clubs for p in club.players + club.youths):
         ceiling(player)  # potentiel tiré d'après l'âge de départ (engine/development.py)
     session.add_all(ClubRow.from_domain(club) for club in clubs)

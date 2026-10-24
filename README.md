@@ -516,6 +516,40 @@ et reporter son secret dans `STRIPE_WEBHOOK_SECRET`. Au retour de la page de
 paiement, l'interface fait aussi confirmer la session (`POST /billing/confirm`) :
 le compte est débloqué aussitôt, même avant le webhook.
 
+### Backoffice
+
+`/backoffice` (interface) et les routes `/backoffice/*` (API), ouverts au seul compte
+`maxence.duffuler@epfedu.fr` (`ADMIN_EMAIL`, `api/routers/admin.py` ; 403 pour les autres) :
+
+- **Vue d'ensemble** : comptes, version complète (payée ou offerte), comptes
+  gratuits au bout de leurs saisons, parties, clubs retouchés.
+- **Comptes** : recherche, filtres par formule, et pour chaque compte ses parties,
+  sa référence de paiement Stripe ; offrir ou retirer la version complète, rendre
+  ses saisons gratuites.
+- **Clubs** : les clubs par championnat. Championnat (faire passer un club de Pro D2
+  en Top 14, par exemple), ville, stade, capacité, niveau, budget et effectif
+  (ajouter, retirer, modifier des joueurs) valent pour les **nouvelles parties** ;
+  couleurs et blason (PNG, JPEG ou WebP) changent **tout de suite**, dans toutes les
+  parties (l'interface les lit par `GET /catalog/clubs`). « Nouveau club » en crée
+  un, avec son pays (la nationalité de ses joueurs inventés) ; un club créé se
+  supprime, les parties déjà commencées le gardent.
+- **Championnats** : ceux du jeu (formule et calendrier fixes, seuls leurs clubs
+  changent) et ceux créés ici : nom, pays, formule des phases finales, calendrier
+  repris d'un championnat du jeu, primes. Un championnat créé ne monte ni ne descend
+  et ne joue pas la Coupe d'Europe ; il s'archive mais ne s'efface pas, pour que les
+  parties qui le jouent gardent sa formule.
+
+Un championnat compte au plus 16 clubs (au-delà, la saison ne tient plus dans
+l'année) et au moins ses qualifiés pour les phases finales, 8 pour ceux de la Coupe
+d'Europe (Top 14, Premiership, URC). En dessous, il est signalé « incomplet » et
+reste en dehors des nouvelles parties, avec ses clubs.
+
+Seules les retouches sont gardées, dans la base des comptes (tables
+`catalog_clubs`, `catalog_logos` et `catalog_leagues`, `backend/catalog.py`) : un club
+non touché suit `data/leagues.py`, `data/rosters.json` et
+`frontend/src/clubLogos.json`. Les championnats créés sont inscrits dans
+`data/leagues.py` (`catalog.sync`) avant qu'une partie s'ouvre.
+
 ## Principe d'architecture
 
 Le moteur de simulation (`backend/engine/`) ne travaille que sur des objets

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 
+import { adminApi } from "../adminApi.js";
 import { api } from "../api.js";
 import { clubTheme } from "../clubs.js";
 import ClubCrest from "../components/ClubCrest.jsx";
@@ -16,6 +17,8 @@ export default function Saves() {
   const navigate = useNavigate();
   const me = useApi(useCallback(api.me, []));
   const saves = useApi(useCallback(api.listSaves, []));
+  // Backoffice : adminApi.me répond 403 aux comptes qui ne sont pas admin (data reste null).
+  const admin = useApi(useCallback(adminApi.me, []));
   const confirm = useConfirm();
   const [busy, setBusy] = useState(null); // emplacement en cours d'ouverture
   const [error, setError] = useState(null);
@@ -103,6 +106,11 @@ export default function Saves() {
         </div>
         <div className="saves__account">
           {me.data && <span className="muted">{me.data.email}</span>}
+          {admin.data && (
+            <Link className="button" to="/backoffice">
+              Backoffice
+            </Link>
+          )}
           <button type="button" className="button" disabled={busy !== null} onClick={logout}>
             Se déconnecter
           </button>

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { BASE_URL } from "./api.js";
 import manifest from "./clubLogos.json";
 
 // Blason et couleurs d'un club ou d'une sélection nationale. Les vrais clubs et les
@@ -20,12 +21,45 @@ const INVENTED_COLORS = [
   ["#4A4F55", "#E8B10F"],
 ];
 
-export function clubInfo(name) {
+// Couleurs et blasons retouchés depuis le backoffice (GET /catalog/clubs), par nom :
+// ils passent devant ceux de clubLogos.json, dans toutes les parties.
+let overrides = {};
+
+// Lus une fois au démarrage (main.jsx) ; sans réponse rapide de l'API, on garde le manifeste.
+export async function loadClubOverrides(timeout = 1500) {
+  try {
+    const response = await Promise.race([
+      fetch(`${BASE_URL}/catalog/clubs`),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), timeout)),
+    ]);
+    if (response.ok) overrides = await response.json();
+  } catch {
+    // API injoignable : les couleurs d'origine suffisent.
+  }
+}
+
+// Le backoffice remplace la retouche d'un club après l'avoir enregistrée.
+export function setClubOverride(name, entry) {
+  overrides = { ...overrides, [name]: entry };
+}
+
+// Blason et couleurs d'origine (clubLogos.json, ou tirés du nom), sans retouche.
+export function defaultClubInfo(name) {
   const entry = (name && manifest[name]) || {};
   return {
     logo: entry.logo ?? null,
     light: Boolean(entry.light),
     colors: entry.colors?.length ? entry.colors : INVENTED_COLORS[hash(name ?? "") % INVENTED_COLORS.length],
+  };
+}
+
+export function clubInfo(name) {
+  const base = defaultClubInfo(name);
+  const edit = (name && overrides[name]) || {};
+  return {
+    logo: edit.logo ? BASE_URL + edit.logo : base.logo,
+    light: edit.light ?? base.light,
+    colors: edit.colors?.length ? edit.colors : base.colors,
   };
 }
 

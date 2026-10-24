@@ -7,7 +7,8 @@ joueurs inventés sinon, ou pour combler un poste vide.
 Chaque club reçoit un niveau de base ; ses joueurs sont tirés autour de ce
 niveau, avec un profil d'attributs cohérent avec leur poste. Un vrai joueur n'a
 pas de note publique : son niveau suit celui de son club, plus haut s'il est
-international, et selon son âge. Il garde sa nationalité ; un joueur inventé
+international, et selon son âge, sauf si le backoffice a fixé ses notes. Il garde
+sa nationalité ; un joueur inventé
 prend celle du pays de son club (data/nations.py), aucune dans un monde inventé.
 """
 
@@ -233,6 +234,8 @@ POSITION_MINIMUM = {
 # Photo d'un vrai joueur : chemin dans l'API, qui la sert depuis sa propre copie
 # (voir api/routers/photos.py). Le nom est celui du fichier sur Wikimedia Commons.
 PHOTO_PATH = "/photos/{}"
+# Photo envoyée depuis le backoffice (`photo_id` : son empreinte, voir catalog.py).
+UPLOADED_PHOTO_PATH = "/catalog/photos/{}"
 # Niveau d'un vrai joueur par rapport à son club : international, puis âge.
 INTERNATIONAL_BONUS = 1.6
 REAL_PLAYER_SPREAD = 1.0
@@ -270,6 +273,31 @@ def _age_offset(age: int) -> float:
     return -0.6
 
 
+def photo_path(entry: dict) -> str | None:
+    """Adresse de la photo d'un joueur du fichier : envoyée, sinon celle de Wikimedia."""
+    if entry.get("photo_id"):
+        return UPLOADED_PHOTO_PATH.format(entry["photo_id"])
+    if entry.get("photo"):
+        return PHOTO_PATH.format(urllib.parse.quote(entry["photo"].replace(" ", "_")))
+    return None
+
+
+def real_player_level(
+    club_level: float, international: bool, age: int, youth: bool = False, academy_level: int = 1
+) -> float:
+    """Niveau autour duquel un vrai joueur est tiré (sans la compensation des pros)."""
+    bonus = INTERNATIONAL_BONUS * international
+    if youth:
+        return youth_level(club_level, academy_level) + (bonus + 0.3 * (age - 19))
+    return club_level + bonus + _age_offset(age)
+
+
+def typical_attributes(position: Position, level: float) -> dict[str, int]:
+    """Les attributs d'un joueur de ce niveau sans hasard : le centre du tirage."""
+    profile = POSITION_PROFILES[position]
+    return {name: _clamp(level + profile[name]) for name in ATTRIBUTE_NAMES}
+
+
 def _real_age(entry: dict, ages: tuple[int, int], rng: random.Random) -> int:
     born = entry.get("born")
     if born:
@@ -288,13 +316,21 @@ def _split_name(name: str) -> tuple[str, str]:
 
 def _trim(entries: list[dict], cap: int, composition: dict[Position, int]) -> tuple[list, list]:
     """Ramène la liste à `cap` joueurs en retirant au poste le plus fourni (rapporté
-    à l'effectif type) : d'abord un jeune non international, puis le dernier listé."""
+    à l'effectif type) : d'abord un jeune non international, puis le dernier listé.
+    Un joueur aux notes fixées par le backoffice part en dernier."""
     kept, dropped = list(entries), []
     while len(kept) > cap:
         counts = Counter(e["position"] for e in kept)
         position = max(counts, key=lambda p: counts[p] / composition[p])
         candidates = [e for e in reversed(kept) if e["position"] == position]
-        victim = min(candidates, key=lambda e: (e["international"], e["age"] > YOUTH_OVERFLOW_AGE))
+        victim = min(
+            candidates,
+            key=lambda e: (
+                e["attributes"] is not None,
+                e["international"],
+                e["age"] > YOUTH_OVERFLOW_AGE,
+            ),
+        )
         kept.remove(victim)
         dropped.append(victim)
     return kept, dropped
@@ -310,6 +346,8 @@ def _entries(raw: list[dict], ages: tuple[int, int], rng: random.Random) -> list
             "nationality": nation_code(e.get("nationality")),
             "age": _real_age(e, ages, rng),
             "photo": e.get("photo"),
+            "photo_id": e.get("photo_id"),
+            "attributes": e.get("attributes"),
         }
         for e in raw
     ]
@@ -319,6 +357,11 @@ def _real_player(
     entry: dict, player_id: int, player_level: float, club_id: int | None, rng: random.Random
 ) -> Player:
     first, last = _split_name(entry["name"])
+    # Le tirage a lieu même pour des notes fixées : le hasard des autres joueurs ne bouge pas.
+    attributes = _attributes(player_id, entry["position"], player_level, rng)
+    for name, value in (entry["attributes"] or {}).items():
+        if name in attributes:
+            attributes[name] = _clamp(value)
     player = Player(
         id=player_id,
         first_name=first[:50],
@@ -327,12 +370,11 @@ def _real_player(
         position=entry["position"],
         club_id=club_id,
         nationality=entry["nationality"],
-        **_attributes(player_id, entry["position"], player_level, rng),
+        **attributes,
     )
     player.wage = wage_for(player, noise=rng.uniform(0.9, 1.15))
     player.contract_until = FIRST_SEASON_YEAR + rng.randint(0, CONTRACT_MAX_YEARS - 1)
-    if entry["photo"]:
-        player.photo = PHOTO_PATH.format(urllib.parse.quote(entry["photo"].replace(" ", "_")))
+    player.photo = photo_path(entry)
     return player
 
 
@@ -379,8 +421,10 @@ def _real_squads(
 
     junior_level = youth_level(level, club.facilities.academy_level)
     for entry in youths:
-        bonus = INTERNATIONAL_BONUS * entry["international"] + 0.3 * (entry["age"] - 19)
-        player_level = rng.gauss(junior_level + bonus, REAL_PLAYER_SPREAD)
+        target = real_player_level(
+            level, entry["international"], entry["age"], True, club.facilities.academy_level
+        )
+        player_level = rng.gauss(target, REAL_PLAYER_SPREAD)
         youth = _real_player(entry, next(player_ids), player_level, club.id, rng)
         youth.wage = YOUTH_WAGE
         youth.contract_until = FIRST_SEASON_YEAR + YOUTH_CONTRACT_YEARS - 1
