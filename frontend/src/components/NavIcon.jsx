@@ -28,6 +28,13 @@ const PATHS = {
       <path d="M9 7V4.5h6V7M12 11v5M9.5 13.5h5" />
     </>
   ),
+  // Entraînement : un plot d'entraînement sur sa base
+  entrainement: (
+    <>
+      <path d="M9.5 5h5l3.5 13H6L9.5 5z" />
+      <path d="M8.2 10h7.6M7.2 14h9.6M3.5 18h17" />
+    </>
+  ),
   formation: (
     <>
       <path d="M2.5 9.5L12 5l9.5 4.5L12 14 2.5 9.5z" />

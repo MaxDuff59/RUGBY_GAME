@@ -6046,3 +6046,100 @@ td > .tag:first-child,
 .scoreboard__mood--silent {
   color: var(--ink-muted);
 }
+
+/* --- Entraînement ---------------------------------------------------------------------- */
+
+.page-head__sub {
+  margin: 6px 0 0;
+  max-width: 760px;
+}
+
+.training {
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+}
+
+.training__plan {
+  min-height: 0;
+  overflow: auto;
+}
+
+.training__options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.training__options--themes {
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+}
+
+/* Un choix : une carte entière, bordée en accent quand elle est retenue. */
+.training__option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 14px 16px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.training__option:hover {
+  border-color: var(--ink);
+}
+
+.training__option[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.training__name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+  text-transform: uppercase;
+}
+
+.training__option[aria-pressed="true"] .training__name {
+  color: var(--accent);
+}
+
+.training__scope {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.training__effects {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+
+.training__effect {
+  display: flex;
+  justify-content: space-between;
+}
+
+.training__effect--good {
+  color: var(--win);
+  font-weight: 600;
+}
+
+.training__effect--bad {
+  color: var(--loss);
+  font-weight: 600;
+}
+
+@media (max-width: 960px) {
+  .training,
+  .training__options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -394,7 +394,11 @@ ADDED_COLUMNS = {
         "progress": "FLOAT NOT NULL DEFAULT 0",
         "season_gain": "INTEGER NOT NULL DEFAULT 0",
     },
-    "clubs": {"captain_id": "INTEGER"},
+    "clubs": {
+        "captain_id": "INTEGER",
+        "training_intensity": "VARCHAR(8) NOT NULL DEFAULT 'normal'",
+        "training_theme": "VARCHAR(10) NOT NULL DEFAULT 'none'",
+    },
 }
 
 

@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { to: "/journal", label: "Journal", icon: "journal" },
   { to: "/calendrier", label: "Calendrier", icon: "calendrier", primary: true },
   { to: "/effectif", label: "Effectif", icon: "effectif", primary: true },
+  { to: "/entrainement", label: "Entraînement", icon: "entrainement" },
   { to: "/medical", label: "Médical", icon: "medical" },
   { to: "/formation", label: "Formation", icon: "formation" },
   { to: "/staff", label: "Staff", icon: "staff" },

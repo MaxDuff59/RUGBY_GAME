@@ -16,11 +16,12 @@ from data.leagues import league_config
 from engine.board import BoardSeason, Objective, board_confidence, objective_for
 from engine.cohesion import team_cohesion
 from engine.form import Form
-from engine.freshness import appearances_by_player, squad_freshness
+from engine.freshness import FULL, appearances_by_player, squad_freshness
 from engine.match_engine import team_strength
 from engine.morale import team_morale
 from engine.notes import Boost, Note
 from engine.supporters import fan_fervour
+from engine.training import plan_of
 from models import Club, Match, StaffRole
 
 # club -> note -> [(saison, coup de pouce)]
@@ -122,7 +123,8 @@ class History:
         return board_confidence(club_id, seasons, balance_on, self.boosts(club_id, "board"))
 
     def form(self, club: Club, day: date) -> Form:
-        """Forme du club avant de jouer le jour `day` (tout l'effectif, pour la fraîcheur)."""
+        """Forme du club avant de jouer le jour `day` (tout l'effectif, pour la fraîcheur) ;
+        le rythme de la semaine d'entraînement (engine/training.py) joue sur la fraîcheur."""
         freshness = squad_freshness(
             self.appearances,
             [p.id for p in club.players],
@@ -130,6 +132,12 @@ class History:
             club.staff_level(StaffRole.FITNESS_COACH),
             self.boosts(club.id, "freshness"),
         )
+        week = plan_of(club).rhythm.freshness
+        if week:
+            freshness = {
+                player_id: min(FULL, max(0.0, value + week))
+                for player_id, value in freshness.items()
+            }
         return Form(
             morale=self.morale(club.id).value,
             cohesion=self.cohesion(club.id).value,

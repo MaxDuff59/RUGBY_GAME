@@ -22,6 +22,7 @@ from dataclasses import dataclass
 
 from engine.freshness import BASE_RECOVERY, RECOVERY_PER_FITNESS_LEVEL
 from engine.medical import DOCTOR_RELAPSE_PER_LEVEL, PHYSIO_DURATION_PER_LEVEL
+from engine.training import plan_of
 from models import Club, StaffRole
 
 # Le niveau d'un entraîneur qui ne change rien au jeu.
@@ -41,25 +42,36 @@ class Coaching:
     defence: float = 1.0  # multiplie la défense
     kicking: float = 0.0  # s'ajoute à la réussite des coups de pied au but
     analysis: float = 1.0  # multiplie le territoire
+    endurance: float = 1.0  # multiplie l'énergie dépensée par minute de jeu
 
 
 NEUTRAL = Coaching()
 
 
 def coaching(club: Club) -> Coaching:
-    """L'apport du staff technique de `club` (neutre pour une équipe sans staff)."""
+    """L'apport du staff technique de `club` (neutre pour une équipe sans staff), et
+    celui du thème de la semaine d'entraînement (engine/training.py)."""
+    plan = plan_of(club)
+    theme = plan.multipliers()
     if not club.staff:
-        return NEUTRAL
+        return Coaching(
+            forwards=theme["forwards"],
+            attack=theme["attack"],
+            defence=theme["defence"],
+            kicking=plan.kicking,
+            endurance=1 - plan.stamina,
+        )
 
     def gap(role: StaffRole) -> int:
         return club.staff_level(role) - REFERENCE_LEVEL
 
     return Coaching(
-        forwards=1 + COACH_PER_LEVEL * gap(StaffRole.FORWARDS_COACH),
-        attack=1 + COACH_PER_LEVEL * gap(StaffRole.ATTACK_COACH),
-        defence=1 + COACH_PER_LEVEL * gap(StaffRole.DEFENCE_COACH),
-        kicking=KICKING_PER_LEVEL * gap(StaffRole.KICKING_COACH),
+        forwards=(1 + COACH_PER_LEVEL * gap(StaffRole.FORWARDS_COACH)) * theme["forwards"],
+        attack=(1 + COACH_PER_LEVEL * gap(StaffRole.ATTACK_COACH)) * theme["attack"],
+        defence=(1 + COACH_PER_LEVEL * gap(StaffRole.DEFENCE_COACH)) * theme["defence"],
+        kicking=KICKING_PER_LEVEL * gap(StaffRole.KICKING_COACH) + plan.kicking,
         analysis=1 + COACH_PER_LEVEL * gap(StaffRole.ANALYST),
+        endurance=1 - plan.stamina,
     )
 
 

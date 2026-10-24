@@ -19,6 +19,7 @@ import Selection from "./pages/Selection.jsx";
 import Squad from "./pages/Squad.jsx";
 import SquadList from "./pages/SquadList.jsx";
 import Staff from "./pages/Staff.jsx";
+import Training from "./pages/Training.jsx";
 import StartCareer from "./pages/StartCareer.jsx";
 import Transfers from "./pages/Transfers.jsx";
 import { leaveSlot } from "./save.js";
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="/medical" element={<Medical />} />
         <Route path="/formation" element={<Academy />} />
         <Route path="/staff" element={<Staff />} />
+        <Route path="/entrainement" element={<Training />} />
         <Route path="/transferts" element={<Transfers />} />
         <Route path="/infrastructures" element={<Facilities />} />
         <Route path="/finances" element={<Finances />} />

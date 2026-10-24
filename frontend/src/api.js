@@ -111,6 +111,8 @@ export const api = {
   // Gestion du club dirigé
   getFinances: () => request("/finances"),
   getStaff: () => request("/staff"),
+  getTraining: () => request("/training"),
+  setTraining: (change) => request("/training", { method: "PUT", body: change }),
   hireStaff: (staffId) => post(`/staff/hire/${staffId}`),
   fireStaff: (staffId) => post(`/staff/${staffId}/fire`),
   getFacilities: () => request("/facilities"),

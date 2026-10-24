@@ -277,6 +277,21 @@ export function formatPotential(player) {
 // Points d'attributs gagnés depuis le début de la saison : « +4 », ou « – ».
 export const formatGain = (points) => (points > 0 ? `+${points}` : "–");
 
+// La semaine d'entraînement (engine/training.py) : son rythme et son thème.
+export const TRAINING_INTENSITIES = {
+  light: { label: "Légère", scope: "On récupère : plus frais au coup d'envoi, moins de blessés." },
+  normal: { label: "Normale", scope: "Le rythme habituel du staff." },
+  intense: { label: "Intense", scope: "On charge : on progresse plus vite, au prix de la fraîcheur." },
+};
+export const TRAINING_THEMES = {
+  none: { label: "Sans thème", match: "Pas d'effet sur le match." },
+  set_piece: { label: "Conquête", match: "Match suivant : conquête et paquet +4 %, le reste −1 %." },
+  attack: { label: "Jeu courant", match: "Match suivant : attaque +4 %, le reste −1 %." },
+  defence: { label: "Défense", match: "Match suivant : défense +4 %, le reste −1 %." },
+  kicking: { label: "Jeu au pied", match: "Match suivant : coups de pied au but +3 points de réussite." },
+  fitness: { label: "Physique", match: "Match suivant : 8 % d'énergie dépensée en moins." },
+};
+
 // Ce qu'un joueur suspendu doit encore purger (engine/discipline.py).
 export const formatSuspension = (matches) => `Suspendu ${matches} match${matches > 1 ? "s" : ""}`;
 

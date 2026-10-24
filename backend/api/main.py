@@ -38,6 +38,7 @@ from api.routers import (
     seasons,
     selection,
     staff,
+    training,
     transfers,
 )
 from database import NoSaveLoaded, OutdatedSave
@@ -71,6 +72,7 @@ app.include_router(career.router)
 app.include_router(seasons.router)
 app.include_router(finances.router)
 app.include_router(staff.router)
+app.include_router(training.router)
 app.include_router(facilities.router)
 app.include_router(transfers.router)
 app.include_router(medical.router)

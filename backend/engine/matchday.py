@@ -17,7 +17,6 @@ from dataclasses import dataclass, field
 from data.leagues import League
 from engine import development, discipline
 from engine.crowd import gate
-from engine.development import NO_TRAINING, Training
 from engine.economy import (
     CHAMPION_PRIZE,
     PLAYOFF_PRIZES,
@@ -33,6 +32,7 @@ from engine.form import Form
 from engine.match_engine import simulate_match
 from engine.medical import new_injury, training_injuries
 from engine.supporters import NEUTRAL as FANS_NEUTRAL
+from engine.training import plan_of
 from engine.weather import forecast
 from models import Club, EventType, Injury, InjurySource, Match, Stage
 
@@ -81,8 +81,6 @@ class Day:
     fervour: Callable[[int], float] = lambda club_id: FANS_NEUTRAL
     # Recette par match des sponsors du maillot d'un club (engine/sponsors.py).
     shirt_revenue: Callable[[int], int] = lambda club_id: 0
-    # Semaine d'entraînement d'un club (engine/training.py) : rythme et thème de travail.
-    training: Callable[[int], Training] = lambda club_id: NO_TRAINING
 
 
 @dataclass
@@ -110,11 +108,17 @@ def training_week(
     """Semaine d'entraînement des clubs avant les matchs du jour `day`.
 
     Un blessé à l'entraînement manque le match du jour ; les joueurs fatigués se
-    blessent plus. Renvoie les blessures, avec le club de chacune.
+    blessent plus, et plus encore pendant une semaine intense. Renvoie les
+    blessures, avec le club de chacune.
     """
     injuries = []
     for club in clubs:
-        risk = forms[club.id].injury_weight
+        form, rhythm = forms[club.id], plan_of(club).rhythm
+
+        def risk(player, form=form, rhythm=rhythm) -> float:
+            # La fatigue, et le rythme de la semaine (engine/training.py).
+            return form.injury_weight(player) * rhythm.injuries
+
         decided = club.id != managed_club_id
         for injury in training_injuries(club, day, rng, decided, risk):
             injuries.append((club.id, injury))
@@ -212,7 +216,7 @@ def play_day(
         # Chacun progresse selon ce qu'il a fait du match (ou de la semaine).
         for club in (home, away):
             report.gains.update(
-                development.develop(club, match.stats, rng, training=world.training(club.id))
+                development.develop(club, match.stats, rng, training=plan_of(club).training())
             )
             report.developed.update(p.id for p in club.players)
 

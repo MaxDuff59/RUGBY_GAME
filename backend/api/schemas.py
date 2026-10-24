@@ -25,6 +25,7 @@ from engine.match_engine import (
 from engine.notes import Note
 from engine.sponsors import Placement
 from engine.team_talk import Moment, Outcome
+from engine.training import Intensity, Theme
 from engine.transfers import DealKind
 from engine.weather import Weather, forecast_at
 from models import (
@@ -334,6 +335,37 @@ class LineupIn(BaseModel):
     """XV voulu par le manager : un joueur (ou null) par place, dans l'ordre de lineup_ids."""
 
     player_ids: list[int | None]
+
+
+class IntensityOptionOut(BaseModel):
+    key: Intensity
+    pace: float  # multiplicateur de la progression
+    freshness: float  # points de fraîcheur (sur 20) au coup d'envoi
+    injuries: float  # multiplicateur du risque de blessure à l'entraînement
+
+
+class ThemeOptionOut(BaseModel):
+    key: Theme
+    focus: list[str]  # attributs travaillés en priorité
+
+
+class TrainingOut(BaseModel):
+    """La semaine d'entraînement du club dirigé (engine/training.py)."""
+
+    intensity: Intensity
+    theme: Theme
+    intensities: list[IntensityOptionOut]
+    themes: list[ThemeOptionOut]
+    training_level: int  # centre d'entraînement (progression des pros)
+    academy_level: int  # centre de formation (progression des espoirs)
+    players: list["PlayerOut"]  # pros puis espoirs, avec potentiel estimé et progrès
+
+
+class TrainingIn(BaseModel):
+    """Changement de la semaine : seuls les champs renseignés changent."""
+
+    intensity: Intensity | None = None
+    theme: Theme | None = None
 
 
 class CaptainIn(BaseModel):

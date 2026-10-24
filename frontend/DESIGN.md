@@ -229,6 +229,12 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   étroite pour nos joueurs que pour les autres) et « Prog. » (points d'attributs gagnés
   cette saison, « +3 ») dans l'effectif et au centre de formation ; sur la fiche joueur,
   « potentiel estimé » parmi les chiffres de l'en-tête, « Progrès » dans sa saison.
+- Entraînement (page `/entrainement`, entrée du menu sous Effectif ; volet « Plus » sur
+  téléphone) : à gauche, le rythme de la semaine en trois cartes (Légère, Normale,
+  Intense : progression, fraîcheur, blessures, l'effet en vert quand il aide, en rouge
+  quand il coûte) puis le thème en six cartes (attributs travaillés, effet sur le match
+  suivant) ; la carte retenue est bordée et titrée en accent. À droite, « Qui progresse » :
+  pros et espoirs, potentiel estimé et progrès de la saison, les plus grands progrès d'abord.
 - Tableau d'effectif : 9 attributs (dont l'endurance, qui règle la barre d'énergie en match),
   gras à partir de 15, gris à 8 et moins.
 - Boutons et liens cliquables : 44 px de haut minimum.

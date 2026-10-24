@@ -790,10 +790,11 @@ class Side:
 
     def effort(self, minute: int) -> float:
         """Multiplicateur de la dépense d'énergie à cette minute : infériorité
-        numérique, agressivité défensive et chaleur."""
+        numérique, agressivité défensive, chaleur, et semaine de préparation physique."""
         short_handed = 1 + SHORT_HANDED_EFFORT * self.missing(minute)
         defence = DEFENCE_EFFECTS[self.tactics.defence]["effort"]
-        return short_handed * defence * WEATHER_EFFECTS[self.weather].drain
+        weather = WEATHER_EFFECTS[self.weather].drain
+        return short_handed * defence * weather * self.coaching.endurance
 
     def spend_energy(self, minute: int) -> None:
         """Une minute de jeu : chaque joueur présent dépense selon son endurance."""

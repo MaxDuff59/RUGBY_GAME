@@ -55,6 +55,9 @@ class ClubRow(Base):
     lineup_choice: Mapped[list] = mapped_column(JSON, default=list)
     # Capitaine choisi par le manager (NULL : le staff désigne le meneur du XV).
     captain_id: Mapped[int | None] = mapped_column(default=None)
+    # Semaine d'entraînement (engine/training.py) : rythme et thème.
+    training_intensity: Mapped[str] = mapped_column(String(8), default="normal")
+    training_theme: Mapped[str] = mapped_column(String(10), default="none")
     # Maillots dessinés par le manager, par tenue : {"home": {...}, "away": {...},
     # "third": {...}} (motif, trois couleurs, sponsor). Une tenue absente prend le maillot
     # aux couleurs du club, que l'interface compose elle-même. À réassigner en entier.
@@ -98,6 +101,8 @@ class ClubRow(Base):
             league=self.league,
             lineup_choice=list(self.lineup_choice or []),
             captain_id=self.captain_id,
+            training_intensity=self.training_intensity or "normal",
+            training_theme=self.training_theme or "none",
         )
 
     def facilities(self) -> Facilities:

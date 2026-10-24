@@ -300,6 +300,9 @@ class Club:
     cover: list[Player] = field(default_factory=list)
     # Capitaine choisi par le manager (None : le staff désigne le meneur du XV).
     captain_id: int | None = None
+    # Semaine d'entraînement (engine/training.py) : rythme et thème choisis par le manager.
+    training_intensity: str = "normal"
+    training_theme: str = "none"
 
     def players_at(self, position: Position) -> list[Player]:
         """Joueurs de l'effectif à un poste donné."""
