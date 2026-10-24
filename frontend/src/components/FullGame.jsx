@@ -49,7 +49,9 @@ export function ActionError({ error, className = "status--error" }) {
 }
 
 // Ce que le compte peut encore faire (écran des parties). `saves` : parties occupées.
+// Rien quand la formule est en pause (`paywall`, backend/api/plans.py) : tout est gratuit.
 export function PlanCard({ me, saves }) {
+  if (!me.paywall) return null;
   if (me.premium) {
     return (
       <p className="full-game full-game--done">
@@ -89,7 +91,7 @@ export function PlanCard({ me, saves }) {
 
 // Le compte gratuit peut-il commencer une nouvelle partie ? (sinon, pourquoi)
 export function newSaveBlocked(me, saves) {
-  if (!me || me.premium) return null;
+  if (!me || !me.paywall || me.premium) return null;
   if (me.seasons_left === 0) return "Tes saisons gratuites sont jouées : passe au jeu complet";
   if (saves >= me.free_saves) return "Le compte gratuit garde une seule partie";
   return null;

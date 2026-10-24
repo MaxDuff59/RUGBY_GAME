@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 import accounts
 from accounts import AccountError, User
+from api import plans
 
 COOKIE = "rugby_session"
 COOKIE_MAX_AGE = accounts.SESSION_DAYS * 24 * 3600
@@ -55,6 +56,8 @@ class UserOut(BaseModel):
     seasons_left: int | None
     free_seasons: int = accounts.FREE_SEASONS
     free_saves: int = accounts.FREE_SAVES
+    # Formule en pause (api/plans.py) : tout est gratuit, l'interface n'en parle pas.
+    paywall: bool
 
 
 def user_out(user: User) -> UserOut:
@@ -65,6 +68,7 @@ def user_out(user: User) -> UserOut:
         premium=user.premium,
         seasons_played=user.seasons_played,
         seasons_left=user.seasons_left,
+        paywall=plans.PAYWALL,
     )
 
 

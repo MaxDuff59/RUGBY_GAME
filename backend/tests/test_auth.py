@@ -29,6 +29,7 @@ def test_register_then_login(client):
         "seasons_left": 2,
         "free_seasons": 2,
         "free_saves": 1,
+        "paywall": False,
     }
     assert auth.COOKIE in client.cookies
     assert client.get("/auth/me").json()["email"] == "maxence@example.com"

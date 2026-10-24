@@ -12,12 +12,18 @@ from sqlalchemy import create_engine, func, select, text
 
 import accounts
 import database
-from api import auth, billing
+from api import auth, billing, plans
 from api.main import app
 from models.orm import SeasonRow
 from tests.test_saves import sign_up, start
 
 SECRET = "whsec_test"
+
+
+@pytest.fixture(autouse=True)
+def paywall(monkeypatch) -> None:
+    """La formule est en pause dans le jeu (api/plans.py) : ses tests la remettent."""
+    monkeypatch.setattr(plans, "PAYWALL", True)
 
 
 @pytest.fixture
@@ -66,6 +72,17 @@ def test_taking_another_club_in_the_same_world_costs_no_season(player):
     again = player.post("/career", json={"manager_name": "Alex", "club_id": clubs["Bath Rugby"]})
     assert again.status_code == 201
     assert plan(player) == (False, 1, 1)
+
+
+def test_without_the_paywall_everything_is_free(player, monkeypatch):
+    monkeypatch.setattr(plans, "PAYWALL", False)
+    start(player, 1, "Maxence", "Stade Toulousain")
+    accounts.count_season(1)
+    assert player.get("/auth/me").json()["paywall"] is False
+    start(player, 2, "Alex", "Leinster Rugby")  # une deuxième partie
+    assert database.slot_exists(1, 2)
+    assert plan(player) == (False, 3, 0)  # les saisons se comptent toujours
+    assert player.post("/seasons/next").status_code != 402
 
 
 def test_the_full_game_has_no_limit(player):
