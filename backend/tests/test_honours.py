@@ -83,8 +83,16 @@ def test_honours_follow_the_seasons(manager):
     assert league["titles"][0]["titles"] == 1
     assert {a["kind"] for a in season["awards"]} >= {"player", "tries", "points", "team"}
     assert honours["records"]["tries"] and honours["records"]["biggest_wins"]
+    # La finale jouée, les trophées sont déjà inscrits : plus rien à recalculer.
+    from sqlalchemy import func, select
 
-    # L'intersaison inscrit les trophées : ils restent, même si des lauréats raccrochent.
+    from models.orm import AwardRow
+    from tests.test_jokers import db
+
+    stored = db().scalar(select(func.count(AwardRow.id)).where(AwardRow.year == season["year"]))
+    assert stored == len(season["awards"])
+
+    # Ils restent, même si des lauréats raccrochent à l'intersaison.
     manager.post("/seasons/next")
     honours = manager.get("/honours").json()
     league = next(lg for lg in honours["leagues"] if lg["code"] == honours["league"])

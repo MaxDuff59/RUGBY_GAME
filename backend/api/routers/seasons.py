@@ -613,6 +613,10 @@ def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayRes
     if live is not None:
         session.delete(live.row)
     session.commit()
+    # Une finale jouée : les trophées de son championnat s'inscrivent au palmarès.
+    finals = {row.league for row in league_rows if row.stage == Stage.FINAL.value}
+    if finals:
+        record_awards(session, season, finals)
 
     cases = []
     if my_club_id is not None:
@@ -1040,14 +1044,24 @@ def start_next_season(session: SessionDep) -> SeasonOut:
     return _season_out(session, create_season(session, year, rng.randrange(SEED_RANGE)))
 
 
-def record_awards(session: Session, season: SeasonRow) -> None:
-    """Les trophées de chaque championnat de la saison (engine/awards.py), inscrits avant
-    les retraites de l'intersaison, avec le nom des joueurs."""
-    if session.scalar(select(func.count(AwardRow.id)).where(AwardRow.year == season.year)):
+def record_awards(session: Session, season: SeasonRow, finals: set[str] | None = None) -> None:
+    """Les trophées de chaque championnat de la saison (engine/awards.py), avec le nom des
+    joueurs : inscrits le jour de sa finale (`finals` : les championnats qui l'ont jouée),
+    sinon à l'intersaison, avant les retraites. Un championnat inscrit n'est pas repris."""
+    done = set(session.scalars(select(AwardRow.league).where(AwardRow.year == season.year)))
+    if finals is None:
+        leagues = [code for code in _season_league_codes(season) if code not in done]
+    else:
+        leagues = [
+            code
+            for code in sort_codes(finals)
+            if code not in done and _phase(season, code) == "finished"
+        ]
+    if not leagues:
         return
     players = {row.id: row for row in session.scalars(select(PlayerRow))}
     domain = {pid: row.to_domain() for pid, row in players.items()}
-    for league in _season_league_codes(season):
+    for league in leagues:
         for award in season_awards(_league_domain(season, league, stats=True), domain):
             row = players[award.player_id]
             session.add(

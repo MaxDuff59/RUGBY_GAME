@@ -86,12 +86,13 @@ _HISTORY_COLUMNS = (
     MatchRow.events,
     MatchRow.home_lineup,
     MatchRow.away_lineup,
+    MatchRow.weather,
 )
 
 
-def _history_matches(session: Session) -> dict[int, list[Row]]:
+def history_matches(session: Session) -> dict[int, list[Row]]:
     """Les matchs pros de chaque saison, joués ou non, dans l'ordre chronologique : une
-    seule requête, sur les seules colonnes utiles."""
+    seule requête, sur les seules colonnes utiles (`light_match` en fait des matchs)."""
     rows = session.execute(
         select(*_HISTORY_COLUMNS)
         .where(MatchRow.squad == Squad.PRO.value)
@@ -103,26 +104,28 @@ def _history_matches(session: Session) -> dict[int, list[Row]]:
     return by_season
 
 
+def light_match(row: Row) -> Match:
+    """Un match de `history_matches`, sans statistiques des joueurs ni public."""
+    return Match(
+        id=row.id,
+        home_club_id=row.home_club_id,
+        away_club_id=row.away_club_id,
+        matchday=row.matchday,
+        home_score=row.home_score,
+        away_score=row.away_score,
+        stage=Stage(row.stage),
+        date=row.date,
+        neutral=row.neutral,
+        events=_events_from_json(row.events),
+        home_lineup=list(row.home_lineup or []),
+        away_lineup=list(row.away_lineup or []),
+        league=row.league,
+        weather=row.weather,
+    )
+
+
 def _played(rows: list[Row]) -> list[Match]:
-    return [
-        Match(
-            id=row.id,
-            home_club_id=row.home_club_id,
-            away_club_id=row.away_club_id,
-            matchday=row.matchday,
-            home_score=row.home_score,
-            away_score=row.away_score,
-            stage=Stage(row.stage),
-            date=row.date,
-            neutral=row.neutral,
-            events=_events_from_json(row.events),
-            home_lineup=list(row.home_lineup or []),
-            away_lineup=list(row.away_lineup or []),
-            league=row.league,
-        )
-        for row in rows
-        if row.home_score is not None
-    ]
+    return [light_match(row) for row in rows if row.home_score is not None]
 
 
 def _leagues(rows: list[Row]) -> dict[int, str]:
@@ -185,7 +188,7 @@ class History(engine.history.History):
         # Les rangs d'avant-saison peuvent être calculés ici (et enregistrés) :
         # à charger avant de modifier quoi que ce soit dans la session.
         seasons = list(session.scalars(select(SeasonRow).order_by(SeasonRow.year)))
-        matches = _history_matches(session)
+        matches = history_matches(session)
         return cls(
             session=session,
             seasons=seasons,

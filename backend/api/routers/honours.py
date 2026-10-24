@@ -1,8 +1,9 @@
 """Palmarès : les champions de chaque championnat, l'histoire du club dirigé, les
 trophées de chaque saison (engine/awards.py) et les records depuis la première saison.
 
-Les champions et l'histoire se relisent dans les matchs des saisons passées ; les
-trophées des saisons finies sont inscrits à l'intersaison (`AwardRow`), ceux de la
+Les champions, l'histoire et les records se relisent dans les matchs des saisons
+passées, chargés une seule fois et sans les statistiques des joueurs (`_Matches`) ;
+les trophées des saisons finies sont inscrits à l'intersaison (`AwardRow`), ceux de la
 saison en cours se calculent dès que son championnat a joué sa finale.
 """
 
@@ -14,14 +15,8 @@ from sqlalchemy.orm import Session
 
 from api import cup
 from api.deps import SessionDep
-from api.routers.seasons import (
-    _champion_id,
-    _league_domain,
-    _league_matches,
-    _phase,
-    _season_league_codes,
-    _standings,
-)
+from api.notes import history_matches, light_match
+from api.routers.seasons import _league_domain
 from api.schemas import (
     AwardOut,
     ClubRef,
@@ -38,13 +33,39 @@ from api.schemas import (
 from data.leagues import league_config, sort_codes
 from engine import europe
 from engine.awards import AwardKind, season_awards
-from models import EventType, Player, Position, Stage
+from engine.season import champion, league_table, phase
+from models import EventType, Match, Player, Position, Stage
 from models.orm import AwardRow, CareerRow, ClubRow, MoveRow, PlayerRow, SeasonRow
 
 router = APIRouter(prefix="/honours", tags=["palmarès"])
 
 RECORDS_SHOWN = 10
 WINS_SHOWN = 5
+
+
+class _Matches:
+    """Les matchs pros de toutes les saisons, joués ou non, lus en une requête et sans
+    les statistiques des joueurs, rangés par saison et par championnat."""
+
+    def __init__(self, session: Session) -> None:
+        self.by_league: dict[tuple[int, str], list[Match]] = defaultdict(list)
+        for season_id, rows in history_matches(session).items():
+            for row in rows:
+                self.by_league[(season_id, row.league)].append(light_match(row))
+
+    def leagues(self, season: SeasonRow) -> list[str]:
+        """Les championnats de la saison, dans l'ordre de data/leagues.py."""
+        return sort_codes(code for season_id, code in self.by_league if season_id == season.id)
+
+    def of(self, season: SeasonRow, league: str) -> list[Match]:
+        return self.by_league.get((season.id, league), [])
+
+    def league_of(self, season: SeasonRow, club_id: int) -> str | None:
+        """Le championnat que jouait le club cette saison-là (None s'il n'existait pas)."""
+        for code in self.leagues(season):
+            if any(club_id in (m.home_club_id, m.away_club_id) for m in self.of(season, code)):
+                return code
+        return None
 
 
 class _Names:
@@ -106,7 +127,11 @@ def _live_awards(
 
 
 def _leagues(
-    session: Session, seasons: list[SeasonRow], clubs: dict[int, str], names: _Names
+    session: Session,
+    seasons: list[SeasonRow],
+    matches: _Matches,
+    clubs: dict[int, str],
+    names: _Names,
 ) -> list[LeagueHonoursOut]:
     stored = defaultdict(list)
     for row in session.scalars(select(AwardRow).order_by(AwardRow.id)):
@@ -114,24 +139,23 @@ def _leagues(
     by_league: dict[str, list[SeasonHonoursOut]] = defaultdict(list)
     players: dict[int, Player] = {}  # chargés seulement s'il faut des trophées en direct
     for season in seasons:
-        for league in _season_league_codes(season):
-            champion_id = _champion_id(season, league)
-            final_row = next(
-                (m for m in _league_matches(season, league) if m.stage == Stage.FINAL.value), None
-            )
+        for league in matches.leagues(season):
+            domain = matches.of(season, league)
+            champion_id = champion(domain)
+            final_match = next((m for m in domain if m.stage == Stage.FINAL), None)
             final = runner_up = None
-            if final_row is not None and final_row.is_played:
-                final = MatchSummary.from_match(final_row.to_domain(), clubs)
+            if final_match is not None and final_match.is_played:
+                final = MatchSummary.from_match(final_match, clubs)
                 loser = (
-                    final_row.away_club_id
-                    if champion_id == final_row.home_club_id
-                    else final_row.home_club_id
+                    final_match.away_club_id
+                    if champion_id == final_match.home_club_id
+                    else final_match.home_club_id
                 )
                 runner_up = ClubRef(id=loser, name=clubs[loser])
             awards = stored.get((season.year, league))
             if awards is None:
                 awards = []
-                if _phase(season, league) == "finished":
+                if phase(domain) == "finished":
                     if not players:
                         players.update(
                             (row.id, row.to_domain()) for row in session.scalars(select(PlayerRow))
@@ -202,25 +226,23 @@ def _leagues(
     return out
 
 
-def _club_history(seasons: list[SeasonRow], club_id: int) -> list[ClubSeasonOut]:
+def _club_history(seasons: list[SeasonRow], matches: _Matches, club_id: int) -> list[ClubSeasonOut]:
     history = []
     for season in seasons:
-        league = next(
-            (m.league for m in season.matches if club_id in (m.home_club_id, m.away_club_id)),
-            None,
-        )
+        league = matches.league_of(season, club_id)
         if league is None:
             continue
-        table = _standings(season, league).table()
+        domain = matches.of(season, league)
+        table = league_table(domain).table()
         line = next(row for row in table if row.club_id == club_id)
         rank = [row.club_id for row in table].index(club_id) + 1 if line.played else None
         playoffs = "none"
-        for row in sorted(_league_matches(season, league), key=lambda m: m.matchday):
-            if row.stage != Stage.REGULAR.value and club_id in (row.home_club_id, row.away_club_id):
-                playoffs = row.stage
-        if _champion_id(season, league) == club_id:
+        for match in sorted(domain, key=lambda m: m.matchday):
+            if match.stage != Stage.REGULAR and club_id in (match.home_club_id, match.away_club_id):
+                playoffs = match.stage.value
+        if champion(domain) == club_id:
             playoffs = "champion"
-        elif _phase(season, league) != "finished":
+        elif phase(domain) != "finished":
             playoffs = "running"
         history.append(
             ClubSeasonOut(
@@ -239,16 +261,18 @@ def _club_history(seasons: list[SeasonRow], club_id: int) -> list[ClubSeasonOut]
     return sorted(history, key=lambda s: s.year, reverse=True)
 
 
-def _records(seasons: list[SeasonRow], clubs: dict[int, str], names: _Names) -> RecordsOut:
+def _records(
+    seasons: list[SeasonRow], matches: _Matches, clubs: dict[int, str], names: _Names
+) -> RecordsOut:
     tries, points = defaultdict(int), defaultdict(int)
     season_tries, season_points = defaultdict(int), defaultdict(int)
     last_club: dict[int, int] = {}
     wins = []
     for season in seasons:
-        for row in season.matches:
-            if not row.is_played:
+        played = [m for code in matches.leagues(season) for m in matches.of(season, code)]
+        for match in sorted(played, key=lambda m: m.id):
+            if not match.is_played:
                 continue
-            match = row.to_domain()
             for event in match.events:
                 if event.player_id is None or not event.points:
                     continue
@@ -258,7 +282,9 @@ def _records(seasons: list[SeasonRow], clubs: dict[int, str], names: _Names) -> 
                 if event.type == EventType.TRY:
                     tries[event.player_id] += 1
                     season_tries[(event.player_id, season.year)] += 1
-            wins.append((abs(match.home_score - match.away_score), season.year, row.league, match))
+            wins.append(
+                (abs(match.home_score - match.away_score), season.year, match.league, match)
+            )
 
     def line(player_id: int, value: int, year: int | None = None) -> RecordLineOut | None:
         known = names.of(player_id)
@@ -305,17 +331,18 @@ def get_honours(session: SessionDep) -> HonoursOut:
     seasons = list(session.scalars(select(SeasonRow).order_by(SeasonRow.year)))
     clubs = {row.id: row.name for row in session.scalars(select(ClubRow))}
     names = _Names(session)
+    matches = _Matches(session)
     career = session.scalars(select(CareerRow)).first()
     club = league = None
     history = []
     if career is not None:
         club = ClubRef(id=career.club_id, name=clubs[career.club_id])
         league = session.get(ClubRow, career.club_id).league
-        history = _club_history(seasons, career.club_id)
+        history = _club_history(seasons, matches, career.club_id)
     return HonoursOut(
         club=club,
         league=league,
-        leagues=_leagues(session, seasons, clubs, names),
+        leagues=_leagues(session, seasons, matches, clubs, names),
         club_history=history,
-        records=_records(seasons, clubs, names),
+        records=_records(seasons, matches, clubs, names),
     )
