@@ -4,7 +4,8 @@ Règles : engine/market.py. Ici on charge les clubs IA et le vivier, on laisse l
 moteur conclure, puis on enregistre : un pré-contrat est une négociation signée
 (`NegotiationRow`, exécutée à l'intersaison comme celles du manager), un prêt ou
 une signature change l'effectif tout de suite et s'inscrit au registre des
-mouvements (api/moves.py).
+mouvements (api/moves.py). À l'intersaison, le mercato d'été (engine/mercato.py) :
+les transferts entre clubs IA, indemnités comprises.
 """
 
 import datetime
@@ -14,14 +15,18 @@ from collections import Counter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import engine.mercato
 from api.deps import load_clubs
 from api.free_agents import free_agent_rows
+from api.ledger import record
 from api.moves import log_move
+from engine.economy import TransactionCategory
 from engine.journal import MoveKind
 from engine.market import Deal, Market
+from engine.mercato import Transfer
 from engine.transfers import DealKind
 from models import Stage
-from models.orm import CareerRow, ClubRow, NegotiationRow, PlayerRow, SeasonRow
+from models.orm import CareerRow, ClubRow, MoveRow, NegotiationRow, PlayerRow, SeasonRow
 
 OPEN_STAGES = ("club", "player")
 
@@ -115,5 +120,49 @@ def market_day(
         else:
             row.wage, row.contract_until = player.wage, player.contract_until
             log_move(session, MoveKind(deal.kind.value), row, day, destination=destination.id)
+    session.commit()
+    return deals
+
+
+def summer_market(
+    session: Session, year: int, rng: random.Random, my_club_id: int | None, day: datetime.date
+) -> list[Transfer]:
+    """Intersaison, après les retraites et avant le vivier : les clubs IA s'achètent des
+    joueurs entre eux (engine/mercato.py). Indemnités au grand livre des deux clubs,
+    contrats à jour, et chaque transfert au registre des mouvements."""
+    session.flush()
+    session.expire_all()
+    ids = [club_id for club_id in session.scalars(select(ClubRow.id)) if club_id != my_club_id]
+    clubs = load_clubs(session, ids)
+    # Arrivés à l'intersaison (pré-contrats exécutés) : ils restent où ils viennent de signer.
+    arrived = frozenset(
+        session.scalars(
+            select(MoveRow.player_id).where(MoveRow.date == day, MoveRow.to_club_id.is_not(None))
+        )
+    )
+    deals = engine.mercato.summer_market([clubs[i] for i in sorted(clubs)], year, rng, arrived)
+    for deal in deals:
+        player, seller, buyer = deal.player, deal.seller, deal.buyer
+        row = session.get(PlayerRow, player.id)
+        log_move(session, MoveKind.TRANSFER, row, day, seller.id, buyer.id, fee=deal.fee)
+        row.club_id, row.wage, row.contract_until = buyer.id, deal.wage, player.contract_until
+        name = f"{row.first_name} {row.last_name}"
+        seller_row, buyer_row = session.get(ClubRow, seller.id), session.get(ClubRow, buyer.id)
+        record(
+            session,
+            seller_row,
+            TransactionCategory.TRANSFER,
+            f"Vente · {name} ({buyer.name})",
+            deal.fee,
+            day,
+        )
+        record(
+            session,
+            buyer_row,
+            TransactionCategory.TRANSFER,
+            f"Achat · {name} ({seller.name})",
+            -deal.fee,
+            day,
+        )
     session.commit()
     return deals

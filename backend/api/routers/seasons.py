@@ -38,7 +38,7 @@ from api.free_agents import age_free_agents, release, renew_pool
 from api.jokers import close_jokers, end_piges
 from api.ledger import current_season, record
 from api.live import live_match_row, load_live, load_live_test
-from api.market import market_day
+from api.market import market_day, summer_market
 from api.moves import delete_player, log_move
 from api.notes import History, ensure_preseason_ranks, season_leagues
 from api.routers.contracts import contracts_overview, expire_contracts, rival_signings
@@ -1071,6 +1071,8 @@ def start_next_season(session: SessionDep) -> SeasonOut:
             release(rows[youth.id], year)
         for youth in moves.newcomers:
             session.add(PlayerRow.from_domain(youth))
+    # Le mercato d'été entre clubs IA, avant qu'ils ne complètent leur effectif.
+    summer_market(session, year, season_rng(season, "mercato"), my_club_id, day)
     renew_pool(session, year, rng, my_club_id, player_ids, day)
     internationals.offseason(session, rng)
     session.commit()

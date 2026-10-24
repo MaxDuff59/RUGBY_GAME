@@ -25,6 +25,7 @@ from engine import internationals
 from engine.free_agents import age_free_agent, release, renew_pool, settle_contracts
 from engine.history import History, expected_ranks
 from engine.matchday import Day, DayReport, play_day
+from engine.mercato import summer_market
 from engine.offseason import RETIREMENT_AGE, club_offseason, develop_player
 from engine.season import (
     champion,
@@ -286,6 +287,7 @@ class World:
             for youth in moves.released:
                 release(youth, year)
             self.free_agents += moves.released
+        summer_market(clubs, year, rng_for(self.seed, year, "mercato"))
         renew_pool(clubs, self.free_agents, year, rng, self._player_ids)
         # Hors des championnats du jeu aussi, on vieillit et on raccroche.
         for player in self.away:

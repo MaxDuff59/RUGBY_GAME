@@ -265,11 +265,13 @@ def test_the_offseason_fills_the_register(manager):
     # Les plus récents d'abord, puis les mieux notés.
     order = [(move["date"], move["player"]["overall"]) for move in moves]
     assert order == sorted(order, reverse=True)
-    # En tête, l'intersaison : fins de contrat, recrues des clubs IA, retraites, et les
-    # pré-contrats signés pendant la saison qui viennent de s'exécuter.
+    # En tête, l'intersaison : fins de contrat, recrues des clubs IA (agents libres et
+    # mercato d'été), retraites, et les pré-contrats signés pendant la saison qui
+    # viennent de s'exécuter.
     offseason = [move for move in moves if move["date"] == moves[0]["date"]]
     assert moves[0]["date"] < data["today"]
-    assert {move["kind"] for move in offseason} <= {"free", "release", "retirement", "precontract"}
+    kinds = {"free", "release", "retirement", "precontract", "transfer"}
+    assert {move["kind"] for move in offseason} <= kinds
     for move in offseason:
         assert not move["pending"]
         if move["kind"] == "retirement":
