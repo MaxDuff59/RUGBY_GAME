@@ -249,6 +249,101 @@ export const TACTICS = [
   },
 ];
 
+// Où le manager prend la parole (engine/team_talk.py).
+export const TALK_MOMENTS = {
+  kickoff: "Vestiaire · avant le coup d'envoi",
+  break: "Vestiaire · à la pause",
+  touchline: "Bord du terrain",
+};
+
+// Les discours : libellé, ce que fait le manager, et ce que donne chaque issue.
+export const TALKS = {
+  fire_up: {
+    label: "Discours enflammé",
+    scope: "Les tripes sur la table avant d'entrer.",
+    lifted: "Les joueurs sortent du vestiaire en hurlant. Ça va cogner.",
+    flat: "Bel effort. Les joueurs hochent la tête poliment.",
+    backfired: "Trop d'émotion : le XV entre crispé, les mains tremblent.",
+  },
+  focus: {
+    label: "Rester concentrés",
+    scope: "Le plan, rien que le plan. Têtes froides.",
+    lifted: "Regards fixes, gestes sûrs : le groupe est dans son match.",
+    flat: "Message reçu, sans plus.",
+    backfired: "Trop calme : l'équipe entre endormie.",
+  },
+  pressure: {
+    label: "Mettre la pression",
+    scope: "« C'est le match de la saison. » Ça passe ou ça casse.",
+    lifted: "Le groupe relève le défi : il veut écrire l'histoire.",
+    flat: "La pression glisse sur les joueurs.",
+    backfired: "Le poids de l'enjeu écrase le groupe.",
+  },
+  encourage: {
+    label: "Encourager",
+    scope: "Valoriser ce qui marche, donner confiance.",
+    lifted: "Les têtes se relèvent : l'équipe repart avec confiance.",
+    flat: "Des mots gentils, vite oubliés.",
+    backfired: "Les joueurs se relâchent, ils se croient arrivés.",
+  },
+  tactical: {
+    label: "Recadrer au tableau",
+    scope: "Calmement, deux ou trois ajustements précis.",
+    lifted: "Le message passe : chacun sait ce qu'il a à faire.",
+    flat: "Le tableau noir n'a pas passionné grand monde.",
+    backfired: "Trop d'informations : le groupe ressort embrouillé.",
+  },
+  rant: {
+    label: "Remonter les bretelles",
+    scope: "Une engueulade en règle. Vexe si l'on mène.",
+    lifted: "Piqués au vif, les joueurs veulent prouver qu'il avait tort.",
+    flat: "Ils ont déjà entendu ça. Ça rentre par une oreille…",
+    backfired: "Le vestiaire se braque : les cadres font la tête.",
+  },
+  smash_tv: {
+    label: "Coup de poing dans la télé",
+    scope: "L'écran vole en éclats. Le pari le plus risqué.",
+    lifted: "Électrochoc ! Le XV ressort comme une meute de fauves.",
+    flat: "Un silence gêné. Personne ne sait trop quoi en penser.",
+    backfired: "Les joueurs sont tétanisés, la peur a pris le dessus.",
+  },
+  leaders: {
+    label: "Laisser parler les cadres",
+    scope: "Le manager se tait, les anciens prennent la parole.",
+    lifted: "Les cadres trouvent les mots : le groupe se resserre.",
+    flat: "Les cadres cherchent leurs mots. Rien ne se passe.",
+    backfired: "Les cadres se disputent devant tout le monde.",
+  },
+  cheer: {
+    label: "Encourager",
+    scope: "Applaudir, pousser depuis la touche.",
+    lifted: "Les joueurs entendent le banc et accélèrent.",
+    flat: "Noyé dans le bruit du stade.",
+    backfired: "Les joueurs n'en ont rien à faire.",
+  },
+  shout: {
+    label: "Hausser le ton",
+    scope: "Crier sur la touche. Plus de rage, plus de fautes.",
+    lifted: "Le cri a réveillé tout le monde.",
+    flat: "Personne n'a entendu.",
+    backfired: "Les joueurs perdent leurs nerfs.",
+  },
+  calm: {
+    label: "Calmer les esprits",
+    scope: "Faire redescendre la tension : moins de cartons.",
+    lifted: "Les têtes se refroidissent, le jeu redevient propre.",
+    flat: "Le message passe à moitié.",
+    backfired: "Trop calme : l'équipe perd son mordant.",
+  },
+};
+
+// L'issue d'un discours, en un mot.
+export const TALK_OUTCOMES = {
+  lifted: "Ça porte",
+  flat: "Sans effet",
+  backfired: "Ça se retourne",
+};
+
 // Abréviation d'un poste pour les compositions serrées.
 export const POSITION_SHORT = {
   PROP: "PIL",

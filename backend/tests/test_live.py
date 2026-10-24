@@ -4,8 +4,10 @@ import random
 
 import pytest
 
+from engine import team_talk
 from engine.match_engine import (
     BENCH_SIZE,
+    HALF_TIME,
     MATCH_MINUTES,
     MAX_SUBSTITUTIONS,
     RATING_MAX,
@@ -20,6 +22,7 @@ from engine.match_engine import (
     select_lineup,
     simulate_match,
 )
+from engine.team_talk import TALKS, TOUCHLINE_COOLDOWN, Moment
 from models import EventType, Position
 
 # --- Moteur ------------------------------------------------------------------------------
@@ -359,3 +362,74 @@ def test_short_handed_players_tire_faster(even_clubs):
     before = side.energy(victim)
     live.advance(5)
     assert side.energy(victim) == before
+
+
+# --- Discours ------------------------------------------------------------------------------
+
+
+def test_team_talk_moments_and_cooldown(even_clubs):
+    home, away = even_clubs
+    live = LiveMatch(home, away, rng=random.Random(6), auto={away.id})
+    assert live.talk_moment(home.id) == Moment.KICKOFF
+    with pytest.raises(ValueError):
+        live.talk(home.id, "rant")  # la colère se garde pour la mi-temps
+    heard = live.talk(home.id, "focus")
+    assert heard.minute == 0 and heard.key == "focus"
+    assert live.talk_moment(home.id) is None  # un discours par passage au vestiaire
+    assert live.next_talk(home.id) == TOUCHLINE_COOLDOWN
+    live.advance(5)
+    assert live.talk_moment(home.id) is None
+    assert live.next_talk(home.id) == TOUCHLINE_COOLDOWN
+    live.advance(TOUCHLINE_COOLDOWN - 5)
+    assert live.talk_moment(home.id) == Moment.TOUCHLINE
+    live.talk(home.id, "cheer")
+    live.advance(HALF_TIME - live.minute)
+    assert live.talk_moment(home.id) == Moment.BREAK
+    live.talk(home.id, "smash_tv")
+    assert live.talk_moment(home.id) is None
+    # L'issue est sauvegardée avec le match.
+    restored = LiveMatch.from_state(home, away, live.to_state())
+    assert restored.home.talks == live.home.talks
+    assert restored.home.spirit == live.home.spirit
+
+
+def test_team_talk_odds_depend_on_score_and_morale():
+    rant = TALKS["rant"]
+    ahead, _ = team_talk.odds(rant, 20, 12.0, [])
+    behind, _ = team_talk.odds(rant, -20, 12.0, [])
+    assert behind > ahead  # une engueulade quand on mène vexe le groupe
+    _, calm_backfire = team_talk.odds(rant, 0, 12.0, [])
+    _, low_backfire = team_talk.odds(rant, 0, 8.0, [])
+    assert low_backfire > calm_backfire  # un groupe qui doute encaisse mal les cris
+    for talk in TALKS.values():
+        for margin in (-30, 0, 30):
+            success, backfire = team_talk.odds(talk, margin, 5.0, [])
+            assert success >= 0 and backfire >= 0 and success + backfire <= 1
+
+
+def test_spirit_lifts_the_team_then_fades(even_clubs):
+    home, away = even_clubs
+    live = LiveMatch(home, away, rng=random.Random(9))
+    before = live.home.collective(0).attack
+    live.home.hear(TALKS["smash_tv"], team_talk.Outcome.LIFTED, 0)
+    assert live.home.spirit == TALKS["smash_tv"].boost
+    assert live.home.collective(0).attack == pytest.approx(before * (1 + live.home.spirit))
+    assert live.home.heat > 0
+    live.advance(30)
+    assert 0 < live.home.spirit < TALKS["smash_tv"].boost / 2
+    live.home.hear(TALKS["smash_tv"], team_talk.Outcome.BACKFIRED, 30)
+    assert live.home.spirit < 0
+
+
+def test_live_team_talk_route(manager):
+    live = manager.post("/live").json()
+    assert live["talk"]["moment"] == "kickoff"
+    keys = {option["key"] for option in live["talk"]["options"]}
+    assert "focus" in keys and "smash_tv" not in keys
+    assert manager.post("/live/talk", json={"key": "rant"}).status_code == 400
+    live = manager.post("/live/talk", json={"key": "fire_up"}).json()
+    heard = _my_side(live)["talks"][-1]
+    assert heard["key"] == "fire_up" and heard["minute"] == 0
+    assert heard["outcome"] in ("lifted", "flat", "backfired")
+    assert live["talk"]["moment"] is None
+    assert manager.post("/live/talk", json={"key": "focus"}).status_code == 400

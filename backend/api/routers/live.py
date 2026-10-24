@@ -3,9 +3,10 @@
 `POST /live` lance le match de la prochaine journée (la semaine d'entraînement a
 lieu tout de suite, comme avant une journée simulée). Puis le frontend fait
 avancer le chrono (`/live/advance`), met en pause pour changer la tactique
-(`/live/tactics`) ou faire un remplacement (`/live/substitute`), et quand le
-match est fini (ou pour l'abandonner au staff), `POST /live/finish` joue le
-reste de la journée : les autres matchs, l'économie, les affaires.
+(`/live/tactics`), parler à l'équipe (`/live/talk`) ou faire un remplacement
+(`/live/substitute`), et quand le match est fini (ou pour l'abandonner au
+staff), `POST /live/finish` joue le reste de la journée : les autres matchs,
+l'économie, les affaires.
 
 Un sélectionneur joue de la même façon le match de sa sélection, le jour où il
 tombe : mêmes routes, la sauvegarde est à part (`LiveInternationalRow`).
@@ -35,7 +36,15 @@ from api.routers.seasons import (
     play_next_matchday,
     season_rng,
 )
-from api.schemas import AdvanceIn, AdvanceOut, LiveOut, PlayOut, SubstituteIn, TacticsIn
+from api.schemas import (
+    AdvanceIn,
+    AdvanceOut,
+    LiveOut,
+    PlayOut,
+    SubstituteIn,
+    TacticsIn,
+    TalkIn,
+)
 from data.nations import NATIONS_BY_CODE
 from engine.match_engine import LiveMatch, Tactics, staff_tactics, team_strength
 from models import Stage
@@ -221,6 +230,20 @@ def set_tactics(payload: TacticsIn, session: SessionDep) -> LiveOut:
         penalties=payload.penalties or current.penalties,
     )
     live.match.set_tactics(my_club_id, tactics)
+    live.save()
+    session.commit()
+    return live_out(live, names, my_club_id)
+
+
+@router.post("/talk", response_model=LiveOut)
+def talk(payload: TalkIn, session: SessionDep) -> LiveOut:
+    """Le manager parle à son équipe : au vestiaire (avant le coup d'envoi, à la
+    pause) ou du bord du terrain. L'issue est dans `talks` de son équipe."""
+    live, names, my_club_id = _load(session)
+    try:
+        live.match.talk(my_club_id, payload.key)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     live.save()
     session.commit()
     return live_out(live, names, my_club_id)

@@ -23,6 +23,9 @@ from api.schemas import (
     LivePlayerOut,
     LiveSideOut,
     TacticsOut,
+    TalkHeardOut,
+    TalkOptionOut,
+    TalkOut,
 )
 from engine.form import Form
 from engine.match_engine import (
@@ -32,6 +35,7 @@ from engine.match_engine import (
     Side,
 )
 from engine.matchday import training_week
+from engine.team_talk import TALKS
 from models import Club, EventType, Injury, Stage
 from models.orm import (
     InjuryRow,
@@ -192,7 +196,26 @@ def _side_out(live: LiveMatch, side: Side, name: str) -> LiveSideOut:
             "attack": round(ratings.attack, 1),
             "defense": round(ratings.defense, 1),
         },
+        spirit=round(side.spirit, 3),
+        heat=round(side.heat, 2),
+        talks=[TalkHeardOut(**heard.to_dict()) for heard in side.talks],
     )
+
+
+def _talk_out(live: LiveMatch, club_id: int) -> TalkOut:
+    """Les discours que le manager peut tenir maintenant, avec leurs chances."""
+    moment = live.talk_moment(club_id)
+    options = []
+    if moment is not None:
+        for talk in TALKS.values():
+            if moment in talk.moments:
+                success, backfire = live.talk_odds(club_id, talk)
+                options.append(
+                    TalkOptionOut(
+                        key=talk.key, success=round(success, 2), backfire=round(backfire, 2)
+                    )
+                )
+    return TalkOut(moment=moment, options=options, next_at=live.next_talk(club_id))
 
 
 def live_out(live: Live, names: dict[int, str], my_club_id: int) -> LiveOut:
@@ -231,4 +254,5 @@ def live_out(live: Live, names: dict[int, str], my_club_id: int) -> LiveOut:
             )
             for e in match.events
         ],
+        talk=_talk_out(match, my_club_id),
     )

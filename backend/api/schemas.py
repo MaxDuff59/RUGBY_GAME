@@ -15,6 +15,7 @@ from engine.journal import MoveKind
 from engine.match_engine import Defence, GamePlan, PenaltyChoice, TeamStrength
 from engine.notes import Note
 from engine.sponsors import Placement
+from engine.team_talk import Moment, Outcome
 from engine.transfers import DealKind
 from models import (
     AmenityKind,
@@ -466,6 +467,28 @@ class LivePlayerOut(BaseModel):
     energy: float
 
 
+class TalkHeardOut(BaseModel):
+    minute: int
+    key: str
+    outcome: Outcome
+    spirit: float  # élan gagné (ou perdu)
+    heat: float  # nervosité ajoutée (ou retirée)
+
+
+class TalkOptionOut(BaseModel):
+    key: str
+    success: float  # chance que le discours porte
+    backfire: float  # chance qu'il se retourne contre le manager
+
+
+class TalkOut(BaseModel):
+    """Ce que le manager peut dire à son équipe maintenant."""
+
+    moment: Moment | None  # None : pas maintenant
+    options: list[TalkOptionOut]
+    next_at: int | None  # minute à partir de laquelle il pourra reparler du bord du terrain
+
+
 class LiveSideOut(BaseModel):
     club: ClubRef
     score: int
@@ -477,6 +500,9 @@ class LiveSideOut(BaseModel):
     missing: int  # joueurs en moins sur le terrain (cartons, blessés sans remplaçant)
     kicker_id: int | None  # buteur du moment
     strength: dict[str, float]  # notes collectives du moment : set_piece, pack, attack, defense
+    spirit: float  # élan donné par les discours (+0,05 = notes collectives +5 %)
+    heat: float  # nervosité (+0,5 = 50 % de cartons en plus)
+    talks: list[TalkHeardOut]  # discours tenus, dans l'ordre
 
 
 class LiveEventOut(BaseModel):
@@ -508,10 +534,15 @@ class LiveOut(BaseModel):
     home: LiveSideOut
     away: LiveSideOut
     events: list[LiveEventOut]  # dans l'ordre du match
+    talk: TalkOut  # discours possibles du club dirigé
 
 
 class AdvanceIn(BaseModel):
     minutes: int = Field(default=1, ge=1, le=100)
+
+
+class TalkIn(BaseModel):
+    key: str
 
 
 class SubstituteIn(BaseModel):

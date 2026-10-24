@@ -102,6 +102,7 @@ export const api = {
   startLive: () => post("/live"),
   advanceLive: (minutes = 1) => post("/live/advance", { minutes }),
   setLiveTactics: (tactics) => post("/live/tactics", tactics),
+  talkLive: (key) => post("/live/talk", { key }),
   substituteLive: (playerOut, playerIn) =>
     post("/live/substitute", { player_out: playerOut, player_in: playerIn }),
   finishLive: () => post("/live/finish"),

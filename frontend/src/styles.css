@@ -703,13 +703,6 @@ select.tactics__select {
   padding-left: 14px;
 }
 
-/* Trois listes côte à côte dans la tactique : chevron plus près du bord. */
-.tactics select.tactics__select {
-  padding-left: 12px;
-  padding-right: 28px;
-  background-position: right 9px center;
-}
-
 .num {
   font-variant-numeric: tabular-nums;
 }
@@ -4226,22 +4219,6 @@ button.simulation__row:focus-visible {
   background: var(--neutral-soft);
 }
 
-/* Tactique : trois curseurs en listes déroulantes */
-.tactics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--line-soft);
-}
-
-.tactics__axis {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
 .tactics__label {
   font-size: 11px;
   font-weight: 600;
@@ -4257,6 +4234,246 @@ button.simulation__row:focus-visible {
   font-weight: 500;
 }
 
+/* Sous le tableau : plan de jeu et discours (chacun met en pause), puis l'élan */
+.live-actions {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  margin-top: -8px;
+}
+
+.live-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.live-action:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.live-action:disabled {
+  cursor: default;
+  color: var(--ink-muted);
+}
+
+/* Au vestiaire (avant le coup d'envoi, à la pause), le discours attend le manager. */
+.live-action--due {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.live-action--due .live-action__value {
+  color: var(--accent);
+}
+
+.live-action__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.live-action__value {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* Élan : libellé et valeur, une jauge qui part du centre, puis le dernier discours */
+.live-actions__spirit {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 240px;
+  min-width: 0;
+  padding: 8px 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+}
+
+.spirit__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.spirit__mood {
+  color: var(--accent);
+}
+
+.spirit__value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.spirit__value--down {
+  color: var(--loss);
+}
+
+.spirit__track {
+  position: relative;
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+
+/* Repère du zéro, au milieu */
+.spirit__track::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 1px);
+  width: 2px;
+  background: var(--neutral-soft);
+}
+
+.spirit__fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--ink);
+  transition: width 0.4s ease;
+}
+
+.spirit__fill--down {
+  background: var(--loss);
+}
+
+.spirit__note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+/* Fenêtres du match : plan de jeu et discours */
+.modal--dialog.live-dialog {
+  margin-top: 8vh;
+}
+
+.plan__axis {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.plan__scope {
+  font-size: 13px;
+}
+
+.talk__options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.talk__option {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px;
+  row-gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.talk__option:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.talk__name {
+  font-weight: 600;
+}
+
+.talk__scope {
+  grid-column: 1;
+  font-size: 13px;
+}
+
+.talk__odds {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.talk__odds--risky {
+  color: var(--accent);
+}
+
+.talk__outcome {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-left: 3px solid var(--neutral-soft);
+  background: var(--line-soft);
+  border-radius: 0 8px 8px 0;
+}
+
+.talk__outcome--lifted {
+  border-left-color: var(--win);
+}
+
+.talk__outcome--backfired {
+  border-left-color: var(--loss);
+}
+
+.talk__verdict {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.talk__outcome--lifted .talk__verdict {
+  color: var(--win);
+}
+
+.talk__outcome--backfired .talk__verdict {
+  color: var(--loss);
+}
+
+.talk__effect {
+  font-size: 13px;
+  font-weight: 600;
+}
+
 @media (max-width: 960px) {
   .scoreboard {
     grid-template-columns: minmax(0, 1fr) auto auto minmax(0, 1fr);
@@ -4268,6 +4485,13 @@ button.simulation__row:focus-visible {
   .live__grid {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto;
+  }
+  .live-actions {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .live-actions__spirit {
+    grid-column: 1 / -1;
+    width: auto;
   }
 }
 

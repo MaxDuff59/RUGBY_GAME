@@ -168,14 +168,23 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   puis les commandes : « Coup d'envoi / Pause / Reprendre » (accent), vitesse ×1 à ×8 en
   pastilles, « Terminer » (le staff finit le match). Le match se met de lui-même en pause à
   la mi-temps et sur une blessure ou un carton de notre équipe (motif affiché sous les
-  commandes). En dessous, deux colonnes, domicile à gauche, extérieur à droite : les faits de
+  commandes). Juste sous le tableau, une rangée : « Plan de jeu » (le plan en cours en
+  résumé) et « Discours » (le moment : vestiaire avant le coup d'envoi, vestiaire à la pause,
+  bord du terrain, ou la minute où l'on pourra reparler) — chacun met le match en pause et
+  ouvre sa fenêtre ; au vestiaire, le bouton Discours porte un liseré accent. À droite, l'élan
+  donné par les discours (« +6 % », en rouge s'il est négatif) et l'humeur du groupe
+  (nerveuse, survoltée, sereine). La fenêtre Plan de jeu montre les trois curseurs en
+  pastilles, avec l'effet du choix en cours dessous ; la fenêtre Discours liste les discours
+  du moment (libellé, ce que fait le manager, chances en mots : « Bonnes chances · sans
+  risque », en accent quand c'est quitte ou double), puis l'issue (Ça porte en vert, Sans
+  effet, Ça se retourne en rouge) avec une phrase et l'effet sur l'élan.
+  En dessous, deux colonnes, domicile à gauche, extérieur à droite : les faits de
   jeu de chaque équipe (les plus récents en haut ; minute, repère — rond accent pour un
   essai, noir pour un coup de pied réussi, contour pour un raté, carton jaune ou rouge —,
   libellé, joueur, puis les points marqués à sa suite), puis sa composition : les 15 places dans l'ordre des numéros
   avec le joueur qui l'occupe, son poste, son énergie (barre verticale qui se vide au fil
   du match, noire, en accent sous 30 %, grise pour un joueur hors du terrain, le pourcentage
-  à côté) et sa note sur 10 (gras à partir de 7,5), puis le banc (sortis en gris avec la minute). Notre carte porte en tête trois listes déroulantes
-  de tactique (plan de jeu, défense, pénalités) et accepte les remplacements en pause : on
+  à côté) et sa note sur 10 (gras à partir de 7,5), puis le banc (sortis en gris avec la minute). Notre carte accepte les remplacements en pause : on
   clique un joueur du terrain, puis « Faire entrer » sur un remplaçant. Les deux rangées
   défilent dans leur carte ; la page tient dans l'écran.
 - Tableau d'effectif : 9 attributs (dont l'endurance, qui règle la barre d'énergie en match),

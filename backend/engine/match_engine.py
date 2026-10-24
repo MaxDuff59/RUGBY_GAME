@@ -25,7 +25,9 @@ Principe :
    (essai, coup de pied, carton) et la domination de sa ligne.
 6. La forme du jour (`engine/form.py` : moral, cohésion, fraîcheur) multiplie
    les notes collectives (et fixe l'énergie de départ de chaque joueur), et la
-   fatigue augmente le risque de blessure.
+   fatigue augmente le risque de blessure. En direct, les discours du manager
+   (`engine/team_talk.py`) ajoutent un élan passager aux notes collectives, et
+   de la nervosité qui fait monter (ou baisser) le risque de carton.
 7. En phase finale, une égalité après 80 minutes mène à une prolongation
    (2 x 10 minutes), puis si besoin à une séance de tirs au but.
 
@@ -44,6 +46,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from engine import team_talk
 from engine.form import NEUTRAL_FORM, Form
 from engine.medical import MATCH_INJURY_CHANCE_PER_MINUTE
 from models import (
@@ -584,6 +587,11 @@ class Side:
         # Énergie restante de ceux qui ont joué ; les autres sont à leur énergie de départ.
         self.energy_left: dict[int, float] = {}
         self.kicker_id = max(lineup, key=lambda p: p.kicking).id if lineup else None
+        # Discours du manager (engine/team_talk.py) : l'élan multiplie les notes
+        # collectives, la nervosité le risque de carton ; les deux s'estompent.
+        self.spirit = 0.0
+        self.heat = 0.0
+        self.talks: list[team_talk.Heard] = []
 
     # -- Qui est où -----------------------------------------------------------------
 
@@ -644,8 +652,8 @@ class Side:
             self.energy_left[player.id] = max(0.0, left)
 
     def collective(self, minute: int) -> Collective:
-        """Notes collectives des joueurs présents : énergie, forme, infériorité, tactique."""
-        factor = self.factor * SHORT_HANDED_FACTOR ** self.missing(minute)
+        """Notes collectives des joueurs présents : énergie, forme, élan, infériorité, tactique."""
+        factor = self.factor * (1 + self.spirit) * SHORT_HANDED_FACTOR ** self.missing(minute)
         ratings = collective_ratings(
             self.fielded(minute),
             weight=lambda p: efficiency(self.energy(p)),
@@ -658,6 +666,28 @@ class Side:
         kicker = self.kicker(minute)
         plan = GAME_PLAN_EFFECTS[self.tactics.game_plan]["territory"]
         return plan * ratings.territory(kicker.kicking if kicker else 0)
+
+    # -- Discours ------------------------------------------------------------------------
+
+    def hear(
+        self, talk: team_talk.Talk, outcome: team_talk.Outcome, minute: int
+    ) -> team_talk.Heard:
+        """L'équipe entend un discours : son élan et sa nervosité bougent selon l'issue."""
+        spirit = team_talk.clamp(
+            self.spirit + team_talk.spirit_change(talk, outcome),
+            team_talk.SPIRIT_MIN,
+            team_talk.SPIRIT_MAX,
+        )
+        heat = team_talk.clamp(self.heat + talk.heat, team_talk.HEAT_MIN, team_talk.HEAT_MAX)
+        heard = team_talk.Heard(minute, talk.key, outcome, spirit - self.spirit, heat - self.heat)
+        self.spirit, self.heat = spirit, heat
+        self.talks.append(heard)
+        return heard
+
+    def fade(self) -> None:
+        """Une minute de jeu : l'effet des discours s'estompe."""
+        self.spirit *= team_talk.SPIRIT_FADE
+        self.heat *= team_talk.HEAT_FADE
 
     # -- Mouvements ------------------------------------------------------------------------
 
@@ -793,6 +823,9 @@ class Side:
             "ratings": {str(k): v for k, v in self.ratings.items()},
             "energy_left": {str(k): v for k, v in self.energy_left.items()},
             "kicker_id": self.kicker_id,
+            "spirit": self.spirit,
+            "heat": self.heat,
+            "talks": [heard.to_dict() for heard in self.talks],
         }
 
     @classmethod
@@ -829,6 +862,10 @@ class Side:
         side.ratings = {int(k): v for k, v in state["ratings"].items()}
         side.energy_left = {int(k): v for k, v in state["energy_left"].items()}
         side.kicker_id = state["kicker_id"]
+        # Un match sauvegardé avant les discours n'en a pas.
+        side.spirit = state.get("spirit", 0.0)
+        side.heat = state.get("heat", 0.0)
+        side.talks = [team_talk.Heard.from_dict(heard) for heard in state.get("talks", [])]
         return side
 
 
@@ -923,6 +960,49 @@ class LiveMatch:
     def set_tactics(self, club_id: int, tactics: Tactics) -> None:
         self.side(club_id).tactics = tactics
 
+    def talk_moment(self, club_id: int) -> team_talk.Moment | None:
+        """Où le manager de ce club peut prendre la parole maintenant (None : pas
+        maintenant). Au vestiaire, un discours par passage ; au bord du terrain, un
+        toutes les 10 minutes."""
+        if self.finished:
+            return None
+        talks = self.side(club_id).talks
+        last = talks[-1].minute if talks else None
+        if self.minute == 0:
+            return team_talk.Moment.KICKOFF if last is None else None
+        if self.minute == HALF_TIME or (self.extra_time and self.minute == MATCH_MINUTES):
+            return team_talk.Moment.BREAK if last != self.minute else None
+        if last is not None and self.minute < last + team_talk.TOUCHLINE_COOLDOWN:
+            return None
+        return team_talk.Moment.TOUCHLINE
+
+    def next_talk(self, club_id: int) -> int | None:
+        """Minute à partir de laquelle le manager pourra reparler du bord du terrain,
+        s'il ne le peut pas maintenant (None sinon, ou si le match est fini)."""
+        talks = self.side(club_id).talks
+        if self.finished or not talks or self.talk_moment(club_id) is not None:
+            return None
+        return max(talks[-1].minute + team_talk.TOUCHLINE_COOLDOWN, self.minute + 1)
+
+    def talk_odds(self, club_id: int, talk: team_talk.Talk) -> tuple[float, float]:
+        """(chance de porter, chance de se retourner) d'un discours, à cette minute."""
+        side = self.side(club_id)
+        margin = self.score(club_id) - self.score(self.opponent(side).club.id)
+        present = [slot.player for slot in side.on_field(self.minute)]
+        return team_talk.odds(talk, margin, side.form.morale, present)
+
+    def talk(self, club_id: int, key: str) -> team_talk.Heard:
+        """Le manager parle à son équipe ; lève ValueError si ce n'est pas le moment."""
+        moment = self.talk_moment(club_id)
+        if moment is None:
+            raise ValueError("Ce n'est pas le moment de parler à l'équipe")
+        talk = team_talk.TALKS.get(key)
+        if talk is None or moment not in talk.moments:
+            raise ValueError("Ce discours n'est pas de circonstance")
+        success, backfire = self.talk_odds(club_id, talk)
+        outcome = team_talk.outcome(self.rng.random(), success, backfire)
+        return self.side(club_id).hear(talk, outcome, self.minute)
+
     def substitute(self, club_id: int, player_out: int, player_in: int) -> MatchEvent:
         """Remplacement décidé par le manager, effectif à la minute en cours."""
         if self.finished:
@@ -973,6 +1053,7 @@ class LiveMatch:
             self._cards(side, minute)
         for side in self.sides:
             side.spend_energy(minute)
+            side.fade()
         for side in self.sides:
             if side.club.id in self.auto and minute in AI_SUBSTITUTION_MINUTES:
                 event = side.auto_substitution(minute)
@@ -1020,7 +1101,7 @@ class LiveMatch:
         present = side.on_field(minute)
         if not present:
             return
-        cards = DEFENCE_EFFECTS[side.tactics.defence]["cards"]
+        cards = DEFENCE_EFFECTS[side.tactics.defence]["cards"] * (1 + side.heat)
         roll = rng.random()
         if roll < RED_CHANCE_PER_MINUTE * cards:
             red = True

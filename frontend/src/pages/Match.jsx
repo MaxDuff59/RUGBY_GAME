@@ -4,12 +4,16 @@ import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { api } from "../api.js";
 import ClubCrest from "../components/ClubCrest.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
+import Modal from "../components/Modal.jsx";
 import {
   EVENTS,
   POSITION_SHORT,
   POSITIONS,
   STAGES,
   TACTICS,
+  TALK_MOMENTS,
+  TALK_OUTCOMES,
+  TALKS,
   formatLongDate,
   formatNote,
 } from "../format.js";
@@ -29,7 +33,8 @@ const PAUSING = new Set(["injury", "yellow_card", "red_card"]);
 
 // Le match du club dirigé en direct : tableau d'affichage et chrono, événements
 // de chaque équipe de son côté, compositions avec la note sur 10 de chaque joueur.
-// En pause, on change la tactique et on fait des remplacements.
+// Sous le tableau, « Plan de jeu » et « Discours » mettent le match en pause et
+// ouvrent leur fenêtre ; en pause, on fait aussi les remplacements.
 export default function Match() {
   const { career } = useOutletContext();
   const navigate = useNavigate();
@@ -42,6 +47,7 @@ export default function Match() {
   const [finishing, setFinishing] = useState(false);
   const phone = useMediaQuery(PHONE_QUERY);
   const [lineupClub, setLineupClub] = useState(null); // téléphone : la composition montrée (la nôtre par défaut)
+  const [panel, setPanel] = useState(null); // fenêtre ouverte : "plan" ou "talk"
   const confirm = useConfirm();
   const live = current.data;
   const { setData } = current;
@@ -110,6 +116,17 @@ export default function Match() {
     }
   }
 
+  // Plan de jeu et discours : le match s'arrête le temps de la décision.
+  const openPanel = (kind) => {
+    setPlaying(false);
+    setPanel(kind);
+  };
+
+  const resume = () => {
+    setPanel(null);
+    start();
+  };
+
   const handOver = () => {
     setPlaying(false);
     confirm.ask({
@@ -128,6 +145,7 @@ export default function Match() {
   const myId = live.my_club_id;
   const sides = [live.home, live.away];
   const shownSide = sides.find((side) => side.club.id === lineupClub) ?? sides.find((side) => side.club.id === myId) ?? live.home;
+  const mySide = sides.find((side) => side.club.id === myId);
 
   return (
     <div className="live">
@@ -146,6 +164,30 @@ export default function Match() {
         onHandOver={handOver}
         onFinish={finish}
       />
+      <Actions live={live} side={mySide} onOpen={openPanel} />
+      {panel === "plan" && (
+        <PlanDialog
+          tactics={mySide.tactics}
+          busy={busy}
+          error={error}
+          onChange={(tactics) => act(() => api.setLiveTactics(tactics))}
+          resumeLabel={live.minute === 0 ? "Coup d'envoi" : "Reprendre le match"}
+          onClose={() => setPanel(null)}
+          onResume={resume}
+        />
+      )}
+      {panel === "talk" && (
+        <TalkDialog
+          live={live}
+          side={mySide}
+          busy={busy}
+          error={error}
+          onTalk={(key) => act(() => api.talkLive(key))}
+          resumeLabel={live.minute === 0 ? "Coup d'envoi" : "Reprendre le match"}
+          onClose={() => setPanel(null)}
+          onResume={resume}
+        />
+      )}
       <div className="live__grid fill">
         {phone ? (
           // Téléphone : un seul fil des faits de jeu, puis la composition d'une équipe au choix.
@@ -171,7 +213,6 @@ export default function Match() {
               mine={shownSide.club.id === myId}
               paused={!playing && !live.finished}
               busy={busy}
-              onTactics={(tactics) => act(() => api.setLiveTactics(tactics))}
               onSubstitute={(out, into) => act(() => api.substituteLive(out, into))}
             />
           </>
@@ -187,7 +228,6 @@ export default function Match() {
                 mine={side.club.id === myId}
                 paused={!playing && !live.finished}
                 busy={busy}
-                onTactics={(tactics) => act(() => api.setLiveTactics(tactics))}
                 onSubstitute={(out, into) => act(() => api.substituteLive(out, into))}
               />
             ))}
@@ -493,7 +533,7 @@ function Mark({ type }) {
 
 // --- Composition d'une équipe --------------------------------------------------------------
 
-function Lineup({ side, mine, paused, busy, onTactics, onSubstitute }) {
+function Lineup({ side, mine, paused, busy, onSubstitute }) {
   const [outgoing, setOutgoing] = useState(null); // joueur qu'on va remplacer
   const canManage = mine && paused && !busy;
   const byNumber = Object.fromEntries(side.players.filter((p) => p.slot_number !== null).map((p) => [p.slot_number, p]));
@@ -521,12 +561,10 @@ function Lineup({ side, mine, paused, busy, onTactics, onSubstitute }) {
         </span>
       </div>
 
-      {mine && <Tactics tactics={side.tactics} disabled={!canManage} onChange={onTactics} />}
-
       {mine && (
         <p className="live-lineup__hint muted">
           {!paused
-            ? "Mets le match en pause pour changer la tactique ou faire un remplacement."
+            ? "Mets le match en pause pour faire un remplacement."
             : outgoingPlayer
               ? `${outgoingPlayer.last_name} va sortir : choisis qui entre sur le banc.`
               : "Clique sur un joueur du terrain pour le remplacer."}
@@ -674,28 +712,188 @@ function Energy({ value, frozen }) {
   );
 }
 
-// Les trois curseurs de la tactique, en listes déroulantes (changement immédiat).
-function Tactics({ tactics, disabled, onChange }) {
+// --- Plan de jeu et discours --------------------------------------------------------------
+
+const percent = (value) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(Math.round(value * 100))} %`;
+
+// Nervosité de l'équipe, en un mot (elle pèse sur les cartons).
+function temper(heat) {
+  if (heat >= 0.6) return "Survoltée";
+  if (heat >= 0.2) return "Nerveuse";
+  if (heat <= -0.2) return "Sereine";
+  return null;
+}
+
+// Sous le tableau d'affichage : le plan de jeu en cours, le discours possible, et
+// l'élan que les discours ont donné à l'équipe.
+function Actions({ live, side, onOpen }) {
+  const plan = TACTICS.map((axis) => axis.options.find((o) => o.key === side.tactics[axis.key])?.label).join(" · ");
+  const { moment, next_at: nextAt } = live.talk;
+  const locker = moment === "kickoff" || moment === "break";
+  const mood = temper(side.heat);
+  const lastTalk = side.talks.at(-1);
   return (
-    <div className="tactics">
-      {TACTICS.map((axis) => (
-        <label key={axis.key} className="tactics__axis">
-          <span className="tactics__label">{axis.label}</span>
-          <select
-            className="input tactics__select"
-            value={tactics[axis.key]}
-            disabled={disabled}
-            title={axis.options.find((o) => o.key === tactics[axis.key])?.scope}
-            onChange={(event) => onChange({ [axis.key]: event.target.value })}
-          >
-            {axis.options.map((option) => (
-              <option key={option.key} value={option.key}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      ))}
+    <div className="live-actions">
+      <button type="button" className="live-action" disabled={live.finished} onClick={() => onOpen("plan")}>
+        <span className="live-action__label">Plan de jeu</span>
+        <span className="live-action__value">{plan}</span>
+      </button>
+      <button
+        type="button"
+        className={`live-action${locker ? " live-action--due" : ""}`}
+        disabled={live.finished || !moment}
+        onClick={() => onOpen("talk")}
+      >
+        <span className="live-action__label">Discours</span>
+        <span className="live-action__value">
+          {moment
+            ? TALK_MOMENTS[moment]
+            : live.finished
+              ? "Match terminé"
+              : nextAt
+                ? `Possible à la ${nextAt}'`
+                : "Pas maintenant"}
+        </span>
+      </button>
+      <Spirit spirit={side.spirit} mood={mood} lastTalk={lastTalk} />
     </div>
+  );
+}
+
+// L'élan va de −12 % à +15 % : la jauge part du centre, à droite quand il porte, à
+// gauche (en rouge) quand il pèse. Sous elle, le dernier discours.
+const SPIRIT_SCALE = 0.15;
+
+function Spirit({ spirit, mood, lastTalk }) {
+  const flat = Math.abs(spirit) < 0.005;
+  const down = spirit < 0 && !flat;
+  const width = flat ? 0 : Math.min(50, (Math.abs(spirit) / SPIRIT_SCALE) * 50);
+  const note = lastTalk ? `${TALKS[lastTalk.key].label} · ${lastTalk.minute}'` : "Aucun discours";
+  return (
+    <div className="live-actions__spirit" title="L'élan multiplie les notes collectives et s'estompe au fil des minutes">
+      <div className="spirit__head">
+        <span className="live-action__label">
+          Élan{mood && <span className="spirit__mood"> · {mood}</span>}
+        </span>
+        <span className={`spirit__value num${down ? " spirit__value--down" : ""}`}>{flat ? "–" : percent(spirit)}</span>
+      </div>
+      <span className="spirit__track" aria-hidden="true">
+        <span
+          className={`spirit__fill${down ? " spirit__fill--down" : ""}`}
+          style={down ? { right: "50%", width: `${width}%` } : { left: "50%", width: `${width}%` }}
+        />
+      </span>
+      <span className="muted spirit__note" title={note}>
+        {note}
+      </span>
+    </div>
+  );
+}
+
+// Plan de jeu : les trois curseurs de la tactique, en pastilles (changement immédiat).
+function PlanDialog({ tactics, busy, error, resumeLabel, onChange, onClose, onResume }) {
+  return (
+    <Modal compact className="modal--dialog live-dialog" onClose={onClose}>
+      <div>
+        <p className="eyebrow">Match en pause</p>
+        <h2 className="confirm__title">Plan de jeu</h2>
+      </div>
+      {TACTICS.map((axis) => {
+        const current = axis.options.find((o) => o.key === tactics[axis.key]);
+        return (
+          <div key={axis.key} className="plan__axis">
+            <span className="tactics__label">{axis.label}</span>
+            <div className="chips" role="group" aria-label={axis.label}>
+              {axis.options.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  className="chip"
+                  aria-pressed={option.key === current?.key}
+                  disabled={busy}
+                  onClick={() => option.key !== current?.key && onChange({ [axis.key]: option.key })}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <span className="muted plan__scope">{current?.scope}</span>
+          </div>
+        );
+      })}
+      {error && <p className="status--error" style={{ margin: 0 }}>{error.message}</p>}
+      <div className="confirm__actions">
+        <button type="button" className="button" onClick={onClose}>
+          Fermer
+        </button>
+        <button type="button" className="button button--primary" disabled={busy} autoFocus onClick={onResume}>
+          {resumeLabel}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+// Chance qu'un discours porte, et risque qu'il se retourne, en mots.
+const chance = (value) => (value >= 0.55 ? "Bonnes chances" : value >= 0.4 ? "Une chance sur deux" : "Peu de chances");
+const risk = (value) => (value < 0.1 ? "sans risque" : value < 0.3 ? "risqué" : "quitte ou double");
+
+// Discours : au vestiaire (avant le coup d'envoi, à la pause) ou du bord du terrain.
+// Une fois le discours tenu, la fenêtre montre son issue.
+function TalkDialog({ live, side, busy, error, resumeLabel, onTalk, onClose, onResume }) {
+  const [spokenAt, setSpokenAt] = useState(null); // nombre de discours avant le nôtre
+  const heard = spokenAt !== null ? side.talks[spokenAt] : null;
+  const { moment, options } = live.talk;
+  const talk = (key) => {
+    setSpokenAt(side.talks.length);
+    onTalk(key);
+  };
+  return (
+    <Modal compact className="modal--dialog live-dialog" onClose={busy ? () => {} : onClose}>
+      <div>
+        <p className="eyebrow">{heard ? `Discours · ${heard.minute}'` : TALK_MOMENTS[moment] ?? "Discours"}</p>
+        <h2 className="confirm__title">{heard ? TALKS[heard.key].label : "Parler à l'équipe"}</h2>
+      </div>
+
+      {heard ? (
+        <div className={`talk__outcome talk__outcome--${heard.outcome}`}>
+          <span className="talk__verdict">{TALK_OUTCOMES[heard.outcome]}</span>
+          <p className="confirm__text">{TALKS[heard.key][heard.outcome]}</p>
+          <span className="muted talk__effect">
+            {Math.abs(heard.spirit) >= 0.005 ? `Élan ${percent(heard.spirit)}` : "Élan inchangé"}
+            {heard.heat >= 0.1 && " · les nerfs s'échauffent"}
+            {heard.heat <= -0.1 && " · les esprits se calment"}
+          </span>
+        </div>
+      ) : spokenAt !== null && !error ? (
+        <p className="muted">Les joueurs écoutent…</p>
+      ) : (
+        <ul className="talk__options">
+          {options.map((option) => (
+            <li key={option.key}>
+              <button type="button" className="talk__option" disabled={busy || !moment} onClick={() => talk(option.key)}>
+                <span className="talk__name">{TALKS[option.key].label}</span>
+                <span className="muted talk__scope">{TALKS[option.key].scope}</span>
+                <span className={`talk__odds${option.backfire >= 0.3 ? " talk__odds--risky" : ""}`}>
+                  {chance(option.success)} · {risk(option.backfire)}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {error && <p className="status--error" style={{ margin: 0 }}>{error.message}</p>}
+      <div className="confirm__actions">
+        <button type="button" className="button" disabled={busy} onClick={onClose}>
+          {heard ? "Fermer" : "Ne rien dire"}
+        </button>
+        {heard && (
+          <button type="button" className="button button--primary" autoFocus onClick={onResume}>
+            {resumeLabel}
+          </button>
+        )}
+      </div>
+    </Modal>
   );
 }
