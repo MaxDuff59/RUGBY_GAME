@@ -22,7 +22,7 @@ import random
 from dataclasses import dataclass, field
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from api import cup, internationals
@@ -133,7 +133,18 @@ def season_rng(season: SeasonRow, *labels: object) -> random.Random:
 
 
 def _club_rows(session: Session) -> list[ClubRow]:
+    """Les clubs, effectifs compris (chargés avec eux) : coûteux, seulement s'il les faut."""
     return list(session.scalars(select(ClubRow).order_by(ClubRow.id)))
+
+
+def club_names(session: Session) -> dict[int, str]:
+    """Le nom de chaque club, sans charger les effectifs."""
+    return dict(session.execute(select(ClubRow.id, ClubRow.name)).all())
+
+
+def _club_leagues(session: Session) -> dict[int, str]:
+    """Le championnat de chaque club, dans l'ordre des identifiants, sans les effectifs."""
+    return dict(session.execute(select(ClubRow.id, ClubRow.league).order_by(ClubRow.id)).all())
 
 
 def focus_league(session: Session) -> str:
@@ -260,7 +271,7 @@ def _season_out(session: Session, season: SeasonRow, league: str | None = None) 
     codes = _season_league_codes(season)
     if league not in codes:
         raise HTTPException(status_code=404, detail=f"Championnat « {league} » introuvable")
-    names = {row.id: row.name for row in _club_rows(session)}
+    names = club_names(session)
 
     standings = [
         StandingOut(
@@ -351,8 +362,8 @@ def create_season(session: Session, year: int, seed: int | None = None) -> Seaso
     """Tire le calendrier de la saison régulière de chaque championnat (matchs sans
     score) et l'enregistre, avec la graine du hasard de la saison (au hasard sans `seed`)."""
     by_league: dict[str, list[int]] = {}
-    for row in _club_rows(session):
-        by_league.setdefault(row.league, []).append(row.id)
+    for club_id, league in _club_leagues(session).items():
+        by_league.setdefault(league, []).append(club_id)
 
     season = SeasonRow(year=year, seed=random.randrange(SEED_RANGE) if seed is None else seed)
     pros, youths = [], []
@@ -380,7 +391,7 @@ def _draw_cup(session: Session, season: SeasonRow, preseason: dict[int, int]) ->
     """La Coupe d'Europe de la saison : les clubs de chaque championnat qualificatif dans
     l'ordre de la saison régulière précédente, ou, la première saison, de leur effectif."""
     previous = session.scalars(select(SeasonRow).where(SeasonRow.year == season.year - 1)).first()
-    leagues = {row.id: row.league for row in _club_rows(session)}
+    leagues = _club_leagues(session)
     ranked = {}
     for league in europe.LEAGUES:
         members = [club_id for club_id, code in leagues.items() if code == league]
@@ -480,7 +491,12 @@ def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayRes
     # Seuls les clubs des championnats du jour, ceux de la coupe (et le club dirigé)
     # sont chargés.
     rows_by_id = {
-        row.id: row for row in _club_rows(session) if row.league in leagues or row.id in cup_clubs
+        row.id: row
+        for row in session.scalars(
+            select(ClubRow)
+            .where(or_(ClubRow.league.in_(leagues), ClubRow.id.in_(cup_clubs)))
+            .order_by(ClubRow.id)
+        )
     }
     wanted = set(rows_by_id) | ({my_club_id} if my_club_id is not None else set())
     clubs = load_clubs(session, wanted)
@@ -684,7 +700,7 @@ def _play_matchday(session: Session, season: SeasonRow) -> tuple[MatchdayOut, li
     else:
         raise HTTPException(status_code=400, detail="La saison est terminée")
     _prepare_day(session, season)
-    names = {row.id: row.name for row in _club_rows(session)}
+    names = club_names(session)
     return _matchday_out(ours, names), injuries
 
 
@@ -734,7 +750,7 @@ def get_season_review(session: SessionDep) -> SeasonReviewOut:
     league = season_leagues(season)[club_id]
     if _phase(season, league) != "finished":
         raise HTTPException(status_code=400, detail="La saison n'est pas terminée")
-    names = {row.id: row.name for row in _club_rows(session)}
+    names = club_names(session)
     matches = _league_matches(season, league)
 
     table = _standings(season, league).table()

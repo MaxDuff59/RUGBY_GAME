@@ -8,6 +8,7 @@ plus que le centre est bon).
 """
 
 from fastapi import APIRouter, HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api.deps import SessionDep, load_my_club_row
@@ -27,14 +28,17 @@ router = APIRouter(prefix="/academy", tags=["formation"])
 
 
 def _overview(session: Session, me: ClubRow) -> AcademyOverview:
-    from api.routers.seasons import _club_rows, _matchday_out, _summary
+    from api.routers.seasons import _matchday_out, _summary, club_names
 
     session.expire_all()
     club = me.to_domain()
     day = game_date(session)
-    club_rows = _club_rows(session)
-    clubs = {row.id: row.to_domain() for row in club_rows}
-    names = {row.id: row.name for row in club_rows}
+    # Les seuls clubs de son championnat : ce sont eux qu'affronte le centre.
+    clubs = {
+        row.id: row.to_domain()
+        for row in session.scalars(select(ClubRow).where(ClubRow.league == me.league))
+    }
+    names = club_names(session)
 
     # Championnat espoirs : celui du championnat pro du club.
     season: SeasonRow | None = current_season(session)
