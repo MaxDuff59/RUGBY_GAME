@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from api.deps import SessionDep, load_my_club_row
 from api.jokers import joker_ids, squad_count
 from api.ledger import current_season, game_date
+from api.rules import check_salary_cap
 from api.schemas import AcademyOverview, PlayerOut, StandingOut, StrengthOut
 from engine.development import OWN_UNCERTAINTY
 from engine.economy import SQUAD_MAX, SQUAD_MIN, wage_for
@@ -121,8 +122,10 @@ def promote(player_id: int, session: SessionDep) -> AcademyOverview:
     row = _my_player(session, me, player_id, Squad.YOUTH)
     if squad_count(session, me) >= SQUAD_MAX:
         raise HTTPException(status_code=400, detail=f"Effectif pro complet ({SQUAD_MAX} joueurs)")
+    wage = wage_for(row.to_domain())
+    check_salary_cap(me.to_domain(), wage)
     row.squad = Squad.PRO.value
-    row.wage = wage_for(row.to_domain())
+    row.wage = wage
     session.commit()
     return _overview(session, me)
 

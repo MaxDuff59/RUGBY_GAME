@@ -237,6 +237,12 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   de la saison, révélation, meilleur marqueur, réalisateur, plaqueur : libellé, blason,
   nom, valeur) et les records en pastilles (essais, points, en une saison, larges
   victoires). À droite, l'équipe type sur le terrain. Ce qui est à nous en accent.
+- Règlements (Top 14, Pro D2, Premiership) : dans l'effectif, la phrase de composition
+  dit « JIFF sur la feuille de match : 17 / 23 (minimum 14) » (en rouge sous le
+  minimum) et les joueurs étrangers portent l'étiquette grise « Non JIFF » ; dans les
+  transferts, un chiffre de plus : ce qu'il reste sous le plafond salarial ; dans les
+  finances, le plafond sous les salaires des pros. Une signature, une prolongation ou
+  une promotion qui dépasserait le plafond est refusée avec son montant.
 - Carrière du manager : une étape « Carrière » dans le bilan de fin de saison (entre
   « Vie du club » et « Contrats ») : le palier de réputation en grand titre (« Espoir du
   banc »… « Star du banc »), réputation sur 100, saisons et titres, puis les clubs qui

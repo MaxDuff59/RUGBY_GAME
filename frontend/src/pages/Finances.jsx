@@ -20,7 +20,11 @@ export default function Finances() {
 
       <div className="tiles">
         <Tile label="Trésorerie" value={formatMoney(data.balance)} />
-        <Tile label="Salaires des pros" value={formatMoney(data.player_wages)} note="par saison" />
+        <Tile
+          label="Salaires des pros"
+          value={formatMoney(data.player_wages)}
+          note={data.salary_cap ? `par saison · plafond ${formatMoney(data.salary_cap)}` : "par saison"}
+        />
         <Tile label="Salaires des espoirs" value={formatMoney(data.youth_wages)} note="par saison" />
         <Tile label="Salaires du staff" value={formatMoney(data.staff_wages)} note="par saison" />
         <Tile label="Masse salariale" value={formatMoney(totalWages)} note="par saison" />

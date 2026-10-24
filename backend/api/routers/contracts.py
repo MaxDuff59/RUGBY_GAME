@@ -24,6 +24,7 @@ from api.free_agents import release
 from api.jokers import joker_ids
 from api.ledger import current_season, game_date
 from api.moves import log_move
+from api.rules import check_salary_cap
 from api.schemas import (
     ClubRef,
     ContractOut,
@@ -265,6 +266,8 @@ def extend(player_id: int, payload: ExtendIn, session: SessionDep) -> ContractsO
         raise HTTPException(status_code=400, detail=f"{player.name} veut un contrat de {seasons}")
 
     wage = renewal_wage(player, club)
+    if player.squad == Squad.PRO:
+        check_salary_cap(club, wage - player.wage)
     row.wage = wage
     row.contract_until = year + payload.years
     session.add(

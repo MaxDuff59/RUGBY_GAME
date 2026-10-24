@@ -107,6 +107,11 @@ export default function Squad() {
             {club.lineup_custom ? "Ta composition" : "Composition choisie par le staff"} · touche un joueur du
             terrain pour le remplacer, une ligne du tableau pour sa fiche
             {away.length > 0 && ` · doublon : ${away.length} joueur${away.length > 1 ? "s" : ""} en sélection au prochain match`}
+            {club.strength.jiff_min > 0 && (
+              <span className={club.strength.jiff < club.strength.jiff_min ? "status--error" : undefined}>
+                {` · JIFF sur la feuille de match : ${club.strength.jiff} / 23 (minimum ${club.strength.jiff_min})`}
+              </span>
+            )}
           </p>
           {club.lineup_custom && (
             <button type="button" className="button button--small" disabled={resetting} onClick={resetLineup}>
@@ -188,6 +193,11 @@ export default function Squad() {
                       <PlayerAvatar src={player.photo} size={26} />
                       <InjuryIcon injury={player.injury} />
                       {player.name}
+                      {club.strength.jiff_min > 0 && !player.jiff && (
+                        <span className="tag tag--light" title="Pas issu des filières de formation françaises : il ne compte pas parmi les JIFF de la feuille de match">
+                          Non JIFF
+                        </span>
+                      )}
                       {player.id === club.strength.captain_id && (
                         <span className="captain-badge" title="Capitaine">
                           C

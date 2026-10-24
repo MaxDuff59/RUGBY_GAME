@@ -32,6 +32,7 @@ from api.jokers import joker_ids, joker_slots, live_jokers, squad_count, start_t
 from api.jokers import sign as sign_joker
 from api.ledger import current_season, game_date, record
 from api.moves import log_move
+from api.rules import check_salary_cap
 from api.schemas import (
     ClubRef,
     DealOption,
@@ -51,6 +52,7 @@ from data.leagues import league_config, sort_codes
 from engine.economy import SQUAD_MAX, SQUAD_MIN, TransactionCategory, sale_price
 from engine.free_agents import free_agent_wage, seasons_without_club
 from engine.journal import MoveKind
+from engine.regulations import payroll, salary_cap
 from engine.transfers import (
     CLUB_OPENING_MARKUP,
     COOLDOWN_WEEKS_AFTER_MY_EXIT,
@@ -263,6 +265,8 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
         squad_min=SQUAD_MIN,
         squad_max=SQUAD_MAX,
         my_level=round(club_level(me.to_domain()), 1),
+        payroll=payroll(me.to_domain()),
+        salary_cap=salary_cap(me.league),
         leagues=[league_config(code).short_name for code in sort_codes({r.league for r in others})],
         listings=listings,
         negotiations=[_negotiation_out(row) for row in negotiations],
@@ -686,11 +690,13 @@ def make_offer(negotiation_id: int, payload: OfferIn, session: SessionDep) -> Of
     else:
         kind = DealKind(row.kind)
         if kind == DealKind.LOAN:
+            check_salary_cap(me.to_domain(), player.wage)
             verdict, ask, wage = "accepted", row.wage_demand, player.wage
         else:
             if payload.wage is None:
                 raise HTTPException(status_code=400, detail="Indique le salaire proposé")
             wage = payload.wage
+            check_salary_cap(me.to_domain(), wage)
             low, high = preferred_years(player.to_domain())
             if kind != DealKind.JOKER and not low <= payload.years <= high:
                 # La durée ne lui convient pas : il ne discute même pas le salaire.

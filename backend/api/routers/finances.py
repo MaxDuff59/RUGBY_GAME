@@ -6,6 +6,7 @@ from sqlalchemy import select
 from api.deps import SessionDep, load_my_club_row
 from api.schemas import FinancesOut, TransactionOut
 from engine.economy import squad_value
+from engine.regulations import salary_cap
 from models.orm import TransactionRow
 
 router = APIRouter(prefix="/finances", tags=["finances"])
@@ -27,5 +28,6 @@ def get_finances(session: SessionDep) -> FinancesOut:
         staff_wages=club.staff_wages,
         squad_value=squad_value(club),
         squad_size=len(club.players),
+        salary_cap=salary_cap(club.league),
         transactions=[TransactionOut.model_validate(t) for t in transactions],
     )

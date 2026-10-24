@@ -57,7 +57,7 @@ from enum import StrEnum
 from itertools import accumulate
 
 from engine import crowd as crowds
-from engine import team_talk
+from engine import regulations, team_talk
 from engine.coaching import Coaching
 from engine.coaching import coaching as coaching_of
 from engine.crowd import Crowd
@@ -615,8 +615,17 @@ def team_strength(
     club: Club, day: datetime.date | None = None, form: Form = NEUTRAL_FORM
 ) -> TeamStrength:
     """XV de départ, banc et notes collectives ; `form` les module (neutre par défaut),
-    le staff technique aussi."""
+    le staff technique aussi. La feuille de match respecte le minimum de JIFF de son
+    championnat (engine/regulations.py)."""
     lineup = select_lineup(club, day)
+    lineup, bench = regulations.comply(
+        club,
+        lineup,
+        select_bench(club, lineup, day),
+        club.available_players(day),
+        list(SLOT_POSITIONS),
+        lambda position, player: RATING_FOR_POSITION[position](player),
+    )
     factor = form.factor([p.id for p in lineup])
     ratings = coach(
         collective_ratings(zip(SLOT_POSITIONS, lineup, strict=False), factor=factor),
@@ -630,7 +639,7 @@ def team_strength(
         attack=ratings.attack,
         defense=ratings.defense,
         kicker=max(lineup, key=lambda p: p.kicking),
-        bench=select_bench(club, lineup, day),
+        bench=bench,
     )
 
 

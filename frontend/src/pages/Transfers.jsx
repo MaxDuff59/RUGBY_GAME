@@ -202,6 +202,12 @@ export default function Transfers() {
             }
           />
           <Stat value={formatNote(data.my_level)} label={phone ? "niveau du XV" : "niveau de ton XV"} />
+          {data.salary_cap && (
+            <Stat
+              value={formatMoney(data.salary_cap - data.payroll)}
+              label={phone ? "sous le plafond" : `sous le plafond salarial (${formatMoney(data.salary_cap)})`}
+            />
+          )}
         </div>
       </header>
 

@@ -24,6 +24,7 @@ from engine.match_engine import (
     leadership,
 )
 from engine.notes import Note
+from engine.regulations import is_jiff, jiff_min
 from engine.sponsors import Placement
 from engine.team_talk import Moment, Outcome
 from engine.training import Intensity, Theme
@@ -161,6 +162,7 @@ class PlayerOut(BaseModel):
     yellow_cards: int = 0
     # Ascendant sur le groupe, sur 20 (expérience et niveau) : l'étoffe d'un capitaine.
     leadership: float = 0.0
+    jiff: bool = False  # issu des filières de formation françaises (engine/regulations.py)
     # Potentiel estimé par le club (engine/development.py) : une fourchette de note
     # générale, d'autant plus étroite que le club connaît le joueur ; le vrai reste caché.
     potential_low: float = 0.0
@@ -188,6 +190,7 @@ class PlayerOut(BaseModel):
             "leadership",
             "potential_low",
             "potential_high",
+            "jiff",
         }
         fields = {name: getattr(player, name) for name in cls.model_fields if name not in computed}
         injury = None
@@ -205,6 +208,7 @@ class PlayerOut(BaseModel):
             leadership=round(20 * leadership(player), 1),
             potential_low=low,
             potential_high=high,
+            jiff=is_jiff(player),
         )
 
 
@@ -286,6 +290,10 @@ class StrengthOut(BaseModel):
     kicker_id: int
     lineup_ids: list[int]
     captain_id: int | None = None  # capitaine du XV : celui du manager s'il est titulaire
+    bench_ids: list[int] = []  # les 8 remplaçants
+    # JIFF sur la feuille de match (les 23) et le minimum du championnat (0 : sans règle).
+    jiff: int = 0
+    jiff_min: int = 0
 
     @classmethod
     def from_team(cls, team: TeamStrength) -> "StrengthOut":
@@ -299,6 +307,9 @@ class StrengthOut(BaseModel):
             kicker_id=team.kicker.id,
             lineup_ids=[p.id for p in team.lineup],
             captain_id=captain.id if captain else None,
+            bench_ids=[p.id for p in team.bench],
+            jiff=sum(is_jiff(p) for p in team.lineup + team.bench),
+            jiff_min=jiff_min(team.club),
         )
 
 
@@ -971,6 +982,7 @@ class FinancesOut(BaseModel):
     staff_wages: int
     squad_value: int
     squad_size: int
+    salary_cap: int | None = None  # plafond salarial du championnat (engine/regulations.py)
     transactions: list[TransactionOut]  # de la plus récente à la plus ancienne
 
 
@@ -1162,6 +1174,8 @@ class TransfersOverview(BaseModel):
     squad_min: int
     squad_max: int
     my_level: float
+    payroll: int = 0  # masse salariale des pros, par saison
+    salary_cap: int | None = None  # plafond de son championnat (engine/regulations.py)
     leagues: list[str]  # noms courts des championnats du marché, dans l'ordre
     listings: list[ListingOut]
     negotiations: list[NegotiationOut]  # en cours, et pré-contrats en attente de l'intersaison
