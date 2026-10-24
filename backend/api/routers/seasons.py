@@ -210,7 +210,47 @@ def _matchday_out(rows: list[MatchRow], names: dict[int, str]) -> MatchdayOut:
         stage=Stage(first.stage),
         date=first.date,
         matches=[_summary(row, names) for row in rows],
+        cup=first.squad == cup.CUP_SQUAD,
     )
+
+
+def next_fixture(session: Session, season: SeasonRow) -> MatchRow | None:
+    """Le prochain match du club dirigé, celui où s'arrête la prochaine journée jouée :
+    la journée de son championnat, ou un match de Coupe d'Europe qui tombe avant.
+    None s'il ne joue pas la prochaine journée de son championnat (phases finales).
+
+    Les tours de phases finales prêts sont déjà ouverts (`_prepare_day`, après chaque
+    journée)."""
+    career = session.scalars(select(CareerRow)).first()
+    if career is None:
+        return None
+    league = focus_league(session)
+    club_id = career.club_id
+    unplayed = [m for m in season.matches if not m.is_played and m.league == league]
+    league_day = min((m.date for m in unplayed), default=None)
+    mine = [
+        m
+        for m in [*unplayed, *season.cup_matches]
+        if not m.is_played
+        and club_id in (m.home_club_id, m.away_club_id)
+        and (league_day is None or m.date <= league_day)
+    ]
+    return min(mine, key=lambda m: (m.date, m.id), default=None)
+
+
+def _next_match_out(
+    session: Session, season: SeasonRow, names: dict[int, str]
+) -> MatchdayOut | None:
+    """Le prochain match du club dirigé et les autres affiches du jour de sa compétition."""
+    row = next_fixture(session, season)
+    if row is None:
+        return None
+    pool = season.cup_matches if row.squad == cup.CUP_SQUAD else season.matches
+    todays = sorted(
+        (m for m in pool if not m.is_played and m.date == row.date and m.league == row.league),
+        key=lambda m: m.id,
+    )
+    return _matchday_out(todays, names)
 
 
 def _season_out(session: Session, season: SeasonRow, league: str | None = None) -> SeasonOut:
@@ -258,6 +298,7 @@ def _season_out(session: Session, season: SeasonRow, league: str | None = None) 
         club_count=out.club_count,
         playoff_qualifiers=league_config(league).playoffs.qualifiers,
         next_matchday=next_matchday,
+        next_match=_next_match_out(session, season, names),
         standings=standings,
         matches=[_summary(m, names) for m in matches],
         champion=ClubRef(id=champion_id, name=names[champion_id]) if champion_id else None,
@@ -611,21 +652,27 @@ def _selector_list(session: Session, season: SeasonRow, human) -> set[int]:
 
 
 def _play_matchday(session: Session, season: SeasonRow) -> tuple[MatchdayOut, list[InjuryCase]]:
-    """Joue jusqu'à la prochaine journée du championnat du club dirigé.
+    """Joue jusqu'à la prochaine journée du championnat du club dirigé, ou jusqu'à son
+    prochain match de Coupe d'Europe s'il tombe avant.
 
     Les autres championnats ont leur propre calendrier : leurs matchs des jours
-    d'avant (et du même jour) se jouent en chemin. Renvoie la journée jouée du
-    championnat du club dirigé et ses blessés.
+    d'avant (et du même jour) se jouent en chemin. Renvoie la journée jouée (du
+    championnat du club dirigé, ou de la coupe) et ses blessés.
     """
     league = focus_league(session)
     if _phase(season, league) == "finished":
         raise HTTPException(status_code=400, detail="La saison est terminée")
+    career = session.scalars(select(CareerRow)).first()
+    my_club_id = career.club_id if career is not None else None
     injuries: list[InjuryCase] = []
     while (day := _prepare_day(session, season)) is not None:
         result = _play_day(session, season, day)
         injuries += result.cases
         ours = [m for m in result.matches if m.league == league]
         if ours:
+            break
+        ours = [m for m in result.matches if m.squad == cup.CUP_SQUAD]
+        if any(my_club_id in (m.home_club_id, m.away_club_id) for m in ours):
             break
     else:
         raise HTTPException(status_code=400, detail="La saison est terminée")

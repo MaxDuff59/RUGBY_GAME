@@ -701,6 +701,7 @@ class LiveOut(BaseModel):
     date: datetime.date
     neutral: bool
     knockout: bool
+    cup: bool  # un match de la Coupe d'Europe (sinon, du championnat)
     my_club_id: int
     minute: int  # dernière minute jouée (0 avant le coup d'envoi)
     last_minute: int  # 80, ou 100 si la prolongation est engagée
@@ -780,6 +781,7 @@ class MatchdayOut(BaseModel):
     stage: Stage
     date: datetime.date
     matches: list[MatchSummary]
+    cup: bool = False  # une journée de la Coupe d'Europe (sinon, du championnat)
 
 
 # --- Carrière ------------------------------------------------------------------------
@@ -877,6 +879,9 @@ class SeasonOut(BaseModel):
     club_count: int
     playoff_qualifiers: int
     next_matchday: MatchdayOut | None
+    # Le prochain match du club dirigé, avec les autres affiches du jour de sa compétition :
+    # la journée du championnat, ou un week-end de Coupe d'Europe qui tombe avant.
+    next_match: MatchdayOut | None = None
     standings: list[StandingOut]  # saison régulière seulement
     matches: list[MatchSummary]  # tout le calendrier, phases finales comprises
     champion: ClubRef | None

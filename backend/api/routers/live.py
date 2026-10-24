@@ -15,7 +15,7 @@ tombe : mêmes routes, la sauvegarde est à part (`LiveInternationalRow`).
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from api import internationals
+from api import cup, internationals
 from api.affairs import forced_starters, ignore_pending
 from api.deps import SessionDep, load_clubs
 from api.live import (
@@ -31,9 +31,11 @@ from api.routers import selection
 from api.routers.internationals import NATION_NAMES
 from api.routers.seasons import (
     _current_or_404,
-    _ensure_next_stage,
+    _phase,
+    _prepare_day,
     _seeding,
     focus_league,
+    next_fixture,
     play_next_matchday,
     season_rng,
 )
@@ -93,7 +95,8 @@ def get_live(session: SessionDep) -> LiveOut:
 
 @router.post("", response_model=LiveOut, status_code=201)
 def start_live(session: SessionDep) -> LiveOut:
-    """Lance le match du club dirigé de la prochaine journée (ou reprend celui en cours).
+    """Lance le prochain match du club dirigé (ou reprend celui en cours) : celui de la
+    prochaine journée de son championnat, ou de la Coupe d'Europe si elle tombe avant.
 
     Les affaires sans réponse sont réglées d'office, la semaine d'entraînement de
     tous les clubs est jouée, puis le XV et le banc sont choisis à la date du match.
@@ -114,20 +117,28 @@ def start_live(session: SessionDep) -> LiveOut:
 
     ignore_pending(session)
     league = focus_league(session)
-    _ensure_next_stage(session, season, league)
-    unplayed = [m for m in season.matches if not m.is_played and m.league == league]
-    if not unplayed:
+    _prepare_day(session, season)
+    if _phase(season, league) == "finished":
         raise HTTPException(status_code=400, detail="La saison est terminée")
-    matchday = min(m.matchday for m in unplayed)
-    todays = [m for m in unplayed if m.matchday == matchday]
-    match_row = next((m for m in todays if my_club_id in (m.home_club_id, m.away_club_id)), None)
+    # Le match du club de la prochaine journée de son championnat, ou de la Coupe
+    # d'Europe si elle tombe avant.
+    match_row = next_fixture(session, season)
     if match_row is None:
         raise HTTPException(status_code=400, detail="Ton club ne joue pas cette journée")
     stage, day = Stage(match_row.stage), match_row.date
+    in_cup = match_row.squad == cup.CUP_SQUAD
 
-    # Semaine d'entraînement des clubs dont le championnat joue ce jour-là.
+    # Semaine d'entraînement des clubs qui jouent ce jour-là : ceux des championnats du
+    # jour et ceux de la coupe, comme pour une journée simulée.
     leagues = {m.league for m in season.matches if m.date == day and not m.is_played}
-    playing_ids = session.scalars(select(ClubRow.id).where(ClubRow.league.in_(leagues)))
+    cup_clubs = {
+        club_id
+        for m in season.cup_matches
+        if m.date == day and not m.is_played
+        for club_id in (m.home_club_id, m.away_club_id)
+    }
+    playing_ids = {*session.scalars(select(ClubRow.id).where(ClubRow.league.in_(leagues)))}
+    playing_ids |= cup_clubs
     clubs = load_clubs(session, {*playing_ids, my_club_id})
     clubs[my_club_id].forced_starters = forced_starters(session, my_club_id)
     # Doublon : les joueurs retenus par une sélection qui joue ce jour-là manquent.
@@ -135,7 +146,7 @@ def start_live(session: SessionDep) -> LiveOut:
     called_up = internationals.absentees_on(session, season, day)
     for club in clubs.values():
         internationals.rules.release(club, called_up, day)
-    playing = {club_id: club for club_id, club in clubs.items() if club.league in leagues}
+    playing = {club_id: club for club_id, club in clubs.items() if club_id in playing_ids}
     rng = season_rng(season, day, "live")
     history = History.load(session)
     forms = {club_id: history.form(club, day) for club_id, club in playing.items()}
@@ -148,14 +159,14 @@ def start_live(session: SessionDep) -> LiveOut:
     # Le public est là dès le coup d'envoi ; la billetterie de la journée le reprend.
     crowd = None
     if not match_row.neutral:
-        seeding = _seeding(season, league)
+        seeding = cup.seeding(session, season) if in_cup else _seeding(season, league)
         fervour = history.fervour(home.id).value
         crowd = gate(home, seeding.index(home.id) + 1, len(seeding), stage.is_playoff, rng, fervour)
     live = LiveMatch(
         home,
         away,
         rng=rng,
-        matchday=matchday,
+        matchday=match_row.matchday,
         neutral=match_row.neutral,
         day=day,
         home_form=forms[home.id],

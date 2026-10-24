@@ -210,9 +210,25 @@ export const formatPercent = (ratio) => `${upToOneDecimal.format(ratio * 100)} %
 // 1 -> "1 semaine", 6 -> "6 semaines"
 export const formatWeeks = (weeks) => `${weeks} semaine${weeks > 1 ? "s" : ""}`;
 
-// "J12" pour une journée, "Barrages" / "Demi-finales" / "Finale" sinon.
-export const matchdayLabel = (match) =>
-  match.stage === "regular" ? `J${match.matchday}` : STAGES[match.stage];
+// "J12" pour une journée, "Barrages" / "Demi-finales" / "Finale" sinon ; "Coupe · J1"
+// pour une journée de Coupe d'Europe (`cup`).
+export const matchdayLabel = (match) => {
+  const label = match.stage === "regular" ? `J${match.matchday}` : STAGES[match.stage];
+  return match.cup ? `Coupe · ${label}` : label;
+};
+
+// "Journée 12 sur 26" (sans `regularMatchdays` : "Journée 12"), "Demi-finales",
+// "Coupe d'Europe · Poules, journée 2 sur 4", "Coupe d'Europe · Quarts de finale".
+export function matchdayTitle(day, regularMatchdays = null) {
+  if (day.cup) {
+    return `Coupe d'Europe · ${day.stage === "regular" ? `Poules, journée ${day.matchday} sur ${CUP_POOL_ROUNDS}` : STAGES[day.stage]}`;
+  }
+  if (day.stage !== "regular") return STAGES[day.stage];
+  return regularMatchdays ? `Journée ${day.matchday} sur ${regularMatchdays}` : `Journée ${day.matchday}`;
+}
+
+// Les journées de poule de la Coupe d'Europe (engine/europe.py, POOL_ROUNDS).
+const CUP_POOL_ROUNDS = 4;
 
 // --- Match en direct ------------------------------------------------------------------
 

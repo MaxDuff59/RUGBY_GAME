@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api import internationals
+from api.cup import CUP_SQUAD
 from api.schemas import (
     ClubRef,
     CrowdOut,
@@ -242,6 +243,8 @@ def live_out(live: Live, names: dict[int, str], my_club_id: int) -> LiveOut:
         date=live.match_row.date,
         neutral=live.match_row.neutral,
         knockout=match.knockout,
+        # Un match de sélection (`InternationalRow`) n'a pas d'effectif : jamais de coupe.
+        cup=getattr(live.match_row, "squad", None) == CUP_SQUAD,
         my_club_id=my_club_id,
         minute=match.minute,
         last_minute=match.last_minute,

@@ -25,18 +25,30 @@ const formatFullDay = (iso) => fullDay.format(parseDate(iso)).replace(/ 1 /, " 1
 
 const plural = (count, word) => `${count} ${word}${count > 1 ? "s" : ""}`;
 
-// Journées du championnat encore à jouer, dans l'ordre : { matchday, stage, date, matches }.
-function upcoming(season) {
+// Journées encore à jouer, dans l'ordre : { matchday, stage, date, matches, cup }. Celles
+// du championnat, et (avec `clubId`) les journées de Coupe d'Europe où joue le club : la
+// simulation s'y arrête aussi.
+function upcoming(season, clubId = null) {
   const days = new Map();
-  for (const match of season.matches) {
-    if (match.home_score !== null) continue;
-    if (!days.has(match.matchday)) {
-      days.set(match.matchday, { matchday: match.matchday, stage: match.stage, date: match.date, matches: [] });
+  const add = (match, cup) => {
+    const key = `${cup ? "cup" : "league"}:${match.matchday}`;
+    if (!days.has(key)) {
+      days.set(key, { matchday: match.matchday, stage: match.stage, date: match.date, matches: [], cup });
     }
-    days.get(match.matchday).matches.push(match);
+    days.get(key).matches.push(match);
+  };
+  for (const match of season.matches) {
+    if (match.home_score === null) add(match, false);
   }
-  return [...days.values()].sort((a, b) => a.matchday - b.matchday);
+  for (const match of season.cup?.matches ?? []) {
+    const ours = match.home.id === clubId || match.away.id === clubId;
+    if (match.home_score === null && ours) add(match, true);
+  }
+  return [...days.values()].sort((a, b) => a.date.localeCompare(b.date) || a.matchday - b.matchday);
 }
+
+// La clé d'une journée jouée ou à jouer, la coupe à part du championnat.
+const dayKey = (day) => `${day.cup ? "cup" : "league"}:${day.matchday}`;
 
 // Raccourcis de « Simuler jusqu'à… » : la fin de la phase aller et celle de la saison
 // régulière tant qu'elles sont devant nous, puis la fin de la saison.
@@ -85,7 +97,7 @@ const OUTCOMES = {
 // dit si au moins une journée a été jouée.
 export default function Simulation({ season, clubId, initialUntil, onPlayed, onClose }) {
   // Sans date proposée : les deux prochaines journées, à ajuster.
-  const [until, setUntil] = useState(() => initialUntil ?? upcoming(season).slice(0, 2).at(-1)?.date ?? "");
+  const [until, setUntil] = useState(() => initialUntil ?? upcoming(season, clubId).slice(0, 2).at(-1)?.date ?? "");
   const [stopOnAffair, setStopOnAffair] = useState(false);
   const [step, setStep] = useState("setup"); // setup → running → done
   const [results, setResults] = useState([]); // une réponse de l'API par journée jouée
@@ -106,7 +118,7 @@ export default function Simulation({ season, clubId, initialUntil, onPlayed, onC
     };
   }, []);
 
-  const plan = upcoming(season);
+  const plan = upcoming(season, clubId);
   const inRange = plan.filter((day) => day.date <= until);
   const targets = simulationTargets(season);
 
@@ -126,7 +138,7 @@ export default function Simulation({ season, clubId, initialUntil, onPlayed, onC
         setResults([...played]);
         notify.current(result, gather(played));
         if (result.dismissal) return; // limogé : la page est partie choisir un autre club
-        const next = result.season.next_matchday;
+        const next = result.season.next_match ?? result.season.next_matchday;
         if (!next) {
           reason = "season";
           break;
@@ -185,7 +197,7 @@ export default function Simulation({ season, clubId, initialUntil, onPlayed, onC
               id="simulation-until"
               type="date"
               className="input"
-              min={season.next_matchday.date}
+              min={(season.next_match ?? season.next_matchday).date}
               value={until === SEASON_END ? "" : until}
               onChange={(event) => setUntil(event.target.value)}
             />
@@ -219,13 +231,13 @@ export default function Simulation({ season, clubId, initialUntil, onPlayed, onC
 
       <ul className="simulation__days">
         {results.map((result) => (
-          <Day key={result.played.matchday} day={result.played} clubId={clubId} state="played" />
+          <Day key={dayKey(result.played)} day={result.played} clubId={clubId} state="played" />
         ))}
         {(step === "setup" ? plan : inRange).map((day, index) => {
           const running = step === "running" && index === 0;
           return (
             <Day
-              key={day.matchday}
+              key={dayKey(day)}
               day={day}
               clubId={clubId}
               state={running ? "current" : day.date <= until ? "todo" : "out"}

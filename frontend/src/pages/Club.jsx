@@ -23,6 +23,7 @@ import {
   formatRank,
   formatShortDate,
   matchdayLabel,
+  matchdayTitle,
 } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
@@ -191,7 +192,8 @@ export default function Club() {
   if (season.error) return <p className="status status--error">{season.error.message}</p>;
 
   const data = season.data;
-  const next = data.next_matchday;
+  // Le prochain match du club : la journée du championnat, ou un week-end de coupe avant.
+  const next = data.next_match ?? data.next_matchday;
   const myNextMatch = next?.matches.find((m) => m.home.id === myId || m.away.id === myId) ?? null;
   const opponentId = myNextMatch ? (myNextMatch.home.id === myId ? myNextMatch.away.id : myNextMatch.home.id) : null;
   const rankOf = (clubId) => data.standings.find((row) => row.club_id === clubId)?.rank;
@@ -281,12 +283,11 @@ export default function Club() {
           ) : (
             <section className="hero">
               <p className="eyebrow">
-                {next.stage === "regular" ? `Journée ${next.matchday} sur ${data.regular_matchdays}` : STAGES[next.stage]} ·{" "}
-                {formatLongDate(next.date)}
+                {matchdayTitle(next, data.regular_matchdays)} · {formatLongDate(next.date)}
               </p>
               {myNextMatch ? (
                 <>
-                  <NextMatch match={myNextMatch} myId={myId} rankOf={rankOf} matches={data.matches} />
+                  <NextMatch match={myNextMatch} myId={myId} rankOf={rankOf} matches={allMatches(data)} />
                   <Doublon clubId={myId} season={data} />
                 </>
               ) : (
@@ -465,6 +466,11 @@ function Doublon({ clubId, season }) {
   );
 }
 
+// Les matchs de la saison, championnat et Coupe d'Europe, dans l'ordre des dates : pour
+// la forme du moment.
+const allMatches = (season) =>
+  [...season.matches, ...(season.cup?.matches ?? [])].sort((a, b) => a.date.localeCompare(b.date));
+
 function NextMatch({ match, myId, rankOf, matches }) {
   const home = match.home.id === myId;
   const opponent = home ? match.away : match.home;
@@ -476,7 +482,9 @@ function NextMatch({ match, myId, rankOf, matches }) {
         <h1 className="hero__title">{opponent.name}</h1>
       </div>
       <p className="hero__sub">
-        {venue} · {rankOf(opponent.id) ? `${formatRank(rankOf(opponent.id))} du championnat` : ""}
+        {[venue, rankOf(opponent.id) && `${formatRank(rankOf(opponent.id))} du championnat`]
+          .filter(Boolean)
+          .join(" · ")}
       </p>
       <div className="hero__forms">
         <div>

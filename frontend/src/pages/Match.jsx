@@ -11,7 +11,6 @@ import {
   MATCH_STATS,
   POSITION_SHORT,
   POSITIONS,
-  STAGES,
   TACTICS,
   TALK_MOMENTS,
   TALK_OUTCOMES,
@@ -22,6 +21,7 @@ import {
   formatCrowd,
   formatLongDate,
   formatNote,
+  matchdayTitle,
 } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
@@ -275,7 +275,7 @@ function NoLiveClubMatch({ career, onStarted }) {
 
   if (season.loading) return <p className="status">Chargement…</p>;
   if (season.error) return <p className="status status--error">{season.error.message}</p>;
-  const next = season.data.next_matchday;
+  const next = season.data.next_match ?? season.data.next_matchday;
   const myMatch = next?.matches.find((m) => m.home.id === career.club_id || m.away.id === career.club_id);
   const pending = affairs.data?.pending?.length ?? 0;
 
@@ -303,7 +303,7 @@ function NoLiveClubMatch({ career, onStarted }) {
             <ClubCrest name={myMatch.away.name} size={56} />
           </div>
           <p className="hero__sub">
-            {next.stage === "regular" ? `Journée ${next.matchday}` : STAGES[next.stage]} · {formatLongDate(next.date)}
+            {matchdayTitle(next)} · {formatLongDate(next.date)}
           </p>
           <div className="hero__actions">
             {pending > 0 ? (
@@ -344,7 +344,7 @@ function NoLiveClubMatch({ career, onStarted }) {
 // --- Tableau d'affichage ----------------------------------------------------------------
 
 function Scoreboard({ live, playing, speed, setSpeed, notice, error, busy, finishing, onPlay, onPause, onHandOver, onFinish }) {
-  const label = live.stage === "regular" ? `Journée ${live.matchday}` : STAGES[live.stage];
+  const label = matchdayTitle(live);
   return (
     <header className="scoreboard card">
       <Team side={live.home} mine={live.home.club.id === live.my_club_id} />

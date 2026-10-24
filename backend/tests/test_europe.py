@@ -118,14 +118,27 @@ def test_the_cup_is_played_with_the_real_leagues():
         cup = client.get("/seasons/current").json()["cup"]
         assert len(cup["pools"]) == 4 and len(cup["matches"]) == 48
         assert any(toulouse in (m["home"]["id"], m["away"]["id"]) for m in cup["matches"])
-        # Jusqu'au premier week-end de coupe : ses matchs se jouent avec les journées.
+        # Jusqu'au premier week-end de coupe : le club dirigé s'y arrête, son match se joue
+        # en direct comme une journée de championnat.
         for _ in range(20):
-            client.post("/seasons/current/play")
-            cup = client.get("/seasons/current").json()["cup"]
-            if any(m["home_score"] is not None for m in cup["matches"]):
+            season = client.get("/seasons/current").json()
+            if season["next_match"]["cup"]:
                 break
-        # Les deux week-ends de décembre se jouent avant la reprise du Top 14 en janvier :
-        # deux journées de poule, de douze affiches chacune (quatre poules de six).
+            client.post("/seasons/current/play")
+        assert season["next_match"]["stage"] == "regular" and season["next_match"]["matchday"] == 1
+        assert season["next_matchday"]["date"] > season["next_match"]["date"]
+        live = client.post("/live")
+        assert live.status_code == 201 and live.json()["cup"]
+        assert toulouse in (live.json()["home"]["club"]["id"], live.json()["away"]["club"]["id"])
+        finished = client.post("/live/finish").json()
+        assert finished["played"]["cup"] and len(finished["played"]["matches"]) == 12
+        # Le week-end suivant est aussi de coupe : ses douze affiches, puis la reprise du Top 14.
+        assert finished["season"]["next_match"]["cup"]
+        assert finished["season"]["next_match"]["matchday"] == 2
+        second = client.post("/seasons/current/play").json()
+        assert second["played"]["cup"] and second["played"]["matchday"] == 2
+        assert not second["season"]["next_match"]["cup"]
+        cup = second["season"]["cup"]
         played = [m for m in cup["matches"] if m["home_score"] is not None]
         assert len(played) == 24 and {m["matchday"] for m in played} == {1, 2}
     finally:
