@@ -10,6 +10,10 @@ Les trois voies du manager (engine/transfers.py), avec les mêmes règles :
 - agent libre : sur une longue blessure, il engage un joker médical ; et faute de
   prêt possible, un agent libre, jusqu'à la fin de la saison.
 
+Chaque club respecte le plafond salarial de son championnat (engine/regulations.py) :
+un agent libre ou un prêté ne signe que si son salaire y tient, un pré-contrat que si
+celui de la saison suivante y tient, avec ceux déjà signés.
+
 Le club dirigé par le joueur n'est pas de ce marché : il recrute lui-même, et ses
 fins de contrat sont approchées à part (api/routers/contracts.py, `rival_signings`).
 Aucune dépendance à FastAPI ni à la base.
@@ -26,6 +30,7 @@ from engine.economy import SQUAD_MAX, SQUAD_MIN
 from engine.free_agents import free_agent_wage
 from engine.match_engine import FORMATION, RATING_FOR_POSITION
 from engine.medical import allows_joker
+from engine.regulations import cap_breach, fits_next_season
 from engine.transfers import (
     TIME_BENCH,
     TIME_RESERVE,
@@ -92,6 +97,8 @@ class Market:
     late: set[str]  # championnats en phase retour ou en phases finales
     active: set[str]  # championnats dont la saison régulière est en cours
     incoming: Counter[int] = field(default_factory=Counter)  # pré-contrats signés, par club
+    # Salaires de ces pré-contrats, par club : pour le plafond de la saison suivante.
+    incoming_wages: Counter[int] = field(default_factory=Counter)
     # Joueurs hors marché : déjà engagés ailleurs, ou en discussion avec le manager.
     taken: set[int] = field(default_factory=set)
     _levels: dict[int, float] = field(default_factory=dict, repr=False)
@@ -143,6 +150,7 @@ class Market:
                     continue
                 destination, wage = offer
                 self.incoming[destination.id] += 1
+                self.incoming_wages[destination.id] += wage
                 self.taken.add(player.id)
                 years = rng.randint(*preferred_years(player))
                 deals.append(Deal(DealKind.PRECONTRACT, player, club, destination, wage, years))
@@ -150,8 +158,8 @@ class Market:
 
     def _suitor(self, player: Player, origin: Club, rng: random.Random) -> tuple[Club, int] | None:
         """Le club qui le signe et le salaire convenu : il y serait au moins remplaçant,
-        et le club ne le surpaie pas. Un international d'une fédération qui ne retient
-        que les joueurs du pays y reste."""
+        le club ne le surpaie pas et reste sous le plafond salarial. Un international
+        d'une fédération qui ne retient que les joueurs du pays y reste."""
         suitors = self._neighbours(origin, rng)
         nation = NATIONS_BY_CODE.get(player.nationality)
         if nation is not None and nation.home_only and home_nation(origin.name) == nation.code:
@@ -165,6 +173,8 @@ class Market:
                 continue
             wage = wage_demand(player, origin, rival, self.level)
             if wage is None or wage > player.wage * MAX_RAISE:
+                continue
+            if not fits_next_season(rival, self.season_year, wage, self.incoming_wages[rival.id]):
                 continue
             offers.append((move_appeal(player, origin, rival, self.level), -rival.id, rival, wage))
         if not offers:
@@ -204,9 +214,16 @@ class Market:
 
     def _sign(self, club: Club, position: Position, kind: DealKind) -> Deal | None:
         """Le meilleur agent libre au poste, sous contrat jusqu'à la fin de la saison,
-        s'il a le niveau du club : il vaut à peu près le moins bon de ses joueurs du poste."""
+        s'il a le niveau du club : il vaut à peu près le moins bon de ses joueurs du poste,
+        et son salaire tient sous le plafond."""
         rating = RATING_FOR_POSITION[position]
-        candidates = [p for p in self.pool if p.position == position and p.id not in self.taken]
+        candidates = [
+            p
+            for p in self.pool
+            if p.position == position
+            and p.id not in self.taken
+            and cap_breach(club, free_agent_wage(p, club)) is None
+        ]
         if not candidates:
             return None
         player = max(candidates, key=rating)
@@ -222,7 +239,7 @@ class Market:
 
     def _borrow(self, club: Club, position: Position, rng: random.Random) -> Deal | None:
         """Le meilleur réserviste qu'un autre club peut prêter à ce poste : son club garde
-        de quoi jouer, et lui serait au moins remplaçant ici."""
+        de quoi jouer, lui serait au moins remplaçant ici, et son salaire tient sous le plafond."""
         offers = []
         for lender in self._neighbours(club, rng):
             if len(lender.players) <= LENDER_MIN_SQUAD:
@@ -237,6 +254,7 @@ class Market:
                     and playing_time(player, lender) == TIME_RESERVE
                     and playing_time(player, club) >= TIME_BENCH
                     and accepts_loan(player, lender, club, self.level)
+                    and cap_breach(club, player.wage) is None
                 ):
                     offers.append(
                         (RATING_FOR_POSITION[position](player), -player.id, player, lender)

@@ -3,6 +3,10 @@
 Plafond salarial (Top 14, Pro D2, Premiership) : la masse salariale des pros d'un
 club ne peut pas le dépasser. Le manager ne peut pas signer, prolonger ni promouvoir
 un joueur si sa masse salariale passait au-dessus. L'URC et le Super Rugby n'en ont pas.
+Les clubs gérés par le jeu le respectent aussi : ils ne signent (agent libre, joker,
+prêt, pré-contrat) que si le salaire y tient, et à l'intersaison un club au-dessus
+(un promu, un relégué, un monde tiré trop riche) laisse partir ses fins de contrat,
+puis renégocie les salaires de tous ses pros (`fit_under_cap`).
 
 JIFF (« joueurs issus des filières de formation », Top 14 et Pro D2) : une feuille
 de match (les 23) compte au moins `JIFF_MIN` JIFF. Le jeu tient pour JIFF un joueur
@@ -13,6 +17,7 @@ JIFF disponibles à la place des étrangers les moins indispensables.
 
 from collections.abc import Callable
 
+from engine.economy import WAGE_MIN
 from models import Club, Player, Position
 
 SALARY_CAP = {"top14": 7_800_000, "prod2": 2_300_000, "premiership": 5_000_000}
@@ -41,6 +46,39 @@ def cap_breach(club: Club, extra: int) -> tuple[int, int] | None:
     cap = salary_cap(club.league)
     after = payroll(club) + extra
     return (after, cap) if cap is not None and extra > 0 and after > cap else None
+
+
+def committed_payroll(club: Club, season_year: int) -> int:
+    """La masse salariale déjà engagée pour la saison qui suit `season_year` : les pros
+    sous contrat au-delà (les prêtés rentrent chez eux)."""
+    return sum(
+        p.wage for p in club.players if p.loaned_from is None and p.contract_until > season_year
+    )
+
+
+def fits_next_season(club: Club, season_year: int, wage: int, incoming: int = 0) -> bool:
+    """Un pré-contrat à `wage` tient-il sous le plafond la saison suivante, avec la masse
+    déjà engagée et les salaires des joueurs qui doivent arriver (`incoming`) ?"""
+    cap = salary_cap(club.league)
+    return cap is None or committed_payroll(club, season_year) + incoming + wage <= cap
+
+
+# Un club au-dessus du plafond revient à cette part du plafond : de quoi compléter son effectif.
+CAP_MARGIN = 0.97
+
+
+def fit_under_cap(club: Club) -> list[Player]:
+    """Un club au-dessus du plafond renégocie : le salaire de chacun de ses pros baisse
+    d'autant, pour revenir sous le plafond avec un peu de marge. Renvoie les joueurs
+    dont le salaire a changé (aucun si le club était sous le plafond)."""
+    cap = salary_cap(club.league)
+    total = payroll(club)
+    if cap is None or total <= cap:
+        return []
+    ratio = cap * CAP_MARGIN / total
+    for player in club.players:
+        player.wage = max(WAGE_MIN, int(player.wage * ratio / 1_000) * 1_000)
+    return list(club.players)
 
 
 def is_jiff(player: Player) -> bool:

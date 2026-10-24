@@ -8,6 +8,7 @@ les plus convoités. Aucune dépendance à FastAPI ni à la base.
 """
 
 import random
+from collections.abc import Callable
 
 from data.generator import YOUTH_CONTRACT_YEARS, YOUTH_WAGE
 from engine.economy import WAGE_MIN, wage_for
@@ -83,11 +84,16 @@ def poach_chance(player: Player, club: Club) -> float:
 
 
 def pick_suitor(
-    player: Player, origin: Club, rivals: list[Club], rng: random.Random
+    player: Player,
+    origin: Club,
+    rivals: list[Club],
+    rng: random.Random,
+    fits: Callable[[Club, int], bool] = lambda club, wage: True,
 ) -> tuple[Club, int] | None:
     """Le concurrent qui le signe et le salaire convenu, ou None si aucun ne lui plaît.
 
-    `rivals` : les clubs qui ont encore de la place pour lui.
+    `rivals` : les clubs qui ont encore de la place pour lui ; `fits(club, salaire)` :
+    le salaire tient-il sous le plafond du club (pour un pro) ?
     """
     if not rivals:
         return None
@@ -95,7 +101,7 @@ def pick_suitor(
         biggest = sorted(rivals, key=club_level, reverse=True)[:YOUTH_SUITORS]
         return rng.choice(biggest), YOUTH_WAGE
     offers = [(rival, wage_demand(player, origin, rival)) for rival in rivals]
-    offers = [(rival, wage) for rival, wage in offers if wage is not None]
+    offers = [(rival, wage) for rival, wage in offers if wage is not None and fits(rival, wage)]
     if not offers:
         return None
     return max(offers, key=lambda offer: move_appeal(player, origin, offer[0]))

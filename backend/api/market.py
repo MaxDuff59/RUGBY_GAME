@@ -58,10 +58,13 @@ def market_day(
     pool = {row.id: row for row in free_agent_rows(session)}
     late, active = _phases(season)
     signed = session.execute(
-        select(NegotiationRow.player_id, NegotiationRow.club_id).where(
+        select(NegotiationRow.player_id, NegotiationRow.club_id, NegotiationRow.wage).where(
             NegotiationRow.stage == "agreed"
         )
     ).all()
+    incoming_wages: Counter[int] = Counter()
+    for _, club_id, wage in signed:
+        incoming_wages[club_id] += wage or 0
     talks = session.scalars(
         select(NegotiationRow.player_id).where(NegotiationRow.stage.in_(OPEN_STAGES))
     )
@@ -72,8 +75,9 @@ def market_day(
         season_year=season.year,
         late=late,
         active=active,
-        incoming=Counter(club_id for _, club_id in signed),
-        taken={player_id for player_id, _ in signed} | set(talks),
+        incoming=Counter(club_id for _, club_id, _ in signed),
+        incoming_wages=incoming_wages,
+        taken={player_id for player_id, _, _ in signed} | set(talks),
     )
     deals = market.play(rng)
 

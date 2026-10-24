@@ -23,6 +23,7 @@ from pathlib import Path
 from data.leagues import DEFAULT_LEAGUE, LEAGUES, League
 from data.nations import home_nation, nation_code
 from engine.economy import SQUAD_MAX, SQUAD_MIN, STADIUM_STEPS, staff_wage, wage_for
+from engine.regulations import fit_under_cap
 from models import (
     ATTRIBUTE_MAX,
     ATTRIBUTE_MIN,
@@ -568,6 +569,8 @@ def _make_club(
                         nationality=country,
                     )
                 )
+    # Les vrais effectifs les plus riches dépassent parfois le plafond : salaires renégociés.
+    fit_under_cap(club)
     # Un membre de staff par poste, de niveau proche de celui du club.
     for role in StaffRole:
         staff_level = _clamp_level(round(1.5 + wealth * 2.5 + rng.uniform(-1, 1)))

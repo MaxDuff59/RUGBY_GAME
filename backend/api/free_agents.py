@@ -61,8 +61,9 @@ def renew_pool(
     player_ids: Iterator[int],
     day: datetime.date,
 ) -> None:
-    """Intersaison, après les départs : les clubs IA à court d'effectif piochent
-    dans le vivier, qui est ensuite ramené entre son minimum et son maximum.
+    """Intersaison, après les départs : les clubs IA au-dessus du plafond salarial
+    renégocient leurs salaires, ceux à court d'effectif piochent dans le vivier, qui
+    est ensuite ramené entre son minimum et son maximum.
     `day` : la date de l'intersaison, pour le registre des mouvements."""
     session.flush()
     session.expire_all()
@@ -83,6 +84,8 @@ def renew_pool(
             player.contract_until,
         )
         log_move(session, MoveKind.FREE, row, day, destination=player.club_id)
+    for player in renewal.renegotiated:
+        session.get(PlayerRow, player.id).wage = player.wage
     for player in renewal.dropped:
         session.delete(rows[player.id])
     for player in renewal.arrivals:

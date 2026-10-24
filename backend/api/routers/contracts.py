@@ -45,6 +45,7 @@ from engine.development import OWN_UNCERTAINTY
 from engine.economy import SQUAD_MAX, SQUAD_MIN
 from engine.free_agents import settle_contracts
 from engine.journal import MoveKind
+from engine.regulations import fits_next_season
 from engine.transfers import DealKind, playing_time, time_label
 from models import Club, Player, Squad
 from models.orm import CareerRow, ClubRow, NegotiationRow, PlayerRow, SeasonRow
@@ -311,9 +312,14 @@ def rival_signings(
     signed = _signed_elsewhere(session, me.id)
     jokers = joker_ids(session, me.id)
     # Place chez chaque concurrent, en comptant les joueurs qui doivent déjà le rejoindre.
-    incoming = Counter(
-        session.scalars(select(NegotiationRow.club_id).where(NegotiationRow.stage == "agreed"))
-    )
+    agreed = session.execute(
+        select(NegotiationRow.club_id, NegotiationRow.wage).where(NegotiationRow.stage == "agreed")
+    ).all()
+    incoming = Counter(club_id for club_id, _ in agreed)
+    # Les salaires qu'ils se sont déjà engagés à payer : le plafond de la saison suivante.
+    incoming_wages: Counter[int] = Counter()
+    for club_id, wage in agreed:
+        incoming_wages[club_id] += wage or 0
 
     signings = []
     for player in [*me.players, *me.youths]:
@@ -332,7 +338,13 @@ def rival_signings(
             for club in rivals
             if player.squad == Squad.YOUTH or len(club.players) + incoming[club.id] < SQUAD_MAX
         ]
-        suitor = pick_suitor(player, me, room, rng)
+
+        def fits(club: Club, wage: int, player: Player = player) -> bool:
+            if player.squad == Squad.YOUTH:
+                return True  # un espoir arrive au centre, hors masse salariale des pros
+            return fits_next_season(club, season.year, wage, incoming_wages[club.id])
+
+        suitor = pick_suitor(player, me, room, rng, fits)
         if suitor is None:
             continue
         rival, wage = suitor
@@ -356,6 +368,7 @@ def rival_signings(
         )
         session.add(row)
         incoming[rival.id] += 1
+        incoming_wages[rival.id] += wage
         signings.append(
             ContractOut(
                 player=PlayerOut.from_player(player, day, names, uncertainty=OWN_UNCERTAINTY),
