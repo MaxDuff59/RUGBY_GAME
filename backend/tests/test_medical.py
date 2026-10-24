@@ -327,10 +327,26 @@ def test_an_injured_youth_shows_up_at_the_infirmary(manager):
             base_weeks=2,
             return_date=day + timedelta(weeks=2),
             protocol="standard",
-            protocol_chosen=True,
+            protocol_chosen=False,
         )
     )
     session.commit()
     medical = manager.get("/medical")
     assert medical.status_code == 200
     assert youth.id in {c["player"]["id"] for c in medical.json()["injured"]}
+    # Aucune page où il peut paraître ne bute sur lui.
+    for path in (
+        "/clubs/3",
+        "/clubs/3/notes",
+        "/academy",
+        f"/players/{youth.id}",
+        "/inbox",
+        "/journal",
+        "/transfers",
+        "/contracts",
+        "/training",
+    ):
+        assert manager.get(path).status_code == 200, path
+    case = next(c for c in medical.json()["injured"] if c["player"]["id"] == youth.id)
+    assert manager.post(f"/medical/{case['injury']['id']}/protocol/cautious").status_code == 200
+    assert manager.post("/seasons/current/play").status_code == 200
