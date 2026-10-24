@@ -57,7 +57,7 @@ from enum import StrEnum
 from itertools import accumulate
 
 from engine import crowd as crowds
-from engine import regulations, team_talk
+from engine import momentum, regulations, team_talk
 from engine.coaching import Coaching
 from engine.coaching import coaching as coaching_of
 from engine.crowd import Crowd
@@ -1104,6 +1104,8 @@ class LiveMatch:
         self.crowd = None if neutral else crowd  # public de l'équipe qui reçoit
         self.roar = 0.0  # élan du public, qui réagit au score (engine/crowd.py)
         self.events: list[MatchEvent] = []
+        # Une barre par minute jouée (engine/momentum.py), positive pour l'équipe qui reçoit.
+        self.momentum: list[int] = []
         self.minute = 0  # dernière minute jouée
         self.extra_time = False
         self.finished = False
@@ -1246,8 +1248,15 @@ class LiveMatch:
             return
         minute = self.minute + 1
         before = len(self.events)
+        self._minute_chance = None
+        self._minute_play = {}  # points de jeu de la minute, par club (engine/momentum.py)
         self._play_minute(minute)
         self._crowd_reacts(self.events[before:])
+        self.momentum.append(
+            momentum.minute_bar(
+                self.home.club.id, self._minute_play, self._minute_chance, self.events[before:]
+            )
+        )
         self.minute = minute
         if minute == MATCH_MINUTES:
             if self.knockout and self.level():
@@ -1452,6 +1461,11 @@ class LiveMatch:
             * their_defence["fouls"]
             * weather.penalties
         )
+        # Pour le momentum : ce que l'action avait de chances de finir en points.
+        self._minute_chance = (
+            attacking.club.id,
+            momentum.threat(try_probability, penalty_probability),
+        )
         roll = rng.random()
 
         # 1) Essai, suivi d'une tentative de transformation.
@@ -1511,6 +1525,7 @@ class LiveMatch:
                 list(accumulate(TURNOVER_WEIGHT[s.position] * s.player.power for s in present)),
             )
         ratings = {self.home.club.id: home, self.away.club.id: away}
+        play = self._minute_play = {self.home.club.id: 0, self.away.club.id: 0}
         for _ in range(PHASES_PER_MINUTE):
             attacking, defending = (
                 (self.home, self.away) if rng.random() < home_share else (self.away, self.home)
@@ -1520,6 +1535,7 @@ class LiveMatch:
             carrier = rng.choices(carriers, cum_weights=carry_weights)[0]
             tackler = rng.choices(tacklers, cum_weights=tackle_weights)[0]
             attacking.count(carrier.id, "carries")
+            play[attacking.club.id] += momentum.PLAY_POINTS["carries"]
             duel = _win_probability(
                 defending_rating(tackler) * efficiency(defending.energy(tackler)),
                 carrying_rating(carrier) * efficiency(attacking.energy(carrier)),
@@ -1533,11 +1549,13 @@ class LiveMatch:
                 if rng.random() < TURNOVER_PER_PHASE:
                     poacher = rng.choices(tacklers, cum_weights=turnover_weights)[0]
                     defending.count(poacher.id, "turnovers")
+                    play[defending.club.id] += momentum.PLAY_POINTS["turnovers"]
                 continue
             defending.count(tackler.id, "missed_tackles")
             att, dfn = ratings[attacking.club.id], ratings[defending.club.id]
             if rng.random() < 2 * LINE_BREAK_ON_MISS * _win_probability(att.attack, dfn.defense):
                 attacking.count(carrier.id, "line_breaks")
+                play[attacking.club.id] += momentum.PLAY_POINTS["line_breaks"]
 
     def _lineout(self, minute: int) -> None:
         """Une touche, parfois : le lanceur la garde le plus souvent, sinon l'adversaire la vole."""
@@ -1627,6 +1645,7 @@ class LiveMatch:
             "weather": self.weather.value,
             "crowd": self.crowd.to_dict() if self.crowd else None,
             "roar": self.roar,
+            "momentum": self.momentum,
             "rng": [version, list(internal), gauss],
             "events": [
                 {
@@ -1671,6 +1690,9 @@ class LiveMatch:
         live.weather = Weather(state.get("weather", Weather.CLEAR))
         live.crowd = Crowd.from_dict(state["crowd"]) if state.get("crowd") else None
         live.roar = state.get("roar", 0.0)
+        # Un match commencé avant le graphique : les minutes déjà jouées restent vides.
+        bars = state.get("momentum", [])
+        live.momentum = [0] * (live.minute - len(bars)) + list(bars)
         live.home.weather = live.away.weather = live.weather
         return live
 

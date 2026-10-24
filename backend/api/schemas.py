@@ -713,6 +713,9 @@ class LiveOut(BaseModel):
     home: LiveSideOut
     away: LiveSideOut
     events: list[LiveEventOut]  # dans l'ordre du match
+    # Une barre par minute jouée, de -100 à 100 : positive quand l'équipe qui reçoit
+    # menace, négative quand c'est l'autre (engine/momentum.py).
+    momentum: list[int]
     talk: TalkOut  # discours possibles du club dirigé
 
 
