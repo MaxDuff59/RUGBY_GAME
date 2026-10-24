@@ -422,24 +422,23 @@ class SeasonRow(Base):
 
     # Le classement n'est pas stocké : il se recalcule à partir des matchs.
     # Les matchs des pros et ceux des espoirs partagent la table, séparés par `squad`.
+    # Chargés à la première lecture seulement : beaucoup de routes n'ont besoin que de
+    # l'année de la saison, et ses matchs (avec leurs statistiques) pèsent lourd.
     matches: Mapped[list["MatchRow"]] = relationship(
         primaryjoin="and_(MatchRow.season_id == SeasonRow.id, MatchRow.squad == 'pro')",
         overlaps="youth_matches,season,cup_matches",
         order_by="MatchRow.id",
-        lazy="selectin",
     )
     youth_matches: Mapped[list["MatchRow"]] = relationship(
         primaryjoin="and_(MatchRow.season_id == SeasonRow.id, MatchRow.squad == 'youth')",
         overlaps="matches,season,cup_matches",
         order_by="MatchRow.id",
-        lazy="selectin",
     )
     # La Coupe d'Europe (engine/europe.py) : ses matchs à part, `squad` = 'cup'.
     cup_matches: Mapped[list["MatchRow"]] = relationship(
         primaryjoin="and_(MatchRow.season_id == SeasonRow.id, MatchRow.squad == 'cup')",
         overlaps="matches,youth_matches,season",
         order_by="MatchRow.id",
-        lazy="selectin",
     )
 
 
@@ -515,7 +514,9 @@ class MatchRow(Base):
     def is_played(self) -> bool:
         return self.home_score is not None
 
-    def to_domain(self) -> Match:
+    def to_domain(self, stats: bool = True) -> Match:
+        """Le match du moteur ; sans `stats`, sans les statistiques des joueurs (les plus
+        lourdes à décoder), inutiles au classement comme au calendrier."""
         return Match(
             id=self.id,
             home_club_id=self.home_club_id,
@@ -531,7 +532,7 @@ class MatchRow(Base):
             away_lineup=list(self.away_lineup or []),
             league=self.league,
             weather=self.weather,
-            stats=_stats_from_json(self.stats),
+            stats=_stats_from_json(self.stats) if stats else {},
             spectators=self.spectators,
             atmosphere=self.atmosphere,
         )

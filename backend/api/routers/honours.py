@@ -101,7 +101,7 @@ def _live_awards(
             value=award.value,
             active=True,
         )
-        for award in season_awards(_league_domain(season, league), players)
+        for award in season_awards(_league_domain(season, league, stats=True), players)
     ]
 
 

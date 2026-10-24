@@ -97,14 +97,21 @@ def _scaled(amount: int | None, demands: float) -> int | None:
     return None if amount is None else round(amount * demands)
 
 
-def _fee_target(player: Player, club: Club, year: int, demands: float = 1.0) -> int | None:
-    return _scaled(transfer_fee(player, club, year), demands)
+def _fee_target(
+    player: Player, club: Club, year: int, demands: float = 1.0, level: float | None = None
+) -> int | None:
+    return _scaled(transfer_fee(player, club, year, level), demands)
 
 
 def _fee_opening(
-    player: Player, club: Club, year: int, grudges: int = 0, demands: float = 1.0
+    player: Player,
+    club: Club,
+    year: int,
+    grudges: int = 0,
+    demands: float = 1.0,
+    level: float | None = None,
 ) -> int | None:
-    target = _fee_target(player, club, year, demands)
+    target = _fee_target(player, club, year, demands, level)
     if target is None:
         return None
     return opening_ask(target, grudge_markup(CLUB_OPENING_MARKUP, grudges), FEE_STEP)
@@ -214,7 +221,8 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
     listings = []
     for row in others:
         club = row.to_domain()
-        level = round(club_level(club), 1)
+        exact = club_level(club)  # une fois par club, pas pour chacun de ses joueurs
+        level = round(exact, 1)
         for player in club.players:
             if player.loaned_from is not None:
                 continue  # un joueur prêté ne se négocie pas avec son club d'accueil
@@ -231,7 +239,7 @@ def _overview(session: Session, me: ClubRow) -> TransfersOverview:
                     playing_time=time_label(playing_time(player, club)),
                     transfer_fee=None
                     if gone
-                    else _fee_opening(player, club, year, grudges, demands),
+                    else _fee_opening(player, club, year, grudges, demands, exact),
                     loanable=club_lends(player, club),
                     precontract=can_precontract(player, year) and gone is None,
                     talks_closed_until=closed_until,

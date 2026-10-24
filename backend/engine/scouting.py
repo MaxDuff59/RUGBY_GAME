@@ -12,6 +12,7 @@ celui de ses propres joueurs (engine/development.py).
 
 import random
 from dataclasses import replace
+from functools import cache
 
 from models import ATTRIBUTE_MAX, ATTRIBUTE_MIN, ATTRIBUTE_NAMES, Player
 
@@ -20,11 +21,18 @@ REPORT_COST = 15_000
 ERRORS = (-2, -1, -1, 0, 0, 0, 1, 1, 2)
 
 
+@cache
+def _errors(player_id: int) -> dict[str, int]:
+    """Les erreurs d'estimation d'un joueur, tirées une fois pour toutes (et gardées :
+    tout le marché s'affiche d'un coup)."""
+    return {
+        name: random.Random(f"scout:{player_id}:{name}").choice(ERRORS) for name in ATTRIBUTE_NAMES
+    }
+
+
 def estimate(player: Player) -> Player:
     """Le joueur tel que le club le voit sans rapport : ses attributs estimés."""
-    errors = {
-        name: random.Random(f"scout:{player.id}:{name}").choice(ERRORS) for name in ATTRIBUTE_NAMES
-    }
+    errors = _errors(player.id)
     seen = {
         name: max(ATTRIBUTE_MIN, min(ATTRIBUTE_MAX, getattr(player, name) + errors[name]))
         for name in ATTRIBUTE_NAMES

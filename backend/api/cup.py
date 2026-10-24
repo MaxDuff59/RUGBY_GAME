@@ -66,7 +66,7 @@ def pools(session: Session, season: SeasonRow) -> dict[str, list[int]]:
 
 
 def matches(season: SeasonRow) -> list[Match]:
-    return [row.to_domain() for row in season.cup_matches]
+    return [row.to_domain(stats=False) for row in season.cup_matches]
 
 
 def ensure_next_round(session: Session, season: SeasonRow) -> None:

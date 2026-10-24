@@ -68,10 +68,13 @@ def _round_to(value: float, step: int) -> int:
     return int(round(value / step) * step)
 
 
-def transfer_fee(player: Player, club: Club, season_year: int) -> int | None:
-    """Indemnité demandée par le club, ou None s'il refuse tout transfert."""
+def transfer_fee(
+    player: Player, club: Club, season_year: int, level: float | None = None
+) -> int | None:
+    """Indemnité demandée par le club, ou None s'il refuse tout transfert. `level` : le
+    niveau du club (`club_level`), s'il est déjà calculé (tout un marché à chiffrer)."""
     time = playing_time(player, club)
-    if time == TIME_STARTER and club_level(club) >= UNTRANSFERABLE_LEVEL:
+    if time == TIME_STARTER and (level or club_level(club)) >= UNTRANSFERABLE_LEVEL:
         return None
     years = player.years_left(season_year)
     fee = market_value(player) * (1 + FEE_PER_CONTRACT_YEAR * years) * FEE_IMPORTANCE[time]

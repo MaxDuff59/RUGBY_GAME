@@ -164,8 +164,10 @@ def _league_out(season: SeasonRow, league: str) -> LeagueOut:
     return league_out(league, len(_league_club_ids(season, league)))
 
 
-def _league_domain(season: SeasonRow, league: str) -> list[Match]:
-    return [m.to_domain() for m in _league_matches(season, league)]
+def _league_domain(season: SeasonRow, league: str, stats: bool = False) -> list[Match]:
+    """Les matchs d'un championnat pour le moteur ; les statistiques des joueurs
+    (`stats`) seulement pour qui en a besoin, les trophées."""
+    return [m.to_domain(stats) for m in _league_matches(season, league)]
 
 
 def _regular_matchday_count(season: SeasonRow, league: str) -> int:
@@ -1045,7 +1047,7 @@ def record_awards(session: Session, season: SeasonRow) -> None:
     players = {row.id: row for row in session.scalars(select(PlayerRow))}
     domain = {pid: row.to_domain() for pid, row in players.items()}
     for league in _season_league_codes(season):
-        for award in season_awards(_league_domain(season, league), domain):
+        for award in season_awards(_league_domain(season, league, stats=True), domain):
             row = players[award.player_id]
             session.add(
                 AwardRow(

@@ -3,10 +3,10 @@
 Morale et fraîcheur ne regardent que la saison en cours ; cohésion, direction et
 supporters ont de la mémoire et parcourent toutes les saisons.
 
-`History` charge les matchs une fois pour toutes ; la journée s'en sert pour la
-forme de chaque club (engine/form.py), l'affluence et le jugement de la direction.
-Elle charge aussi les décisions du manager entre deux matchs (engine/affairs.py),
-qui s'ajoutent aux notes de son club.
+`History` charge les matchs une fois pour toutes (sans leurs statistiques) ; la
+journée s'en sert pour la forme de chaque club (engine/form.py), l'affluence et le
+jugement de la direction. Elle charge aussi les décisions du manager entre deux
+matchs (engine/affairs.py), qui s'ajoutent aux notes de son club.
 """
 
 import bisect
@@ -14,7 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import Row, event, inspect, select
 from sqlalchemy.orm import Session
 
 import engine.history
@@ -28,15 +28,17 @@ from engine.history import AffairBoosts, expected_ranks
 from engine.match_engine import team_strength
 from engine.notes import Boost, Note
 from engine.sponsors import deals_from, sponsor_mood
-from models import Club, Match, StaffRole
+from models import Club, Match, Squad, StaffRole, Stage
 from models.orm import (
     AffairRow,
     CareerRow,
     ClubRow,
+    InternationalRow,
     MatchRow,
     PreseasonRankRow,
     SeasonRow,
     TransactionRow,
+    _events_from_json,
 )
 
 
@@ -67,10 +69,68 @@ def season_leagues(season: SeasonRow) -> dict[int, str]:
     return leagues
 
 
-def _played(rows: list[MatchRow]) -> list[Match]:
+# Ce que l'historique lit d'un match pro : ni les statistiques des joueurs, ni la météo,
+# ni le public, les colonnes les plus lourdes à charger.
+_HISTORY_COLUMNS = (
+    MatchRow.id,
+    MatchRow.season_id,
+    MatchRow.league,
+    MatchRow.matchday,
+    MatchRow.home_club_id,
+    MatchRow.away_club_id,
+    MatchRow.home_score,
+    MatchRow.away_score,
+    MatchRow.stage,
+    MatchRow.date,
+    MatchRow.neutral,
+    MatchRow.events,
+    MatchRow.home_lineup,
+    MatchRow.away_lineup,
+)
+
+
+def _history_matches(session: Session) -> dict[int, list[Row]]:
+    """Les matchs pros de chaque saison, joués ou non, dans l'ordre chronologique : une
+    seule requête, sur les seules colonnes utiles."""
+    rows = session.execute(
+        select(*_HISTORY_COLUMNS)
+        .where(MatchRow.squad == Squad.PRO.value)
+        .order_by(MatchRow.date, MatchRow.matchday, MatchRow.id)
+    )
+    by_season: dict[int, list[Row]] = {}
+    for row in rows:
+        by_season.setdefault(row.season_id, []).append(row)
+    return by_season
+
+
+def _played(rows: list[Row]) -> list[Match]:
     return [
-        m.to_domain() for m in sorted(rows, key=lambda m: (m.date, m.matchday, m.id)) if m.is_played
+        Match(
+            id=row.id,
+            home_club_id=row.home_club_id,
+            away_club_id=row.away_club_id,
+            matchday=row.matchday,
+            home_score=row.home_score,
+            away_score=row.away_score,
+            stage=Stage(row.stage),
+            date=row.date,
+            neutral=row.neutral,
+            events=_events_from_json(row.events),
+            home_lineup=list(row.home_lineup or []),
+            away_lineup=list(row.away_lineup or []),
+            league=row.league,
+        )
+        for row in rows
+        if row.home_score is not None
     ]
+
+
+def _leagues(rows: list[Row]) -> dict[int, str]:
+    """Championnat de chaque club pendant la saison (comme `season_leagues`)."""
+    leagues = {}
+    for row in rows:
+        leagues[row.home_club_id] = leagues[row.away_club_id] = row.league
+    return leagues
 
 
 def _balance_lookup(session: Session, club_id: int) -> Callable[[date], int | None]:
@@ -110,27 +170,57 @@ class History(engine.history.History):
 
     @classmethod
     def load(cls, session: Session) -> "History":
+        """L'historique, chargé une fois par session : une journée s'en sert avant les
+        matchs, puis pour la direction et les affaires. Ce qui le change (un résultat,
+        une affaire, un sponsor...) l'efface (`_forget_history`)."""
+        session.flush()  # ce qui a changé depuis efface l'historique gardé
+        if (history := session.info.get(HISTORY_KEY)) is not None:
+            return history
+        history = cls._read(session)
+        session.info[HISTORY_KEY] = history
+        return history
+
+    @classmethod
+    def _read(cls, session: Session) -> "History":
         # Les rangs d'avant-saison peuvent être calculés ici (et enregistrés) :
         # à charger avant de modifier quoi que ce soit dans la session.
         seasons = list(session.scalars(select(SeasonRow).order_by(SeasonRow.year)))
+        matches = _history_matches(session)
         return cls(
             session=session,
             seasons=seasons,
             season_ids=[season.id for season in seasons],
-            by_season=[_played(season.matches) for season in seasons],
-            leagues=[season_leagues(season) for season in seasons],
+            by_season=[_played(matches.get(season.id, [])) for season in seasons],
+            leagues=[_leagues(matches.get(season.id, [])) for season in seasons],
             ranks=[ensure_preseason_ranks(session, season) for season in seasons],
             affair_boosts=_affair_boosts(session),
             internationals=internationals.played_tests(session),
+            # Les seuls contrats de sponsoring : pas les effectifs, chargés avec un club.
             sponsor_moods={
-                row.id: sponsor_mood(deals_from(row.sponsors))
-                for row in session.scalars(select(ClubRow))
-                if row.sponsors
+                club_id: sponsor_mood(deals_from(sponsors))
+                for club_id, sponsors in session.execute(select(ClubRow.id, ClubRow.sponsors))
+                if sponsors
             },
         )
 
     def board(self, club_id: int) -> Note:
         return super().board(club_id, _balance_lookup(self.session, club_id))
+
+
+# L'historique gardé dans `session.info`, et ce qui l'efface quand il change.
+HISTORY_KEY = "history"
+_HISTORY_ROWS = (MatchRow, InternationalRow, AffairRow, SeasonRow, PreseasonRankRow)
+
+
+@event.listens_for(Session, "after_flush")
+def _forget_history(session: Session, _context) -> None:
+    if HISTORY_KEY not in session.info:
+        return
+    for row in (*session.new, *session.dirty, *session.deleted):
+        sponsors = isinstance(row, ClubRow) and inspect(row).attrs.sponsors.history.has_changes()
+        if sponsors or isinstance(row, _HISTORY_ROWS):
+            del session.info[HISTORY_KEY]
+            return
 
 
 def club_notes(session: Session, club: Club) -> ClubNotesOut:
