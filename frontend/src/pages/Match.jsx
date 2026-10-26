@@ -449,11 +449,13 @@ function Scoreboard({ live, playing, speed, setSpeed, notice, error, busy, finis
             </>
           )}
         </div>
-        {(notice || error) && (
-          <span className={`scoreboard__notice${error ? " status--error" : ""}`}>
-            {error ? error.message : `Pause · ${notice}`}
-          </span>
-        )}
+        {/* Toujours là, invisible sans message : le tableau garde sa hauteur. */}
+        <span
+          className={`scoreboard__notice${error ? " status--error" : ""}${notice || error ? "" : " scoreboard__notice--empty"}`}
+          aria-hidden={notice || error ? undefined : "true"}
+        >
+          {error ? error.message : notice ? `Pause · ${notice}` : "\u00a0"}
+        </span>
       </div>
       <span className="scoreboard__score">{live.away.score}</span>
       <Team side={live.away} mine={live.away.club.id === live.my_club_id} away />

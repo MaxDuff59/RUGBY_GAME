@@ -456,7 +456,13 @@ function Doublon({ clubId, season }) {
   // Rechargé à chaque journée jouée (la saison change d'objet).
   const club = useApi(useCallback(() => api.getClub(clubId), [clubId, season]));
   const away = club.data?.players.filter((player) => player.duty?.away) ?? [];
-  if (away.length === 0) return null;
+  // Sans doublon, la ligne garde sa place (invisible) : l'affiche ne change pas de hauteur.
+  if (away.length === 0)
+    return (
+      <p className="muted doublon doublon--empty" aria-hidden="true">
+        <span className="tag tag--fragile">Doublon</span>
+      </p>
+    );
   const names = away.map((player) => player.last_name);
   return (
     <p className="muted doublon">

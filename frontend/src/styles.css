@@ -4026,6 +4026,10 @@ button.simulation__row:focus-visible {
   font-weight: 600;
 }
 
+.scoreboard__notice--empty {
+  visibility: hidden;
+}
+
 /* Sous le tableau : les faits de jeu de chaque équipe, puis sa composition */
 .live__grid {
   display: grid;
@@ -5215,6 +5219,10 @@ button.simulation__row:focus-visible {
 
 .doublon .tag {
   margin-right: 6px;
+}
+
+.doublon--empty {
+  visibility: hidden;
 }
 
 .doublon a {
