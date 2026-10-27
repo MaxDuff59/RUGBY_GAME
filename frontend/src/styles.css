@@ -3564,6 +3564,29 @@ button.market-item__main:focus-visible {
   transition: width 0.3s ease-out;
 }
 
+/* --- Intersaison : la fenêtre d'attente ------------------------------------------- */
+
+.modal--dialog.offseason {
+  margin-top: 24vh;
+}
+
+.offseason__meter {
+  height: 10px;
+  border-radius: 5px;
+}
+
+/* Le pas de 120 ms de la barre, adouci ; le remplissage final se voit aussi. */
+.offseason__fill {
+  border-radius: inherit;
+  transition: width 0.4s ease-out;
+}
+
+.offseason__status {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 /* Les journées : une grille partagée, pour que date, adversaire et résultat s'alignent
    d'une ligne à l'autre. La liste défile dans la fenêtre. */
 .simulation__days {

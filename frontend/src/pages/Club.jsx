@@ -8,6 +8,7 @@ import { ActionError } from "../components/FullGame.jsx";
 import FormPills, { recentForm } from "../components/FormPills.jsx";
 import MatchList from "../components/MatchList.jsx";
 import { NOTE_LINES, NoteLine } from "../components/NoteLine.jsx";
+import Offseason from "../components/Offseason.jsx";
 import SeasonReview from "../components/SeasonReview.jsx";
 import Simulation, { simulationTargets } from "../components/Simulation.jsx";
 import SortHeader from "../components/SortHeader.jsx";
@@ -71,6 +72,9 @@ export default function Club() {
   const [signings, setSignings] = useState([]); // nos joueurs signés ailleurs cette journée
   const [callUps, setCallUps] = useState([]); // nos joueurs dans les listes des sélections annoncées depuis
   const [showReview, setShowReview] = useState(false); // bilan de fin de saison
+  // Intersaison en cours : { year, done }, la saison qui s'achève ; la fenêtre d'attente.
+  const [offseason, setOffseason] = useState(null);
+  const offseasonOver = useCallback(() => setOffseason(null), []);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState(null);
   // Affaires entre deux matchs : à régler avant de jouer la journée suivante.
@@ -179,15 +183,20 @@ export default function Club() {
     }
   };
 
-  const nextSeason = () =>
-    act(api.startNextSeason, (data) => {
+  const nextSeason = async () => {
+    setOffseason({ year: season.data.year, done: false });
+    await act(api.startNextSeason, (data) => {
       setLastPlayed(null);
       setNewInjuries([]);
       setSignings([]);
       setCallUps([]);
       setShowReview(false);
       season.setData(data);
+      setOffseason((current) => ({ ...current, done: true }));
     });
+    // Refusée : la fenêtre se ferme, l'erreur s'affiche sous le bilan.
+    setOffseason((current) => (current?.done ? current : null));
+  };
 
   if (season.loading) return <p className="status">Chargement…</p>;
   if (season.error) return <p className="status status--error">{season.error.message}</p>;
@@ -218,7 +227,8 @@ export default function Club() {
   return (
     <>
       <ActionError error={actionError} />
-      {showReview && (
+      {offseason && <Offseason year={offseason.year} done={offseason.done} onFinished={offseasonOver} />}
+      {showReview && !offseason && (
         <SeasonReview
           clubId={myId}
           onClose={() => setShowReview(false)}
