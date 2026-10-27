@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from accounts import User
 from api import cup, internationals, plans
@@ -461,6 +462,9 @@ class DayResult:
     cases: list[InjuryCase] = field(default_factory=list)
 
 
+# Ce que la progression d'un joueur change (engine/development.py).
+PROGRESSION_COLUMNS = (*ATTRIBUTE_NAMES, "potential", "progress", "season_gain")
+
 # Les recettes d'un jour de match (billetterie, buvettes et boutique, sponsors).
 REVENUES = {
     TransactionCategory.TICKETING,
@@ -591,14 +595,14 @@ def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayRes
         player, player_row = players[player_id], session.get(PlayerRow, player_id)
         player_row.suspended_matches = player.suspended_matches
         player_row.yellow_cards = player.yellow_cards
-    # Progression : chacun a avancé vers son potentiel (engine/development.py).
+    # Progression : chacun a avancé vers son potentiel (engine/development.py). Toutes
+    # les colonnes de progression sont écrites pour chacun, même inchangées : les lignes
+    # ont alors la même forme et partent en une requête groupée, pas une par joueur.
     for player_id in report.developed:
         player, player_row = players[player_id], session.get(PlayerRow, player_id)
-        for name in ATTRIBUTE_NAMES:
+        for name in PROGRESSION_COLUMNS:
             setattr(player_row, name, getattr(player, name))
-        player_row.potential = player.potential
-        player_row.progress = player.progress
-        player_row.season_gain = player.season_gain
+            flag_modified(player_row, name)
 
     # Les matchs internationaux du jour, avec leur propre hasard : les clubs jouent
     # la même journée qu'il y en ait ou non.

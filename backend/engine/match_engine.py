@@ -561,19 +561,21 @@ def collective_ratings(
     le tout (forme du jour, infériorité numérique).
     """
     fielded = list(fielded)
+    # Le poids de chacun, calculé une fois pour toutes les notes.
+    weights = {p.id: weight(p) for _, p in fielded}
 
     def at(*positions: Position) -> list[Player]:
         return [p for pos, p in fielded if pos in positions]
 
     def rate(players: list[Player], rating: Callable[[Player], float]) -> float:
-        return _average([rating(p) * weight(p) for p in players])
+        return _average([rating(p) * weights[p.id] for p in players])
 
     jumpers = at(Position.HOOKER, Position.LOCK, Position.BACK_ROW)
     forwards = [p for pos, p in fielded if pos.is_forward]
     backs = [p for pos, p in fielded if not pos.is_forward]
     everyone = [p for _, p in fielded]
 
-    scrum = scrum_strength(fielded, weight)
+    scrum = scrum_strength(fielded, lambda p: weights[p.id])
     lineout = rate(jumpers, lineout_rating)
     return Collective(
         set_piece=factor * (0.5 * scrum + 0.5 * lineout),
@@ -823,7 +825,12 @@ class Side:
         return {p.id: p for p in [*self.lineup, *self.bench]}
 
     def on_field(self, minute: int) -> list[Slot]:
-        return [s for s in self.slots if s.present(minute)]
+        # Le test de `Slot.present`, écrit ici : appelé plusieurs fois par minute de jeu.
+        return [
+            s
+            for s in self.slots
+            if s.player is not None and (s.absent_until is None or minute >= s.absent_until)
+        ]
 
     def fielded(self, minute: int) -> list[Fielded]:
         return [(s.position, s.player) for s in self.on_field(minute)]

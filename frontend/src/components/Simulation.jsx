@@ -11,7 +11,7 @@ import Modal from "./Modal.jsx";
 export const SEASON_END = "9999-12-31";
 
 // Chaque journée reste au moins ce temps à l'écran : le temps de voir la page changer derrière.
-const PACE_MS = 700;
+const PACE_MS = 350;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

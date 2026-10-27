@@ -60,13 +60,16 @@ export default function Match() {
   const confirm = useConfirm();
   const live = current.data;
   const { setData } = current;
+  const lastRequest = useRef(0); // durée de la dernière minute demandée au serveur, en ms
 
   // Avance d'une minute, puis s'arrête sur ce qui mérite une décision.
   const tick = useCallback(async () => {
     if (!live || live.finished || busy) return;
     setBusy(true);
     try {
+      const sent = performance.now();
       const next = await api.advanceLive(1);
+      lastRequest.current = performance.now() - sent;
       setData(next);
       const fresh = next.events.slice(live.events.length);
       const mine = fresh.find((e) => e.club_id === next.my_club_id && PAUSING.has(e.type));
@@ -91,10 +94,11 @@ export default function Match() {
     }
   }, [live, busy, setData]);
 
-  // Le chrono : une minute de jeu à chaque intervalle tant que le match tourne.
+  // Le chrono : une minute de jeu à chaque intervalle tant que le match tourne. Le temps
+  // de réponse du serveur compte dans l'intervalle : ×8 va vraiment huit fois plus vite.
   useEffect(() => {
     if (!playing || !live || live.finished) return undefined;
-    const timer = setTimeout(tick, SPEEDS[speed].ms);
+    const timer = setTimeout(tick, Math.max(0, SPEEDS[speed].ms - lastRequest.current));
     return () => clearTimeout(timer);
   }, [playing, live, speed, tick]);
 
