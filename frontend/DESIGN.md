@@ -413,6 +413,12 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   Il se ferme au changement de page, par Échap ou en touchant le fond ; « Plus » reste
   marqué actif tant que l'on est sur l'une de ses pages.
 - Titres de page et affiches (`.title`, `.hero__title`) à 40 px.
+- Fenêtres (`Modal`) sur téléphone : la barre d'onglets reste devant ; la fenêtre se
+  centre dans l'espace libre au-dessus d'elle, sans les marges du haut de l'ordinateur,
+  et son contenu défile dedans : ses boutons restent visibles.
+- Choix de la carrière (`/start`) sur téléphone : marges de 16 px, titre à 40 px, puis
+  une ligne par championnat, club ou sélection (blason et nom à gauche, niveau à
+  droite) ; la liste défile, « Prendre les rênes » sur toute la largeur en bas.
 - Match en direct sur téléphone : le tableau d'affichage inchangé ; puis une seule carte
   de faits de jeu pour les deux équipes, dans l'ordre du match, ceux du club à domicile
   calés à gauche et ceux de l'extérieur à droite (minute et repère vers le bord), une

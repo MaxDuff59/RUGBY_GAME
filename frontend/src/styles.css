@@ -996,6 +996,16 @@ select.tactics__select {
   .squad__table {
     overflow: visible;
   }
+  /* En-tête resserré : la liste (ou l'effectif) commence plus haut. */
+  .squad__head {
+    gap: 12px;
+  }
+  .squad__stats {
+    gap: 20px;
+  }
+  .squad__compo {
+    gap: 8px;
+  }
 }
 
 .squad__table .table {
@@ -1569,6 +1579,49 @@ select.tactics__select {
   font-weight: 600;
   font-size: 20px;
   line-height: 1.1;
+}
+
+/* Sur téléphone, le choix tient dans l'écran : marges et titre resserrés, puis une ligne
+   par championnat, club ou sélection (nom à gauche, niveau à droite) pour en voir une
+   demi-douzaine à la fois au lieu de deux cartes. Le bouton prend toute la largeur. */
+@media (max-width: 960px) {
+  .start {
+    padding: 20px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    gap: 16px;
+  }
+  .start .title {
+    font-size: 40px;
+  }
+  .start .field {
+    max-width: none;
+  }
+  .start .section__head {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+  }
+  .start .club-list {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .start .club-option {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 2px 12px;
+    padding: 10px 14px;
+  }
+  .start .club-option > .num {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    font-size: 14px;
+  }
+  .start .club-option__name {
+    font-size: 18px;
+  }
+  .start__submit .button {
+    width: 100%;
+  }
 }
 
 .field {
@@ -2777,8 +2830,13 @@ button.market-item__main:focus-visible {
   .modal-backdrop {
     padding-bottom: calc(24px + var(--tabbar-h));
   }
-  .modal {
-    max-height: calc(100dvh - 48px - var(--tabbar-h));
+  /* Les marges du haut prévues pour l'ordinateur (8vh, 12vh, 24vh…) feraient passer le
+     bas de la fenêtre, et ses boutons, sous la barre : sur téléphone elle se centre dans
+     l'espace libre sans jamais le dépasser. `[aria-modal]` passe devant les variantes
+     (`.modal--dialog.offseason`…). */
+  .modal-backdrop > .modal[aria-modal] {
+    margin: auto 0;
+    max-height: 100%;
   }
 }
 

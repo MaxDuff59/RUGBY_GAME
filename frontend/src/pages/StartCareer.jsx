@@ -230,7 +230,7 @@ export default function StartCareer() {
 
       <ActionError error={submitError} />
 
-      <div>
+      <div className="start__submit">
         <button type="submit" className="button button--primary" disabled={!canSubmit}>
           Prendre les rênes
         </button>
