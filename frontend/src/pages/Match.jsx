@@ -47,7 +47,34 @@ const PAUSING = new Set(["injury", "yellow_card", "red_card"]);
 export default function Match() {
   const { career } = useOutletContext();
   const navigate = useNavigate();
-  const current = useApi(useCallback(api.getLive, []));
+  return (
+    <LiveScreen
+      calls={CAREER_CALLS}
+      empty={(onStarted) => <NoLiveMatch career={career} onStarted={onStarted} />}
+      // Fin de journée : les autres matchs se jouent, et le tableau de bord raconte la suite.
+      onFinished={(result) => navigate("/", { replace: true, state: { played: result } })}
+      handOverText="Le reste du match se joue sans toi : le staff gère le banc. La journée se termine ensuite comme d'habitude."
+    />
+  );
+}
+
+const CAREER_CALLS = {
+  get: api.getLive,
+  advance: api.advanceLive,
+  tactics: api.setLiveTactics,
+  talk: api.talkLive,
+  decide: api.decideLive,
+  substitute: api.substituteLive,
+  finish: api.finishLive,
+};
+
+// L'écran du match en direct, quel que soit le match : `calls` sont ses appels à l'API
+// (ceux de la carrière, ou du match libre), `empty(onStarted)` ce qu'on montre sans match
+// en cours. `finish` (« Terminer », ou le bouton du match fini) joue la fin ; sa réponse
+// va à `onFinished`, ou s'affiche sans lui. Avec `onDone`, le bouton du match fini
+// (`doneLabel`) appelle `onDone` à la place.
+export function LiveScreen({ calls, title, empty, onFinished, onDone, doneLabel = "Continuer", handOverText }) {
+  const current = useApi(calls.get);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [notice, setNotice] = useState(null); // pourquoi le match s'est arrêté
@@ -68,7 +95,7 @@ export default function Match() {
     setBusy(true);
     try {
       const sent = performance.now();
-      const next = await api.advanceLive(1);
+      const next = await calls.advance(1);
       lastRequest.current = performance.now() - sent;
       setData(next);
       const fresh = next.events.slice(live.events.length);
@@ -92,7 +119,7 @@ export default function Match() {
     } finally {
       setBusy(false);
     }
-  }, [live, busy, setData]);
+  }, [live, busy, setData, calls]);
 
   // Le chrono : une minute de jeu à chaque intervalle tant que le match tourne. Le temps
   // de réponse du serveur compte dans l'intervalle : ×8 va vraiment huit fois plus vite.
@@ -153,13 +180,18 @@ export default function Match() {
     setPlaying(true);
   };
 
-  // Fin de journée : les autres matchs se jouent, et le tableau de bord raconte la suite.
   async function finish() {
     setFinishing(true);
     setError(null);
     try {
-      const result = await api.finishLive();
-      navigate("/", { replace: true, state: { played: result } });
+      const result = await calls.finish();
+      if (onFinished) {
+        onFinished(result);
+      } else {
+        setData(result);
+        setNotice(null);
+        setFinishing(false);
+      }
     } catch (err) {
       setError(err);
       setFinishing(false);
@@ -182,7 +214,7 @@ export default function Match() {
     confirm.ask({
       eyebrow: "Terminer le match",
       title: "Laisser le staff finir ?",
-      text: "Le reste du match se joue sans toi : le staff gère le banc. La journée se termine ensuite comme d'habitude.",
+      text: handOverText,
       confirmLabel: "Terminer le match",
       // La barre d'espace sert à relancer le chrono : tapée par réflexe, elle annule.
       cautious: true,
@@ -191,7 +223,7 @@ export default function Match() {
   };
 
   if (current.loading) return <p className="status">Chargement…</p>;
-  if (current.error?.status === 404) return <NoLiveMatch career={career} onStarted={current.setData} />;
+  if (current.error?.status === 404) return empty(current.setData);
   if (current.error) return <p className="status status--error">{current.error.message}</p>;
 
   const myId = live.my_club_id;
@@ -204,6 +236,8 @@ export default function Match() {
       {confirm.dialog}
       <Scoreboard
         live={live}
+        title={title}
+        doneLabel={doneLabel}
         playing={playing}
         speed={speed}
         setSpeed={setSpeed}
@@ -214,7 +248,7 @@ export default function Match() {
         onPlay={start}
         onPause={() => setPlaying(false)}
         onHandOver={handOver}
-        onFinish={finish}
+        onFinish={live.finished && onDone ? onDone : finish}
       />
       <Actions live={live} side={mySide} onOpen={openPanel} />
       <Momentum
@@ -233,7 +267,7 @@ export default function Match() {
           tactics={mySide.tactics}
           busy={busy}
           error={error}
-          onChange={(tactics) => act(() => api.setLiveTactics(tactics))}
+          onChange={(tactics) => act(() => calls.tactics(tactics))}
           resumeLabel={live.minute === 0 ? "Coup d'envoi" : "Reprendre le match"}
           onClose={() => setPanel(null)}
           onResume={resume}
@@ -245,7 +279,7 @@ export default function Match() {
           side={mySide}
           busy={busy}
           error={error}
-          onDecide={(option) => act(() => api.decideLive(option))}
+          onDecide={(option) => act(() => calls.decide(option))}
           onClose={() => setPanel(null)}
           onResume={resume}
         />
@@ -256,7 +290,7 @@ export default function Match() {
           side={mySide}
           busy={busy}
           error={error}
-          onTalk={(key) => act(() => api.talkLive(key))}
+          onTalk={(key) => act(() => calls.talk(key))}
           resumeLabel={live.minute === 0 ? "Coup d'envoi" : "Reprendre le match"}
           onClose={() => setPanel(null)}
           onResume={resume}
@@ -287,7 +321,7 @@ export default function Match() {
               mine={shownSide.club.id === myId}
               paused={!playing && !live.finished}
               busy={busy}
-              onSubstitute={(out, into) => act(() => api.substituteLive(out, into))}
+              onSubstitute={(out, into) => act(() => calls.substitute(out, into))}
             />
           </>
         ) : (
@@ -302,7 +336,7 @@ export default function Match() {
                 mine={side.club.id === myId}
                 paused={!playing && !live.finished}
                 busy={busy}
-                onSubstitute={(out, into) => act(() => api.substituteLive(out, into))}
+                onSubstitute={(out, into) => act(() => calls.substitute(out, into))}
               />
             ))}
           </>
@@ -411,8 +445,23 @@ function NoLiveClubMatch({ career, onStarted }) {
 
 // --- Tableau d'affichage ----------------------------------------------------------------
 
-function Scoreboard({ live, playing, speed, setSpeed, notice, error, busy, finishing, onPlay, onPause, onHandOver, onFinish }) {
-  const label = matchdayTitle(live);
+function Scoreboard({
+  live,
+  title,
+  doneLabel,
+  playing,
+  speed,
+  setSpeed,
+  notice,
+  error,
+  busy,
+  finishing,
+  onPlay,
+  onPause,
+  onHandOver,
+  onFinish,
+}) {
+  const label = title ?? matchdayTitle(live);
   return (
     <header className="scoreboard card">
       <Team side={live.home} mine={live.home.club.id === live.my_club_id} />
@@ -451,7 +500,7 @@ function Scoreboard({ live, playing, speed, setSpeed, notice, error, busy, finis
         <div className="scoreboard__controls">
           {live.finished ? (
             <button type="button" className="button button--primary" disabled={finishing} onClick={onFinish}>
-              {finishing ? "Fin de journée…" : "Continuer"}
+              {finishing ? "Fin de journée…" : doneLabel}
             </button>
           ) : (
             <>

@@ -9,6 +9,7 @@ import Calendar from "./pages/Calendar.jsx";
 import Club from "./pages/Club.jsx";
 import Facilities from "./pages/Facilities.jsx";
 import Finances from "./pages/Finances.jsx";
+import FreeMatch from "./pages/FreeMatch.jsx";
 import Internationals from "./pages/Internationals.jsx";
 import Journal from "./pages/Journal.jsx";
 import Login from "./pages/Login.jsx";
@@ -23,6 +24,7 @@ import Staff from "./pages/Staff.jsx";
 import Training from "./pages/Training.jsx";
 import Honours from "./pages/Honours.jsx";
 import StartCareer from "./pages/StartCareer.jsx";
+import StartCompetition from "./pages/StartCompetition.jsx";
 import Transfers from "./pages/Transfers.jsx";
 import { leaveSlot } from "./save.js";
 
@@ -43,6 +45,8 @@ export default function App() {
       <Route path="/connexion" element={<Login />} />
       <Route path="/parties" element={<Saves />} />
       <Route path="/start" element={<StartCareer />} />
+      <Route path="/match-libre" element={<FreeMatch />} />
+      <Route path="/competition" element={<StartCompetition />} />
       <Route path="/backoffice" element={<Admin />} />
       <Route element={<Layout />}>
         <Route index element={<Home />} />

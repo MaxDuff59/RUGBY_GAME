@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from accounts import User
-from api import cup, internationals, plans
+from api import competition, cup, internationals, plans
 from api.affairs import (
     affair_out,
     draw_affair,
@@ -878,6 +878,7 @@ def play_next_matchday(session: SessionDep) -> PlayOut:
         raise HTTPException(
             status_code=400, detail="Un sélectionneur avance jour par jour (/selection/advance)"
         )
+    competition.require_running(session, season)
     ignore_pending(session)
     known_lists = {row.id for row in internationals.call_up_rows(session, season)}
     played, injuries = _play_matchday(session, season)
@@ -954,7 +955,8 @@ def _board_verdict(session: Session, played: MatchdayOut) -> DismissalRow | None
     monde continue, et le manager peut reprendre un autre club.
     """
     career = session.scalars(select(CareerRow)).first()
-    if career is None:
+    # En mode compétition, le manager mène son club jusqu'au bout de la coupe.
+    if career is None or competition.current(session) is not None:
         return None
     club_id = career.club_id
     if not any(club_id in (m.home.id, m.away.id) for m in played.matches):
@@ -1010,6 +1012,8 @@ def start_next_season(session: SessionDep, user: UserDep) -> SeasonOut:
     contrat du manager s'achève sans qu'il ait prolongé, signé ailleurs ou quitté
     le club (api/routers/career.py), ou si le compte gratuit a joué toutes ses
     saisons (api/plans.py) : la nouvelle compte dans les siennes."""
+    if competition.current(session) is not None:
+        raise HTTPException(status_code=400, detail="Une compétition se joue sur une saison")
     plans.require_season(user)
     season = _current_or_404(session)
     if internationals.selector(session) is not None:

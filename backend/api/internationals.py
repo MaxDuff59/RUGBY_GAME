@@ -39,6 +39,7 @@ from models import ATTRIBUTE_NAMES, Club, Injury, Match, Player, Squad, Stage
 from models.orm import (
     CallUpRow,
     ClubRow,
+    CompetitionRow,
     InjuryRow,
     InternationalRow,
     MatchRow,
@@ -164,7 +165,8 @@ def ensure_calendar(session: Session, season: SeasonRow) -> None:
     les sélections à court de joueurs à un poste (`reinforcements`).
 
     Une saison déjà entamée (partie commencée avant les sélections) ne reçoit que
-    les fenêtres pas encore commencées.
+    les fenêtres pas encore commencées. Une partie Coupe du monde (api/competition.py)
+    n'a qu'elle, quelle que soit la saison.
     """
     exists = session.scalar(
         select(func.count())
@@ -173,7 +175,10 @@ def ensure_calendar(session: Session, season: SeasonRow) -> None:
     )
     if exists or not has_nations(session):
         return
-    matches = rules.schedule(season.year)
+    world_cup_only = session.scalar(
+        select(CompetitionRow.id).where(CompetitionRow.code == rules.WORLD_CUP.code)
+    )
+    matches = rules.schedule(season.year, [rules.WORLD_CUP] if world_cup_only else None)
     played = [m.date for m in season.matches if m.is_played]
     if played:
         started = {m.league for m in matches if m.date <= max(played)}

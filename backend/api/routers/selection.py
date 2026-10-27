@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from api import internationals
+from api import competition, internationals
 from api.deps import SessionDep
 from api.ledger import game_date
 from api.notes import History
@@ -355,6 +355,7 @@ def advance(session: SessionDep) -> AdvanceOut:
 
     Refusé tant que la liste due n'est pas annoncée."""
     human, season, where = _load(session)
+    competition.require_running(session, season)
     if where.phase == "finished":
         raise HTTPException(status_code=400, detail="La saison est terminée")
     if where.phase == "list":

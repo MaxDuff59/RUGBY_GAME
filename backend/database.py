@@ -223,7 +223,17 @@ def load_slot(user_id: int, slot: int) -> None:
 
 
 def new_slot(user_id: int, slot: int, seed: int | None = None) -> None:
-    """Remplace l'emplacement par un monde neuf (la carrière reste à choisir)."""
+    """Remplace l'emplacement par un monde neuf (la carrière reste à choisir). Un monde
+    qui n'a pas pu se remplir (catalogue injoignable...) est effacé : l'emplacement
+    reste libre au lieu de garder une partie vide."""
+    try:
+        _fill_slot(user_id, slot, seed)
+    except Exception:
+        delete_slot(user_id, slot)
+        raise
+
+
+def _fill_slot(user_id: int, slot: int, seed: int | None) -> None:
     delete_slot(user_id, slot)
     if uses_postgres():
         schema = schema_name(user_id, slot)

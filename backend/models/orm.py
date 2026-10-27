@@ -715,6 +715,18 @@ class LiveInternationalRow(Base):
     state: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
+class CompetitionRow(Base):
+    """Partie en mode compétition (api/competition.py) : le joueur n'y mène son équipe
+    que dans une compétition, la Coupe d'Europe ou la Coupe du monde, et la partie
+    s'arrête avec elle. Absente d'une carrière ordinaire."""
+
+    __tablename__ = "competition"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Code de la compétition : `champions_cup` ou `world_cup`.
+    code: Mapped[str] = mapped_column(String(LEAGUE_CODE_LENGTH))
+
+
 class SelectorRow(Base):
     """Partie sauvegardée d'un sélectionneur : la sélection nationale qu'il dirige.
 

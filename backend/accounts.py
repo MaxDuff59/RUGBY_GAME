@@ -7,6 +7,10 @@ reste un fichier par emplacement et par joueur (voir database.py).
 Une session est un jeton aléatoire remis au navigateur (cookie) ; on n'en garde
 ici que l'empreinte, comme pour les mots de passe (scrypt, bibliothèque standard).
 
+Un invité joue sans compte : le jeu lui crée un compte sans adresse ni mot de passe,
+retrouvé par son seul cookie. Il garde une partie, tant qu'il revient la jouer
+(`GUEST_DAYS`) ; s'il crée un compte ensuite, sa partie le suit.
+
 Un compte gratuit garde une seule partie et joue deux saisons en tout. Les saisons
 se comptent sur le compte, pas dans la partie, dès qu'elles commencent : supprimer
 une carrière ne rend pas les saisons jouées. Le compte complet (payé une fois, voir
@@ -22,12 +26,15 @@ import secrets
 from dataclasses import dataclass
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Engine,
     ForeignKey,
     Integer,
     String,
     create_engine,
+    delete,
+    false,
     inspect,
     select,
     text,
@@ -36,6 +43,10 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 SESSION_DAYS = 30
+# Un invité qui ne revient pas pendant ce temps perd sa partie (purge_guests).
+GUEST_DAYS = 7
+# Adresse interne d'un invité : jamais montrée, ne sert qu'à tenir l'unicité.
+GUEST_DOMAIN = "invite.local"
 PASSWORD_MIN_LENGTH = 8
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -65,6 +76,8 @@ class UserRow(AccountsBase):
     # Compte complet : date du paiement, et sa référence chez Stripe.
     premium_at: Mapped[datetime.datetime | None] = mapped_column(DateTime)
     payment_ref: Mapped[str | None] = mapped_column(String(255))
+    # Invité : compte créé sans adresse ni mot de passe, le temps d'une partie.
+    guest: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
 
 class SessionRow(AccountsBase):
@@ -83,6 +96,7 @@ class User:
     active_slot: int | None
     premium: bool = False
     seasons_played: int = 0
+    guest: bool = False
 
     @property
     def seasons_left(self) -> int | None:
@@ -124,6 +138,7 @@ _NEW_COLUMNS = {
     "seasons_played": "INTEGER NOT NULL DEFAULT 0",
     "premium_at": "TIMESTAMP",
     "payment_ref": "VARCHAR(255)",
+    "guest": "BOOLEAN NOT NULL DEFAULT FALSE",
 }
 
 
@@ -193,21 +208,63 @@ def _user(row: UserRow) -> User:
         active_slot=row.active_slot,
         premium=row.premium_at is not None,
         seasons_played=row.seasons_played or 0,
+        guest=bool(row.guest),
     )
 
 
-def register(email: str, password: str) -> User:
-    """Crée un compte (AccountError si l'adresse est prise ou le mot de passe trop court)."""
+def register(email: str, password: str, guest_id: int | None = None) -> User:
+    """Crée un compte (AccountError si l'adresse est prise ou le mot de passe trop court).
+    Avec `guest_id`, le compte de cet invité devient un vrai compte : sa partie le suit."""
     email = normalize_email(email)
     if len(password) < PASSWORD_MIN_LENGTH:
         raise AccountError(f"Mot de passe trop court ({PASSWORD_MIN_LENGTH} caractères minimum)")
     with _session() as session:
         if session.scalars(select(UserRow).where(UserRow.email == email)).first():
             raise AccountError("Un compte existe déjà avec cette adresse")
-        row = UserRow(email=email, password_hash=hash_password(password), created_at=_now())
+        row = session.get(UserRow, guest_id) if guest_id is not None else None
+        if row is not None and row.guest:
+            row.email, row.password_hash, row.guest = email, hash_password(password), False
+        else:
+            row = UserRow(email=email, password_hash=hash_password(password), created_at=_now())
+            session.add(row)
+        session.commit()
+        return _user(row)
+
+
+def register_guest() -> User:
+    """Crée un compte d'invité : pas d'adresse ni de mot de passe (personne ne peut s'y
+    connecter), seulement la session qu'on lui ouvre."""
+    with _session() as session:
+        row = UserRow(
+            email=f"{secrets.token_hex(12)}@{GUEST_DOMAIN}",
+            password_hash="",
+            created_at=_now(),
+            guest=True,
+        )
         session.add(row)
         session.commit()
         return _user(row)
+
+
+def purge_guests() -> list[int]:
+    """Efface les invités dont plus aucune session n'est valable (partie comprise) et
+    renvoie leurs identifiants."""
+    import database
+
+    with _session() as session:
+        alive = select(SessionRow.user_id).where(SessionRow.expires_at >= _now())
+        gone = list(
+            session.scalars(select(UserRow.id).where(UserRow.guest, UserRow.id.not_in(alive)))
+        )
+        if not gone:
+            return []
+        for user_id in gone:
+            for slot in range(1, database.SLOT_COUNT + 1):
+                database.delete_slot(user_id, slot)
+        session.execute(delete(SessionRow).where(SessionRow.user_id.in_(gone)))
+        session.execute(delete(UserRow).where(UserRow.id.in_(gone)))
+        session.commit()
+    return gone
 
 
 def authenticate(email: str, password: str) -> User:
@@ -291,6 +348,10 @@ def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+def _lifetime(row: UserRow) -> datetime.timedelta:
+    return datetime.timedelta(days=GUEST_DAYS if row.guest else SESSION_DAYS)
+
+
 def open_session(user_id: int) -> str:
     """Ouvre une session et renvoie son jeton (à remettre au navigateur)."""
     token = secrets.token_urlsafe(32)
@@ -301,7 +362,7 @@ def open_session(user_id: int) -> str:
                 token_hash=_token_hash(token),
                 user_id=user_id,
                 created_at=now,
-                expires_at=now + datetime.timedelta(days=SESSION_DAYS),
+                expires_at=now + _lifetime(session.get(UserRow, user_id)),
             )
         )
         session.commit()
@@ -321,6 +382,13 @@ def user_for_token(token: str | None) -> User | None:
             session.commit()
             return None
         row = session.get(UserRow, found.user_id)
+        # Un invité garde sa partie tant qu'il revient : sa session repart pour
+        # `GUEST_DAYS` (au plus une écriture par jour).
+        if row is not None and row.guest:
+            renewed = _now() + _lifetime(row)
+            if renewed - found.expires_at > datetime.timedelta(days=1):
+                found.expires_at = renewed
+                session.commit()
     return _user(row) if row is not None else None
 
 

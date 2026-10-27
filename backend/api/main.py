@@ -10,12 +10,14 @@ l'interface construite (`RUGBY_STATIC_DIR`, le `dist/` de Vite) : l'API sous
 `/api` vers `app` (voir frontend/vite.config.js).
 """
 
+import logging
 import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.exc import OperationalError
 
 from api import auth, billing
 from api.routers import (
@@ -26,9 +28,11 @@ from api.routers import (
     career,
     catalog,
     clubs,
+    competition,
     contracts,
     facilities,
     finances,
+    friendly,
     honours,
     inbox,
     internationals,
@@ -63,6 +67,20 @@ def outdated_save(request: Request, error: OutdatedSave) -> JSONResponse:
     return JSONResponse(status_code=409, content={"detail": str(error)})
 
 
+@app.exception_handler(OperationalError)
+def database_unreachable(request: Request, error: OperationalError) -> JSONResponse:
+    # Une base injoignable : 503 et une raison lisible plutôt qu'un 500 muet. En local,
+    # c'est presque toujours le catalogue de la prod, joint par un tunnel fermé.
+    logging.getLogger("uvicorn.error").exception("Base de données injoignable")
+    detail = "Base de données injoignable : réessaie dans un instant."
+    if os.environ.get("RUGBY_CATALOG_DB_URL"):
+        detail = (
+            "Catalogue injoignable (RUGBY_CATALOG_DB_URL) : ouvre le tunnel, "
+            "railway connect Postgres --tunnel-only -P 5433."
+        )
+    return JSONResponse(status_code=503, content={"detail": detail})
+
+
 @app.get("/health", include_in_schema=False)
 def health() -> dict[str, str]:
     """Pour l'hébergeur : l'API répond."""
@@ -76,6 +94,7 @@ app.include_router(clubs.router)
 app.include_router(leagues.router)
 app.include_router(matches.router)
 app.include_router(career.router)
+app.include_router(competition.router)
 app.include_router(seasons.router)
 app.include_router(finances.router)
 app.include_router(staff.router)
@@ -88,6 +107,7 @@ app.include_router(players.router)
 app.include_router(affairs.router)
 app.include_router(contracts.router)
 app.include_router(live.router)
+app.include_router(friendly.router)
 app.include_router(internationals.router)
 app.include_router(selection.router)
 app.include_router(journal.router)

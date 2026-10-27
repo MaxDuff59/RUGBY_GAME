@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, Path
 from sqlalchemy import select
 
 import accounts
-from api import internationals, plans
+from api import competition, internationals, plans
 from api.auth import UserDep
 from api.ledger import current_season, game_date
 from api.schemas import SaveOut
@@ -60,6 +60,11 @@ def _save_out(user: accounts.User, slot: int) -> SaveOut:
             out.manager_name = human.manager_name
             out.club_name = NATIONS_BY_CODE[human.nation].name
             out.league_name = "Sélection nationale"
+        found = competition.status(session, season)
+        if found is not None:
+            out.competition = found.code
+            out.competition_result = found.result
+            out.league_name = competition.NAMES[found.code]
     return out
 
 

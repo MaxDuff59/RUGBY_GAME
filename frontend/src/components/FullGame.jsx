@@ -91,6 +91,7 @@ export function PlanCard({ me, saves }) {
 
 // Le compte gratuit peut-il commencer une nouvelle partie ? (sinon, pourquoi)
 export function newSaveBlocked(me, saves) {
+  if (me?.guest && saves >= 1) return "Sans compte, une seule partie : crée un compte pour en mener plusieurs";
   if (!me || !me.paywall || me.premium) return null;
   if (me.seasons_left === 0) return "Tes saisons gratuites sont jouées : passe au jeu complet";
   if (saves >= me.free_saves) return "Le compte gratuit garde une seule partie";

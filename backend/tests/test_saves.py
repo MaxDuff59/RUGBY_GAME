@@ -177,3 +177,32 @@ def test_old_saves_keep_the_room_to_grow_of_each_player(tmp_path):
         player = session.scalars(select(PlayerRow)).one()
         assert player.potential_scale == 2
         assert player.potential == pytest.approx(round(player.level + 2.5, 1))
+
+
+def test_failed_world_leaves_the_slot_free(world, monkeypatch):
+    import catalog
+
+    def unreachable():
+        raise ConnectionError("catalogue injoignable")
+
+    monkeypatch.setattr(catalog, "leagues", unreachable)
+    with pytest.raises(ConnectionError):
+        database.new_slot(1, 1)
+    assert not database.slot_exists(1, 1)
+
+
+def test_unreachable_catalog_says_so(world, monkeypatch):
+    from sqlalchemy.exc import OperationalError
+
+    import catalog
+
+    def unreachable():
+        raise OperationalError("SELECT 1", {}, ConnectionRefusedError("port 5433"))
+
+    monkeypatch.setattr(catalog, "leagues", unreachable)
+    monkeypatch.setenv("RUGBY_CATALOG_DB_URL", "postgresql://127.0.0.1:5433/railway")
+    client = TestClient(app)
+    client.post("/auth/register", json={"email": "max@example.com", "password": "ballon-ovale"})
+    refused = client.post("/saves/1/new")
+    assert refused.status_code == 503 and "tunnel" in refused.json()["detail"]
+    assert not database.slot_exists(client.get("/auth/me").json()["id"], 1)

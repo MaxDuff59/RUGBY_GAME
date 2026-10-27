@@ -25,6 +25,8 @@ export default function StartCareer() {
   const leagues = useApi(useCallback(api.listLeagues, []));
   // Vide dans un monde de clubs inventés : pas de sélections à diriger.
   const nations = useApi(useCallback(api.listNations, []));
+  // Une partie en mode compétition choisit son équipe sur sa propre page.
+  const competition = useApi(useCallback(api.getCompetition, []));
   const [kind, setKind] = useState("club"); // "club" ou "nation"
   const [nationCode, setNationCode] = useState(null);
   const [leagueCode, setLeagueCode] = useState(null);
@@ -61,6 +63,7 @@ export default function StartCareer() {
   // Le club se choisit dans une partie : on passe d'abord par l'écran des parties.
   if (error?.status === 401) return <Navigate to="/connexion" replace />;
   if (chosenSlot() === null || error?.status === 409) return <Navigate to="/parties" replace />;
+  if (competition.data) return <Navigate to="/competition" replace />;
   if (loading || leagues.loading) return <p className="status">Chargement des clubs…</p>;
   if (error || leagues.error) {
     return (

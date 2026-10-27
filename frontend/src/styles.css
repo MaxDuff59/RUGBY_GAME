@@ -1513,6 +1513,14 @@ select.tactics__select {
   flex-wrap: wrap;
 }
 
+.login__guest {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: min(100%, 420px);
+}
+
 /* --- Choix du club ----------------------------------------------------------- */
 
 .start {
@@ -7009,4 +7017,119 @@ td > .tag:first-child,
 
 .start > .full-game {
   margin: 0;
+}
+
+/* --- Match libre ------------------------------------------------------------- */
+
+/* Le choix de l'affiche : deux colonnes (domicile, extérieur), chacune ses pastilles de
+   championnat et sa liste qui défile dans son cadre ; puis l'équipe dirigée et le bouton. */
+.friendly {
+  gap: 20px;
+}
+
+.friendly__crumbs {
+  margin: 0;
+}
+
+.friendly__teams {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.friendly__column {
+  min-height: 0;
+}
+
+.friendly__groups {
+  flex-wrap: wrap;
+}
+
+.friendly__list {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.friendly__submit {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* Téléphone : les deux colonnes l'une sous l'autre (les marges et les lignes de club
+   sont celles du choix de carrière, plus haut). */
+@media (max-width: 960px) {
+  .friendly .page-head .muted {
+    display: none;
+  }
+
+  /* Pendant le match, la page défile comme celle du match de carrière (.app--phone). */
+  .friendly:has(> .live) {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .friendly > .live,
+  .friendly .live .fill {
+    flex: 0 0 auto;
+  }
+
+  .friendly__teams {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .friendly__submit {
+    justify-content: stretch;
+  }
+
+  .friendly__submit > .button {
+    flex: 1 1 auto;
+  }
+}
+
+/* --- Mode compétition -------------------------------------------------------- */
+
+/* Dans l'en-tête, à côté de « À traiter » : la compétition, le prochain match ou l'issue,
+   et le bouton qui y mène. Sur téléphone, sur sa propre ligne sous le club. */
+.competition-bar {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.competition-bar__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.competition-bar--won strong {
+  color: var(--accent);
+}
+
+.competition-bar > .status--error {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+@media (max-width: 960px) {
+  .competition-bar {
+    order: 3;
+    flex-basis: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+
+  .competition-bar__more {
+    display: none;
+  }
 }

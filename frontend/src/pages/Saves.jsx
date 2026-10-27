@@ -59,8 +59,14 @@ export default function Saves() {
     }
   }
 
-  const resume = (save) => open(save.slot, api.loadSave, (loaded) => (loaded.manager_name ? "/" : "/start"));
+  // Une partie sans équipe reprend au choix de la carrière, ou de la compétition.
+  const resume = (save) =>
+    open(save.slot, api.loadSave, (loaded) =>
+      loaded.manager_name ? "/" : loaded.competition ? "/competition" : "/start",
+    );
   const create = (slot) => open(slot, api.newSave, () => "/start");
+  // Mode compétition : une partie qui ne joue que la Coupe d'Europe ou la Coupe du monde.
+  const createCompetition = (slot) => open(slot, api.newSave, () => "/competition");
 
   const remove = (save) =>
     confirm.ask({
@@ -77,6 +83,19 @@ export default function Saves() {
     navigate("/connexion", { replace: true });
   }
 
+  // Un invité n'a pas de compte où revenir : sa partie part avec lui.
+  const guest = me.data?.guest ?? false;
+  const leave = () =>
+    guest
+      ? confirm.ask({
+          eyebrow: "Sans compte",
+          title: "Quitter et effacer la partie",
+          text: "Sans compte, rien ne te permet de revenir : ta partie est effacée pour de bon.",
+          confirmLabel: "Quitter",
+          onConfirm: logout,
+        })
+      : logout();
+
   if (saves.error?.status === 401) return <Navigate to="/connexion" replace />;
   if (saves.loading) return <p className="status">Chargement des parties…</p>;
   if (saves.error) {
@@ -88,7 +107,9 @@ export default function Saves() {
     );
   }
 
-  const free = saves.data.find((save) => save.empty);
+  // Sans compte, une seule partie : on ne montre que son emplacement.
+  const slots = guest ? saves.data.slice(0, 1) : saves.data;
+  const free = slots.find((save) => save.empty);
   const occupied = saves.data.filter((save) => !save.empty).length;
   // Compte gratuit : une partie, deux saisons en tout (components/FullGame.jsx).
   const blocked = newSaveBlocked(me.data, occupied);
@@ -101,37 +122,62 @@ export default function Saves() {
           <p className="eyebrow">Rugby Manager</p>
           <h1 className="title">Tes parties</h1>
           <p className="muted" style={{ margin: "8px 0 0" }}>
-            Trois emplacements. Une partie se sauvegarde automatiquement à chaque action.
+            {guest
+              ? "Sans compte : une partie, gardée sur ce navigateur tant que tu reviens dans les 7 jours."
+              : "Trois emplacements. Une partie se sauvegarde automatiquement à chaque action."}
           </p>
         </div>
         <div className="saves__account">
-          {me.data && <span className="muted">{me.data.email}</span>}
+          {me.data && !guest && <span className="muted">{me.data.email}</span>}
+          {guest && (
+            <Link className="button button--primary" to="/connexion">
+              Créer un compte
+            </Link>
+          )}
           {admin.data && (
             <Link className="button" to="/backoffice">
               Backoffice
             </Link>
           )}
-          <button type="button" className="button" disabled={busy !== null} onClick={logout}>
-            Se déconnecter
+          <button type="button" className="button" disabled={busy !== null} onClick={leave}>
+            {guest ? "Quitter" : "Se déconnecter"}
           </button>
-          <button
-            type="button"
-            className="button button--primary"
-            disabled={!free || blocked !== null || busy !== null}
-            title={blocked ?? (free ? undefined : "Supprime une partie pour en commencer une nouvelle")}
-            onClick={() => create(free.slot)}
-          >
-            Nouvelle carrière
-          </button>
+          {/* Un match entre deux équipes au choix, hors de toute partie. */}
+          <Link className="button" to="/match-libre">
+            Match libre
+          </Link>
+          {/* L'invité n'a qu'un emplacement : il le recommence depuis sa carte. */}
+          {!guest && (
+            <button
+              type="button"
+              className="button button--primary"
+              disabled={!free || blocked !== null || busy !== null}
+              title={blocked ?? (free ? undefined : "Supprime une partie pour en commencer une nouvelle")}
+              onClick={() => create(free.slot)}
+            >
+              Nouvelle carrière
+            </button>
+          )}
+          {!guest && (
+            <button
+              type="button"
+              className="button"
+              disabled={!free || blocked !== null || busy !== null}
+              title={blocked ?? (free ? undefined : "Supprime une partie pour en commencer une nouvelle")}
+              onClick={() => createCompetition(free.slot)}
+            >
+              Nouvelle compétition
+            </button>
+          )}
         </div>
       </header>
 
-      {me.data && <PlanCard me={me.data} saves={occupied} />}
+      {me.data && !guest && <PlanCard me={me.data} saves={occupied} />}
       {payment && <p className={payment.ok ? "status" : "status--error"}>{payment.text}</p>}
       <ActionError error={error} />
 
       <ul className="saves">
-        {saves.data.map((save) => (
+        {slots.map((save) => (
           <li
             key={save.slot}
             className={`card card--padded save${save.empty ? " save--empty" : ""}`}
@@ -155,13 +201,24 @@ export default function Saves() {
                   >
                     {busy === save.slot ? "Création du monde…" : "Nouvelle carrière"}
                   </button>
+                  <button
+                    type="button"
+                    className="button"
+                    disabled={blocked !== null || busy !== null}
+                    title={blocked ?? undefined}
+                    onClick={() => createCompetition(save.slot)}
+                  >
+                    Compétition
+                  </button>
                 </div>
               </>
             ) : (
               <>
                 <p className="save__club with-crest">
                   {save.club_name && !save.outdated && <ClubCrest name={save.club_name} size={36} />}
-                  {save.outdated ? "Ancien format" : (save.club_name ?? "Carrière à choisir")}
+                  {save.outdated
+                    ? "Ancien format"
+                    : (save.club_name ?? (save.competition ? "Équipe à choisir" : "Carrière à choisir"))}
                 </p>
                 <div className="save__details">
                   {save.outdated ? (
@@ -173,6 +230,7 @@ export default function Saves() {
                           {save.manager_name} · {save.league_name}
                         </span>
                       )}
+                      {save.competition_result && <strong>{save.competition_result}</strong>}
                       {save.season_year && (
                         <span className="muted">
                           Saison {save.season_year}-{String(save.season_year + 1).slice(2)} ·{" "}

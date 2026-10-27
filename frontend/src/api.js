@@ -45,6 +45,8 @@ export const api = {
   register: (email, password) => post("/auth/register", { email, password }),
   login: (email, password) => post("/auth/login", { email, password }),
   logout: () => post("/auth/logout"),
+  // Jouer sans compte : un invité, retrouvé par son seul cookie.
+  guest: () => post("/auth/guest"),
   // Jeu complet (2 €, Stripe) : page de paiement, puis confirmation au retour.
   checkout: () => post("/billing/checkout"),
   confirmPayment: (sessionId) => post("/billing/confirm", { session_id: sessionId }),
@@ -118,6 +120,26 @@ export const api = {
   substituteLive: (playerOut, playerIn) =>
     post("/live/substitute", { player_out: playerOut, player_in: playerIn }),
   finishLive: () => post("/live/finish"),
+
+  // Mode compétition : une partie qui ne joue que la Coupe d'Europe ou la Coupe du monde.
+  getCompetition: () => request("/competition"),
+  chooseCompetition: (code) => post("/competition", { code }),
+  chooseCompetitionTeam: (managerName, teamId, difficulty) =>
+    post("/competition/team", { manager_name: managerName, team_id: teamId, difficulty }),
+
+  // Match libre : deux équipes au choix (clubs ou sélections), hors de toute partie.
+  friendlyTeams: () => request("/friendly/teams"),
+  getFriendly: () => request("/friendly"),
+  startFriendly: (homeId, awayId, myId) =>
+    post("/friendly", { home_id: homeId, away_id: awayId, my_id: myId }),
+  dropFriendly: () => del("/friendly"),
+  advanceFriendly: (minutes = 1) => post("/friendly/advance", { minutes }),
+  setFriendlyTactics: (tactics) => post("/friendly/tactics", tactics),
+  talkFriendly: (key) => post("/friendly/talk", { key }),
+  decideFriendly: (option) => post("/friendly/decide", { option }),
+  substituteFriendly: (playerOut, playerIn) =>
+    post("/friendly/substitute", { player_out: playerOut, player_in: playerIn }),
+  finishFriendly: () => post("/friendly/finish"),
 
   // Gestion du club dirigé
   getFinances: () => request("/finances"),

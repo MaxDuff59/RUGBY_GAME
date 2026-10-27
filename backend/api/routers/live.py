@@ -16,7 +16,7 @@ tombe : mêmes routes, la sauvegarde est à part (`LiveInternationalRow`).
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from api import cup, internationals
+from api import competition, cup, internationals
 from api.affairs import forced_starters, ignore_pending
 from api.deps import SessionDep, load_clubs
 from api.live import (
@@ -117,6 +117,7 @@ def start_live(session: SessionDep) -> LiveOut:
     existing = load_live(session, load_clubs(session, live_club_ids(session)))
     if existing is not None:
         return live_out(existing, names, my_club_id)
+    competition.require_running(session, season)
 
     ignore_pending(session)
     league = focus_league(session)
@@ -203,6 +204,7 @@ def _start_test(session, human: SelectorRow) -> LiveOut:
     existing = load_live_test(session)
     if existing is not None:
         return live_out(existing, NATION_NAMES, my_id)
+    competition.require_running(session, season)
 
     where = selection.situation(session, season, human)
     if where.phase == "list":

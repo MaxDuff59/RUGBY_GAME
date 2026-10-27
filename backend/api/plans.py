@@ -32,7 +32,13 @@ def require_season(user: User) -> None:
 
 
 def require_new_save(user: User, saves: int) -> None:
-    """Refuse une partie de plus au compte gratuit qui en a déjà `saves`."""
+    """Refuse une partie de plus au compte gratuit qui en a déjà `saves`, et à
+    l'invité qui en a déjà une (même formule en pause)."""
+    if user.guest and saves:
+        raise HTTPException(
+            status_code=403,
+            detail="Sans compte, une seule partie : crée un compte pour en mener plusieurs.",
+        )
     require_season(user)
     if PAYWALL and not user.premium and saves >= FREE_SAVES:
         raise HTTPException(

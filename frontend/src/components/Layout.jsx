@@ -7,6 +7,7 @@ import { useApi } from "../hooks/useApi.js";
 import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
 import { chosenSlot, leaveSlot } from "../save.js";
 import ClubCrest from "./ClubCrest.jsx";
+import CompetitionBar from "./CompetitionBar.jsx";
 import Guide, { resetGuide } from "./Guide.jsx";
 import Inbox from "./Inbox.jsx";
 import { ManagerContractModal } from "./ManagerContract.jsx";
@@ -79,6 +80,7 @@ export default function Layout() {
               <div className="muted">{career.league_name}</div>
             </div>
           </div>
+          <CompetitionBar career={career} />
           {career.kind !== "nation" && <Inbox />}
         </header>
         {career.kind !== "nation" && <Guide />}

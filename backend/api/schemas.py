@@ -939,6 +939,9 @@ class SaveOut(BaseModel):
     season_year: int | None = None
     game_date: datetime.date | None = None  # date du jour dans le jeu
     saved_at: datetime.datetime | None = None  # dernière sauvegarde (automatique)
+    # Mode compétition (api/competition.py) : son code, et l'issue une fois finie.
+    competition: str | None = None
+    competition_result: str | None = None
 
 
 class ManagerSeasonOut(BaseModel):
