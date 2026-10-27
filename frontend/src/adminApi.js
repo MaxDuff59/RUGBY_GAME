@@ -52,6 +52,7 @@ export const adminApi = {
 
   // Joueurs : un joueur se désigne par son club et son nom.
   players: () => request("/backoffice/players"),
+  overallRules: () => request("/backoffice/players/overall-rules"),
   createPlayer: (form) => request("/backoffice/players", { method: "POST", body: form }),
   player: (clubName, name) => request(player(clubName, name)),
   savePlayer: (clubName, name, form) => put(player(clubName, name), form),

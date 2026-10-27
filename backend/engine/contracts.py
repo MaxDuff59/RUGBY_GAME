@@ -79,8 +79,8 @@ YOUTH_SUITORS = 3
 
 def poach_chance(player: Player, club: Club) -> float:
     group = club.youths if player.squad == Squad.YOUTH else club.players
-    mean = sum(p.overall for p in group) / max(len(group), 1)
-    return min(POACH_MAX, max(POACH_BASE, POACH_BASE + POACH_PER_POINT * (player.overall - mean)))
+    mean = sum(p.level for p in group) / max(len(group), 1)
+    return min(POACH_MAX, max(POACH_BASE, POACH_BASE + POACH_PER_POINT * (player.level - mean)))
 
 
 def pick_suitor(

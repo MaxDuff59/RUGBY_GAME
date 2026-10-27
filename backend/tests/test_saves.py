@@ -10,7 +10,7 @@ import accounts
 import database
 from api.main import app
 from api.routers.seasons import _play_matchday, create_season, season_rng
-from models.orm import Base, ClubRow, SeasonRow
+from models.orm import Base, ClubRow, PlayerRow, SeasonRow
 from tests import conftest
 
 
@@ -147,3 +147,33 @@ def test_old_saves_get_a_season_seed(tmp_path):
         assert season.seed is None
         season_rng(season, "2026-09-05")
         assert season.seed is not None
+
+
+def test_old_saves_keep_the_room_to_grow_of_each_player(tmp_path):
+    """La note générale ne fait plus la moyenne des 9 attributs : un potentiel tiré avant
+    bouge d'autant que le niveau du joueur, une fois, et l'écart entre les deux reste."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'ancienne.db'}")
+    Base.metadata.create_all(engine)
+    with sessionmaker(bind=engine)() as session:
+        # Un demi de mêlée nul en mêlée : sa moyenne des 9 attributs vaut 12.
+        attributes = dict(
+            pace=14, power=10, handling=15, passing=17, kicking=13, tackling=11, scrum=8,
+            lineout=8, stamina=12,
+        )  # fmt: skip
+        session.add(
+            PlayerRow(
+                id=1, first_name="Léo", last_name="Banos", age=19, position="SCRUM_HALF",
+                potential=14.5, **attributes,
+            )
+        )  # fmt: skip
+        session.commit()
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE players DROP COLUMN potential_scale"))
+
+    database.init_db(engine)
+    database.init_db(engine)  # une seule fois
+
+    with sessionmaker(bind=engine)() as session:
+        player = session.scalars(select(PlayerRow)).one()
+        assert player.potential_scale == 2
+        assert player.potential == pytest.approx(round(player.level + 2.5, 1))

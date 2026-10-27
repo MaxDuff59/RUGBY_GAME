@@ -681,6 +681,17 @@ select.admin__cell {
   font-weight: 700;
 }
 
+.admin__rating--overall .admin__rating-label,
+.admin__rating--overall .admin__rating-value {
+  font-weight: 700;
+}
+
+.admin__rating-share {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
 .admin__rating-value {
   min-height: 34px;
   padding: 0 4px;

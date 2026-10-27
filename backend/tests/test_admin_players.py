@@ -57,12 +57,17 @@ def test_move_a_player_and_fix_his_notes(admin):
     found = next(p for p in players if p["name"] == PLAYER)
     assert found["club"] == TOULOUSE and found["league"] == "top14" and found["squad"] == "pros"
     assert found["attributes"] is None and found["photo_url"].startswith("/photos/")
+    assert found["overall"] is None
 
     detail = admin.get(url(TOULOUSE, PLAYER)).json()
     assert detail["typical"]["scrum"] > detail["typical"]["kicking"]  # un pilier
     moved = admin.put(url(TOULOUSE, PLAYER), json=form(detail, club=TOULON, attributes=NOTES))
     assert moved.status_code == 200, moved.text
     assert moved.json()["club"] == TOULON and moved.json()["attributes"] == NOTES
+    # Un pilier : son jeu au pied à 3 ne compte pas dans sa note générale.
+    weights = admin.get("/backoffice/players/overall-rules").json()["PROP"]
+    assert "kicking" not in weights
+    assert moved.json()["overall"] == pytest.approx(17, abs=0.01)
     assert admin.get(url(TOULOUSE, PLAYER)).status_code == 404
 
     clubs = {c["name"]: c for c in admin.get("/backoffice/clubs").json()}

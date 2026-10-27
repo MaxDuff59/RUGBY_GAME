@@ -12,6 +12,7 @@ from models import (
     ATTRIBUTE_MAX,
     ATTRIBUTE_MIN,
     ATTRIBUTE_NAMES,
+    OVERALL_WEIGHTS,
     YOUTH_EXIT_AGE,
     Club,
     Player,
@@ -58,11 +59,16 @@ def growth_points(player: Player, facility_level: int, rng: random.Random) -> in
 
 def develop_player(player: Player, facility_level: int, rng: random.Random) -> int:
     """Fait progresser (ou décliner) un joueur d'un coup ; renvoie les points gagnés.
-    Sert aux joueurs hors des championnats du jeu, et au déclin des plus âgés."""
+    Sert aux joueurs hors des championnats du jeu, et au déclin des plus âgés : il
+    touche ce qui compte à son poste, sa note générale baisse à chaque point perdu."""
     points = growth_points(player, facility_level, rng)
     step = 1 if points > 0 else -1
+    counted = OVERALL_WEIGHTS[player.position]
     for _ in range(abs(points)):
-        name = rng.choice(ATTRIBUTE_NAMES)
+        if step > 0:
+            name = rng.choice(ATTRIBUTE_NAMES)
+        else:
+            name = rng.choices(list(counted), weights=list(counted.values()))[0]
         value = getattr(player, name) + step
         setattr(player, name, max(ATTRIBUTE_MIN, min(ATTRIBUTE_MAX, value)))
     return points
@@ -90,7 +96,7 @@ def youth_intake(
     """Nouveaux espoirs du centre, aux postes les moins fournis chez les espoirs.
     Formés au club, ils ont la nationalité de son pays (data/nations.py)."""
     rng = rng or random.Random()
-    squad_level = sum(p.overall for p in club.players) / max(len(club.players), 1)
+    squad_level = sum(p.level for p in club.players) / max(len(club.players), 1)
     level = youth_level(squad_level, club.facilities.academy_level)
 
     newcomers = []

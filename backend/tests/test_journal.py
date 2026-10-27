@@ -194,7 +194,7 @@ def test_a_release_followed_by_a_signing_is_one_move():
 
         first, second = session.scalars(select(MoveRow).order_by(MoveRow.id)).all()
         assert (first.kind, first.from_club_id, first.to_club_id) == ("free", 1, 2)
-        assert (first.player_name, first.overall) == ("Léo Banos", 12.0)
+        assert (first.player_name, first.overall) == ("Léo Banos", pytest.approx(player.overall))
         assert (second.kind, second.from_club_id, second.to_club_id) == ("loan", 2, 1)
 
 

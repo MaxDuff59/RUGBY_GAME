@@ -27,7 +27,7 @@ from api.routers.admin import (
     player_entry,
 )
 from data.generator import SEASON_START, photo_path, real_player_level, typical_attributes
-from models import Position
+from models import OVERALL_WEIGHTS, Position, overall_of
 
 router = APIRouter(prefix="/backoffice/players", tags=["backoffice"])
 
@@ -44,6 +44,8 @@ class PlayerOut(RosterPlayer):
     squad: SquadName
     # Adresse de sa photo (envoyée, sinon Wikimedia), None sans photo.
     photo_url: str | None
+    # Note générale de ses notes fixées (models/domain.py), None si le jeu les tire.
+    overall: float | None
 
 
 class PlayerDetail(PlayerOut):
@@ -67,8 +69,16 @@ def _player_out(club: str, league: str, squad: SquadName, entry: dict) -> Player
         attributes=entry.get("attributes"),
         photo_id=entry.get("photo_id"),
     )
+    overall = None
+    if player.attributes is not None:
+        overall = round(overall_of(player.position, player.attributes.model_dump()), 1)
     return PlayerOut(
-        **player.model_dump(), club=club, league=league, squad=squad, photo_url=photo_path(entry)
+        **player.model_dump(),
+        club=club,
+        league=league,
+        squad=squad,
+        photo_url=photo_path(entry),
+        overall=overall,
     )
 
 
@@ -137,6 +147,13 @@ def list_players(_: AdminDep) -> list[PlayerOut]:
         for squad in ("pros", "youths"):
             out += [_player_out(name, entry.league, squad, e) for e in roster.get(squad, [])]
     return out
+
+
+@router.get("/overall-rules", response_model=dict[Position, dict[str, float]])
+def overall_rules(_: AdminDep) -> dict[Position, dict[str, float]]:
+    """Ce qui compte dans la note générale à chaque poste, avec son poids (models/domain.py),
+    pour la suivre pendant qu'on règle les notes d'un joueur."""
+    return OVERALL_WEIGHTS
 
 
 @router.post("", response_model=PlayerDetail, status_code=201)

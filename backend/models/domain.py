@@ -48,6 +48,95 @@ class Position(StrEnum):
 FORWARDS = frozenset({Position.PROP, Position.HOOKER, Position.LOCK, Position.BACK_ROW})
 
 
+# --- Note générale -------------------------------------------------------------------
+
+# Écart au niveau de base selon le poste, à la génération (data/generator.py) : un pilier
+# pousse en mêlée mais ne court pas vite, un ailier est rapide mais inutile en mêlée, etc.
+# Ordre : pace, power, handling, passing, kicking, tackling, scrum, lineout, stamina
+_PROFILE_TABLE = {
+    Position.PROP:       (-4,  3, -2, -3, -6,  1,  4, -2, -3),
+    Position.HOOKER:     (-2,  2,  0, -1, -5,  1,  3,  4, -1),
+    Position.LOCK:       (-3,  3, -1, -2, -6,  1,  2,  4, -1),
+    Position.BACK_ROW:   ( 0,  2,  1, -1, -4,  3,  0,  1,  3),
+    Position.SCRUM_HALF: ( 1, -3,  2,  4,  1, -1, -6, -6,  2),
+    Position.FLY_HALF:   ( 0, -2,  2,  3,  4, -1, -6, -6,  0),
+    Position.CENTRE:     ( 1,  1,  3,  1, -1,  2, -5, -5,  1),
+    Position.WING:       ( 4,  0,  1, -1, -1, -1, -6, -6,  1),
+    Position.FULLBACK:   ( 3, -1,  2,  0,  2,  0, -6, -5,  2),
+}  # fmt: skip
+POSITION_PROFILES: dict[Position, dict[str, int]] = {
+    position: dict(zip(ATTRIBUTE_NAMES, offsets, strict=True))
+    for position, offsets in _PROFILE_TABLE.items()
+}
+
+# Ce qui compte dans la note générale à chaque poste (poids sur 1) : la mêlée d'un demi
+# de mêlée ou le jeu au pied d'un pilier n'y entrent pas. Même ordre que les profils.
+# Les poids donnent à chaque poste le même avantage de profil (2 points, à 0,1 près) :
+# deux joueurs tirés au même niveau ont la même note, quel que soit leur poste.
+_WEIGHT_TABLE = {
+    Position.PROP:       (0,    .25, 0,    0,    0,    .15, .40, 0,   .20),
+    Position.HOOKER:     (.05,  .15, .05,  0,    0,    .15, .25, .25, .10),
+    Position.LOCK:       (0,    .25, .10,  0,    0,    .20, 0,   .30, .15),
+    Position.BACK_ROW:   (.15,  .25, .15,  0,    0,    .30, 0,   0,   .15),
+    Position.SCRUM_HALF: (.20,  0,   .20,  .35,  .15,  .10, 0,   0,   0),
+    Position.FLY_HALF:   (.15,  0,   .20,  .25,  .25,  .15, 0,   0,   0),
+    Position.CENTRE:     (.20,  .10, .30,  .10,  0,    .30, 0,   0,   0),
+    Position.WING:       (.45,  .15, .30,  0,    0,    .10, 0,   0,   0),
+    Position.FULLBACK:   (.25,  0,   .25,  0,    .25,  .10, 0,   0,   .15),
+}  # fmt: skip
+OVERALL_WEIGHTS: dict[Position, dict[str, float]] = {
+    position: {name: w for name, w in zip(ATTRIBUTE_NAMES, weights, strict=True) if w}
+    for position, weights in _WEIGHT_TABLE.items()
+}
+
+# XV type, pour garder au niveau des joueurs l'échelle de l'ancienne note générale (la
+# moyenne des 9 attributs) : les règles qui en dépendent (valeur marchande, progression,
+# presse...) restent calées.
+_TYPICAL_XV = {
+    Position.PROP: 2,
+    Position.HOOKER: 1,
+    Position.LOCK: 2,
+    Position.BACK_ROW: 3,
+    Position.SCRUM_HALF: 1,
+    Position.FLY_HALF: 1,
+    Position.CENTRE: 2,
+    Position.WING: 2,
+    Position.FULLBACK: 1,
+}
+_XV_SIZE = sum(_TYPICAL_XV.values())
+# Écart entre la note générale et le niveau : l'avantage de profil commun à tous les postes
+# (2 points), moins ce que l'ancienne note perdait en moyenne aux attributs hors du poste.
+LEVEL_SHIFT = sum(
+    n * sum(w * POSITION_PROFILES[p][name] for name, w in OVERALL_WEIGHTS[p].items())
+    for p, n in _TYPICAL_XV.items()
+) / _XV_SIZE - sum(n * sum(POSITION_PROFILES[p].values()) for p, n in _TYPICAL_XV.items()) / (
+    _XV_SIZE * len(ATTRIBUTE_NAMES)
+)
+# Plus haut niveau possible : ce qui compte au poste à 20.
+BEST_LEVEL = ATTRIBUTE_MAX - LEVEL_SHIFT
+
+
+def overall_of(position: Position, attributes: dict[str, int]) -> float:
+    """Note générale sur 20 : la moyenne des attributs qui comptent au poste
+    (`OVERALL_WEIGHTS`). Ce qui compte au poste à 20 fait 20, quel que soit le poste."""
+    return sum(w * attributes[name] for name, w in OVERALL_WEIGHTS[position].items())
+
+
+def level_of(position: Position, attributes: dict[str, int]) -> float:
+    """Niveau, au même titre que celui d'un club : la note générale moins `LEVEL_SHIFT`."""
+    return overall_of(position, attributes) - LEVEL_SHIFT
+
+
+def overall_at_level(level: float) -> float:
+    """La note générale qui va avec un niveau (pour un potentiel)."""
+    return level + LEVEL_SHIFT
+
+
+def level_at_overall(overall: float) -> float:
+    """Le niveau qui va avec une note générale (l'inverse d'`overall_at_level`)."""
+    return overall - LEVEL_SHIFT
+
+
 class Squad(StrEnum):
     """Groupe auquel appartient un joueur : effectif pro ou centre de formation."""
 
@@ -161,9 +250,9 @@ class Player:
     suspended_matches: int = 0
     # Cartons jaunes de la saison qui comptent pour la suspension au cumul.
     yellow_cards: int = 0
-    # Progression (engine/development.py) : potentiel caché (note générale visée, None
-    # tant qu'il n'a pas été tiré), progrès en cours vers le prochain point d'attribut,
-    # et points d'attributs gagnés depuis le début de la saison.
+    # Progression (engine/development.py) : potentiel caché (niveau visé, None tant qu'il
+    # n'a pas été tiré), progrès en cours vers le prochain point d'attribut, et points
+    # d'attributs gagnés depuis le début de la saison.
     potential: float | None = None
     progress: float = 0.0
     season_gain: int = 0
@@ -181,17 +270,18 @@ class Player:
 
     @property
     def attributes(self) -> dict[str, int]:
-        """Les 8 attributs sous forme de dictionnaire."""
+        """Les 9 attributs sous forme de dictionnaire."""
         return {name: getattr(self, name) for name in ATTRIBUTE_NAMES}
 
     @property
     def overall(self) -> float:
-        """Note générale simple : moyenne des attributs.
+        """Note générale sur 20 : ce qui compte à son poste (`overall_of`)."""
+        return overall_of(self.position, self.attributes)
 
-        Volontairement naïve (un pilier n'a pas besoin de jeu au pied) : le
-        moteur calcule ses propres notes selon le poste.
-        """
-        return sum(self.attributes.values()) / len(ATTRIBUTE_NAMES)
+    @property
+    def level(self) -> float:
+        """Niveau (`level_of`) : la mesure des règles calées sur l'ancienne note."""
+        return level_of(self.position, self.attributes)
 
     def years_left(self, season_year: int) -> int:
         """Saisons de contrat restantes, celle en cours comprise (1 = dernière année)."""

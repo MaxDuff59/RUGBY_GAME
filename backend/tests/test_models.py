@@ -1,8 +1,17 @@
-"""Règles portées par les modèles : bornes des attributs et classement Top 14."""
+"""Règles portées par les modèles : bornes des attributs, note générale et classement Top 14."""
 
 import pytest
 
-from models import Player, Position, StandingRow
+from data.generator import typical_attributes
+from models import (
+    ATTRIBUTE_NAMES,
+    BEST_LEVEL,
+    Player,
+    Position,
+    StandingRow,
+    level_at_overall,
+    overall_at_level,
+)
 
 
 def make_player(**overrides) -> Player:
@@ -19,6 +28,32 @@ def make_player(**overrides) -> Player:
 def test_attribute_out_of_range_is_rejected(value):
     with pytest.raises(ValueError):
         make_player(pace=value)
+
+
+def test_overall_counts_only_what_matters_at_the_position():
+    half = make_player(position=Position.SCRUM_HALF, passing=18, handling=17)
+    assert make_player(position=Position.SCRUM_HALF, passing=18, handling=17, scrum=1).overall == (
+        half.overall
+    )
+    assert make_player(position=Position.SCRUM_HALF, passing=19, handling=17).overall > half.overall
+
+
+@pytest.mark.parametrize("level", [6, 10, 14])
+def test_the_same_level_gives_the_same_overall_at_every_position(level):
+    overalls = [make_player(position=p, **typical_attributes(p, level)).overall for p in Position]
+    assert max(overalls) - min(overalls) < 0.4
+
+
+def test_a_perfect_player_is_twenty_at_every_position():
+    for position in Position:
+        top = make_player(position=position, **dict.fromkeys(ATTRIBUTE_NAMES, 20))
+        assert top.overall == pytest.approx(20)
+        assert top.level == pytest.approx(BEST_LEVEL)
+
+
+def test_level_and_overall_go_together():
+    for level in (4.0, 9.5, 13.0, 17.0):
+        assert level_at_overall(overall_at_level(level)) == pytest.approx(level)
 
 
 def test_forwards_and_backs():

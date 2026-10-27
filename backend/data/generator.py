@@ -29,6 +29,7 @@ from models import (
     ATTRIBUTE_MAX,
     ATTRIBUTE_MIN,
     ATTRIBUTE_NAMES,
+    POSITION_PROFILES,
     STAFF_LEVEL_MAX,
     STAFF_LEVEL_MIN,
     YOUTH_EXIT_AGE,
@@ -105,25 +106,6 @@ YOUTH_WAGE = 15_000
 YOUTH_LEVEL_GAP = 4.5
 YOUTH_LEVEL_PER_ACADEMY_LEVEL = 0.4
 YOUTH_CONTRACT_YEARS = 3
-
-# Écart au niveau de base selon le poste : un pilier pousse en mêlée mais ne court
-# pas vite, un ailier est rapide mais inutile en mêlée, etc.
-# Ordre : pace, power, handling, passing, kicking, tackling, scrum, lineout, stamina
-_PROFILE_TABLE = {
-    Position.PROP:       (-4,  3, -2, -3, -6,  1,  4, -2, -3),
-    Position.HOOKER:     (-2,  2,  0, -1, -5,  1,  3,  4, -1),
-    Position.LOCK:       (-3,  3, -1, -2, -6,  1,  2,  4, -1),
-    Position.BACK_ROW:   ( 0,  2,  1, -1, -4,  3,  0,  1,  3),
-    Position.SCRUM_HALF: ( 1, -3,  2,  4,  1, -1, -6, -6,  2),
-    Position.FLY_HALF:   ( 0, -2,  2,  3,  4, -1, -6, -6,  0),
-    Position.CENTRE:     ( 1,  1,  2,  1, -1,  2, -5, -5,  1),
-    Position.WING:       ( 4,  0,  1, -1, -1, -1, -6, -6,  1),
-    Position.FULLBACK:   ( 3, -1,  2,  0,  2,  0, -6, -5,  2),
-}  # fmt: skip
-POSITION_PROFILES: dict[Position, dict[str, int]] = {
-    position: dict(zip(ATTRIBUTE_NAMES, offsets, strict=True))
-    for position, offsets in _PROFILE_TABLE.items()
-}
 
 # Dispersion des attributs autour du niveau visé (écart-type).
 ATTRIBUTE_SPREAD = 2.0

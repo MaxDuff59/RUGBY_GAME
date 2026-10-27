@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { adminApi } from "../adminApi.js";
 import { byLeague } from "../adminFormat.js";
-import { ATTRIBUTES, KEY_ATTRIBUTES, NATIONALITIES, POSITION_ORDER, POSITIONS } from "../format.js";
+import { ATTRIBUTES, NATIONALITIES, POSITION_ORDER, POSITIONS } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
 import ClubCrest from "./ClubCrest.jsx";
@@ -21,12 +21,14 @@ const MAX_ROWS = 200;
 const SQUADS = { pros: "Pros", youths: "Espoirs" };
 
 const keyOf = (player) => `${player.club}\u0000${player.name}`;
-const average = (attributes) => Object.values(attributes).reduce((sum, v) => sum + v, 0) / ATTRIBUTES.length;
+// Note générale à un poste : la moyenne de ce qui y compte, selon `weights` (models/domain.py côté jeu).
+const overallOf = (weights, notes) => Object.entries(weights).reduce((sum, [k, w]) => sum + w * notes[k], 0);
 const oneDecimal = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 export default function AdminPlayers() {
   const players = useApi(useCallback(adminApi.players, []));
   const clubs = useApi(useCallback(adminApi.clubs, []));
+  const rules = useApi(useCallback(adminApi.overallRules, []));
   const phone = useMediaQuery(PHONE_QUERY);
   const confirm = useConfirm();
   const [query, setQuery] = useState("");
@@ -77,8 +79,9 @@ export default function AdminPlayers() {
     setSelected(null);
   };
 
-  if (players.loading || clubs.loading) return <p className="status">Chargement des joueurs…</p>;
-  if (players.error || clubs.error) return <p className="status status--error">{(players.error ?? clubs.error).message}</p>;
+  if (players.loading || clubs.loading || rules.loading) return <p className="status">Chargement des joueurs…</p>;
+  const failed = players.error ?? clubs.error ?? rules.error;
+  if (failed) return <p className="status status--error">{failed.message}</p>;
 
   const list = (
     <section className="card admin__panel">
@@ -136,7 +139,7 @@ export default function AdminPlayers() {
                     <span className="admin__player-club-name">{p.club}</span>
                   </span>
                 </td>
-                <td>{p.attributes ? oneDecimal.format(average(p.attributes)) : "—"}</td>
+                <td>{p.overall !== null ? oneDecimal.format(p.overall) : "—"}</td>
               </tr>
             ))}
             {shown.length === 0 && (
@@ -169,6 +172,7 @@ export default function AdminPlayers() {
         club={clubName}
         name={name}
         clubs={clubs.data}
+        rules={rules.data}
         onSaved={(detail) => replace(selected, detail)}
         onPhoto={(detail) => players.setData(players.data.map((p) => (keyOf(p) === selected ? { ...p, ...detail } : p)))}
         onDeleted={() => removed(selected)}
@@ -353,7 +357,7 @@ function CreatePlayerForm({ clubs, club, onCreated, onDirty, onBack }) {
   );
 }
 
-function PlayerEditor({ club, name, clubs, onSaved, onPhoto, onDeleted, onDirty, onBack }) {
+function PlayerEditor({ club, name, clubs, rules, onSaved, onPhoto, onDeleted, onDirty, onBack }) {
   const player = useApi(useCallback(() => adminApi.player(club, name), [club, name]));
   const confirm = useConfirm();
   const [form, setForm] = useState(null);
@@ -437,7 +441,7 @@ function PlayerEditor({ club, name, clubs, onSaved, onPhoto, onDeleted, onDirty,
             <h2 className="admin__name">{p.name}</h2>
             <p className="muted">
               {POSITIONS[p.position].label}
-              {p.attributes ? ` · notes fixées, ${oneDecimal.format(average(p.attributes))} de moyenne` : " · notes tirées par le jeu"}
+              {p.attributes ? ` · notes fixées, ${oneDecimal.format(p.overall)} de note générale` : " · notes tirées par le jeu"}
             </p>
           </div>
           <button type="button" className="button admin__reset" onClick={remove}>
@@ -480,7 +484,7 @@ function PlayerEditor({ club, name, clubs, onSaved, onPhoto, onDeleted, onDirty,
           </label>
         </div>
 
-        <RatingsBlock form={form} set={set} typical={p.typical} />
+        <RatingsBlock form={form} set={set} typical={p.typical} weights={rules[form.position]} />
       </div>
 
       <div className="admin__footer">
@@ -498,10 +502,45 @@ function PlayerEditor({ club, name, clubs, onSaved, onPhoto, onDeleted, onDirty,
 
 // --- Notes ---------------------------------------------------------------------------------
 
-function RatingsBlock({ form, set, typical }) {
+// Les notes décalées pour que la note générale vaille `target` (au plus près) : un point à la
+// fois, à la note qui a le moins bougé, pour garder le profil du joueur ; à égalité, celle qui
+// compte le plus à son poste. S'arrête quand les notes qui comptent sont toutes au bout.
+function withOverall(notes, target, weights) {
+  const weight = (k) => weights[k] ?? 0;
+  const next = { ...notes };
+  const step = Math.sign(target - overallOf(weights, next));
+  const moved = (k) => (next[k] - notes[k]) * step;
+  for (;;) {
+    const open = ATTRIBUTES.map((a) => a.key).filter((k) => (step > 0 ? next[k] < 20 : next[k] > 1));
+    if (!step || !open.some((k) => weight(k) > 0)) break;
+    const pick = open.reduce((best, k) => (moved(k) < moved(best) || (moved(k) === moved(best) && weight(k) > weight(best)) ? k : best));
+    const before = overallOf(weights, next);
+    next[pick] += step;
+    const after = overallOf(weights, next);
+    if ((after - target) * step >= 0) {
+      if (Math.abs(after - target) > Math.abs(before - target)) next[pick] -= step;
+      break;
+    }
+  }
+  return next;
+}
+
+function RatingsBlock({ form, set, typical, weights }) {
   const notes = form.attributes;
-  const key = new Set(KEY_ATTRIBUTES[form.position]);
+  // Notes de départ du réglage de la note générale : aller-retour au curseur ou saisie
+  // chiffre par chiffre repartent d'elles, tant qu'aucune autre note n'a été touchée.
+  const [shaping, setShaping] = useState(null);
   const setNote = (name, value) => set("attributes", { ...notes, [name]: Math.min(20, Math.max(1, Math.round(Number(value) || 1))) });
+  const setOverall = (value) => {
+    const target = Number(value);
+    if (value === "" || Number.isNaN(target)) return;
+    const from = shaping?.result === notes ? shaping.from : notes;
+    const result = withOverall(from, Math.min(20, Math.max(1, target)), weights);
+    setShaping({ from, result });
+    set("attributes", result);
+  };
+  const overall = notes && Math.round(overallOf(weights, notes) * 10) / 10;
+  const share = (key) => (weights[key] ? ` · ${Math.round(weights[key] * 100)} %` : "");
 
   return (
     <div className="admin__block">
@@ -510,12 +549,23 @@ function RatingsBlock({ form, set, typical }) {
         <>
           <p className="muted admin__note">
             Fixées : le joueur a ces notes au début de chaque nouvelle partie, puis progresse ou décline comme les autres.
-            Note générale {oneDecimal.format(average(notes))}.
+          </p>
+          <label className="admin__rating admin__rating--overall">
+            <span className="admin__rating-label">Note générale</span>
+            <input type="range" min={1} max={20} step={0.1} value={overall} onChange={(e) => setOverall(e.target.value)} />
+            <input className="input admin__rating-value" type="number" min={1} max={20} step={0.1} value={overall} onChange={(e) => setOverall(e.target.value)} aria-label="Note générale" />
+          </label>
+          <p className="muted admin__hint">
+            Elle ne compte que les notes en gras, celles de son poste, selon leur part : 20 quand elles sont toutes à 20. La changer décale
+            toutes ses notes en gardant son profil.
           </p>
           <div className="admin__ratings">
             {ATTRIBUTES.map((a) => (
-              <label key={a.key} className={`admin__rating${key.has(a.key) ? " admin__rating--key" : ""}`}>
-                <span className="admin__rating-label">{a.label}</span>
+              <label key={a.key} className={`admin__rating${weights[a.key] ? " admin__rating--key" : ""}`}>
+                <span className="admin__rating-label">
+                  {a.label}
+                  <span className="admin__rating-share">{share(a.key)}</span>
+                </span>
                 <input type="range" min={1} max={20} step={1} value={notes[a.key]} onChange={(e) => setNote(a.key, e.target.value)} />
                 <input className="input admin__rating-value" type="number" min={1} max={20} value={notes[a.key]} onChange={(e) => setNote(a.key, e.target.value)} aria-label={a.label} />
               </label>
@@ -534,7 +584,7 @@ function RatingsBlock({ form, set, typical }) {
         <>
           <p className="muted admin__note">
             Tirées à la création de chaque partie autour du niveau de son club, plus haut s'il est international, selon son âge.
-            Pour un joueur comme lui : {oneDecimal.format(average(typical))} de moyenne.
+            Pour un joueur comme lui : {oneDecimal.format(overallOf(weights, typical))} de note générale.
           </p>
           <div className="admin__actions">
             <button type="button" className="button button--small" onClick={() => set("attributes", { ...typical })}>
@@ -543,7 +593,7 @@ function RatingsBlock({ form, set, typical }) {
           </div>
         </>
       )}
-      <p className="muted admin__hint">En gras : les notes qui comptent le plus à son poste.</p>
+      {!notes && <p className="muted admin__hint">Sa note générale ne compte que ce qui sert à son poste : la mêlée d'un demi de mêlée n'y entre pas.</p>}
     </div>
   );
 }

@@ -18,7 +18,16 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from engine.season import league_table
-from models import EventType, Injury, InjurySource, Match, Position, Stage, StandingRow
+from models import (
+    EventType,
+    Injury,
+    InjurySource,
+    Match,
+    Position,
+    Stage,
+    StandingRow,
+    level_at_overall,
+)
 from models.domain import DEFENSIVE_BONUS_MAX_GAP, OFFENSIVE_BONUS_TRY_MARGIN
 
 # --- Les mots ------------------------------------------------------------------------------
@@ -289,8 +298,8 @@ PLAYOFF_BONUS = {Stage.QUARTER: 25.0, Stage.BARRAGE: 25.0, Stage.SEMI: 38.0, Sta
 INTERNATIONAL_BONUS = 16.0
 MINE_BONUS = 35.0
 HOME_BONUS = 12.0  # le championnat du joueur
-# Un joueur compte à partir de cette note ; chaque point au-dessus pèse.
-NOTABLE_OVERALL = 9.0
+# Un joueur compte à partir de ce niveau (models/domain.py) ; chaque point au-dessus pèse.
+NOTABLE_LEVEL = 9.0
 
 # Une surprise : le vainqueur était classé au moins cette part du tableau plus bas.
 UPSET_GAP = 0.4
@@ -703,7 +712,7 @@ def title_article(code: str, competition: str, winner: Team, day: datetime.date)
 
 
 def _star(overall: float, per_point: float) -> float:
-    return max(0.0, overall - NOTABLE_OVERALL) * per_point
+    return max(0.0, level_at_overall(overall) - NOTABLE_LEVEL) * per_point
 
 
 def move_article(move: Move) -> Article:

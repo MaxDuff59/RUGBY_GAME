@@ -39,7 +39,7 @@ def _round_to(value: float, step: int) -> int:
 
 def market_value(player: Player) -> int:
     """Valeur marchande d'un joueur, arrondie aux 5 k€."""
-    base = VALUE_AT_TEN * VALUE_GROWTH_PER_POINT ** (player.overall - 10)
+    base = VALUE_AT_TEN * VALUE_GROWTH_PER_POINT ** (player.level - 10)
     factor = next(f for max_age, f in AGE_FACTORS if player.age <= max_age)
     return max(5_000, _round_to(base * factor, 5_000))
 

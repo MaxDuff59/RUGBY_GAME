@@ -26,10 +26,10 @@ def _player(age: int, seed: int = 0):
 
 
 def test_young_players_have_more_upside():
-    young = [initial_potential(_player(17, s)) - _player(17, s).overall for s in range(40)]
-    old = [initial_potential(_player(30, s)) - _player(30, s).overall for s in range(40)]
+    young = [initial_potential(_player(17, s)) - _player(17, s).level for s in range(40)]
+    old = [initial_potential(_player(30, s)) - _player(30, s).level for s in range(40)]
     assert sum(young) / 40 > 3
-    assert all(abs(gap) < 0.06 for gap in old)  # arrivé : le potentiel est sa note, arrondie
+    assert all(abs(gap) < 0.06 for gap in old)  # arrivé : le potentiel est son niveau, arrondi
 
 
 def test_potential_is_drawn_once_and_stays():
@@ -49,28 +49,33 @@ def test_playing_well_helps():
 
 def test_a_young_starter_grows_over_a_season_up_to_his_potential():
     player = _player(18, seed=3)
-    player.potential = player.overall + 4
-    start = player.overall
+    player.potential = player.level + 4
+    start = player.level
     rng = random.Random(0)
     for _ in range(30):
         tick(player, 3, PlayerMatchStats(minutes=80, rating=6.5), rng)
-    assert player.overall > start
-    assert player.overall <= player.potential
-    assert player.season_gain == round((player.overall - start) * 9)
+    assert player.level > start
+    assert player.level <= player.potential
+    assert player.season_gain > 0
     # Arrivé à son potentiel, il ne progresse plus.
-    player.potential = player.overall
+    player.potential = player.level
     assert tick(player, 5, PlayerMatchStats(minutes=80, rating=9), rng) == []
 
 
 def test_playing_time_and_facilities_make_the_difference():
     def season(minutes: int, facility: int) -> float:
-        player = _player(19, seed=5)
-        player.potential = player.overall + 4
-        start, rng = player.overall, random.Random(1)
-        for _ in range(30):
-            line = PlayerMatchStats(minutes=minutes, rating=6.0) if minutes else None
-            tick(player, facility, line, rng)
-        return player.overall - start
+        # Sur plusieurs joueurs : un point dans un attribut hors du poste ne compte pas.
+        total = 0.0
+        for seed in range(20):
+            player = make_club(1, 11, seed=seed).players[seed]
+            player.age = 19
+            player.potential = player.level + 4
+            start, rng = player.level, random.Random(seed)
+            for _ in range(30):
+                line = PlayerMatchStats(minutes=minutes, rating=6.0) if minutes else None
+                tick(player, facility, line, rng)
+            total += player.level - start
+        return total
 
     assert season(80, 5) > season(80, 1) > season(0, 1)
 
@@ -92,7 +97,7 @@ def test_training_focus_steers_the_gains():
 def test_develop_a_club_after_its_match():
     club = make_club(2, 11, seed=4)
     for player in club.players:
-        player.age, player.potential = 19, player.overall + 3
+        player.age, player.potential = 19, player.level + 3
     stats = {p.id: PlayerMatchStats(minutes=80, rating=7.0) for p in club.players[:15]}
     gains = {}
     rng = random.Random(3)
@@ -121,7 +126,7 @@ def test_the_club_knows_its_own_players_better():
     low, high = estimate(player, OWN_UNCERTAINTY)
     far_low, far_high = estimate(player, OTHER_UNCERTAINTY)
     assert high - low < far_high - far_low
-    assert low >= player.overall
+    assert low >= player.level
 
 
 # --- API -------------------------------------------------------------------------------

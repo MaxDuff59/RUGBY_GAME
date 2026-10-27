@@ -10,6 +10,7 @@ from sqlalchemy import JSON, Date, ForeignKey, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from models.domain import (
+    ATTRIBUTE_NAMES,
     AmenityKind,
     Career,
     Club,
@@ -29,6 +30,8 @@ from models.domain import (
     StaffRole,
     Stage,
     StandSide,
+    level_of,
+    overall_of,
 )
 
 # Longueur des codes de championnat (data/leagues.py, et `champions_cup`) : Postgres la
@@ -183,6 +186,9 @@ class PlayerRow(Base):
     potential: Mapped[float | None] = mapped_column(default=None)
     progress: Mapped[float] = mapped_column(default=0.0, server_default="0")
     season_gain: Mapped[int] = mapped_column(default=0, server_default="0")
+    # Échelle du potentiel : 1, celle de l'ancienne note générale (la moyenne des 9
+    # attributs), 2, celle du niveau (models/domain.py) ; database.py ramène les anciens à 2.
+    potential_scale: Mapped[int] = mapped_column(default=2, server_default="1")
 
     club: Mapped[ClubRow | None] = relationship(
         foreign_keys=[club_id], overlaps="players,youths", viewonly=True
@@ -194,6 +200,20 @@ class PlayerRow(Base):
         order_by="InjuryRow.id",
         lazy="selectin",
     )
+
+    @property
+    def attributes(self) -> dict[str, int]:
+        return {name: getattr(self, name) for name in ATTRIBUTE_NAMES}
+
+    @property
+    def overall(self) -> float:
+        """Note générale (models/domain.py)."""
+        return overall_of(Position(self.position), self.attributes)
+
+    @property
+    def level(self) -> float:
+        """Niveau (models/domain.py)."""
+        return level_of(Position(self.position), self.attributes)
 
     @property
     def latest_injury(self) -> "InjuryRow | None":

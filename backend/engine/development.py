@@ -1,10 +1,10 @@
 """Progression des joueurs : un potentiel caché, et des progrès au fil de la saison.
 
-Chaque joueur a un potentiel : la note générale (moyenne des 9 attributs) qu'il
-peut espérer atteindre. Il est tiré une fois, d'après son âge à ce moment-là : un
-espoir de 17 ans peut avoir quatre ou cinq points devant lui, un joueur de 28 ans
-est à peu près arrivé. Il reste caché : l'interface n'en montre qu'une estimation,
-d'autant plus juste que le club connaît le joueur (voir `estimate`).
+Chaque joueur a un potentiel : le niveau (sa note générale moins un écart fixe, voir
+models/domain.py) qu'il peut espérer atteindre. Il est tiré une fois, d'après son âge
+à ce moment-là : un espoir de 17 ans peut avoir quatre ou cinq points devant lui, un
+joueur de 28 ans est à peu près arrivé. Il reste caché : l'interface n'en montre qu'une
+estimation, d'autant plus juste que le club connaît le joueur (voir `estimate`).
 
 La progression se fait match après match (`develop`, à chaque jour où l'équipe
 du joueur joue) : il comble chaque saison une part de l'écart qui le sépare de son
@@ -19,11 +19,20 @@ import random
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from models import ATTRIBUTE_MAX, ATTRIBUTE_NAMES, Club, Player, PlayerMatchStats, Position
+from models import (
+    ATTRIBUTE_MAX,
+    ATTRIBUTE_NAMES,
+    BEST_LEVEL,
+    OVERALL_WEIGHTS,
+    Club,
+    Player,
+    PlayerMatchStats,
+    Position,
+)
 
 POTENTIAL_MAX = 19.5
 
-# Marge de progression (en points de note générale) selon l'âge : (âge maximal, moyenne,
+# Marge de progression (en points de niveau) selon l'âge : (âge maximal, moyenne,
 # écart-type) ; au-delà du dernier âge, le joueur est arrivé.
 UPSIDE_BY_AGE = ((18, 5.5, 1.8), (20, 4.5, 1.5), (22, 3.0, 1.2), (24, 1.8, 0.9), (27, 0.7, 0.5))
 
@@ -57,7 +66,7 @@ KEY_WEIGHT = 2.0
 
 
 def initial_potential(player: Player) -> float:
-    """Le potentiel d'un joueur, d'après son âge et sa note du moment ; le hasard est
+    """Le potentiel d'un joueur, d'après son âge et son niveau du moment ; le hasard est
     propre au joueur, si bien que le même joueur a toujours le même potentiel."""
     rng = random.Random(f"potential:{player.id}")
     upside = 0.0
@@ -65,14 +74,15 @@ def initial_potential(player: Player) -> float:
         if player.age <= max_age:
             upside = max(0.0, rng.gauss(mean, spread))
             break
-    return round(min(max(player.overall + upside, player.overall), POTENTIAL_MAX), 1)
+    return round(min(max(player.level + upside, player.level), POTENTIAL_MAX), 1)
 
 
 def ceiling(player: Player) -> float:
-    """Le potentiel du joueur, tiré la première fois qu'on en a besoin."""
+    """Le potentiel du joueur, tiré la première fois qu'on en a besoin, dans la limite du
+    plus haut niveau possible (ce qui compte à son poste à 20)."""
     if player.potential is None:
         player.potential = initial_potential(player)
-    return player.potential
+    return min(player.potential, BEST_LEVEL)
 
 
 def catch_up(age: int) -> float:
@@ -110,16 +120,17 @@ def tick(
 ) -> list[str]:
     """Un jour de match pour un joueur : il avance vers son potentiel. Renvoie les
     attributs qui ont gagné un point."""
-    gap = ceiling(player) - player.overall
+    gap = ceiling(player) - player.level
     rate = catch_up(player.age)
-    if gap <= 0 or rate <= 0:
+    gain = _level_per_point(player, training.focus)
+    if gap <= 0 or rate <= 0 or gain <= 0:
         return []
     facility = 1 + FACILITY_PER_LEVEL * (facility_level - 1)
-    # Points d'attributs (9 par point de note générale) gagnés ce jour-là.
-    points = 9 * gap * rate / TICKS_PER_SEASON * playing_factor(line) * facility * training.pace
+    # Points d'attributs gagnés ce jour-là, assez pour combler la part prévue de l'écart.
+    points = gap * rate / TICKS_PER_SEASON * playing_factor(line) * facility * training.pace / gain
     player.progress += points
     gained = []
-    while player.progress >= 1 and player.overall < ceiling(player):
+    while player.progress >= 1 and player.level < ceiling(player):
         name = _pick_attribute(player, training.focus, rng)
         if name is None:
             break
@@ -127,20 +138,35 @@ def tick(
         player.progress -= 1
         player.season_gain += 1
         gained.append(name)
-    if player.overall >= ceiling(player):
+    if player.level >= ceiling(player):
         player.progress = 0.0
     return gained
 
 
-def _pick_attribute(player: Player, focus: Iterable[str], rng: random.Random) -> str | None:
+def _choices(player: Player, focus: Iterable[str]) -> tuple[list[str], list[float]]:
+    """Les attributs qui peuvent encore gagner un point, et leurs chances."""
     names = [name for name in ATTRIBUTE_NAMES if getattr(player, name) < ATTRIBUTE_MAX]
-    if not names:
-        return None
     key, focus = KEY_ATTRIBUTES[player.position], set(focus)
     weights = [
         (KEY_WEIGHT if name in key else 1.0) * (KEY_WEIGHT if name in focus else 1.0)
         for name in names
     ]
+    return names, weights
+
+
+def _level_per_point(player: Player, focus: Iterable[str]) -> float:
+    """Niveau gagné en moyenne par point d'attribut : un point dans un attribut qui ne
+    compte pas au poste (la mêlée d'un ailier) n'en rapporte pas."""
+    names, weights = _choices(player, focus)
+    counted = OVERALL_WEIGHTS[player.position]
+    share = sum(w * counted.get(n, 0.0) for n, w in zip(names, weights, strict=True))
+    return share / max(sum(weights), 1.0)
+
+
+def _pick_attribute(player: Player, focus: Iterable[str], rng: random.Random) -> str | None:
+    names, weights = _choices(player, focus)
+    if not names:
+        return None
     return rng.choices(names, weights=weights)[0]
 
 
@@ -171,7 +197,7 @@ def new_season(players: Iterable[Player]) -> None:
 
 # --- Ce que le club voit du potentiel --------------------------------------------------
 
-# Écart (en points de note) entre l'estimation et la vérité, selon ce que le club sait
+# Écart (en points de niveau) entre l'estimation et la vérité, selon ce que le club sait
 # du joueur : les siens, il les voit tous les jours ; les autres, il les devine.
 OWN_UNCERTAINTY = 1.0
 OTHER_UNCERTAINTY = 2.5
@@ -182,6 +208,6 @@ def estimate(player: Player, uncertainty: float) -> tuple[float, float]:
     2 x `uncertainty`, décalée d'un biais propre au joueur (le club peut se tromper)."""
     bias = random.Random(f"estimate:{player.id}").uniform(-0.5, 0.5) * uncertainty
     center = ceiling(player) + bias
-    low = max(player.overall, center - uncertainty)
+    low = max(player.level, center - uncertainty)
     high = min(POTENTIAL_MAX + 0.5, max(center + uncertainty, low))
     return round(low, 1), round(high, 1)

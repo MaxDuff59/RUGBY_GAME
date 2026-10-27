@@ -11,7 +11,6 @@ from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from engine.journal import MoveKind
-from models import ATTRIBUTE_NAMES
 from models.orm import InjuryRow, JokerRow, MoveRow, NegotiationRow, PlayerRow, SuspensionRow
 
 
@@ -42,7 +41,7 @@ def log_move(
     Un joueur libéré puis recruté le même jour (l'intersaison) ne fait qu'une
     ligne : son départ devient une arrivée libre, de son ancien club au nouveau.
     """
-    overall = sum(getattr(player, name) for name in ATTRIBUTE_NAMES) / len(ATTRIBUTE_NAMES)
+    overall = player.overall
     if origin is None and destination is not None:
         released = session.scalars(
             select(MoveRow).where(

@@ -37,7 +37,7 @@ from engine import internationals as rules
 from engine.free_agents import seasons_without_club
 from engine.journal import Article, Move, MoveKind, Person, Team
 from engine.offseason import RETIREMENT_AGE
-from models import ATTRIBUTE_NAMES, EventType, Match, Position, Squad, Stage
+from models import EventType, Match, Position, Squad, Stage
 from models.orm import (
     CallUpRow,
     CareerRow,
@@ -165,9 +165,8 @@ def _competitions(session: Session, season: SeasonRow) -> list[_Competition]:
 
 
 def _person(row: PlayerRow) -> Person:
-    overall = sum(getattr(row, name) for name in ATTRIBUTE_NAMES) / len(ATTRIBUTE_NAMES)
     return Person(
-        row.id, f"{row.first_name} {row.last_name}", Position(row.position), row.age, overall
+        row.id, f"{row.first_name} {row.last_name}", Position(row.position), row.age, row.overall
     )
 
 

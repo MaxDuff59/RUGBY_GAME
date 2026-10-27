@@ -36,8 +36,14 @@ from data.leagues import LEAGUES
 from data.nations import home_nation
 from engine.development import ceiling, initial_potential
 from engine.free_agents import newcomers
-from models import ATTRIBUTE_MAX, ATTRIBUTE_MIN, Position
-from models.orm import LEAGUE_CODE_LENGTH, Base, ClubRow, PlayerRow, StaffRow
+from models import (
+    ATTRIBUTE_MAX,
+    ATTRIBUTE_MIN,
+    ATTRIBUTE_NAMES,
+    Position,
+    overall_at_level,
+)
+from models.orm import LEAGUE_CODE_LENGTH, Base, ClubRow, MoveRow, PlayerRow, StaffRow
 
 # Dossier des parties SQLite et des photos (surchargeable : instance de test, volume en prod).
 SAVES_DIR = Path(os.environ.get("RUGBY_SAVES_DIR", "./saves"))
@@ -398,6 +404,7 @@ ADDED_COLUMNS = {
         "potential": "FLOAT",
         "progress": "FLOAT NOT NULL DEFAULT 0",
         "season_gain": "INTEGER NOT NULL DEFAULT 0",
+        "potential_scale": "INTEGER NOT NULL DEFAULT 1",
     },
     "careers": {
         "difficulty": "VARCHAR(6) NOT NULL DEFAULT 'normal'",
@@ -426,6 +433,27 @@ def _add_columns(engine: Engine) -> None:
             for column, ddl in columns.items():
                 if column not in present:
                     connection.execute(text(f"ALTER TABLE {name} ADD COLUMN {column} {ddl}"))
+
+
+def _rescale_potential(engine: Engine) -> None:
+    """La note générale ne fait plus la moyenne des 9 attributs mais compte ce qui sert au
+    poste (models/domain.py). Le potentiel déjà tiré, sur l'ancienne note, bouge d'autant
+    que le niveau du joueur, pour lui laisser la même marge ; les notes gardées par le
+    journal des mouvements passent à la nouvelle note générale."""
+    if not inspect(engine).has_table("players", schema=_schema_of(engine)):
+        return
+    with sessionmaker(bind=engine)() as session:
+        rows = session.scalars(select(PlayerRow).where(PlayerRow.potential_scale == 1)).all()
+        if not rows:
+            return
+        for row in rows:
+            if row.potential is not None:
+                mean = sum(getattr(row, name) for name in ATTRIBUTE_NAMES) / len(ATTRIBUTE_NAMES)
+                row.potential = round(row.potential + row.level - mean, 1)
+            row.potential_scale = 2
+        for move in session.scalars(select(MoveRow)):
+            move.overall = round(overall_at_level(move.overall), 2)
+        session.commit()
 
 
 def _fill_potential(engine: Engine) -> None:
@@ -474,9 +502,13 @@ def _migrate(engine: Engine) -> None:
     _add_international_stage(engine)
     _add_columns(engine)
     _widen_league_codes(engine)
+    if engine.dialect.name == "sqlite":
+        _migrate_sqlite(engine)
+    _rescale_potential(engine)
     _fill_potential(engine)
-    if engine.dialect.name != "sqlite":
-        return
+
+
+def _migrate_sqlite(engine: Engine) -> None:
     inspector = inspect(engine)
     if not inspector.has_table("players"):
         return

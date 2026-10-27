@@ -46,6 +46,7 @@ from models import (
     StaffRole,
     Stage,
     StandSide,
+    overall_at_level,
 )
 
 # --- Clubs et joueurs ----------------------------------------------------------------
@@ -207,7 +208,7 @@ class PlayerOut(BaseModel):
         if day is not None and (player.is_injured(day) or player.is_fragile(day)):
             injury = InjuryOut.from_injury(player.injury, day)
         owner = (club_names or {}).get(player.loaned_from) if player.loaned_from else None
-        low, high = estimate(player, uncertainty)
+        low, high = (round(overall_at_level(level), 1) for level in estimate(player, uncertainty))
         return cls(
             **fields,
             value=market_value(player),

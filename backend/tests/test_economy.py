@@ -53,7 +53,7 @@ def test_young_players_are_worth_more_than_old_ones_at_equal_level():
 
 def test_wage_follows_value_with_a_floor():
     assert wage_for(make_player(5)) == WAGE_MIN
-    assert wage_for(make_player(16)) > wage_for(make_player(12)) > WAGE_MIN
+    assert wage_for(make_player(18)) > wage_for(make_player(14)) > WAGE_MIN
 
 
 def test_buying_costs_more_than_selling():

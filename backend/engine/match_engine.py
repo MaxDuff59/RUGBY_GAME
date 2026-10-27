@@ -483,7 +483,7 @@ RATING_FOR_POSITION = {
 def leadership(p: Player) -> float:
     """Ascendant d'un joueur sur le groupe, de 0 à 1 : son expérience, puis son niveau."""
     experience = min(max(p.age - LEADERSHIP_AGE_FROM, 0) / LEADERSHIP_AGE_SPAN, 1.0)
-    level = p.overall / 20
+    level = p.level / 20
     return LEADERSHIP_AGE_SHARE * experience + (1 - LEADERSHIP_AGE_SHARE) * level
 
 
