@@ -86,7 +86,7 @@ export default function StartCareer() {
   };
 
   return (
-    <form className="start" onSubmit={handleSubmit}>
+    <form className="start start--career" onSubmit={handleSubmit}>
       {dismissal ? (
         <div>
           <p className="eyebrow">
@@ -156,25 +156,27 @@ export default function StartCareer() {
               Pas de club à gérer : une liste de 42 joueurs à annoncer avant chaque rendez-vous, puis les matchs.
             </span>
           </div>
-          <ul className="club-list">
-            {nations.data.map((nation) => (
-              <li key={nation.code}>
-                <button
-                  type="button"
-                  className="club-option"
-                  aria-pressed={nation.code === nationCode}
-                  onClick={() => setNationCode(nation.code)}
-                >
-                  <span className="club-option__name with-crest">
-                    <ClubCrest name={nation.name} size={32} />
-                    {nation.name}
-                  </span>
-                  <span className="num">Niveau {formatNote(nation.level)} / 20</span>
-                  <span className="club-option__detail">{nation.competitions.join(" · ")}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <div className="club-list__scroll">
+            <ul className="club-list">
+              {nations.data.map((nation) => (
+                <li key={nation.code}>
+                  <button
+                    type="button"
+                    className="club-option"
+                    aria-pressed={nation.code === nationCode}
+                    onClick={() => setNationCode(nation.code)}
+                  >
+                    <span className="club-option__name with-crest">
+                      <ClubCrest name={nation.name} size={32} />
+                      {nation.name}
+                    </span>
+                    <span className="num">Niveau {formatNote(nation.level)} / 20</span>
+                    <span className="club-option__detail">{nation.competitions.join(" · ")}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       ) : league ? (
         <div className="section">
@@ -186,45 +188,49 @@ export default function StartCareer() {
               </button>
             )}
           </div>
-          <ul className="club-list">
-            {clubs
-              .filter((club) => club.league === league.code)
-              .map((club) => (
-                <li key={club.id}>
-                  <button
-                    type="button"
-                    className="club-option"
-                    aria-pressed={club.id === clubId}
-                    disabled={club.id === dismissal?.club_id || outOfReach(club.id)}
-                    onClick={() => setClubId(club.id)}
-                  >
-                    <span className="club-option__name with-crest">
-                      <ClubCrest name={club.name} size={32} />
-                      {club.name}
-                    </span>
-                    <span className="num">
-                      Niveau {formatNote(club.level)} / 20
-                      {outOfReach(club.id) && club.id !== dismissal.club_id && " · hors de portée"}
-                    </span>
-                  </button>
-                </li>
-              ))}
-          </ul>
+          <div className="club-list__scroll">
+            <ul className="club-list">
+              {clubs
+                .filter((club) => club.league === league.code)
+                .map((club) => (
+                  <li key={club.id}>
+                    <button
+                      type="button"
+                      className="club-option"
+                      aria-pressed={club.id === clubId}
+                      disabled={club.id === dismissal?.club_id || outOfReach(club.id)}
+                      onClick={() => setClubId(club.id)}
+                    >
+                      <span className="club-option__name with-crest">
+                        <ClubCrest name={club.name} size={32} />
+                        {club.name}
+                      </span>
+                      <span className="num">
+                        Niveau {formatNote(club.level)} / 20
+                        {outOfReach(club.id) && club.id !== dismissal.club_id && " · hors de portée"}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+            </ul>
+          </div>
         </div>
       ) : (
         <div className="section">
           <p className="eyebrow">D'abord, le championnat</p>
-          <ul className="club-list">
-            {leagues.data.map((item) => (
-              <li key={item.code}>
-                <button type="button" className="club-option" onClick={() => pickLeague(item.code)}>
-                  <span className="club-option__name">{item.name}</span>
-                  <span className="muted">{item.country}</span>
-                  <span className="num">{item.club_count} clubs</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <div className="club-list__scroll">
+            <ul className="club-list">
+              {leagues.data.map((item) => (
+                <li key={item.code}>
+                  <button type="button" className="club-option" onClick={() => pickLeague(item.code)}>
+                    <span className="club-option__name">{item.name}</span>
+                    <span className="muted">{item.country}</span>
+                    <span className="num">{item.club_count} clubs</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       )}
 

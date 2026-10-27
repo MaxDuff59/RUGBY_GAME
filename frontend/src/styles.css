@@ -1530,7 +1530,9 @@ select.tactics__select {
   min-height: 0;
 }
 
-.start .club-list {
+/* La liste défile dans son cadre : la grille garde sa hauteur naturelle, d'où des
+   rangées toutes à la hauteur de la plus haute carte (`grid-auto-rows: 1fr`). */
+.start .club-list__scroll {
   min-height: 0;
   overflow: auto;
 }
@@ -1541,11 +1543,14 @@ select.tactics__select {
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  /* Toutes les cartes à la hauteur de la plus haute, d'une rangée à l'autre. */
+  grid-auto-rows: 1fr;
   gap: 12px;
 }
 
 .club-option {
   width: 100%;
+  height: 100%;
   min-height: 44px;
   padding: 16px;
   text-align: left;
@@ -1579,6 +1584,34 @@ select.tactics__select {
   font-weight: 600;
   font-size: 20px;
   line-height: 1.1;
+}
+
+/* Ordinateur : le choix de carrière occupe une colonne de 1200 px au milieu de l'écran,
+   titre, champ, pastilles et bouton centrés, les cartes sur toute la largeur. */
+@media (min-width: 961px) {
+  .start--career {
+    padding-inline: max(40px, calc((100% - 1200px) / 2));
+    align-items: center;
+    text-align: center;
+  }
+  .start--career > .section {
+    align-self: stretch;
+  }
+  .start--career .field {
+    width: 320px;
+    align-items: center;
+  }
+  .start--career .field--wide {
+    width: auto;
+  }
+  .start--career .input {
+    align-self: stretch;
+  }
+  .start--career .chips,
+  .start--career .section__head {
+    justify-content: center;
+    gap: 8px 20px;
+  }
 }
 
 /* Sur téléphone, le choix tient dans l'écran : marges et titre resserrés, puis une ligne

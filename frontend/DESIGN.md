@@ -93,6 +93,10 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   et fraîcheur sur les notes du match (détail au survol), sans barre.
 - Limogeage : la page de choix du club s'ouvre sur « Limogé le … / Rebondis ailleurs »,
   le nom du manager prérempli et l'ancien club grisé.
+- Choix de la carrière (`/start`, `.start--career`) sur ordinateur : une colonne de
+  1200 px au milieu de l'écran ; titre, champ, pastilles, en-tête de liste et bouton
+  centrés ; les cartes (championnats, clubs, sélections) sur toute la largeur, toutes à
+  la hauteur de la plus haute.
 - Bilan de fin de saison : grande fenêtre (`Modal`) qui s'ouvre après la finale (ou par
   « Bilan de la saison »), en trois étapes repérées par des pastilles : résultats (titre
   en capitales, chiffres clés, meilleurs marqueurs), vie du club (les lignes de la carte
