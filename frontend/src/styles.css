@@ -1430,6 +1430,9 @@ select.tactics__select {
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  /* La liste a une hauteur imposée (elle défile) : sans cela, sur un petit écran, chaque
+     rangée retombe au `min-height` de la carte et les boutons débordent en dessous. */
+  grid-auto-rows: max-content;
   gap: 16px;
   align-content: start;
 }
@@ -1482,6 +1485,34 @@ select.tactics__select {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+/* Téléphone : l'adresse sur sa ligne, les boutons deux par deux à largeur égale (le
+   dernier, s'il est seul, prend la ligne) ; dans les cartes, les deux actions se
+   partagent la largeur. */
+@media (max-width: 960px) {
+  .saves__account {
+    width: 100%;
+    gap: 8px;
+  }
+  .saves__account > .muted {
+    flex-basis: 100%;
+    overflow-wrap: anywhere;
+  }
+  .saves__account > .button,
+  .save__actions > .button {
+    flex: 1 1 40%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px;
+    line-height: 1.2;
+    text-align: center;
+  }
+  .save {
+    min-height: 0;
+    padding: 20px;
+  }
 }
 
 /* --- Connexion --------------------------------------------------------------- */
