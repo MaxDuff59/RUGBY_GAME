@@ -20,6 +20,10 @@ from database import seed_if_empty
 from models import Club
 from models.orm import Base
 
+# Le catalogue des tests reste dans leurs bases : jamais celui de la prod, même si le
+# terminal a RUGBY_CATALOG_DB_URL (catalog.py la lit à chaque connexion).
+os.environ.pop("RUGBY_CATALOG_DB_URL", None)
+
 # Les tests tournent sur SQLite en mémoire ; avec RUGBY_TEST_DATABASE_URL (un Postgres
 # jetable), ils tournent sur Postgres, vidé avant chaque cas.
 TEST_DB_URL = os.environ.get("RUGBY_TEST_DATABASE_URL")

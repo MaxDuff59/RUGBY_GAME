@@ -497,6 +497,7 @@ Variables d'environnement de l'API :
 | `RUGBY_DATABASE_URL` | Serveur Postgres pour les comptes et les parties (sinon SQLite par fichier) | — |
 | `RUGBY_SAVES_DIR` | Dossier des parties SQLite, des comptes (sans Postgres) et des photos | `/data/saves` |
 | `RUGBY_USERS_DB_URL` | Base des comptes à part (sinon celle des parties, ou `users.db` dans le dossier des parties) | — |
+| `RUGBY_CATALOG_DB_URL` | Base des retouches du backoffice à part (sinon celle des comptes) : en local, celle de la prod | — |
 | `RUGBY_COOKIE_SECURE` | `1` derrière HTTPS (cookie de session marqué Secure) | `1` |
 | `RUGBY_STATIC_DIR` | Optionnel : un `dist/` de Vite servi par l'API elle-même (`api.main:site`, tout sur un seul port) | — |
 | `PORT` | Port d'écoute | `8000` |
@@ -549,6 +550,34 @@ Seules les retouches sont gardées, dans la base des comptes (tables
 non touché suit `data/leagues.py`, `data/rosters.json` et
 `frontend/src/clubLogos.json`. Les championnats créés sont inscrits dans
 `data/leagues.py` (`catalog.sync`) avant qu'une partie s'ouvre.
+
+#### Retoucher le jeu en ligne depuis le backoffice local
+
+Avec `RUGBY_CATALOG_DB_URL`, ces tables vont dans une autre base que les comptes :
+pointée sur le Postgres de la prod, le backoffice local modifie le jeu en ligne
+(comptes et parties restent locaux, on s'y connecte avec son compte local). Le
+Postgres de Railway doit être joignable de l'extérieur : service Postgres →
+Settings → Networking → **TCP Proxy** (port 5432), qui donne `DATABASE_PUBLIC_URL`.
+L'adresse se range dans `backend/.env`, ignoré par git :
+
+```bash
+# backend/.env
+RUGBY_CATALOG_DB_URL=postgresql://postgres:<mot de passe>@<hôte>.proxy.rlwy.net:<port>/railway
+```
+
+```bash
+cd backend && uv run --env-file .env uvicorn api.main:app --reload
+```
+
+Sans `--env-file`, le backoffice local retrouve son catalogue à lui (`users.db`).
+`scripts/push_catalog.py` recopie un catalogue dans un autre, la version d'origine
+gagnant ; il montre la liste des changements et demande confirmation :
+
+```bash
+uv run --env-file .env python -m scripts.push_catalog   # users.db local → prod
+```
+
+Les tests ignorent `RUGBY_CATALOG_DB_URL` (`tests/conftest.py`).
 
 ## Principe d'architecture
 

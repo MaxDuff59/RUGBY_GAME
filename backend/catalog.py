@@ -6,6 +6,10 @@ comptes (le schéma `public` en Postgres), une ligne par club. Un champ vide rep
 la valeur du code : une mise à jour des fichiers continue d'arriver aux clubs que
 personne n'a touchés.
 
+Avec `RUGBY_CATALOG_DB_URL`, ces retouches vont dans une autre base : en local, celle de
+la prod, pour que le backoffice local modifie le jeu en ligne (comptes et parties restent
+locaux). scripts/push_catalog.py y recopie un catalogue local.
+
 - Niveau, budget, capacité et effectif servent à créer les mondes : ils valent pour
   les nouvelles parties, les parties commencées gardent leurs clubs.
 - Couleurs et blason sont lus par l'interface (`GET /catalog/clubs`) par-dessus
@@ -26,6 +30,7 @@ jamais effacée : les parties commencées avec ce joueur continuent de la montre
 import dataclasses
 import datetime
 import hashlib
+import os
 import re
 import unicodedata
 
@@ -38,6 +43,7 @@ from sqlalchemy import (
     Integer,
     LargeBinary,
     String,
+    create_engine,
     inspect,
     select,
     text,
@@ -45,6 +51,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 import accounts
+import database
 from data import leagues as league_data
 from data import nations
 from data.generator import UPLOADED_PHOTO_PATH, load_rosters
@@ -148,22 +155,43 @@ class PlayerPhotoRow(CatalogBase):
 
 
 _ready: Engine | None = None
+_own: Engine | None = None
+
+
+def engine() -> Engine:
+    """La base du catalogue : celle de `RUGBY_CATALOG_DB_URL`, sinon celle des comptes."""
+    global _own
+    url = database._postgres_url(os.environ.get("RUGBY_CATALOG_DB_URL"))
+    if not url:
+        return accounts.engine()
+    if _own is None:
+        # Pas de requêtes préparées côté serveur, comme database.shared_engine.
+        postgres = url.startswith("postgresql")
+        _own = create_engine(
+            url, pool_pre_ping=True, connect_args={"prepare_threshold": None} if postgres else {}
+        )
+    return _own
+
+
+def prepare(bound: Engine) -> None:
+    """Crée les tables du catalogue dans cette base, et ajoute les colonnes qui y manquent."""
+    CatalogBase.metadata.create_all(bound)
+    present = {column["name"] for column in inspect(bound).get_columns("catalog_clubs")}
+    with bound.begin() as connection:
+        for name, definition in _ADDED_CLUB_COLUMNS:
+            if name not in present:
+                connection.execute(
+                    text(f"ALTER TABLE catalog_clubs ADD COLUMN {name} {definition}")
+                )
 
 
 def _session() -> Session:
     global _ready
-    engine = accounts.engine()
-    if engine is not _ready:
-        CatalogBase.metadata.create_all(engine)
-        present = {column["name"] for column in inspect(engine).get_columns("catalog_clubs")}
-        with engine.begin() as connection:
-            for name, definition in _ADDED_CLUB_COLUMNS:
-                if name not in present:
-                    connection.execute(
-                        text(f"ALTER TABLE catalog_clubs ADD COLUMN {name} {definition}")
-                    )
-        _ready = engine
-    return Session(engine, expire_on_commit=False)
+    bound = engine()
+    if bound is not _ready:
+        prepare(bound)
+        _ready = bound
+    return Session(bound, expire_on_commit=False)
 
 
 def _now() -> datetime.datetime:

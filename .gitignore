@@ -21,3 +21,6 @@ dist/
 
 # Vercel (lien local vers le projet)
 .vercel/
+
+# Variables locales (adresse de la base de prod pour le catalogue)
+.env
