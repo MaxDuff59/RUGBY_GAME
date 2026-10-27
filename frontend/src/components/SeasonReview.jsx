@@ -43,7 +43,7 @@ const MOVEMENTS = {
 // du manager (son contrat, sa réputation, et les clubs ou sélections qui le veulent),
 // puis joueurs en fin de contrat (à prolonger, sinon ils partent libres). La dernière
 // étape lance la saison suivante, sauf si le contrat du manager s'achève sans suite ;
-// accepter une offre recharge le jeu dans le nouveau club.
+// accepter une offre recharge le jeu dans le nouveau club, au début de la saison suivante.
 export default function SeasonReview({ clubId, onClose, onNextSeason, onContract, busy, error }) {
   const [step, setStep] = useState(0);
   const review = useApi(useCallback(api.getSeasonReview, []));
@@ -90,6 +90,7 @@ export default function SeasonReview({ clubId, onClose, onNextSeason, onContract
           <Career
             data={career.data}
             clubName={review.data.club.name}
+            year={year}
             contract={contract.data}
             onContract={(next) => {
               contract.setData(next);
@@ -135,8 +136,8 @@ export default function SeasonReview({ clubId, onClose, onNextSeason, onContract
 // --- 3. Carrière ------------------------------------------------------------------------
 
 // Le contrat du manager, sa réputation, et les clubs (ou la sélection) qui le veulent ;
-// accepter une offre recharge le jeu.
-function Career({ data, clubName, contract, onContract }) {
+// accepter l'offre d'un club joue l'intersaison (réglée par son staff) et recharge le jeu.
+function Career({ data, clubName, year, contract, onContract }) {
   const confirm = useConfirm();
   const [error, setError] = useState(null);
 
@@ -157,7 +158,7 @@ function Career({ data, clubName, contract, onContract }) {
       title: nation ? `Sélectionneur : ${offer.club.name}` : `Rejoindre ${offer.club.name}`,
       text: nation
         ? `Tu quittes ${clubName} dès maintenant pour diriger ${offer.club.name} : plus de club à gérer, une liste à annoncer avant chaque rendez-vous. Tes négociations en cours tombent.`
-        : `Tu quittes ${clubName} dès maintenant : la saison prochaine se jouera à la tête de ${offer.club.name}. Tes négociations en cours tombent.`,
+        : `Tu quittes ${clubName} dès maintenant et arrives à ${offer.club.name} pour lancer la saison ${year + 1} : son staff règle l'intersaison (contrats, espoirs, recrues). Tes négociations en cours tombent.`,
       rows,
       confirmLabel: "Accepter l'offre",
       onConfirm: async () => {

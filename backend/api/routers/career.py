@@ -10,6 +10,11 @@ sont alors menés par leur staff.
 Le manager d'un club est sous contrat (engine/manager_contract.py) : deux saisons
 pour commencer ; il demande à le prolonger, part de lui-même, ou accepte l'offre
 d'un autre club ou d'une sélection.
+
+Un manager qui prend un club une fois la saison de son championnat finie arrive au
+début de la suivante : l'intersaison se joue aussitôt, réglée par le staff du club
+(contrats, espoirs, mercato), sans repasser par le bilan d'une saison qu'il n'a pas
+menée, ni par les offres qui l'accompagnent.
 """
 
 from fastapi import APIRouter, HTTPException
@@ -20,7 +25,7 @@ from api import careers, internationals, plans
 from api.auth import UserDep
 from api.deps import SessionDep, load_club
 from api.ledger import current_season, game_date
-from api.routers.seasons import FIRST_SEASON_YEAR, create_season
+from api.routers.seasons import FIRST_SEASON_YEAR, create_season, offseason
 from api.schemas import (
     CareerHistoryOut,
     CareerIn,
@@ -88,10 +93,12 @@ def start_career(payload: CareerIn, session: SessionDep, user: UserDep) -> Caree
     """Démarre une carrière à la tête d'un club (`club_id`) ou d'une sélection (`nation`).
 
     Dans un monde neuf, elle ouvre la première saison, qui compte dans celles du
-    compte (api/plans.py) ; reprendre un club dans le même monde n'en ouvre pas."""
+    compte (api/plans.py) ; reprendre un club dans le même monde n'en ouvre pas, sauf
+    une fois la saison de son championnat finie : il arrive pour la suivante."""
     if (payload.club_id is None) == (payload.nation is None):
         raise HTTPException(status_code=400, detail="Choisis un club ou une sélection")
-    first_season = current_season(session) is None
+    season = current_season(session)
+    first_season = season is None
     if first_season:
         plans.require_season(user)
     club = nation = None
@@ -104,6 +111,7 @@ def start_career(payload: CareerIn, session: SessionDep, user: UserDep) -> Caree
             raise HTTPException(status_code=404, detail=f"Sélection « {payload.nation} » inconnue")
         if not internationals.has_nations(session):
             raise HTTPException(status_code=400, detail="Ce monde n'a pas de sélections nationales")
+    takeover = False
     if club is not None:
         # Un manager parti sans autre club ne reprend qu'un club à sa portée.
         reachable = careers.reachable(session, payload.manager_name)
@@ -111,6 +119,9 @@ def start_career(payload: CareerIn, session: SessionDep, user: UserDep) -> Caree
             raise HTTPException(
                 status_code=400, detail=f"{club.name} est hors de ta portée pour l'instant"
             )
+        takeover = not first_season and careers.league_over(season, club.league)
+        if takeover:
+            plans.require_season(user)
     for table in (CareerRow, SelectorRow, DismissalRow, LiveMatchRow, LiveInternationalRow):
         session.execute(delete(table))
     if club is not None:
@@ -131,6 +142,9 @@ def start_career(payload: CareerIn, session: SessionDep, user: UserDep) -> Caree
         # Son passage dans le club commence aujourd'hui (engine/career.py), pour deux
         # saisons (engine/manager_contract.py).
         careers.open_spell(session, payload.manager_name, club.id, game_date(session))
+        session.commit()
+        if takeover:
+            offseason(session, user, season, None)
         careers.sign(session, row, terms.FIRST_CONTRACT)
         session.commit()
 
@@ -228,14 +242,17 @@ def get_history(session: SessionDep) -> CareerHistoryOut:
 
 
 @router.post("/offers/{club_id}", response_model=CareerOut)
-def accept_offer(club_id: int, session: SessionDep) -> CareerOut:
-    """Le manager accepte l'offre d'un club : il le prend dès maintenant, la saison
-    prochaine se jouera avec lui. Ses négociations en cours tombent, et les affaires
-    de son ancien club sont réglées par le staff. Encore sous contrat, il coûte à son
-    nouveau club une indemnité, versée à l'ancien."""
+def accept_offer(club_id: int, session: SessionDep, user: UserDep) -> CareerOut:
+    """Le manager accepte l'offre d'un club : il le prend dès maintenant, et arrive au
+    début de la saison prochaine, l'intersaison réglée par le staff. Ses négociations
+    en cours tombent, et les affaires de son ancien club sont réglées par le staff.
+    Encore sous contrat, il coûte à son nouveau club une indemnité, versée à l'ancien.
+    La saison qui s'ouvre compte dans celles du compte (api/plans.py)."""
     row = _club_career_or_404(session)
     if club_id not in careers.offers(session):
         raise HTTPException(status_code=400, detail="Ce club ne t'a pas fait d'offre")
+    plans.require_season(user)
+    season = current_season(session)
     left = careers.contract(session, row).left
     seasons = terms.offer_length(careers.reputation_of(session, row.manager_name))
     old_club = session.get(ClubRow, row.club_id)
@@ -245,6 +262,8 @@ def accept_offer(club_id: int, session: SessionDep) -> CareerOut:
     careers.pay_indemnity(session, old_club, left, session.get(ClubRow, club_id), row.manager_name)
     session.add(SpellRow(manager_name=row.manager_name, club_id=club_id, start=game_date(session)))
     row.club_id = club_id
+    session.commit()
+    offseason(session, user, season, None)
     careers.sign(session, row, seasons)
     session.commit()
     return _career_out(row, load_club(session, club_id))

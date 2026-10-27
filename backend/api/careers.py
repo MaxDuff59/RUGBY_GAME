@@ -168,6 +168,11 @@ def season_over(session: Session) -> tuple[CareerRow, SeasonRow] | None:
     return career, season
 
 
+def league_over(season: SeasonRow, league: str) -> bool:
+    """La saison de ce championnat est-elle finie (phases finales comprises) ?"""
+    return _phase(season, league) == "finished"
+
+
 def offers(
     session: Session, reputation: float | None = None, clubs: Market | None = None
 ) -> dict[int, float]:

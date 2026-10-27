@@ -101,8 +101,12 @@ def test_accepting_an_offer_moves_the_manager(manager, monkeypatch):
     assert career["club_id"] == 5
     history = manager.get("/career/history").json()
     assert [(s["club"]["id"], s["reason"]) for s in history["spells"]] == [(3, "left"), (5, None)]
-    # La saison passée reste au crédit de l'ancien club.
-    assert history["seasons"][0]["club"]["id"] == 3
+    # Il arrive au début de la saison suivante : ni bilan, ni nouvelles offres. La
+    # saison passée reste au crédit de l'ancien club.
+    season = manager.get("/seasons/current").json()
+    assert season["year"] == 2027 and season["phase"] != "finished"
+    assert [(s["year"], s["club"]["id"]) for s in history["seasons"]] == [(2027, 5), (2026, 3)]
+    assert history["offers"] == []
 
 
 def _support(monkeypatch, value):
@@ -188,6 +192,9 @@ def test_the_board_may_let_an_ending_contract_go(manager, monkeypatch):
     history = manager.get("/career/history").json()
     assert history["reputation"] == before  # parti au bout de son contrat : rien à redire
     assert [s["reason"] for s in history["spells"]] == ["expired", None]
+    # Il reprend un club pour la saison suivante, sous contrat pour deux saisons.
+    assert manager.get("/seasons/current").json()["year"] == 2027
+    assert manager.get("/career").json()["contract_until"] == 2028
 
 
 def test_resigning_mid_contract(manager):

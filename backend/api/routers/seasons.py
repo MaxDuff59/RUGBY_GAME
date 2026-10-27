@@ -25,6 +25,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from accounts import User
 from api import cup, internationals, plans
 from api.affairs import (
     affair_out,
@@ -1034,7 +1035,13 @@ def start_next_season(session: SessionDep, user: UserDep) -> SeasonOut:
                     "fais passer des espoirs pros ou recrute."
                 ),
             )
+    return _season_out(session, offseason(session, user, season, my_club_id))
 
+
+def offseason(session: Session, user: User, season: SeasonRow, my_club_id: int | None) -> SeasonRow:
+    """L'intersaison de `season` (voir `start_next_season`), et la saison suivante.
+    `my_club_id` : le club que le manager gère lui-même ; les autres le sont par leur
+    staff, comme celui qu'un manager rejoint à la fin de la saison (api/routers/career.py)."""
     _finish_world(session, season)
     session.expire_all()
     record_awards(session, season)
@@ -1092,7 +1099,7 @@ def start_next_season(session: SessionDep, user: UserDep) -> SeasonOut:
 
     created = create_season(session, year, rng.randrange(SEED_RANGE))
     plans.count_season(user)
-    return _season_out(session, created)
+    return created
 
 
 def record_awards(session: Session, season: SeasonRow, finals: set[str] | None = None) -> None:
