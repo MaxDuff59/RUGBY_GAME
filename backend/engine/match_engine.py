@@ -39,6 +39,11 @@ Principe :
    (moins de cartons) et tire un peu l'équipe vers le haut.
 9. Le staff technique (`engine/coaching.py`) multiplie les notes collectives
    (avants, attaque, défense) et le territoire (analyste), et règle le buteur.
+10. Dans les 5 dernières minutes d'un match serré (7 points d'écart ou moins), une
+   pénalité en position pour une équipe menée par son manager attend sa décision
+   (`decide`) : les perches, la touche, la mêlée ou la jouer vite. Dans un match à
+   enjeu (élimination directe, derby), si aucune ne vient d'elle-même, le jeu en
+   offre une avant le coup de sifflet final.
 
 `LiveMatch` joue le match minute par minute : on peut l'arrêter, changer la
 tactique d'une équipe ou faire un remplacement, puis reprendre. `simulate_match`
@@ -246,6 +251,63 @@ PLAY_PENALTY_TRY_RATE = 0.38
 # Pénalité en touche : l'essai se joue entre les deux paquets (conquête et
 # domination des avants contre celles de l'adversaire).
 TOUCH_PENALTY_TRY_RATE = 0.38
+# Pénalité jouée en mêlée : l'essai en force se joue entre les deux mêlées seules.
+SCRUM_PENALTY_TRY_RATE = 0.36
+
+
+class PenaltyOption(StrEnum):
+    """Ce que le manager fait d'une pénalité décisive : les tactiques (`PenaltyChoice`)
+    et, en plus, la mêlée."""
+
+    KICK = "kick"
+    TOUCH = "touch"
+    SCRUM = "scrum"  # mêlée à 5 mètres, pour l'essai en force
+    PLAY = "play"
+
+
+# --- Fin de match serrée : le choix crucial ------------------------------------------
+
+# Dans les CRUNCH_MINUTES dernières minutes, à CRUNCH_MARGIN points d'écart ou moins,
+# une pénalité en position pour une équipe hors de `auto` attend la décision du manager.
+CRUNCH_MINUTES = 5
+CRUNCH_MARGIN = 7
+# Le staff, s'il décide à sa place : les 3 points quand ils suffisent à égaliser ou à
+# passer devant, sinon la touche pour aller chercher l'essai.
+STAFF_KICK_MARGIN = -3
+
+
+def staff_penalty(margin: int) -> PenaltyOption:
+    """Le choix du staff pour une pénalité décisive, selon les points d'avance."""
+    return PenaltyOption.KICK if margin >= STAFF_KICK_MARGIN else PenaltyOption.TOUCH
+
+
+@dataclass
+class Crunch:
+    """Une pénalité qui attend la décision du manager, et de quoi finir sa minute."""
+
+    minute: int
+    club_id: int
+    play: dict[int, int]  # points de jeu de la minute, par club (engine/momentum.py)
+    chance: tuple[int, float] | None  # l'action de la minute (engine/momentum.py)
+
+    def to_dict(self) -> dict:
+        return {
+            "minute": self.minute,
+            "club_id": self.club_id,
+            "play": [[club_id, points] for club_id, points in self.play.items()],
+            "chance": list(self.chance) if self.chance else None,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Crunch":
+        chance = data["chance"]
+        return cls(
+            minute=data["minute"],
+            club_id=data["club_id"],
+            play={club_id: points for club_id, points in data["play"]},
+            chance=(chance[0], chance[1]) if chance else None,
+        )
+
 
 # --- Capitaine ----------------------------------------------------------------------
 
@@ -476,6 +538,18 @@ class Collective:
 Fielded = tuple[Position, Player]
 
 
+def scrum_strength(
+    fielded: Iterable[Fielded], weight: Callable[[Player], float] = lambda p: 1.0
+) -> float:
+    """Poussée en mêlée : la première ligne surtout, les deuxième ligne derrière."""
+    fielded = list(fielded)
+
+    def rate(*positions: Position) -> float:
+        return _average([scrum_rating(p) * weight(p) for pos, p in fielded if pos in positions])
+
+    return 0.7 * rate(Position.PROP, Position.HOOKER) + 0.3 * rate(Position.LOCK)
+
+
 def collective_ratings(
     fielded: Iterable[Fielded],
     weight: Callable[[Player], float] = lambda p: 1.0,
@@ -494,13 +568,12 @@ def collective_ratings(
     def rate(players: list[Player], rating: Callable[[Player], float]) -> float:
         return _average([rating(p) * weight(p) for p in players])
 
-    front_row = at(Position.PROP, Position.HOOKER)
     jumpers = at(Position.HOOKER, Position.LOCK, Position.BACK_ROW)
     forwards = [p for pos, p in fielded if pos.is_forward]
     backs = [p for pos, p in fielded if not pos.is_forward]
     everyone = [p for _, p in fielded]
 
-    scrum = 0.7 * rate(front_row, scrum_rating) + 0.3 * rate(at(Position.LOCK), scrum_rating)
+    scrum = scrum_strength(fielded, weight)
     lineout = rate(jumpers, lineout_rating)
     return Collective(
         set_piece=factor * (0.5 * scrum + 0.5 * lineout),
@@ -834,6 +907,13 @@ class Side:
         ratings.defense *= boost
         return ratings
 
+    def scrum(self, minute: int) -> float:
+        """Poussée en mêlée des avants présents, avec la forme, l'élan, l'infériorité
+        et l'entraîneur des avants, comme les notes collectives."""
+        factor = self.factor * (1 + self.spirit) * SHORT_HANDED_FACTOR ** self.missing(minute)
+        strength = scrum_strength(self.fielded(minute), lambda p: efficiency(self.energy(p)))
+        return factor * self.coaching.forwards * strength
+
     def territory(self, minute: int, ratings: Collective) -> float:
         kicker = self.kicker(minute)
         plan = GAME_PLAN_EFFECTS[self.tactics.game_plan]["territory"]
@@ -1069,7 +1149,8 @@ class LiveMatch:
     on peut changer la tactique d'une équipe (`set_tactics`) ou faire un
     remplacement (`substitute`). Les équipes de `auto` sont gérées par le staff
     (remplacements automatiques) ; une équipe hors de `auto` ne change de joueur
-    que sur blessure ou sur ordre du manager.
+    que sur blessure ou sur ordre du manager, et décide elle-même des pénalités
+    d'une fin de match serrée : le match attend alors `decide` (`crunch`).
     """
 
     def __init__(
@@ -1088,12 +1169,14 @@ class LiveMatch:
         auto: Iterable[int] | None = None,
         weather: Weather = Weather.CLEAR,
         crowd: Crowd | None = None,
+        derby: bool = False,
     ) -> None:
         self.rng = rng or random.Random()
         self.matchday = matchday
         self.neutral = neutral
         self.day = day
         self.knockout = knockout
+        self.derby = derby  # data/derbies.py
         self.auto = set(auto) if auto is not None else {home.id, away.id}
         home_team = team_strength(home, day, home_form)
         away_team = team_strength(away, day, away_form)
@@ -1109,6 +1192,8 @@ class LiveMatch:
         self.minute = 0  # dernière minute jouée
         self.extra_time = False
         self.finished = False
+        self.crunch: Crunch | None = None  # la pénalité qui attend la décision du manager
+        self.crunch_at: int | None = None  # minute du dernier choix crucial offert
 
     # -- Lecture ------------------------------------------------------------------------
 
@@ -1131,6 +1216,12 @@ class LiveMatch:
 
     def level(self) -> bool:
         return self.score(self.home.club.id) == self.score(self.away.club.id)
+
+    @property
+    def stakes(self) -> bool:
+        """Match à enjeu (élimination directe, derby) : une fin serrée y donne toujours
+        un choix crucial au manager."""
+        return self.knockout or self.derby
 
     @property
     def last_minute(self) -> int:
@@ -1227,25 +1318,79 @@ class LiveMatch:
         self.events.append(event)
         return event
 
+    def penalty_odds(self, club_id: int) -> dict[PenaltyOption, float]:
+        """Chances de chaque choix pour la pénalité en attente : réussir le coup de pied
+        aux perches, ou marquer l'essai par les autres voies."""
+        crunch = self.crunch
+        if crunch is None or crunch.club_id != club_id:
+            raise ValueError("Aucune décision à prendre")
+        side = self.side(club_id)
+        other = self.opponent(side)
+        minute = crunch.minute
+        att, dfn = side.collective(minute), other.collective(minute)
+        kicker = side.kicker(minute)
+        odds = {PenaltyOption.KICK: self._kick_probability(side, kicker) if kicker else 0.0}
+        for option in (PenaltyOption.TOUCH, PenaltyOption.SCRUM, PenaltyOption.PLAY):
+            odds[option] = self._penalty_try_odds(side, other, att, dfn, minute, option)
+        return odds
+
+    def conversion_odds(self, club_id: int) -> float:
+        """Chance que le buteur du moment transforme un essai."""
+        side = self.side(club_id)
+        kicker = side.kicker(self.minute)
+        return self._kick_probability(side, kicker, is_conversion=True) if kicker else 0.0
+
+    def decide(self, club_id: int, option: PenaltyOption) -> list[MatchEvent]:
+        """Le manager joue la pénalité en attente ; la minute se termine (le coup de
+        sifflet final peut tomber). Renvoie ce qui s'est passé ; ValueError s'il n'y
+        a rien à décider."""
+        crunch = self.crunch
+        if crunch is None or crunch.club_id != club_id:
+            raise ValueError("Aucune décision à prendre")
+        side = self.side(club_id)
+        other = self.opponent(side)
+        minute = crunch.minute
+        before = len(self.events)
+        att, dfn = side.collective(minute), other.collective(minute)
+        self._penalty(side, other, att, dfn, minute, option)
+        self.crunch = None
+        fresh = self.events[before:]
+        self._crowd_reacts(fresh)
+        self.momentum[-1] = momentum.minute_bar(
+            self.home.club.id,
+            crunch.play,
+            crunch.chance,
+            [e for e in self.events if e.minute == minute],
+        )
+        self._whistle(minute)
+        return fresh
+
     # -- Déroulement ----------------------------------------------------------------------
 
     def advance(self, minutes: int = 1) -> list[MatchEvent]:
         """Joue `minutes` minutes (ou jusqu'à la fin) et renvoie les événements survenus."""
         before = len(self.events)
         for _ in range(minutes):
-            if self.finished:
+            if self.finished or self.crunch is not None:
                 break
             self.step()
         return self.events[before:]
 
     def play_to_end(self) -> Match:
+        """Joue jusqu'au bout ; le staff décide des pénalités en attente."""
         while not self.finished:
-            self.step()
+            crunch = self.crunch
+            if crunch is None:
+                self.step()
+                continue
+            side = self.side(crunch.club_id)
+            margin = self.score(side.club.id) - self.score(self.opponent(side).club.id)
+            self.decide(crunch.club_id, staff_penalty(margin))
         return self.result()
 
     def step(self) -> None:
-        """Joue la minute suivante."""
-        if self.finished:
+        """Joue la minute suivante (rien tant qu'une décision attend)."""
+        if self.finished or self.crunch is not None:
             return
         minute = self.minute + 1
         before = len(self.events)
@@ -1259,6 +1404,11 @@ class LiveMatch:
             )
         )
         self.minute = minute
+        if self.crunch is None:
+            self._whistle(minute)
+
+    def _whistle(self, minute: int) -> None:
+        """La minute jouée finit-elle le match, ou mène-t-elle à la prolongation ?"""
         if minute == MATCH_MINUTES:
             if self.knockout and self.level():
                 self.extra_time = True
@@ -1295,6 +1445,13 @@ class LiveMatch:
         )
         self._phases(minute, home_share, home_ratings, away_ratings)
         self._lineout(minute)
+
+        # Match à enjeu serré sans pénalité pour le manager : le jeu lui en offre une.
+        for side in self.sides:
+            if self._crunch_due(side, minute):
+                self._minute_chance = (side.club.id, momentum.threat(0.0, 1.0))
+                self._offer(side, minute)
+                return
 
         if rng.random() >= CHANCE_PER_MINUTE:
             return
@@ -1474,23 +1631,14 @@ class LiveMatch:
             self._try(attacking, defending, minute)
             return
 
-        # 2) Pénalité en position : tentée face aux perches, ou jouée à la main.
+        # 2) Pénalité en position : tentée face aux perches, ou jouée à la main ; en fin
+        # de match serrée, le manager décide.
         if roll < try_probability + penalty_probability:
-            if attacking.tactics.penalties == PenaltyChoice.PLAY:
-                scored = rng.random() < 2 * PLAY_PENALTY_TRY_RATE * _win_probability(
-                    att.attack, dfn.defense
-                )
-                if scored:
-                    self._try(attacking, defending, minute)
+            if self._crunch(attacking, minute):
+                self._offer(attacking, minute)
                 return
-            if attacking.tactics.penalties == PenaltyChoice.TOUCH:
-                maul = rng.random() < 2 * TOUCH_PENALTY_TRY_RATE * _win_probability(
-                    att.forward_dominance, dfn.forward_dominance
-                )
-                if maul:
-                    self._try(attacking, defending, minute, forwards=True)
-                return
-            self._penalty_kick(attacking, minute)
+            option = PenaltyOption(attacking.tactics.penalties.value)
+            self._penalty(attacking, defending, att, dfn, minute, option)
             return
 
         # 3) Drop de l'ouvreur (on ne garde que les drops réussis, les ratés sont anecdotiques).
@@ -1507,6 +1655,67 @@ class LiveMatch:
                 attacking.rate(drop_kicker.id, RATING_EVENT[EventType.DROP_GOAL])
 
         # 4) L'action ne donne rien.
+
+    def _penalty(
+        self,
+        attacking: Side,
+        defending: Side,
+        att: Collective,
+        dfn: Collective,
+        minute: int,
+        option: PenaltyOption,
+    ) -> None:
+        """Une pénalité en position, jouée selon `option`."""
+        if option == PenaltyOption.KICK:
+            self._penalty_kick(attacking, minute)
+            return
+        odds = self._penalty_try_odds(attacking, defending, att, dfn, minute, option)
+        if self.rng.random() < odds:
+            # Au bout du maul ou de la mêlée, c'est un avant qui marque.
+            self._try(attacking, defending, minute, forwards=option != PenaltyOption.PLAY)
+
+    def _penalty_try_odds(
+        self,
+        attacking: Side,
+        defending: Side,
+        att: Collective,
+        dfn: Collective,
+        minute: int,
+        option: PenaltyOption,
+    ) -> float:
+        """Chance d'essai d'une pénalité jouée à la main, en touche ou en mêlée."""
+        if option == PenaltyOption.PLAY:
+            return 2 * PLAY_PENALTY_TRY_RATE * _win_probability(att.attack, dfn.defense)
+        if option == PenaltyOption.TOUCH:
+            duel = _win_probability(att.forward_dominance, dfn.forward_dominance)
+            return 2 * TOUCH_PENALTY_TRY_RATE * duel
+        duel = _win_probability(attacking.scrum(minute), defending.scrum(minute))
+        return 2 * SCRUM_PENALTY_TRY_RATE * duel
+
+    # -- Le choix crucial --------------------------------------------------------------
+
+    def _crunch(self, side: Side, minute: int) -> bool:
+        """Fin de match serrée pour une équipe menée par son manager : ses pénalités
+        attendent sa décision."""
+        if side.club.id in self.auto or minute <= self.last_minute - CRUNCH_MINUTES:
+            return False
+        margin = self.score(side.club.id) - self.score(self.opponent(side).club.id)
+        return abs(margin) <= CRUNCH_MARGIN
+
+    def _crunch_due(self, side: Side, minute: int) -> bool:
+        """Le jeu offre-t-il sa pénalité au manager cette minute ? Dans un match à
+        enjeu, une fois par fin serrée, à une minute au hasard, s'il n'en a pas eu
+        d'elle-même."""
+        if not self.stakes or not self._crunch(side, minute):
+            return False
+        if self.crunch_at is not None and self.crunch_at > self.last_minute - CRUNCH_MINUTES:
+            return False
+        return self.rng.random() < 1 / (self.last_minute - minute + 1)
+
+    def _offer(self, side: Side, minute: int) -> None:
+        """La pénalité attend la décision du manager : le match s'arrête là."""
+        self.crunch = Crunch(minute, side.club.id, dict(self._minute_play), self._minute_chance)
+        self.crunch_at = minute
 
     def _phases(self, minute: int, home_share: float, home: Collective, away: Collective) -> None:
         """Les temps de jeu de la minute : qui porte le ballon, qui plaque, qui
@@ -1639,10 +1848,13 @@ class LiveMatch:
             "neutral": self.neutral,
             "day": self.day.isoformat() if self.day else None,
             "knockout": self.knockout,
+            "derby": self.derby,
             "auto": sorted(self.auto),
             "minute": self.minute,
             "extra_time": self.extra_time,
             "finished": self.finished,
+            "crunch": self.crunch.to_dict() if self.crunch else None,
+            "crunch_at": self.crunch_at,
             "weather": self.weather.value,
             "crowd": self.crowd.to_dict() if self.crowd else None,
             "roar": self.roar,
@@ -1672,10 +1884,13 @@ class LiveMatch:
         live.neutral = state["neutral"]
         live.day = datetime.date.fromisoformat(state["day"]) if state["day"] else None
         live.knockout = state["knockout"]
+        live.derby = state.get("derby", False)
         live.auto = set(state["auto"])
         live.minute = state["minute"]
         live.extra_time = state["extra_time"]
         live.finished = state["finished"]
+        live.crunch = Crunch.from_dict(state["crunch"]) if state.get("crunch") else None
+        live.crunch_at = state.get("crunch_at")
         live.events = [
             MatchEvent(
                 e["minute"],

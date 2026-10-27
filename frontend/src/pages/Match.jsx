@@ -8,6 +8,7 @@ import Modal from "../components/Modal.jsx";
 import Momentum from "../components/Momentum.jsx";
 import WeatherIcon from "../components/WeatherIcon.jsx";
 import {
+  CRUNCH_OPTIONS,
   EVENTS,
   MATCH_STATS,
   POSITION_SHORT,
@@ -41,7 +42,8 @@ const PAUSING = new Set(["injury", "yellow_card", "red_card"]);
 // Le match du club dirigé en direct : tableau d'affichage et chrono, événements
 // de chaque équipe de son côté, compositions avec la note sur 10 de chaque joueur.
 // Sous le tableau, « Plan de jeu » et « Discours » mettent le match en pause et
-// ouvrent leur fenêtre ; en pause, on fait aussi les remplacements.
+// ouvrent leur fenêtre ; en pause, on fait aussi les remplacements. En fin de match
+// serrée, une pénalité décisive arrête le chrono : c'est le choix crucial.
 export default function Match() {
   const { career } = useOutletContext();
   const navigate = useNavigate();
@@ -54,7 +56,7 @@ export default function Match() {
   const [finishing, setFinishing] = useState(false);
   const phone = useMediaQuery(PHONE_QUERY);
   const [lineupClub, setLineupClub] = useState(null); // téléphone : la composition montrée (la nôtre par défaut)
-  const [panel, setPanel] = useState(null); // fenêtre ouverte : "plan" ou "talk"
+  const [panel, setPanel] = useState(null); // fenêtre ouverte : "plan", "talk" ou "crunch"
   const confirm = useConfirm();
   const live = current.data;
   const { setData } = current;
@@ -71,6 +73,9 @@ export default function Match() {
       if (next.finished) {
         setPlaying(false);
         setNotice(null);
+      } else if (next.crunch) {
+        setPlaying(false);
+        setNotice("Choix crucial");
       } else if (mine) {
         setPlaying(false);
         setNotice(`${EVENTS[mine.type]} : ${mine.player_name}`);
@@ -93,9 +98,17 @@ export default function Match() {
     return () => clearTimeout(timer);
   }, [playing, live, speed, tick]);
 
+  // Une pénalité décisive attend le manager : sa fenêtre s'ouvre (aussi au retour sur
+  // la page). Il peut la fermer pour faire un changement, puis la rouvrir.
+  const crunchMinute = live?.crunch?.minute;
+  useEffect(() => {
+    if (crunchMinute !== undefined) setPanel("crunch");
+  }, [crunchMinute]);
+
   // La barre d'espace met en pause et relance, comme le bouton du tableau d'affichage ;
-  // pas pendant une saisie, ni quand une fenêtre est ouverte (plan, discours, confirmation).
-  const canToggle = Boolean(live) && !live.finished && !finishing && panel === null;
+  // pas pendant une saisie, ni quand une fenêtre est ouverte (plan, discours, confirmation),
+  // ni quand une décision attend.
+  const canToggle = Boolean(live) && !live.finished && !live.crunch && !finishing && panel === null;
   useEffect(() => {
     if (!canToggle) return undefined;
     const onKey = (event) => {
@@ -128,6 +141,10 @@ export default function Match() {
   }
 
   const start = () => {
+    if (live.crunch) {
+      setPanel("crunch");
+      return;
+    }
     setNotice(null);
     setPlaying(true);
   };
@@ -214,6 +231,17 @@ export default function Match() {
           error={error}
           onChange={(tactics) => act(() => api.setLiveTactics(tactics))}
           resumeLabel={live.minute === 0 ? "Coup d'envoi" : "Reprendre le match"}
+          onClose={() => setPanel(null)}
+          onResume={resume}
+        />
+      )}
+      {panel === "crunch" && (
+        <CrunchDialog
+          live={live}
+          side={mySide}
+          busy={busy}
+          error={error}
+          onDecide={(option) => act(() => api.decideLive(option))}
           onClose={() => setPanel(null)}
           onResume={resume}
         />
@@ -389,7 +417,8 @@ function Scoreboard({ live, playing, speed, setSpeed, notice, error, busy, finis
         <Clock minute={live.minute} running={playing} interval={SPEEDS[speed].ms} />
         <span className="scoreboard__period">{period(live)}</span>
         <span className="muted scoreboard__meta">
-          {label} · {formatLongDate(live.date)}
+          {label}
+          {live.derby && ` · ${live.derby}`} · {formatLongDate(live.date)}
           {live.neutral && " · terrain neutre"}
         </span>
         <span className="muted scoreboard__weather" title={WEATHER[live.weather].scope}>
@@ -428,7 +457,7 @@ function Scoreboard({ live, playing, speed, setSpeed, notice, error, busy, finis
                 title="Barre d'espace"
                 onClick={playing ? onPause : onPlay}
               >
-                {playing ? "Pause" : live.minute === 0 ? "Coup d'envoi" : "Reprendre"}
+                {playing ? "Pause" : live.crunch ? "Choix crucial" : live.minute === 0 ? "Coup d'envoi" : "Reprendre"}
               </button>
               <div className="chips" role="group" aria-label="Vitesse du chrono">
                 {SPEEDS.map((s, index) => (
@@ -1010,6 +1039,134 @@ function TalkDialog({ live, side, busy, error, resumeLabel, onTalk, onClose, onR
             {resumeLabel}
           </button>
         )}
+      </div>
+    </Modal>
+  );
+}
+
+// --- Choix crucial ------------------------------------------------------------------------
+
+const points = (n) => `${n} pt${n > 1 ? "s" : ""}`;
+
+// Ce que `scored` points font au score, quand on a `margin` points d'avance.
+function swing(margin, scored) {
+  const after = margin + scored;
+  if (margin > 0) return after >= 8 ? "deux scores d'avance" : "creuse l'écart";
+  if (after === 0) return "égalise";
+  return after > 0 ? "passe devant" : "reste derrière";
+}
+
+// Où en est le match : l'écart et le temps qui reste.
+function situation(margin, left) {
+  const score = margin === 0 ? "À égalité" : margin > 0 ? `Devant de ${points(margin)}` : `Menés de ${points(-margin)}`;
+  const time = left <= 0 ? "dernière action du match" : `${left} minute${left > 1 ? "s" : ""} à jouer`;
+  return `${score}, ${time}`;
+}
+
+// La pénalité d'une fin de match serrée : les perches, la touche, la mêlée ou la jouer
+// vite, chacune avec ses chances et ce qu'elle fait au score. Une fois le choix fait, la
+// fenêtre montre ce qu'il a donné.
+function CrunchDialog({ live, side, busy, error, onDecide, onClose, onResume }) {
+  const [choice, setChoice] = useState(null); // { option, from } : l'option et les événements d'avant
+  const other = side === live.home ? live.away : live.home;
+  const fresh = choice ? live.events.slice(choice.from) : [];
+  const done = choice !== null && !live.crunch && !busy;
+  const crunch = live.crunch;
+  const margin = side.score - other.score;
+  const kicker = side.players.find((p) => p.id === side.kicker_id);
+  const decide = (option) => {
+    setChoice({ option, from: live.events.length });
+    onDecide(option);
+  };
+
+  if (done) {
+    const scored = fresh.find((e) => e.type === "try" || e.type === "penalty_goal");
+    const conversion = fresh.find((e) => e.type === "conversion" || e.type === "conversion_missed");
+    const verdict = scored?.type === "try" ? "Essai !" : scored ? "Les 3 points" : "Raté";
+    let text = CRUNCH_OPTIONS[choice.option].missed;
+    if (scored?.type === "try") {
+      text = `${scored.player_name} aplatit. ${conversion?.type === "conversion" ? "Transformé par" : "Transformation manquée par"} ${conversion?.player_name}.`;
+    } else if (scored) {
+      text = `${scored.player_name} passe la pénalité.`;
+    }
+    const after = side.score - other.score;
+    return (
+      <Modal compact className="modal--dialog live-dialog" onClose={onClose}>
+        <div>
+          <p className="eyebrow">Choix crucial · {fresh[0]?.minute ?? live.minute}'</p>
+          <h2 className="confirm__title">{CRUNCH_OPTIONS[choice.option].label}</h2>
+        </div>
+        <div className={`talk__outcome talk__outcome--${scored ? "lifted" : "backfired"}`}>
+          <span className="talk__verdict">{verdict}</span>
+          <p className="confirm__text">{text}</p>
+          <span className="muted talk__effect">
+            {side.club.name} {side.score} – {other.score} {other.club.name}
+            {live.finished ? " · coup de sifflet final" : live.extra_time && after === 0 ? " · prolongation" : ""}
+          </span>
+        </div>
+        <div className="confirm__actions">
+          {live.finished ? (
+            <button type="button" className="button button--primary" autoFocus onClick={onClose}>
+              Fermer
+            </button>
+          ) : (
+            <button type="button" className="button button--primary" autoFocus onClick={onResume}>
+              Reprendre le match
+            </button>
+          )}
+        </div>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal compact className="modal--dialog live-dialog" onClose={busy ? () => {} : onClose}>
+      <div>
+        <p className="eyebrow">
+          Choix crucial{live.derby && ` · ${live.derby}`} · {crunch?.minute ?? live.minute}'
+        </p>
+        <h2 className="confirm__title">Pénalité pour nous</h2>
+      </div>
+      <p className="crunch__situation">{situation(margin, live.last_minute - live.minute)}</p>
+      {choice !== null && !error ? (
+        <p className="muted">Le ballon est posé…</p>
+      ) : (
+        <ul className="talk__options">
+          {(crunch?.options ?? []).map((option) => {
+            const kick = option.key === "kick";
+            const outcome = kick
+              ? `${points(3)} · ${swing(margin, 3)}`
+              : swing(margin, 5) === swing(margin, 7)
+                ? `${points(5)} ou 7 · ${swing(margin, 5)}`
+                : `${points(5)} · ${swing(margin, 5)}, ${swing(margin, 7)} si transformé`;
+            return (
+              <li key={option.key}>
+                <button type="button" className="talk__option" disabled={busy} onClick={() => decide(option.key)}>
+                  <span className="talk__name">{CRUNCH_OPTIONS[option.key].label}</span>
+                  <span className="muted talk__scope">
+                    {CRUNCH_OPTIONS[option.key].scope} · {outcome}
+                  </span>
+                  <span className="talk__odds">
+                    <span className="crunch__chance num">{Math.round(option.success * 100)} %</span>
+                    {kick ? "de réussite" : "d'essai"}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {crunch && kicker && (
+        <span className="muted plan__scope">
+          Buteur : {kicker.name} · transformation {Math.round(crunch.conversion * 100)} %. Fermer la fenêtre laisse le
+          temps d'un changement.
+        </span>
+      )}
+      {error && <p className="status--error" style={{ margin: 0 }}>{error.message}</p>}
+      <div className="confirm__actions">
+        <button type="button" className="button" disabled={busy} onClick={onClose}>
+          Faire un changement
+        </button>
       </div>
     </Modal>
   );

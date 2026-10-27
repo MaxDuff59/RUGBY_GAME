@@ -20,6 +20,8 @@ from api.cup import CUP_SQUAD, CUPS
 from api.schemas import (
     ClubRef,
     CrowdOut,
+    CrunchOptionOut,
+    CrunchOut,
     LiveEventOut,
     LiveOut,
     LivePlayerOut,
@@ -30,6 +32,7 @@ from api.schemas import (
     TalkOptionOut,
     TalkOut,
 )
+from data.derbies import derby
 from engine import europe
 from engine.form import Form
 from engine.match_engine import (
@@ -229,6 +232,21 @@ def _talk_out(live: LiveMatch, club_id: int) -> TalkOut:
     return TalkOut(moment=moment, options=options, next_at=live.next_talk(club_id))
 
 
+def _crunch_out(live: LiveMatch, club_id: int) -> CrunchOut | None:
+    """Le choix crucial qui attend le manager, avec les chances de chaque voie."""
+    if live.crunch is None or live.crunch.club_id != club_id:
+        return None
+    odds = live.penalty_odds(club_id)
+    return CrunchOut(
+        minute=live.crunch.minute,
+        options=[
+            CrunchOptionOut(key=option.value, success=round(success, 2))
+            for option, success in odds.items()
+        ],
+        conversion=round(live.conversion_odds(club_id), 2),
+    )
+
+
 def live_out(live: Live, names: dict[int, str], my_club_id: int) -> LiveOut:
     match = live.match
     # Un match de sélection (`InternationalRow`) n'a pas d'effectif : jamais de coupe.
@@ -246,6 +264,7 @@ def live_out(live: Live, names: dict[int, str], my_club_id: int) -> LiveOut:
         date=live.match_row.date,
         neutral=live.match_row.neutral,
         knockout=match.knockout,
+        derby=derby(names[match.home.club.id], names[match.away.club.id]),
         cup=in_cup,
         competition=CUPS[live.match_row.league].short_name if in_cup else None,
         pool_rounds=europe.FORMATS[live.match_row.league].pool_rounds if in_cup else None,
@@ -277,4 +296,5 @@ def live_out(live: Live, names: dict[int, str], my_club_id: int) -> LiveOut:
         ],
         momentum=match.momentum,
         talk=_talk_out(match, my_club_id),
+        crunch=_crunch_out(match, my_club_id),
     )

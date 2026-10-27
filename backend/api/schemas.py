@@ -20,6 +20,7 @@ from engine.match_engine import (
     Defence,
     GamePlan,
     PenaltyChoice,
+    PenaltyOption,
     TeamStrength,
     captain_of,
     leadership,
@@ -696,6 +697,19 @@ class LiveEventOut(BaseModel):
     points: int
 
 
+class CrunchOptionOut(BaseModel):
+    key: str  # PenaltyOption : kick, touch, scrum, play
+    success: float  # chance de réussir le coup de pied (kick) ou de marquer l'essai
+
+
+class CrunchOut(BaseModel):
+    """La pénalité d'une fin de match serrée qui attend la décision du manager."""
+
+    minute: int
+    options: list[CrunchOptionOut]
+    conversion: float  # chance de transformer l'essai, s'il est marqué
+
+
 class LiveOut(BaseModel):
     """Le match en direct du club dirigé, tel qu'il en est."""
 
@@ -705,6 +719,7 @@ class LiveOut(BaseModel):
     date: datetime.date
     neutral: bool
     knockout: bool
+    derby: str | None = None  # le nom du derby (data/derbies.py), si c'en est un
     cup: bool  # un match de coupe d'Europe (sinon, du championnat)
     competition: str | None = None  # la coupe : « Coupe d'Europe », « Challenge européen »
     pool_rounds: int | None = None  # ses journées de poule
@@ -723,6 +738,7 @@ class LiveOut(BaseModel):
     # menace, négative quand c'est l'autre (engine/momentum.py).
     momentum: list[int]
     talk: TalkOut  # discours possibles du club dirigé
+    crunch: CrunchOut | None = None  # choix crucial en attente (le chrono est arrêté)
 
 
 class AdvanceIn(BaseModel):
@@ -731,6 +747,10 @@ class AdvanceIn(BaseModel):
 
 class TalkIn(BaseModel):
     key: str
+
+
+class DecideIn(BaseModel):
+    option: PenaltyOption
 
 
 class SubstituteIn(BaseModel):

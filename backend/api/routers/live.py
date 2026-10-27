@@ -4,9 +4,10 @@
 lieu tout de suite, comme avant une journée simulée). Puis le frontend fait
 avancer le chrono (`/live/advance`), met en pause pour changer la tactique
 (`/live/tactics`), parler à l'équipe (`/live/talk`) ou faire un remplacement
-(`/live/substitute`), et quand le match est fini (ou pour l'abandonner au
-staff), `POST /live/finish` joue le reste de la journée : les autres matchs,
-l'économie, les affaires.
+(`/live/substitute`). En fin de match serrée, le chrono s'arrête sur une pénalité
+décisive (`crunch`) jusqu'au choix du manager (`/live/decide`). Quand le match
+est fini (ou pour l'abandonner au staff), `POST /live/finish` joue le reste de la
+journée : les autres matchs, l'économie, les affaires.
 
 Un sélectionneur joue de la même façon le match de sa sélection, le jour où il
 tombe : mêmes routes, la sauvegarde est à part (`LiveInternationalRow`).
@@ -42,12 +43,14 @@ from api.routers.seasons import (
 from api.schemas import (
     AdvanceIn,
     AdvanceOut,
+    DecideIn,
     LiveOut,
     PlayOut,
     SubstituteIn,
     TacticsIn,
     TalkIn,
 )
+from data.derbies import derby
 from data.nations import NATIONS_BY_CODE
 from engine.crowd import gate
 from engine.match_engine import LiveMatch, Tactics, staff_tactics, team_strength
@@ -180,6 +183,7 @@ def start_live(session: SessionDep) -> LiveOut:
         auto={opponent.id},
         weather=forecast(home, day),
         crowd=crowd,
+        derby=derby(names[home.id], names[away.id]) is not None,
     )
     row = LiveMatchRow(
         match_id=match_row.id,
@@ -225,6 +229,7 @@ def _start_test(session, human: SelectorRow) -> LiveOut:
         home_tactics=opponent_tactics if home is opponent else Tactics(),
         away_tactics=opponent_tactics if away is opponent else Tactics(),
         auto={opponent.id},
+        derby=derby(NATION_NAMES[home.id], NATION_NAMES[away.id]) is not None,
     )
     row = LiveInternationalRow(match_id=match_row.id, state=live.to_state())
     session.add(row)
@@ -238,6 +243,8 @@ def advance(payload: AdvanceIn, session: SessionDep) -> LiveOut:
     live, names, my_club_id = _load(session)
     if live.match.finished:
         raise HTTPException(status_code=400, detail="Le match est terminé")
+    if live.match.crunch is not None:
+        raise HTTPException(status_code=400, detail="Une pénalité attend ta décision")
     live.match.advance(payload.minutes)
     live.save()
     session.commit()
@@ -280,6 +287,21 @@ def substitute(payload: SubstituteIn, session: SessionDep) -> LiveOut:
     live, names, my_club_id = _load(session)
     try:
         live.match.substitute(my_club_id, payload.player_out, payload.player_in)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    live.save()
+    session.commit()
+    return live_out(live, names, my_club_id)
+
+
+@router.post("/decide", response_model=LiveOut)
+def decide(payload: DecideIn, session: SessionDep) -> LiveOut:
+    """Le manager choisit quoi faire de la pénalité décisive : les perches, la touche,
+    la mêlée ou la jouer vite. La minute se termine, et le match avec elle si c'était
+    la dernière."""
+    live, names, my_club_id = _load(session)
+    try:
+        live.match.decide(my_club_id, payload.option)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     live.save()

@@ -4,9 +4,11 @@ import random
 
 import pytest
 
-from engine import team_talk
+from engine import match_engine, team_talk
 from engine.match_engine import (
     BENCH_SIZE,
+    CRUNCH_MARGIN,
+    CRUNCH_MINUTES,
     HALF_TIME,
     MATCH_MINUTES,
     MAX_SUBSTITUTIONS,
@@ -17,6 +19,7 @@ from engine.match_engine import (
     GamePlan,
     LiveMatch,
     PenaltyChoice,
+    PenaltyOption,
     Tactics,
     select_bench,
     select_lineup,
@@ -207,6 +210,159 @@ def test_tactics_change_the_game(even_clubs):
         assert len(kicks) <= len(cards_against)
 
 
+def _margin(live: LiveMatch, club_id: int) -> int:
+    other = live.opponent(live.side(club_id)).club.id
+    return live.score(club_id) - live.score(other)
+
+
+def _to_crunch(home, away, seeds=range(300), **options) -> LiveMatch:
+    """Un match où notre club (celui qui reçoit) arrive au choix crucial."""
+    for seed in seeds:
+        live = LiveMatch(home, away, rng=random.Random(seed), auto={away.id}, **options)
+        while not live.finished and live.crunch is None:
+            live.advance(1)
+        if live.crunch is not None:
+            return live
+    raise AssertionError("Aucun choix crucial")
+
+
+def test_tight_finish_waits_for_the_manager(even_clubs):
+    home, away = even_clubs
+    offered = 0
+    for seed in range(150):
+        live = LiveMatch(home, away, rng=random.Random(seed), auto={away.id})
+        while not live.finished:
+            live.advance(1)
+            if live.crunch is None:
+                continue
+            offered += 1
+            crunch = live.crunch
+            # Seulement dans les dernières minutes, à 7 points ou moins, pour notre club.
+            assert crunch.club_id == home.id
+            assert crunch.minute > MATCH_MINUTES - CRUNCH_MINUTES
+            assert crunch.minute == live.minute
+            assert abs(_margin(live, home.id)) <= CRUNCH_MARGIN
+            # Le chrono est arrêté tant que le manager n'a pas choisi.
+            assert live.advance(5) == []
+            assert live.minute == crunch.minute
+            with pytest.raises(ValueError):
+                live.decide(away.id, PenaltyOption.KICK)
+            live.decide(home.id, PenaltyOption.TOUCH)
+            assert live.crunch is None
+    assert offered >= 3
+
+
+def test_only_real_penalties_bring_the_crunch(even_clubs, monkeypatch):
+    home, away = even_clubs
+    # Tout écart compte comme serré, mais plus aucune pénalité en position : rien à
+    # décider (celles des cartons partent toujours aux perches).
+    monkeypatch.setattr(match_engine, "CRUNCH_MARGIN", 1000)
+    monkeypatch.setattr(match_engine, "PENALTY_RATE", 0.0)
+    for seed in range(20):
+        live = LiveMatch(home, away, rng=random.Random(seed), auto={away.id})
+        live.advance(MATCH_MINUTES)
+        assert live.finished
+        assert live.crunch is None
+
+
+def test_crunch_choices_play_out(even_clubs):
+    home, away = even_clubs
+    live = _to_crunch(home, away)
+    minute = live.crunch.minute
+    odds = live.penalty_odds(home.id)
+    assert set(odds) == set(PenaltyOption)
+    assert all(0 < chance < 1 for chance in odds.values())
+
+    # Aux perches : un coup de pied, réussi ou manqué, à la minute de la pénalité.
+    state = live.to_state()
+    fresh = live.decide(home.id, PenaltyOption.KICK)
+    assert [e.type for e in fresh] in ([EventType.PENALTY_GOAL], [EventType.PENALTY_MISSED])
+    assert fresh[0].minute == minute
+    with pytest.raises(ValueError):
+        live.decide(home.id, PenaltyOption.KICK)
+
+    # En mêlée : l'essai (en force, par un avant) ou rien, jamais un coup de pied.
+    tries = 0
+    for seed in range(60):
+        replay = LiveMatch.from_state(home, away, state)
+        replay.rng = random.Random(seed)
+        fresh = replay.decide(home.id, PenaltyOption.SCRUM)
+        assert all(
+            e.type in (EventType.TRY, EventType.CONVERSION, EventType.CONVERSION_MISSED)
+            for e in fresh
+        )
+        if fresh:
+            tries += 1
+            scorer = replay.home.players()[fresh[0].player_id]
+            assert scorer.position.is_forward
+    assert 0 < tries < 60
+
+
+def test_crunch_survives_a_save_and_the_staff_finishes_it(even_clubs):
+    home, away = even_clubs
+    live = _to_crunch(home, away)
+    restored = LiveMatch.from_state(home, away, live.to_state())
+    assert restored.crunch == live.crunch
+    assert restored.penalty_odds(home.id) == live.penalty_odds(home.id)
+    # Le staff décide à la place du manager quand on lui laisse le match.
+    result = restored.play_to_end()
+    assert restored.finished
+    assert restored.crunch is None
+    assert result.home_score + result.away_score >= live.score(home.id) + live.score(away.id)
+
+
+@pytest.mark.parametrize("stakes", [{"derby": True}, {"knockout": True}])
+def test_tight_big_game_always_brings_the_crunch(even_clubs, monkeypatch, stakes):
+    home, away = even_clubs
+    # Tout écart compte comme serré, et plus aucune pénalité en position : dans un
+    # match à enjeu, le jeu en offre quand même une, une seule, dans les dernières minutes.
+    monkeypatch.setattr(match_engine, "CRUNCH_MARGIN", 1000)
+    monkeypatch.setattr(match_engine, "PENALTY_RATE", 0.0)
+    for seed in range(20):
+        live = LiveMatch(home, away, rng=random.Random(seed), auto={away.id}, **stakes)
+        assert live.stakes
+        offered = []
+        while live.minute < MATCH_MINUTES:
+            live.advance(1)
+            if live.crunch is not None:
+                offered.append(live.crunch.minute)
+                live.decide(home.id, PenaltyOption.KICK)
+        assert len(offered) == 1
+        assert offered[0] > MATCH_MINUTES - CRUNCH_MINUTES
+        # Le derby se rejoue tel quel après une sauvegarde.
+        assert LiveMatch.from_state(home, away, live.to_state()).stakes
+
+
+def _penalties_everywhere(monkeypatch):
+    """Tout écart compte comme serré, et presque chaque minute donne une pénalité."""
+    monkeypatch.setattr(match_engine, "CRUNCH_MARGIN", 1000)
+    monkeypatch.setattr(match_engine, "CHANCE_PER_MINUTE", 1.0)
+    monkeypatch.setattr(match_engine, "TRY_RATE", 0.0)
+    monkeypatch.setattr(match_engine, "PENALTY_RATE", 1.0)
+
+
+def test_last_minute_crunch_holds_the_final_whistle(even_clubs, monkeypatch):
+    home, away = even_clubs
+    _penalties_everywhere(monkeypatch)
+    for seed in range(200):
+        live = LiveMatch(home, away, rng=random.Random(seed), auto={away.id}, knockout=True)
+        while not live.finished and live.minute < MATCH_MINUTES:
+            live.advance(1)
+            if live.crunch is not None and live.crunch.minute < MATCH_MINUTES:
+                live.decide(home.id, PenaltyOption.TOUCH)
+        if live.crunch is not None:
+            break
+    else:
+        raise AssertionError("Aucune pénalité décisive à la 80e")
+    # Une pénalité à la 80e : le coup de sifflet attend la décision, qui décide de
+    # la prolongation.
+    assert live.minute == MATCH_MINUTES
+    assert not live.finished and not live.extra_time
+    live.decide(home.id, PenaltyOption.KICK)
+    assert live.extra_time == (not live.finished)
+    assert live.extra_time == live.level()
+
+
 # --- API -------------------------------------------------------------------------------------
 
 
@@ -281,8 +437,17 @@ def test_live_match_flow(manager):
     )
     assert refused.status_code == 400
 
-    # Jusqu'au bout, puis la journée se termine avec ce résultat.
+    # Jusqu'au bout, puis la journée se termine avec ce résultat. Une fin serrée
+    # arrête le chrono sur un choix crucial : la mêlée.
     live = manager.post("/live/advance", json={"minutes": 100}).json()
+    assert live["crunch"] is None or live["minute"] > 80 - CRUNCH_MINUTES
+    while live["crunch"] is not None:
+        assert {o["key"] for o in live["crunch"]["options"]} == {"kick", "touch", "scrum", "play"}
+        assert manager.post("/live/advance", json={"minutes": 1}).status_code == 400
+        live = manager.post("/live/decide", json={"option": "scrum"}).json()
+        if not live["finished"]:
+            live = manager.post("/live/advance", json={"minutes": 100}).json()
+    assert manager.post("/live/decide", json={"option": "kick"}).status_code == 400
     assert live["finished"] is True
     assert live["minute"] == 80
     assert manager.post("/live/advance", json={"minutes": 1}).status_code == 400
@@ -304,6 +469,30 @@ def test_live_match_flow(manager):
 
     detail = manager.get(f"/matches/{live['match_id']}").json()
     assert len(detail["events"]) == len(live["events"])
+
+
+def test_live_crunch_route(manager, monkeypatch):
+    _penalties_everywhere(monkeypatch)
+    manager.post("/live")
+    live = manager.post("/live/advance", json={"minutes": 100}).json()
+    crunch = live["crunch"]
+    assert crunch is not None
+    assert live["finished"] is False
+    assert crunch["minute"] == live["minute"] > 80 - CRUNCH_MINUTES
+    assert [o["key"] for o in crunch["options"]] == ["kick", "touch", "scrum", "play"]
+    assert all(0 < o["success"] < 1 for o in crunch["options"])
+    # Rien ne bouge tant que le manager n'a pas choisi, même après un rechargement.
+    assert manager.post("/live/advance", json={"minutes": 1}).status_code == 400
+    assert manager.get("/live").json()["crunch"] == crunch
+    assert manager.post("/live/decide", json={"option": "drop"}).status_code == 422
+
+    live = manager.post("/live/decide", json={"option": "kick"}).json()
+    assert live["crunch"] is None
+    kick = live["events"][-1]
+    assert kick["type"] in ("penalty_goal", "penalty_missed")
+    assert kick["minute"] == crunch["minute"]
+    assert kick["club_id"] == live["my_club_id"]
+    assert manager.post("/live/decide", json={"option": "kick"}).status_code == 400
 
 
 def test_simulating_the_matchday_finishes_the_live_match(manager):

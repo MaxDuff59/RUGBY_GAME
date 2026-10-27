@@ -365,6 +365,31 @@ export const TACTICS = [
   },
 ];
 
+// Le choix crucial d'une fin de match serrée (engine/match_engine.py, PenaltyOption) :
+// le libellé, ce qui se joue, et ce qu'on voit quand ça échoue.
+export const CRUNCH_OPTIONS = {
+  kick: {
+    label: "Prendre les points",
+    scope: "Face aux perches, pour le buteur",
+    missed: "Le ballon passe à côté des perches.",
+  },
+  touch: {
+    label: "Jouer la touche",
+    scope: "Touche à 5 mètres, puis le maul des avants",
+    missed: "Le maul est stoppé avant la ligne.",
+  },
+  scrum: {
+    label: "Prendre la mêlée",
+    scope: "Mêlée à 5 mètres : l'essai en force, pack contre pack",
+    missed: "La mêlée adverse tient bon.",
+  },
+  play: {
+    label: "La jouer vite",
+    scope: "Jouée à la main, les trois-quarts lancés",
+    missed: "La défense remonte et tient.",
+  },
+};
+
 // Où le manager prend la parole (engine/team_talk.py).
 export const TALK_MOMENTS = {
   kickoff: "Vestiaire · avant le coup d'envoi",

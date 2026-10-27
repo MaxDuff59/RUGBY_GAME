@@ -4616,6 +4616,19 @@ button.simulation__row:focus-visible {
   font-weight: 600;
 }
 
+/* Choix crucial : la situation, puis chaque option avec sa chance en grand */
+.crunch__situation {
+  margin: 0;
+  font-weight: 600;
+}
+
+.crunch__chance {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1;
+}
+
 @media (max-width: 960px) {
   .scoreboard {
     grid-template-columns: minmax(0, 1fr) auto auto minmax(0, 1fr);
