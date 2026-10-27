@@ -28,11 +28,33 @@ def test_club_against_nation_without_any_save(guest):
     france = _team(groups, "France")
 
     assert guest.get("/friendly").status_code == 404
-    started = guest.post(
+    prepared = guest.post(
         "/friendly", json={"home_id": toulouse, "away_id": france, "my_id": toulouse}
     )
+    assert prepared.status_code == 201
+    setup = prepared.json()
+    assert setup["home"]["name"] == "Stade Toulousain" and not setup["started"]
+    assert not setup["team"]["lineup_custom"]
+    # Pas encore de match : la composition d'abord.
+    assert guest.get("/friendly").status_code == 404
+
+    # Le joueur met un remplaçant du staff à l'ouverture (place 10, indice 9).
+    bench = setup["team"]["strength"]["bench_ids"]
+    chosen = [None] * 15
+    chosen[9] = bench[-1]
+    composed = guest.put("/friendly/lineup", json={"player_ids": chosen}).json()
+    assert composed["team"]["lineup_custom"]
+    assert composed["team"]["strength"]["lineup_ids"][9] == bench[-1]
+    stranger = guest.put("/friendly/lineup", json={"player_ids": [10**6]})
+    assert stranger.status_code == 400
+
+    started = guest.post("/friendly/kickoff")
     assert started.status_code == 201
     live = started.json()
+    home_ids = [p["id"] for p in live["home"]["players"]]
+    # Le remplaçant choisi est titulaire au coup d'envoi.
+    assert bench[-1] in home_ids[:15]
+    assert guest.put("/friendly/lineup", json={"player_ids": []}).status_code == 400
     assert live["my_club_id"] == toulouse and live["minute"] == 0
     assert live["home"]["club"]["name"] == "Stade Toulousain"
     # Un Toulousain ne joue pas contre son club avec la France.
@@ -71,6 +93,7 @@ def test_friendly_refuses_bad_choices(guest):
     assert start(toulouse, 99999, toulouse).status_code == 400
     # Sélection contre sélection, en dirigeant celle qui se déplace.
     assert start(_team(groups, "France"), nz, nz).status_code == 201
+    assert guest.post("/friendly/kickoff").json()["my_club_id"] == nz
 
 
 def test_friendly_needs_an_account(world):
@@ -92,3 +115,13 @@ def test_interrupted_reference_world_is_rebuilt(guest, monkeypatch):
     assert not database.slot_exists(*friendly.REFERENCE)
     monkeypatch.setattr(catalog, "leagues", real)
     assert len(guest.get("/friendly/teams").json()) > 1
+
+
+def test_a_guest_who_leaves_takes_their_friendly_along(guest):
+    groups = guest.get("/friendly/teams").json()
+    toulouse, nz = _team(groups, "Stade Toulousain"), _team(groups, "Nouvelle-Zélande")
+    guest.post("/friendly", json={"home_id": toulouse, "away_id": nz, "my_id": toulouse})
+    guest.post("/auth/logout")
+    # Le compte suivant (SQLite peut lui redonner le même identifiant) part de zéro.
+    guest.post("/auth/guest")
+    assert guest.get("/friendly/team").status_code == 404

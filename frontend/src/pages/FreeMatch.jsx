@@ -1,17 +1,22 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 
 import { api } from "../api.js";
 import ClubCrest from "../components/ClubCrest.jsx";
 import { ActionError } from "../components/FullGame.jsx";
+import LineupPicker from "../components/LineupPicker.jsx";
+import Pitch from "../components/Pitch.jsx";
+import { POSITION_SHORT, POSITIONS, formatNote } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
+import { usePitchWidth } from "../hooks/usePitchWidth.js";
+import { buildLineup, lineupChoice } from "../lineup.js";
 import { LiveScreen } from "./Match.jsx";
 
 // Match libre : deux équipes au choix, clubs ou sélections (Toulouse contre les All
-// Blacks, c'est permis), puis le match en direct comme en carrière. Rien ne se garde
-// dans une partie : ni résultat, ni blessure. Il faut seulement être connecté (un
-// invité suffit).
+// Blacks, c'est permis), puis sa composition, puis le match en direct comme en
+// carrière. Rien ne se garde dans une partie : ni résultat, ni blessure. Il faut
+// seulement être connecté (un invité suffit).
 const CALLS = {
   get: api.getFriendly,
   advance: api.advanceFriendly,
@@ -33,14 +38,17 @@ export default function FreeMatch() {
 
   return (
     <div className="start friendly">
-      <p className="eyebrow friendly__crumbs">
-        <Link to="/parties">Parties</Link> · Match libre
-      </p>
+      <div className="friendly__bar">
+        <Link className="button button--small" to="/parties">
+          ← Accueil
+        </Link>
+        <p className="eyebrow friendly__crumbs">Match libre</p>
+      </div>
       <LiveScreen
         key={round}
         calls={CALLS}
         title="Match libre"
-        empty={(onStarted) => <Picker onStarted={onStarted} />}
+        empty={(onStarted) => <Setup onStarted={onStarted} />}
         onDone={again}
         doneLabel="Nouveau match"
         handOverText="Le reste du match se joue sans toi : le staff gère le banc jusqu'au coup de sifflet final."
@@ -49,9 +57,32 @@ export default function FreeMatch() {
   );
 }
 
+// Avant le coup d'envoi : l'affiche à choisir, puis la composition.
+function Setup({ onStarted }) {
+  const setup = useApi(api.getFriendlyTeam);
+  if (setup.loading) return <p className="status">Chargement…</p>;
+  if (setup.data) {
+    return (
+      <Composition
+        setup={setup.data}
+        onChange={setup.setData}
+        onBack={async () => {
+          await api.dropFriendly();
+          setup.reload();
+        }}
+        onStarted={onStarted}
+      />
+    );
+  }
+  if (setup.error && setup.error.status !== 404) {
+    return <p className="status status--error">{setup.error.message}</p>;
+  }
+  return <Picker onPrepared={setup.setData} />;
+}
+
 // --- Le choix des deux équipes ----------------------------------------------------------
 
-function Picker({ onStarted }) {
+function Picker({ onPrepared }) {
   const groups = useApi(useCallback(api.friendlyTeams, []));
   const [home, setHome] = useState(null);
   const [away, setAway] = useState(null);
@@ -67,11 +98,11 @@ function Picker({ onStarted }) {
   const names = new Map(groups.data.flatMap((group) => group.teams.map((team) => [team.id, team.name])));
   const ready = home !== null && away !== null && home !== away;
 
-  async function kickOff() {
+  async function prepare() {
     setBusy(true);
     setError(null);
     try {
-      onStarted(await api.startFriendly(home, away, mine === "home" ? home : away));
+      onPrepared(await api.prepareFriendly(home, away, mine === "home" ? home : away));
     } catch (err) {
       setError(err);
       setBusy(false);
@@ -116,10 +147,138 @@ function Picker({ onStarted }) {
             ))}
           </div>
         )}
-        <button type="button" className="button button--primary" disabled={!ready || busy} onClick={kickOff}>
-          {busy ? "Composition des équipes…" : "Au coup d'envoi"}
+        <button type="button" className="button button--primary" disabled={!ready || busy} onClick={prepare}>
+          {busy ? "Composition des équipes…" : "Composer mon XV"}
         </button>
       </div>
+    </>
+  );
+}
+
+// --- La composition ---------------------------------------------------------------------
+
+// Le XV du joueur sur le terrain, comme l'écran Effectif : toucher un titulaire ouvre le
+// choix de son remplaçant. Le staff compose ce qui n'est pas choisi, et le banc.
+function Composition({ setup, onChange, onBack, onStarted }) {
+  const { team } = setup;
+  const pitchRef = useRef(null);
+  const pitchWidth = usePitchWidth(pitchRef);
+  const [picking, setPicking] = useState(null); // la place touchée
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const lineup = buildLineup(team.players, team.strength.lineup_ids);
+  const jerseys = new Map(lineup.map(({ slot, player }) => [player.id, slot.number]));
+  const byId = new Map(team.players.map((player) => [player.id, player]));
+  const bench = team.strength.bench_ids.map((id) => byId.get(id)).filter(Boolean);
+  const opponent = setup.home.id === team.id ? setup.away : setup.home;
+
+  // Le joueur choisi prend la place ; s'il était titulaire, il échange avec l'ancien.
+  async function replace({ slot, player }, candidate) {
+    const place = lineup.findIndex((entry) => entry.slot.number === slot.number);
+    const from = lineup.findIndex((entry) => entry.player.id === candidate.id);
+    const next = lineup.map((entry, index) => {
+      if (index === place) return { ...entry, player: candidate };
+      if (index === from) return { ...entry, player };
+      return entry;
+    });
+    onChange(await api.setFriendlyLineup(lineupChoice(next)));
+  }
+
+  async function run(call, done) {
+    setBusy(true);
+    setError(null);
+    try {
+      done(await call());
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <header className="page-head friendly__head">
+        <div>
+          <h1 className="title">Ta composition</h1>
+          <p className="muted with-crest" style={{ margin: "8px 0 0" }}>
+            <ClubCrest name={team.name} size={20} />
+            {team.name} contre {opponent.name} ·{" "}
+            {team.lineup_custom ? "ton XV" : "XV du staff"} · touche un joueur pour le remplacer
+          </p>
+        </div>
+        <div className="friendly__actions">
+          <button type="button" className="button" disabled={busy} onClick={onBack}>
+            Changer d'affiche
+          </button>
+          {team.lineup_custom && (
+            <button
+              type="button"
+              className="button"
+              disabled={busy}
+              onClick={() => run(api.resetFriendlyLineup, onChange)}
+            >
+              Rendre la main au staff
+            </button>
+          )}
+          <button
+            type="button"
+            className="button button--primary"
+            disabled={busy}
+            onClick={() => run(api.kickOffFriendly, onStarted)}
+          >
+            Coup d'envoi
+          </button>
+        </div>
+      </header>
+
+      <ActionError error={error} />
+
+      <div className="friendly__compo">
+        <figure
+          ref={pitchRef}
+          className="squad__pitch friendly__pitch"
+          style={pitchWidth ? { width: pitchWidth, flexBasis: pitchWidth } : undefined}
+          aria-label="XV de départ sur le terrain"
+        >
+          <Pitch
+            markers={lineup.map(({ slot, player }) => ({
+              key: slot.number,
+              x: slot.x,
+              y: slot.y,
+              number: slot.number,
+              label: player.last_name,
+              title: `${player.name} · ${POSITIONS[player.position].label} · ${formatNote(player.overall)}`,
+              entry: { slot, player },
+            }))}
+            onPick={(marker) => setPicking(marker.entry)}
+          />
+        </figure>
+        <section className="card friendly__bench">
+          <p className="eyebrow">Le banc · choisi par le staff</p>
+          <ul>
+            {bench.map((player, index) => (
+              <li key={player.id}>
+                <span className="num muted">{16 + index}</span>
+                <span>{player.name}</span>
+                <span className="muted">{POSITION_SHORT[player.position]}</span>
+                <span className="note">{formatNote(player.overall)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
+
+      {picking && (
+        <LineupPicker
+          entry={picking}
+          players={team.players}
+          jerseys={jerseys}
+          onPick={(candidate) => replace(picking, candidate)}
+          onClose={() => setPicking(null)}
+        />
+      )}
     </>
   );
 }

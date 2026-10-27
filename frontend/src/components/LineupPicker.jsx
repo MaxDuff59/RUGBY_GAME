@@ -53,9 +53,12 @@ export default function LineupPicker({ entry, players, jerseys, onPick, onOpen, 
             {POSITIONS[player.position].label} · {player.age} ans · note {formatNote(player.overall)}
           </p>
         </div>
-        <button type="button" className="button button--small" onClick={() => onOpen(player)}>
-          Voir sa fiche
-        </button>
+        {/* Sans `onOpen` (match libre, hors partie) : pas de fiche à ouvrir. */}
+        {onOpen && (
+          <button type="button" className="button button--small" onClick={() => onOpen(player)}>
+            Voir sa fiche
+          </button>
+        )}
       </div>
 
       <p className="muted lineup-picker__hint">

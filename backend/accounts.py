@@ -23,6 +23,7 @@ import hmac
 import os
 import re
 import secrets
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from sqlalchemy import (
@@ -246,6 +247,11 @@ def register_guest() -> User:
         return _user(row)
 
 
+# Ce que d'autres modules rangent par compte, à effacer avec les invités partis
+# (`forget(session, user_ids)`, dans la même transaction) : le match libre, par exemple.
+ON_PURGE: list[Callable[[Session, list[int]], None]] = []
+
+
 def purge_guests() -> list[int]:
     """Efface les invités dont plus aucune session n'est valable (partie comprise) et
     renvoie leurs identifiants."""
@@ -261,6 +267,8 @@ def purge_guests() -> list[int]:
         for user_id in gone:
             for slot in range(1, database.SLOT_COUNT + 1):
                 database.delete_slot(user_id, slot)
+        for forget in ON_PURGE:
+            forget(session, gone)
         session.execute(delete(SessionRow).where(SessionRow.user_id.in_(gone)))
         session.execute(delete(UserRow).where(UserRow.id.in_(gone)))
         session.commit()

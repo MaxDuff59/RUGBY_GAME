@@ -17,7 +17,7 @@ import random
 import threading
 from dataclasses import dataclass
 
-from sqlalchemy import JSON, Date, DateTime, Engine, Integer, delete, func, select
+from sqlalchemy import JSON, Date, DateTime, Engine, Integer, delete, func, inspect, select, text
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 import accounts
@@ -29,7 +29,7 @@ from data.derbies import derby
 from data.leagues import LEAGUES, league_config
 from data.nations import NATIONS, NATIONS_BY_ID
 from engine import internationals as rules
-from engine.match_engine import LiveMatch, Tactics, staff_tactics, team_strength
+from engine.match_engine import SLOT_POSITIONS, LiveMatch, Tactics, staff_tactics, team_strength
 from engine.weather import forecast
 from models import Club, Squad, Stage
 from models.orm import ClubRow, PlayerRow
@@ -59,6 +59,9 @@ class FriendlyRow(accounts.AccountsBase):
     date: Mapped[datetime.date] = mapped_column(Date)
     # Liste de chaque sélection du match (identifiants de joueurs du monde de référence).
     squads: Mapped[dict] = mapped_column(JSON, default=dict)
+    # XV composé par le joueur avant le coup d'envoi, place par place (vide : le staff).
+    lineup: Mapped[list | None] = mapped_column(JSON, default=list)
+    # État du moteur une fois le coup d'envoi donné (vide avant).
     state: Mapped[dict] = mapped_column(JSON, default=dict)
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime)
 
@@ -72,6 +75,10 @@ class FriendlyRow(accounts.AccountsBase):
     def id(self) -> int:
         return self.user_id
 
+    @property
+    def started(self) -> bool:
+        return bool(self.state)
+
 
 def _accounts_session() -> Session:
     """Une session sur la base des comptes, la table des matchs libres créée au besoin."""
@@ -79,8 +86,21 @@ def _accounts_session() -> Session:
     engine = accounts.engine()
     if _table_engine is not engine:
         FriendlyRow.__table__.create(engine, checkfirst=True)
+        # Colonne venue après la table : les bases qui l'ont déjà la reçoivent ici.
+        if "lineup" not in {c["name"] for c in inspect(engine).get_columns("friendly_matches")}:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE friendly_matches ADD COLUMN lineup JSON"))
         _table_engine = engine
     return Session(engine, expire_on_commit=False)
+
+
+def _forget(session: Session, user_ids: list[int]) -> None:
+    """Efface le match libre des invités partis (accounts.purge_guests)."""
+    if inspect(session.get_bind()).has_table("friendly_matches"):
+        session.execute(delete(FriendlyRow).where(FriendlyRow.user_id.in_(user_ids)))
+
+
+accounts.ON_PURGE.append(_forget)
 
 
 # --- Le monde de référence ---------------------------------------------------------------
@@ -187,12 +207,16 @@ def _teams(session: Session, row: FriendlyRow) -> tuple[Club, Club]:
             teams.append(rules.national_team(NATIONS_BY_ID[team], squad))
         else:
             teams.append(clubs[team])
+        # Le XV composé par le joueur ; celui de l'adversaire reste au staff.
+        if team == row.my_id:
+            teams[-1].lineup_choice = list(row.lineup or [])
     return teams[0], teams[1]
 
 
-def start(session: Session, user_id: int, home_id: int, away_id: int, my_id: int) -> Live:
-    """Prépare le match libre du compte (et remplace celui qu'il avait) : la liste de
-    chaque sélection, le XV de chaque équipe, la tactique du staff adverse."""
+def prepare(session: Session, user_id: int, home_id: int, away_id: int, my_id: int) -> FriendlyRow:
+    """Prépare le match libre du compte (et remplace celui qu'il avait) : l'affiche et la
+    liste de chaque sélection. Le joueur compose ensuite son XV (`set_lineup`), puis
+    donne le coup d'envoi (`kick_off`)."""
     if home_id == away_id:
         raise ValueError("Choisis deux équipes différentes")
     if my_id not in (home_id, away_id):
@@ -214,25 +238,10 @@ def start(session: Session, user_id: int, home_id: int, away_id: int, my_id: int
         my_id=my_id,
         date=day,
         squads=squads,
+        lineup=[],
         state={},
         updated_at=now,
     )
-    home, away = _teams(session, row)
-    opponent = away if home.id == my_id else home
-    opponent_tactics = staff_tactics(team_strength(opponent, day))
-    match = LiveMatch(
-        home,
-        away,
-        rng=random.Random(),
-        day=day,
-        home_tactics=opponent_tactics if home is opponent else Tactics(),
-        away_tactics=opponent_tactics if away is opponent else Tactics(),
-        auto={opponent.id},
-        # Une sélection n'a pas de stade dans le jeu : temps sec chez elle.
-        weather=forecast(home, day) if home.id not in NATIONS_BY_ID else forecast(home, None),
-        derby=derby(known[home_id], known[away_id]) is not None,
-    )
-    row.state = match.to_state()
     with _accounts_session() as accounts_session:
         stale = now - datetime.timedelta(days=KEEP_DAYS)
         accounts_session.execute(
@@ -242,14 +251,69 @@ def start(session: Session, user_id: int, home_id: int, away_id: int, my_id: int
         )
         accounts_session.add(row)
         accounts_session.commit()
-    return Live(row=row, match=match, match_row=row)
+    return row
+
+
+def setup(user_id: int) -> FriendlyRow | None:
+    """Le match libre du compte, lancé ou non (None s'il n'en a pas)."""
+    with _accounts_session() as accounts_session:
+        return accounts_session.get(FriendlyRow, user_id)
+
+
+def my_team(session: Session, row: FriendlyRow) -> Club:
+    """L'équipe du joueur, avec le XV qu'il a composé (le staff pourvoit le reste)."""
+    home, away = _teams(session, row)
+    return home if home.id == row.my_id else away
+
+
+def set_lineup(session: Session, row: FriendlyRow, lineup: list[int | None]) -> FriendlyRow:
+    """Le XV voulu par le joueur, place par place (vide : le staff compose)."""
+    if row.started:
+        raise ValueError("Le match a commencé : les changements se font depuis le banc")
+    squad = {player.id for player in my_team(session, row).players}
+    if len(lineup) > len(SLOT_POSITIONS):
+        raise ValueError(f"Un XV compte {len(SLOT_POSITIONS)} places")
+    chosen = [player_id for player_id in lineup if player_id is not None]
+    if any(player_id not in squad for player_id in chosen) or len(set(chosen)) < len(chosen):
+        raise ValueError("Un joueur du XV n'est pas dans ton effectif")
+    with _accounts_session() as accounts_session:
+        stored = accounts_session.get(FriendlyRow, row.user_id)
+        stored.lineup = list(lineup)
+        stored.updated_at = accounts._now()
+        accounts_session.commit()
+        return stored
+
+
+def kick_off(session: Session, row: FriendlyRow) -> Live:
+    """Coup d'envoi : le XV de chaque équipe (celui du joueur, sinon celui du staff) et
+    la tactique du staff adverse. Un match déjà lancé est repris tel quel."""
+    if row.started:
+        return load(session, row.user_id)
+    home, away = _teams(session, row)
+    known = names(session)
+    opponent = away if home.id == row.my_id else home
+    opponent_tactics = staff_tactics(team_strength(opponent, row.date))
+    match = LiveMatch(
+        home,
+        away,
+        rng=random.Random(),
+        day=row.date,
+        home_tactics=opponent_tactics if home is opponent else Tactics(),
+        away_tactics=opponent_tactics if away is opponent else Tactics(),
+        auto={opponent.id},
+        # Une sélection n'a pas de stade dans le jeu : temps sec chez elle.
+        weather=forecast(home, row.date if home.id not in NATIONS_BY_ID else None),
+        derby=derby(known[row.home_id], known[row.away_id]) is not None,
+    )
+    live = Live(row=row, match=match, match_row=row)
+    save(live)
+    return live
 
 
 def load(session: Session, user_id: int) -> Live | None:
-    """Le match libre en cours du compte (None s'il n'en a pas)."""
-    with _accounts_session() as accounts_session:
-        row = accounts_session.get(FriendlyRow, user_id)
-    if row is None:
+    """Le match libre en cours du compte (None s'il n'en a pas, ou pas encore lancé)."""
+    row = setup(user_id)
+    if row is None or not row.started:
         return None
     home, away = _teams(session, row)
     match = LiveMatch.from_state(home, away, row.state)

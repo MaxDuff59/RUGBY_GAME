@@ -1,7 +1,9 @@
 """Le match libre (api/friendly.py) : choisir deux équipes et jouer le match en direct.
 
-`GET /friendly/teams` donne les équipes au choix, `POST /friendly` lance le match (et
-remplace le précédent). Puis les mêmes gestes que le match en direct d'une carrière
+`GET /friendly/teams` donne les équipes au choix, `POST /friendly` prépare l'affiche (et
+remplace le match précédent). Le joueur compose son XV (`PUT /friendly/lineup`, comme
+l'écran Effectif ; le staff complète), puis `POST /friendly/kickoff` lance le match.
+Puis les mêmes gestes que le match en direct d'une carrière
 (routers/live.py) : avancer le chrono, la tactique, le discours, les remplacements, la
 pénalité décisive. `POST /friendly/finish` laisse le staff finir le match. Rien n'est
 enregistré dans une partie : ni résultat, ni blessure, ni fatigue.
@@ -17,8 +19,20 @@ from pydantic import BaseModel
 from api import friendly
 from api.auth import UserDep
 from api.live import Live, live_out
-from api.schemas import ClubRef, DecideIn, LiveOut, SubstituteIn, TacticsIn, TalkIn
-from engine.match_engine import Tactics
+from api.schemas import (
+    ClubDetail,
+    ClubRef,
+    DecideIn,
+    FacilitiesOut,
+    LineupIn,
+    LiveOut,
+    PlayerOut,
+    StrengthOut,
+    SubstituteIn,
+    TacticsIn,
+    TalkIn,
+)
+from engine.match_engine import Tactics, team_strength
 
 router = APIRouter(prefix="/friendly", tags=["match libre"])
 
@@ -42,6 +56,15 @@ class AdvanceIn(BaseModel):
     minutes: int = 1
 
 
+class FriendlyTeamOut(BaseModel):
+    """L'affiche préparée, et l'équipe du joueur telle que le coup d'envoi l'alignerait."""
+
+    home: ClubRef
+    away: ClubRef
+    started: bool
+    team: ClubDetail
+
+
 @router.get("/teams", response_model=list[FriendlyGroupOut])
 def teams(user: UserDep) -> list[FriendlyGroupOut]:
     """Les équipes au choix : les clubs de chaque championnat, puis les sélections.
@@ -63,16 +86,81 @@ def get_friendly(user: UserDep) -> LiveOut:
     return _act(user, lambda live: None, save=False)
 
 
-@router.post("", response_model=LiveOut, status_code=201)
-def start_friendly(payload: FriendlyIn, user: UserDep) -> LiveOut:
-    """Lance un match libre entre deux équipes, club contre club, sélection contre
-    sélection, ou club contre sélection."""
+@router.post("", response_model=FriendlyTeamOut, status_code=201)
+def prepare_friendly(payload: FriendlyIn, user: UserDep) -> FriendlyTeamOut:
+    """Prépare un match libre entre deux équipes, club contre club, sélection contre
+    sélection, ou club contre sélection ; le coup d'envoi attend la composition."""
     with friendly.reference() as session:
         try:
-            live = friendly.start(session, user.id, payload.home_id, payload.away_id, payload.my_id)
+            row = friendly.prepare(
+                session, user.id, payload.home_id, payload.away_id, payload.my_id
+            )
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
+        return _team_out(session, row)
+
+
+@router.get("/team", response_model=FriendlyTeamOut)
+def get_team(user: UserDep) -> FriendlyTeamOut:
+    """L'affiche préparée et l'équipe du joueur (404 sans match libre)."""
+    with friendly.reference() as session:
+        return _team_out(session, _setup_or_404(user))
+
+
+@router.put("/lineup", response_model=FriendlyTeamOut)
+def set_lineup(payload: LineupIn, user: UserDep) -> FriendlyTeamOut:
+    """Le XV voulu : un joueur (ou null) par place, dans l'ordre de `lineup_ids`."""
+    with friendly.reference() as session:
+        try:
+            row = friendly.set_lineup(session, _setup_or_404(user), payload.player_ids)
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        return _team_out(session, row)
+
+
+@router.delete("/lineup", response_model=FriendlyTeamOut)
+def reset_lineup(user: UserDep) -> FriendlyTeamOut:
+    """Rend la composition au staff."""
+    with friendly.reference() as session:
+        try:
+            row = friendly.set_lineup(session, _setup_or_404(user), [])
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        return _team_out(session, row)
+
+
+@router.post("/kickoff", response_model=LiveOut, status_code=201)
+def kick_off(user: UserDep) -> LiveOut:
+    """Coup d'envoi du match préparé, avec le XV composé (ou celui du staff)."""
+    with friendly.reference() as session:
+        live = friendly.kick_off(session, _setup_or_404(user))
         return live_out(live, friendly.names(session), live.row.my_id)
+
+
+def _setup_or_404(user) -> friendly.FriendlyRow:
+    row = friendly.setup(user.id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Aucun match libre en cours")
+    return row
+
+
+def _team_out(session, row: friendly.FriendlyRow) -> FriendlyTeamOut:
+    team = friendly.my_team(session, row)
+    known = friendly.names(session)
+    return FriendlyTeamOut(
+        home=ClubRef(id=row.home_id, name=known[row.home_id]),
+        away=ClubRef(id=row.away_id, name=known[row.away_id]),
+        started=row.started,
+        team=ClubDetail(
+            id=team.id,
+            name=team.name,
+            balance=0,
+            facilities=FacilitiesOut.model_validate(team.facilities),
+            strength=StrengthOut.from_team(team_strength(team, row.date)),
+            players=[PlayerOut.from_player(player, row.date, known) for player in team.players],
+            lineup_custom=any(player_id is not None for player_id in team.lineup_choice),
+        ),
+    )
 
 
 @router.delete("", status_code=204)

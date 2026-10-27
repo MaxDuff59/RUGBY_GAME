@@ -130,8 +130,13 @@ export const api = {
   // Match libre : deux équipes au choix (clubs ou sélections), hors de toute partie.
   friendlyTeams: () => request("/friendly/teams"),
   getFriendly: () => request("/friendly"),
-  startFriendly: (homeId, awayId, myId) =>
+  // L'affiche se prépare, le XV se compose, puis le coup d'envoi lance le direct.
+  prepareFriendly: (homeId, awayId, myId) =>
     post("/friendly", { home_id: homeId, away_id: awayId, my_id: myId }),
+  getFriendlyTeam: () => request("/friendly/team"),
+  setFriendlyLineup: (playerIds) => request("/friendly/lineup", { method: "PUT", body: { player_ids: playerIds } }),
+  resetFriendlyLineup: () => del("/friendly/lineup"),
+  kickOffFriendly: () => post("/friendly/kickoff"),
   dropFriendly: () => del("/friendly"),
   advanceFriendly: (minutes = 1) => post("/friendly/advance", { minutes }),
   setFriendlyTactics: (tactics) => post("/friendly/tactics", tactics),

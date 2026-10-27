@@ -7031,6 +7031,63 @@ td > .tag:first-child,
   margin: 0;
 }
 
+/* Toujours en haut : le retour à l'accueil (l'écran des parties). */
+.friendly__bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* La composition : le terrain à la hauteur restante, le banc à côté. */
+.friendly__head {
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.friendly__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.friendly__compo {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+}
+
+.friendly__bench {
+  flex: 0 1 340px;
+  align-self: flex-start;
+  max-height: 100%;
+  overflow: auto;
+  padding: 16px 20px;
+}
+
+.friendly__bench ul {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.friendly__bench li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto 32px;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.friendly__bench .note {
+  text-align: right;
+}
+
 .friendly__teams {
   flex: 1 1 0;
   min-height: 0;
@@ -7062,11 +7119,28 @@ td > .tag:first-child,
 /* Téléphone : les deux colonnes l'une sous l'autre (les marges et les lignes de club
    sont celles du choix de carrière, plus haut). */
 @media (max-width: 960px) {
-  .friendly .page-head .muted {
+  .friendly .page-head:not(.friendly__head) .muted {
     display: none;
   }
 
-  /* Pendant le match, la page défile comme celle du match de carrière (.app--phone). */
+  /* Pendant le match et la composition, la page défile comme celles d'une carrière
+     (.app--phone) : le terrain prend la largeur de l'écran. */
+  .friendly:has(.friendly__compo) {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .friendly__compo {
+    flex: 0 0 auto;
+    flex-direction: column;
+  }
+
+  .friendly__bench {
+    flex: none;
+    align-self: stretch;
+    max-height: none;
+  }
+
   .friendly:has(> .live) {
     overflow-y: auto;
     overscroll-behavior: contain;
