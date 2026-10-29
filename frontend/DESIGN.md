@@ -93,6 +93,15 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   et fraîcheur sur les notes du match (détail au survol), sans barre.
 - Limogeage : la page de choix du club s'ouvre sur « Limogé le … / Rebondis ailleurs »,
   le nom du manager prérempli et l'ancien club grisé.
+- Connexion (`/connexion`, `.login`) : une pelouse tondue en bandes (vert terrain, grain
+  fin), un ballon de rugby en 3D à gauche (`RugbyBall`, lancer de rayons dans un canvas,
+  sans bibliothèque) qui tourne en vrille au-dessus de son ombre, s'incline vers la souris
+  et saute en culbutant au clic ; immobile avec « réduire les animations ». À droite la
+  carte de connexion (seule carte avec une ombre, posée sur l'herbe) : logo, titre centré,
+  champs et bouton pleine largeur, « Créer un compte » en lien, puis sous un filet
+  « Jouer sans compte ». Sur téléphone, le ballon au-dessus de la carte, retiré sous 800 px de haut. Écran bas
+  (≤ 700 px) : carte resserrée, logo réduit, puis sans logo (≤ 600 px) et sans la note
+  « Jouer sans compte » (≤ 540 px).
 - Choix de la carrière (`/start`, `.start--career`) sur ordinateur : une colonne de
   1200 px au milieu de l'écran ; titre, champ, pastilles, en-tête de liste et bouton
   centrés ; les cartes (championnats, clubs, sélections) sur toute la largeur, toutes à

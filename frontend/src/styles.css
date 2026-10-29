@@ -1517,39 +1517,223 @@ select.tactics__select {
 
 /* --- Connexion --------------------------------------------------------------- */
 
-.login__logo {
-  width: min(100%, 260px);
-  height: auto;
+/* Une pelouse tondue en bandes (grain fin par-dessus), le ballon qui tourne à gauche
+   et la carte de connexion à droite ; sur téléphone, le ballon au-dessus de la carte.
+   La pelouse ne bouge pas : si la fenêtre est trop basse, c'est elle qui défile. */
+.login {
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  display: flex;
+  padding: 32px;
+  background-color: var(--pitch);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.35 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E"),
+    repeating-linear-gradient(90deg, #2e4a38 0 9vw, #34533f 9vw 18vw);
+}
+
+.login__inner {
+  margin: auto;
+  display: flex;
+  align-items: center;
+  gap: clamp(32px, 7vw, 120px);
+}
+
+.login__ball {
+  width: clamp(280px, 34vw, 460px);
   flex: none;
+}
+
+.ball {
+  position: relative;
+  aspect-ratio: 1;
+}
+
+.ball__canvas {
+  position: absolute;
+  inset: 0 0 10%;
+  width: 100%;
+  height: 90%;
+  object-fit: contain;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ball__shadow {
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  bottom: 4%;
+  height: 8%;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.4);
+  filter: blur(10px);
+}
+
+.login__card {
+  width: 400px;
+  padding: 32px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 18px 40px rgb(0 0 0 / 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.login__logo {
+  width: 170px;
+  height: auto;
+  align-self: center;
+}
+
+.login__head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: center;
+}
+
+.login__head .title {
+  font-size: 44px;
+}
+
+.login__head .muted {
+  margin: 0;
+  font-size: 14px;
 }
 
 .login__form {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  width: min(100%, 420px);
+  gap: 16px;
 }
 
 .login__form .field {
   max-width: none;
 }
 
+.login__form .input {
+  background: #fff;
+}
+
 .login__error {
   margin: 0;
 }
 
-.login__actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+.login__switch {
+  margin: 0;
+  text-align: center;
+  color: var(--ink-muted);
+}
+
+.login__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.login__link:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .login__guest {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  width: min(100%, 420px);
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  text-align: center;
+}
+
+@media (max-width: 960px) {
+  .login {
+    padding: 32px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+  .login__inner {
+    width: 100%;
+    flex-direction: column;
+    gap: 0;
+  }
+  .login__ball {
+    width: 170px;
+  }
+  .login__card {
+    width: min(100%, 420px);
+    padding: 24px 20px;
+    gap: 20px;
+  }
+  .login__logo {
+    width: 140px;
+  }
+  .login__head .title {
+    font-size: 38px;
+  }
+}
+
+/* Écran bas (téléphone couché, petit téléphone, fenêtre réduite) : le ballon est déjà
+   retiré sur téléphone (`NO_BALL_QUERY`, Login.jsx), la carte se resserre et le logo
+   rapetisse ; sous 600 px le logo disparaît, sous 540 px la note sous « Jouer sans
+   compte » aussi. */
+@media (max-height: 700px) {
+  .login {
+    padding-block: 16px;
+  }
+  .login__card {
+    padding: 20px;
+    gap: 16px;
+  }
+  .login__logo {
+    width: 120px;
+  }
+  .login__head {
+    gap: 4px;
+  }
+  .login__head .title {
+    font-size: 34px;
+  }
+  .login__form {
+    gap: 12px;
+  }
+  .login__guest {
+    padding-top: 14px;
+    gap: 8px;
+  }
+}
+
+@media (max-height: 600px) {
+  .login__logo {
+    display: none;
+  }
+}
+
+@media (max-height: 540px) {
+  .login__card {
+    padding: 16px 20px;
+    gap: 12px;
+  }
+  .login__head .title {
+    font-size: 28px;
+  }
+  .login__form .field {
+    gap: 4px;
+  }
+  .login__form {
+    gap: 10px;
+  }
+  .login__guest .muted {
+    display: none;
+  }
+  .login__guest {
+    padding-top: 12px;
+  }
 }
 
 /* --- Choix du club ----------------------------------------------------------- */
