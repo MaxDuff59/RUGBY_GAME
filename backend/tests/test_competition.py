@@ -92,6 +92,11 @@ def test_champions_cup_from_the_draw_to_the_end(client):
             if r.code == "champions_cup"
         ]
     assert run.result == reached[status["result"]]
+    # La poule de l'équipe, classée : six clubs (quatre matchs chacun), elle comprise.
+    pool = status["pool"]
+    assert len(pool["table"]) == 6 and team["id"] in [r["club"]["id"] for r in pool["table"]]
+    points = [r["league_points"] for r in pool["table"]]
+    assert points == sorted(points, reverse=True)
     assert run.won + run.drawn + run.lost == len(path)
 
     # Recommencer : même compétition, même club, même manager, dans un monde neuf.
@@ -129,6 +134,7 @@ def test_world_cup_only_with_an_invited_nation(client):
     assert status["over"] and status["result"]
     assert client.post("/selection/advance").status_code == 400
     assert status["path"] and status["path"][-1]["opponent"]["id"] != japan["id"]
+    assert japan["id"] in [r["club"]["id"] for r in status["pool"]["table"]]
 
     again = client.post("/competition/restart").json()
     assert again["team"]["id"] == japan["id"] and not again["over"]

@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { api } from "../api.js";
-import { formatLongDate, formatShortDate } from "../format.js";
+import { formatDiff, formatLongDate, formatShortDate } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { leaveSlot } from "../save.js";
 import ClubCrest from "./ClubCrest.jsx";
@@ -144,12 +144,13 @@ const ROUNDS = { quarter: "Quart de finale", semi: "Demi-finale", final: "Finale
 function Recap({ competition, onClose, onLeave }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const { path, team, champion, name } = competition;
+  const [tab, setTab] = useState("path"); // le parcours, ou la poule
+  const { path, pool, team, champion, name } = competition;
   const won = competition.result === "Vainqueur";
   const count = (result) => path.filter((match) => match.result === result).length;
   const scored = path.reduce((sum, match) => sum + match.score_for, 0);
   const conceded = path.reduce((sum, match) => sum + match.score_against, 0);
-  let pool = 0;
+  let poolDay = 0;
 
   async function restart() {
     setBusy(true);
@@ -193,31 +194,78 @@ function Recap({ competition, onClose, onLeave }) {
         </div>
       </dl>
 
-      <ol className="recap__path">
-        {path.map((match) => {
-          if (match.stage === "regular") pool += 1;
-          const stage = match.stage === "regular" ? `Poules · J${pool}` : ROUNDS[match.stage];
-          return (
-            <li key={`${match.date}-${match.opponent.id}`}>
-              <span className="muted recap__stage">
-                {stage}
-                <small>{formatShortDate(match.date)}</small>
-              </span>
-              <span className="with-crest recap__opponent">
-                <ClubCrest name={match.opponent.name} size={20} />
-                <span>
-                  {match.home || match.neutral ? "" : "à "}
-                  {match.opponent.name}
+      {pool && (
+        <div className="chips" role="group" aria-label="Récap">
+          <button type="button" className="chip chip--small" aria-pressed={tab === "path"} onClick={() => setTab("path")}>
+            Parcours
+          </button>
+          <button type="button" className="chip chip--small" aria-pressed={tab === "pool"} onClick={() => setTab("pool")}>
+            Poule {pool.pool}
+          </button>
+        </div>
+      )}
+
+      {tab === "pool" && pool ? (
+        <table className="table recap__pool">
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col" className="left">
+                Poule {pool.pool}
+              </th>
+              <th scope="col">J</th>
+              <th scope="col">G</th>
+              <th scope="col">Diff</th>
+              <th scope="col">Pts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pool.table.map((row, index) => (
+              <tr key={row.club.id} className={row.club.id === team.id ? "table__row--mine" : undefined}>
+                <td className="num">{index + 1}</td>
+                <td className="left">
+                  <span className="with-crest">
+                    <ClubCrest name={row.club.name} size={18} />
+                    {row.club.name}
+                  </span>
+                </td>
+                <td className="num">{row.played}</td>
+                <td className="num">{row.won}</td>
+                <td className="num">{formatDiff(row.points_difference)}</td>
+                <td className="num" style={{ fontWeight: 700 }}>
+                  {row.league_points}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <ol className="recap__path">
+          {path.map((match) => {
+            if (match.stage === "regular") poolDay += 1;
+            const stage = match.stage === "regular" ? `Poules · J${poolDay}` : ROUNDS[match.stage];
+            return (
+              <li key={`${match.date}-${match.opponent.id}`}>
+                <span className="muted recap__stage">
+                  {stage}
+                  <small>{formatShortDate(match.date)}</small>
                 </span>
-              </span>
-              <span className="num recap__score">
-                {match.score_for} – {match.score_against}
-              </span>
-              <span className={`pill pill--${RESULTS[match.result]}`}>{RESULTS[match.result]}</span>
-            </li>
-          );
-        })}
-      </ol>
+                <span className="with-crest recap__opponent">
+                  <ClubCrest name={match.opponent.name} size={20} />
+                  <span>
+                    {match.home || match.neutral ? "" : "à "}
+                    {match.opponent.name}
+                  </span>
+                </span>
+                <span className="num recap__score">
+                  {match.score_for} – {match.score_against}
+                </span>
+                <span className={`pill pill--${RESULTS[match.result]}`}>{RESULTS[match.result]}</span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
 
       <ActionError error={error} />
       <div className="confirm__actions">

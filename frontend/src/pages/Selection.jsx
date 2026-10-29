@@ -5,6 +5,7 @@ import { api } from "../api.js";
 import ClubCrest from "../components/ClubCrest.jsx";
 import { ActionError } from "../components/FullGame.jsx";
 import MatchList from "../components/MatchList.jsx";
+import SelectionReview from "../components/SelectionReview.jsx";
 import WindowBoard from "../components/WindowBoard.jsx";
 import {
   INJURY_SOURCES,
@@ -36,6 +37,7 @@ export default function Selection() {
   const [busy, setBusy] = useState(false);
   const [running, setRunning] = useState(false); // on enchaîne les jours jusqu'au prochain rendez-vous
   const [actionError, setActionError] = useState(null);
+  const [showReview, setShowReview] = useState(false); // bilan de fin de saison
   const stopped = useRef(false);
 
   const { setData: setSelection } = selection;
@@ -108,6 +110,7 @@ export default function Selection() {
     setActionError(null);
     try {
       await api.startNextSeason();
+      setShowReview(false);
       setLastDay(null);
       setInjuries([]);
       selection.reload();
@@ -132,6 +135,14 @@ export default function Selection() {
   return (
     <>
       <ActionError error={actionError} />
+      {showReview && state.phase === "finished" && (
+        <SelectionReview
+          onClose={() => setShowReview(false)}
+          onNextSeason={nextSeason}
+          busy={busy}
+          error={actionError}
+        />
+      )}
 
       <div className="hero-row">
         <section className="hero">
@@ -141,6 +152,9 @@ export default function Selection() {
               <h1 className="hero__title">Bilan : {recordLabel(record)}</h1>
               <p className="hero__sub">Tous les championnats ont rendu leur verdict</p>
               <div className="hero__actions">
+                <button type="button" className="button" onClick={() => setShowReview(true)}>
+                  Bilan de la saison
+                </button>
                 <button type="button" className="button button--primary" disabled={busy} onClick={nextSeason}>
                   {busy ? "Intersaison…" : `Lancer la saison ${state.year + 1}`}
                 </button>

@@ -21,13 +21,15 @@ from api.auth import UserDep
 from api.deps import SessionDep
 from api.ledger import current_season
 from api.routers.career import selector_out, start_career
-from api.routers.seasons import FIRST_SEASON_YEAR, create_season, next_fixture
-from api.schemas import CareerIn, CareerOut, ClubRef
+from api.routers.internationals import _standings
+from api.routers.seasons import FIRST_SEASON_YEAR, _cup_out, create_season, next_fixture
+from api.schemas import CareerIn, CareerOut, ClubRef, CupPoolOut, CupRowOut
 from data.nations import NATIONS_BY_ID
 from database import NoSaveLoaded, new_slot, open_slot, slot_exists
+from engine import internationals as rules
 from engine.difficulty import Difficulty
 from models import Stage
-from models.orm import CareerRow, CompetitionRow, SelectorRow
+from models.orm import CareerRow, ClubRow, CompetitionRow, SelectorRow
 
 router = APIRouter(prefix="/competition", tags=["compétition"])
 
@@ -70,6 +72,8 @@ class CompetitionOut(BaseModel):
     # propre bouton pour aller au prochain rendez-vous, page Sélection.)
     ready: bool
     path: list[PathMatchOut] = []
+    # Une fois finie : la poule de l'équipe, classée.
+    pool: CupPoolOut | None = None
 
 
 def _out(session) -> CompetitionOut:
@@ -95,7 +99,38 @@ def _out(session) -> CompetitionOut:
         next_date=found.next_date,
         ready=_ready(session, season, found),
         path=_path(found, ref),
+        pool=_pool(session, season, found) if found.over else None,
     )
+
+
+def _pool(session, season, found: competition.Status) -> CupPoolOut | None:
+    """La poule de l'équipe : celle de la Coupe d'Europe, ou de la Coupe du monde."""
+    if found.code == competition.CHAMPIONS_CUP:
+        names = dict(session.execute(select(ClubRow.id, ClubRow.name)).all())
+        pools = _cup_out(session, season, found.code, names).pools
+        return next((p for p in pools if found.team_id in [r.club.id for r in p.table]), None)
+    matches = [
+        row.to_domain()
+        for row in internationals.test_rows(session, season)
+        if row.competition == competition.WORLD_CUP
+    ]
+    for letter, members in zip("ABCD", rules.world_cup_pools(season.year), strict=True):
+        if found.team_id in members:
+            table = _standings(rules.pool_matches(matches, members))
+            return CupPoolOut(
+                pool=letter,
+                table=[
+                    CupRowOut(
+                        club=ClubRef(id=line.club_id, name=line.club_name),
+                        played=line.played,
+                        won=line.won,
+                        points_difference=line.points_difference,
+                        league_points=line.league_points,
+                    )
+                    for line in table
+                ],
+            )
+    return None
 
 
 def _path(found: competition.Status, ref) -> list[PathMatchOut]:

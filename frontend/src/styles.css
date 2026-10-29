@@ -7305,6 +7305,10 @@ td > .tag:first-child,
   font-size: 18px;
 }
 
+.recap__pool {
+  width: 100%;
+}
+
 .recap__note {
   flex: 1 1 200px;
   font-size: 13px;

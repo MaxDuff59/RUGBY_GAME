@@ -716,6 +716,32 @@ def test_selector_follows_the_whole_season_before_the_next_one(selector):
     assert [row["played"] for row in championship["standings"]] == [6, 6, 6, 6]
 
 
+def test_selector_season_review(selector):
+    client, _ = selector
+    assert client.get("/selection/review").status_code == 400
+    while (state := client.get("/selection").json())["phase"] != "finished":
+        if state["phase"] == "list":
+            announce_staff_list(client)
+        assert client.post("/selection/advance").status_code == 200
+    review = client.get("/selection/review").json()
+    assert review["nation"]["code"] == "NZL" and review["record"] == state["record"]
+    record = review["record"]
+    assert record["won"] + record["drawn"] + record["lost"] == record["played"] > 0
+    # Le Rugby Championship (un classement), puis la tournée d'automne (aucun).
+    championship, autumn = review["competitions"]
+    assert championship["code"] == "rugby_championship" and championship["teams"] == 4
+    assert 1 <= championship["rank"] <= 4
+    assert (championship["result"] == "champion") == (
+        championship["champion"]["id"] == NEW_ZEALAND.id
+    )
+    assert autumn["rank"] is None and autumn["result"] is None
+    assert (
+        sum(c["won"] + c["drawn"] + c["lost"] for c in review["competitions"]) == record["played"]
+    )
+    assert len(review["scorers"]) <= 3 and len(review["caps"]) == 5
+    assert review["caps"][0]["starts"] <= record["played"]
+
+
 # --- API : une saison de Coupe du monde -----------------------------------------------------
 
 
@@ -793,6 +819,18 @@ def test_selector_takes_his_nation_to_the_world_cup(world_cup_year):
         assert live["knockout"] and live["stage"] == "quarter"
     else:
         assert state["window"]["code"] == "six_nations"
+
+    # Jusqu'au bout de la saison : le bilan donne la place en poule et le tour atteint.
+    while (state := client.get("/selection").json())["phase"] != "finished":
+        if state["phase"] == "list":
+            announce_staff_list(client)
+        if client.get("/live").status_code == 200:
+            client.post("/live/finish")
+        assert client.post("/selection/advance").status_code == 200
+    world_cup = client.get("/selection/review").json()["competitions"][0]
+    assert world_cup["code"] == "world_cup" and world_cup["rank"] == rank
+    assert world_cup["teams"] == 4
+    assert (world_cup["result"] == "pools") == (rank > 2)
 
 
 # --- Parties d'avant les sélections ---------------------------------------------------------

@@ -22,6 +22,7 @@ from api.deps import SessionDep
 from api.ledger import game_date
 from api.notes import History
 from api.routers.internationals import (
+    _standings,
     nation_out,
     season_starts,
     squad_player_out,
@@ -31,21 +32,26 @@ from api.routers.internationals import (
 from api.routers.seasons import _current_or_404, _play_day, _prepare_day
 from api.schemas import (
     AdvanceOut,
+    CapOut,
     ClubDetail,
+    ClubRef,
     FacilitiesOut,
     LineupIn,
     PlayerOut,
     PoolOut,
     RecordOut,
     ReplaceIn,
+    ScorerOut,
     SelectionOut,
+    SelectionReviewOut,
     SquadListIn,
     StrengthOut,
+    TestRunOut,
 )
-from data.nations import NATIONS_BY_CODE, WINDOWS_BY_CODE, Nation, Window
+from data.nations import NATIONS_BY_CODE, NATIONS_BY_ID, WINDOWS_BY_CODE, Nation, Window
 from engine import internationals as rules
 from engine.match_engine import SLOT_POSITIONS, team_strength
-from models import Club, Facilities, Player
+from models import Club, EventType, Facilities, Match, Player, Stage
 from models.orm import CallUpRow, InternationalRow, PlayerRow, SeasonRow, SelectorRow
 
 router = APIRouter(prefix="/selection", tags=["sélectionneur"])
@@ -167,6 +173,127 @@ def get_selection(session: SessionDep) -> SelectionOut:
     """Ce qui attend le sélectionneur : liste à annoncer, match à jouer, ou jours à passer."""
     _, season, where = _load(session)
     return selection_out(session, season, where)
+
+
+# --- Le bilan de la saison ------------------------------------------------------------------
+
+# Coupe du monde : éliminé au tour de son dernier match.
+REACHED = {Stage.FINAL: "final", Stage.SEMI: "semi", Stage.QUARTER: "quarter"}
+
+
+@router.get("/review", response_model=SelectionReviewOut)
+def get_review(session: SessionDep) -> SelectionReviewOut:
+    """Bilan de la saison de la sélection, une fois tous ses matchs joués : son bilan,
+    chaque compétition (classement, tour atteint), ses marqueurs, ses titulaires."""
+    _, season, where = _load(session)
+    if where.phase != "finished":
+        raise HTTPException(status_code=400, detail="La saison n'est pas terminée")
+    nation = where.nation
+    played = [row.to_domain() for row in where.mine if row.is_played]
+    record = RecordOut(played=len(played), won=0, drawn=0, lost=0)
+    points_for = points_against = tries_for = 0
+    for match in played:
+        result = match.result_for(nation.id)
+        record.won += result > 0
+        record.drawn += result == 0
+        record.lost += result < 0
+        home = match.home_club_id == nation.id
+        points_for += match.home_score if home else match.away_score
+        points_against += match.away_score if home else match.home_score
+        tries_for += sum(
+            1 for e in match.events if e.club_id == nation.id and e.type == EventType.TRY
+        )
+
+    competitions = []
+    for code in dict.fromkeys(row.competition for row in where.mine):
+        window = WINDOWS_BY_CODE[code]
+        everything = [row.to_domain() for row in where.rows if row.competition == code]
+        competitions.append(_run(window, everything, nation.id, season.year))
+
+    points: dict[int, int] = {}
+    tries: dict[int, int] = {}
+    starts: dict[int, int] = {}
+    for match in played:
+        for event in match.events:
+            if event.club_id == nation.id and event.player_id is not None and event.points:
+                points[event.player_id] = points.get(event.player_id, 0) + event.points
+                if event.type == EventType.TRY:
+                    tries[event.player_id] = tries.get(event.player_id, 0) + 1
+        lineup = match.home_lineup if match.home_club_id == nation.id else match.away_lineup
+        for player_id in lineup:
+            starts[player_id] = starts.get(player_id, 0) + 1
+    wanted = sorted(points, key=points.get, reverse=True)[:3]
+    capped = sorted(starts, key=lambda player_id: -starts[player_id])[:5]
+    names = {
+        row.id: f"{row.first_name} {row.last_name}"
+        for row in session.scalars(select(PlayerRow).where(PlayerRow.id.in_([*wanted, *capped])))
+    }
+    return SelectionReviewOut(
+        year=season.year,
+        nation=nation_out(nation),
+        record=record,
+        points_for=points_for,
+        points_against=points_against,
+        tries_for=tries_for,
+        competitions=competitions,
+        scorers=[
+            ScorerOut(
+                player_id=player_id,
+                name=names[player_id],
+                points=points[player_id],
+                tries=tries.get(player_id, 0),
+            )
+            for player_id in wanted
+            if player_id in names
+        ],
+        caps=[
+            CapOut(player_id=player_id, name=names[player_id], starts=starts[player_id])
+            for player_id in capped
+            if player_id in names
+        ],
+    )
+
+
+def _run(window: Window, matches: list[Match], team: int, year: int) -> TestRunOut:
+    """Le parcours de `team` dans une compétition dont `matches` sont tous les matchs."""
+    mine = sorted(
+        (m for m in matches if m.is_played and team in (m.home_club_id, m.away_club_id)),
+        key=lambda m: m.date,
+    )
+    record = {1: 0, 0: 0, -1: 0}
+    for match in mine:
+        record[match.result_for(team)] += 1
+    winner = rules.champion(window, matches)
+    rank = teams = None
+    result = None
+    if window.format == "world_cup":
+        pool = next(p for p in rules.world_cup_pools(year) if team in p)
+        table = _standings(rules.pool_matches(matches, pool))
+        if winner == team:
+            result = "champion"
+        elif mine:
+            result = REACHED.get(mine[-1].stage, "pools")
+    elif window.has_table:
+        table = _standings(matches)
+        result = "champion" if winner == team else None
+    else:
+        table = []
+    if table:
+        rank = next(line.rank for line in table if line.club_id == team)
+        teams = len(table)
+    return TestRunOut(
+        code=window.code,
+        name=window.name,
+        rank=rank,
+        teams=teams or 0,
+        result=result,
+        won=record[1],
+        drawn=record[0],
+        lost=record[-1],
+        champion=ClubRef(id=winner, name=NATIONS_BY_ID[winner].name)
+        if winner is not None
+        else None,
+    )
 
 
 # --- La liste -------------------------------------------------------------------------------

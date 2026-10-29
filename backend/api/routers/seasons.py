@@ -859,7 +859,8 @@ def get_season_review(session: SessionDep) -> SeasonReviewOut:
         playoffs=playoffs,
         movement=movement,
         objective=objective,
-        objective_met=rank <= goal.target_rank,
+        # Le titre vaut tous les objectifs, quel que soit le rang de saison régulière.
+        objective_met=rank <= goal.target_rank or playoffs == "champion",
         youth_rank=youth_ids.index(club_id) + 1 if youth_rows else None,
         balance_start=balance - season_total,
         balance_end=balance,

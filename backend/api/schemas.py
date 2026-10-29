@@ -1758,6 +1758,43 @@ class SelectionOut(BaseModel):
     squad_size: int  # taille d'une liste
 
 
+class TestRunOut(BaseModel):
+    """Le parcours de la sélection dans une compétition de la saison."""
+
+    code: str
+    name: str
+    # Tournoi (Six Nations...) : le rang final ; Coupe du monde : celui de sa poule.
+    rank: int | None
+    teams: int  # équipes du classement (ou de la poule)
+    # Coupe du monde : champion ; final, semi, quarter, pools : éliminé à ce tour.
+    # Tournoi : champion ou None. Tournée de tests : None.
+    result: Literal["champion", "final", "semi", "quarter", "pools"] | None
+    won: int
+    drawn: int
+    lost: int
+    champion: ClubRef | None
+
+
+class CapOut(BaseModel):
+    player_id: int
+    name: str
+    starts: int  # titularisations avec la sélection cette saison
+
+
+class SelectionReviewOut(BaseModel):
+    """Bilan de la saison du sélectionneur, une fois tous ses matchs joués."""
+
+    year: int
+    nation: NationOut
+    record: RecordOut
+    points_for: int
+    points_against: int
+    tries_for: int
+    competitions: list[TestRunOut]
+    scorers: list[ScorerOut]  # trois au plus
+    caps: list[CapOut]  # les plus titularisés, cinq au plus
+
+
 class PoolOut(BaseModel):
     """Tous les joueurs sélectionnables pour la prochaine liste, et celle du staff."""
 

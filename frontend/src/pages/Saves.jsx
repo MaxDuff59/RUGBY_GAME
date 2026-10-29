@@ -68,6 +68,25 @@ export default function Saves() {
   // Mode compétition : une partie qui ne joue que la Coupe d'Europe ou la Coupe du monde.
   const createCompetition = (slot) => open(slot, api.newSave, () => "/competition");
 
+  // Compétition finie : la même, avec la même équipe, dans un monde neuf (la partie
+  // finie est remplacée). Sans l'équipe (pas qualifiée au nouveau tirage), on la choisit.
+  const restart = (save) =>
+    confirm.ask({
+      eyebrow: `Partie ${save.slot}`,
+      title: `Recommencer avec ${save.club_name}`,
+      text: `Une nouvelle ${save.league_name} remplace celle-ci, dans un monde neuf.`,
+      confirmLabel: "Recommencer",
+      onConfirm: () =>
+        open(
+          save.slot,
+          async (slot) => {
+            await api.loadSave(slot);
+            return api.restartCompetition();
+          },
+          (fresh) => (fresh.team ? "/" : "/competition"),
+        ),
+    });
+
   const remove = (save) =>
     confirm.ask({
       eyebrow: `Partie ${save.slot}`,
@@ -250,6 +269,11 @@ export default function Saves() {
                       onClick={() => resume(save)}
                     >
                       {busy === save.slot ? "Chargement…" : "Continuer"}
+                    </button>
+                  )}
+                  {save.competition_result && (
+                    <button type="button" className="button" disabled={busy !== null} onClick={() => restart(save)}>
+                      Recommencer
                     </button>
                   )}
                   <button type="button" className="button" disabled={busy !== null} onClick={() => remove(save)}>

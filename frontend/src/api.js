@@ -84,6 +84,7 @@ export const api = {
 
   // Sélectionneur : où il en est, sa liste de 42, son XV, et le monde qui avance jour par jour
   getSelection: () => request("/selection"),
+  getSelectionReview: () => request("/selection/review"),
   getSelectionPool: () => request("/selection/pool"),
   announceList: (playerIds) => post("/selection/list", { player_ids: playerIds }),
   replaceInList: (playerOut, playerIn) =>

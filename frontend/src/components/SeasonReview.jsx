@@ -257,7 +257,11 @@ function Results({ review }) {
           <Stat
             label={`Objectif · ${objective.label.toLowerCase()}`}
             value={review.objective_met ? "Atteint" : "Manqué"}
-            detail={`${formatRank(objective.target_rank)} au plus bas · ${formatRank(review.rank)} au final`}
+            detail={
+              review.playoffs === "champion" && review.rank > objective.target_rank
+                ? `Titre remporté · ${formatRank(review.rank)} de la saison régulière`
+                : `${formatRank(objective.target_rank)} au plus bas · ${formatRank(review.rank)} au final`
+            }
             muted={!review.objective_met}
           />
         )}
@@ -303,7 +307,7 @@ function Results({ review }) {
   );
 }
 
-function Stat({ label, value, detail, muted = false }) {
+export function Stat({ label, value, detail, muted = false }) {
   return (
     <div className="review__stat">
       <dt className="muted">{label}</dt>
