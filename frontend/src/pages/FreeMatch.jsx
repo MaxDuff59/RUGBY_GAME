@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 
 import { api } from "../api.js";
 import ClubCrest from "../components/ClubCrest.jsx";
@@ -28,13 +28,10 @@ const CALLS = {
 };
 
 export default function FreeMatch() {
-  // Un nouveau match remonte l'écran du direct : il retombe sur le choix des équipes.
+  // Un nouveau match remonte l'écran du direct : il retombe sur la composition (mêmes
+  // équipes), ou sur le choix des équipes, celles du match d'avant déjà cochées.
   const [round, setRound] = useState(0);
-
-  async function again() {
-    await api.dropFriendly();
-    setRound((n) => n + 1);
-  }
+  const [picks, setPicks] = useState(null); // { home, away, mine } du match d'avant
 
   return (
     <div className="start friendly">
@@ -48,17 +45,80 @@ export default function FreeMatch() {
         key={round}
         calls={CALLS}
         title="Match libre"
-        empty={(onStarted) => <Setup onStarted={onStarted} />}
-        onDone={again}
-        doneLabel="Nouveau match"
+        empty={(onStarted) => <Setup picks={picks} onStarted={onStarted} />}
+        endActions={(live) => (
+          <EndActions
+            live={live}
+            onReplay={() => setRound((n) => n + 1)}
+            onChangeTeams={(previous) => {
+              setPicks(previous);
+              setRound((n) => n + 1);
+            }}
+          />
+        )}
         handOverText="Le reste du match se joue sans toi : le staff gère le banc jusqu'au coup de sifflet final."
       />
     </div>
   );
 }
 
+// Au coup de sifflet final : quitter, rejouer la même affiche (même XV, retour à la
+// composition), ou en choisir une autre.
+function EndActions({ live, onReplay, onChangeTeams }) {
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function run(call, done) {
+    setBusy(true);
+    setError(null);
+    try {
+      await call();
+      done();
+    } catch (err) {
+      setError(err);
+      setBusy(false);
+    }
+  }
+
+  const previous = {
+    home: live.home.club.id,
+    away: live.away.club.id,
+    mine: live.home.club.id === live.my_club_id ? "home" : "away",
+  };
+  return (
+    <>
+      <button
+        type="button"
+        className="button"
+        disabled={busy}
+        onClick={() => run(api.dropFriendly, () => navigate("/parties"))}
+      >
+        Quitter
+      </button>
+      <button
+        type="button"
+        className="button"
+        disabled={busy}
+        onClick={() => run(api.dropFriendly, () => onChangeTeams(previous))}
+      >
+        Changer d'équipes
+      </button>
+      <button
+        type="button"
+        className="button button--primary"
+        disabled={busy}
+        onClick={() => run(api.replayFriendly, onReplay)}
+      >
+        Rejouer le match
+      </button>
+      <ActionError error={error} />
+    </>
+  );
+}
+
 // Avant le coup d'envoi : l'affiche à choisir, puis la composition.
-function Setup({ onStarted }) {
+function Setup({ picks, onStarted }) {
   const setup = useApi(api.getFriendlyTeam);
   if (setup.loading) return <p className="status">Chargement…</p>;
   if (setup.data) {
@@ -77,16 +137,16 @@ function Setup({ onStarted }) {
   if (setup.error && setup.error.status !== 404) {
     return <p className="status status--error">{setup.error.message}</p>;
   }
-  return <Picker onPrepared={setup.setData} />;
+  return <Picker initial={picks} onPrepared={setup.setData} />;
 }
 
 // --- Le choix des deux équipes ----------------------------------------------------------
 
-function Picker({ onPrepared }) {
+function Picker({ initial, onPrepared }) {
   const groups = useApi(useCallback(api.friendlyTeams, []));
-  const [home, setHome] = useState(null);
-  const [away, setAway] = useState(null);
-  const [mine, setMine] = useState("home"); // l'équipe que l'on dirige
+  const [home, setHome] = useState(initial?.home ?? null);
+  const [away, setAway] = useState(initial?.away ?? null);
+  const [mine, setMine] = useState(initial?.mine ?? "home"); // l'équipe que l'on dirige
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 

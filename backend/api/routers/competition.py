@@ -4,10 +4,13 @@ Dans un emplacement neuf, `POST /competition` choisit la Coupe d'Europe ou la Co
 monde et tire la saison (les qualifiés de la Coupe d'Europe en dépendent) ; puis
 `POST /competition/team` prend un des participants, comme une carrière de club ou de
 sélectionneur. `GET /competition` dit où en est l'équipe : en course, ou la partie
-finie (titre ou élimination).
+finie (titre ou élimination), et son parcours. Une fois finie,
+`POST /competition/restart` rejoue la même compétition avec la même équipe, dans un
+monde neuf du même emplacement.
 """
 
 import datetime
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -21,7 +24,9 @@ from api.routers.career import selector_out, start_career
 from api.routers.seasons import FIRST_SEASON_YEAR, create_season, next_fixture
 from api.schemas import CareerIn, CareerOut, ClubRef
 from data.nations import NATIONS_BY_ID
+from database import NoSaveLoaded, new_slot, open_slot, slot_exists
 from engine.difficulty import Difficulty
+from models import Stage
 from models.orm import CareerRow, CompetitionRow, SelectorRow
 
 router = APIRouter(prefix="/competition", tags=["compétition"])
@@ -37,6 +42,20 @@ class CompetitionTeamIn(BaseModel):
     difficulty: Difficulty = Difficulty.NORMAL  # pour un club (engine/difficulty.py)
 
 
+class PathMatchOut(BaseModel):
+    """Un match joué par l'équipe dans sa compétition."""
+
+    date: datetime.date
+    stage: Stage
+    opponent: ClubRef
+    home: bool
+    neutral: bool  # la finale : ni chez l'un, ni chez l'autre
+    score_for: int
+    score_against: int
+    # Un match à élimination directe resté nul compte pour celle qui passe.
+    result: Literal["won", "drawn", "lost"]
+
+
 class CompetitionOut(BaseModel):
     code: str
     name: str
@@ -50,6 +69,7 @@ class CompetitionOut(BaseModel):
     # l'interface enchaîne les journées de championnat d'ici là. (Une sélection a son
     # propre bouton pour aller au prochain rendez-vous, page Sélection.)
     ready: bool
+    path: list[PathMatchOut] = []
 
 
 def _out(session) -> CompetitionOut:
@@ -74,7 +94,34 @@ def _out(session) -> CompetitionOut:
         champion=ref(found.champion_id),
         next_date=found.next_date,
         ready=_ready(session, season, found),
+        path=_path(found, ref),
     )
+
+
+def _path(found: competition.Status, ref) -> list[PathMatchOut]:
+    out = []
+    for index, match in enumerate(found.played):
+        home = match.home_club_id == found.team_id
+        scores = (match.home_score, match.away_score)
+        if not match.stage.is_playoff:
+            result = ("lost", "drawn", "won")[match.result_for(found.team_id) + 1]
+        elif index < len(found.played) - 1 or found.champion_id == found.team_id:
+            result = "won"
+        else:
+            result = "lost"
+        out.append(
+            PathMatchOut(
+                date=match.date,
+                stage=match.stage,
+                opponent=ref(match.away_club_id if home else match.home_club_id),
+                home=home,
+                neutral=match.neutral,
+                score_for=scores[0] if home else scores[1],
+                score_against=scores[1] if home else scores[0],
+                result=result,
+            )
+        )
+    return out
 
 
 def _ready(session, season, found: competition.Status) -> bool:
@@ -141,3 +188,35 @@ def choose_team(payload: CompetitionTeamIn, session: SessionDep, user: UserDep) 
     session.add(row)
     session.commit()
     return selector_out(row)
+
+
+@router.post("/restart", response_model=CompetitionOut, status_code=201)
+def restart(user: UserDep) -> CompetitionOut:
+    """Une fois la compétition finie, la rejoue dans un monde neuf du même emplacement :
+    même compétition, même manager, même équipe (et même difficulté). Si l'équipe n'est
+    pas qualifiée dans le nouveau tirage, la partie attend le choix d'une autre."""
+    slot = user.active_slot
+    if slot is None or not slot_exists(user.id, slot):
+        raise NoSaveLoaded
+    with open_slot(user.id, slot) as session:
+        found = _out(session)
+        if not found.over:
+            raise HTTPException(status_code=409, detail=f"La {found.name} n'est pas terminée")
+        career = session.scalars(select(CareerRow)).first()
+        selector = session.scalars(select(SelectorRow)).first()
+        manager = (career or selector).manager_name
+        difficulty = Difficulty(career.difficulty) if career is not None else Difficulty.NORMAL
+    # Refusé avant d'effacer quoi que ce soit : la partie finie reste.
+    plans.require_season(user)
+    new_slot(user.id, slot)
+    with open_slot(user.id, slot) as session:
+        fresh = choose_competition(CompetitionIn(code=found.code), session, user)
+        if found.team.id in {team.id for team in fresh.teams}:
+            choose_team(
+                CompetitionTeamIn(
+                    manager_name=manager, team_id=found.team.id, difficulty=difficulty
+                ),
+                session,
+                user,
+            )
+        return _out(session)

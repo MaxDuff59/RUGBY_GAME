@@ -166,6 +166,7 @@ def test_season_review(manager):
     assert review["objective_met"] == (review["rank"] <= review["objective"]["target_rank"])
     assert 1 <= review["youth_rank"] <= 10
     assert len(review["scorers"]) <= 3
+    assert review["cups"] == []  # pas de coupe d'Europe sans les trois championnats
     assert review["scorers"] == sorted(review["scorers"], key=lambda s: -s["points"])
 
 

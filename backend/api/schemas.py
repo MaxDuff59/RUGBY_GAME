@@ -1520,6 +1520,19 @@ class ScorerOut(BaseModel):
     tries: int
 
 
+class CupRunOut(BaseModel):
+    """Le parcours du club dans une coupe d'Europe de la saison (api/cup.py)."""
+
+    code: str
+    name: str
+    # champion ; final, semi, quarter, pools : éliminé à ce tour ; running : encore en course.
+    result: Literal["champion", "final", "semi", "quarter", "pools", "running"]
+    won: int
+    drawn: int
+    lost: int
+    champion: ClubRef | None
+
+
 class SeasonReviewOut(BaseModel):
     """Bilan sportif de la saison du club dirigé, une fois la finale jouée."""
 
@@ -1548,6 +1561,7 @@ class SeasonReviewOut(BaseModel):
     balance_start: int
     balance_end: int
     scorers: list[ScorerOut]  # meilleurs marqueurs pros, trois au plus
+    cups: list[CupRunOut] = []  # Coupe d'Europe, Challenge européen : celles jouées
 
 
 # --- Palmarès, trophées et records (api/routers/honours.py) ---------------------------

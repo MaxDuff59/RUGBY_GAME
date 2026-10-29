@@ -124,6 +124,7 @@ export const api = {
   // Mode compétition : une partie qui ne joue que la Coupe d'Europe ou la Coupe du monde.
   getCompetition: () => request("/competition"),
   chooseCompetition: (code) => post("/competition", { code }),
+  restartCompetition: () => post("/competition/restart"),
   chooseCompetitionTeam: (managerName, teamId, difficulty) =>
     post("/competition/team", { manager_name: managerName, team_id: teamId, difficulty }),
 
@@ -138,6 +139,7 @@ export const api = {
   resetFriendlyLineup: () => del("/friendly/lineup"),
   kickOffFriendly: () => post("/friendly/kickoff"),
   dropFriendly: () => del("/friendly"),
+  replayFriendly: () => post("/friendly/replay"),
   advanceFriendly: (minutes = 1) => post("/friendly/advance", { minutes }),
   setFriendlyTactics: (tactics) => post("/friendly/tactics", tactics),
   talkFriendly: (key) => post("/friendly/talk", { key }),

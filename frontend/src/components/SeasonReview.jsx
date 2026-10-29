@@ -33,6 +33,16 @@ const PLAYOFFS = {
   quarter: "Éliminé en quart de finale",
 };
 
+// Le parcours en coupe d'Europe (api/cup.py, `runs`).
+const CUP_RESULTS = {
+  champion: "Vainqueur",
+  final: "Finaliste",
+  semi: "Demi-finaliste",
+  quarter: "Quart de finaliste",
+  pools: "Éliminé en poules",
+  running: "En course",
+};
+
 // Montée et descente entre la Pro D2 et le Top 14.
 const MOVEMENTS = {
   promoted: "Champion de Pro D2 : le club monte en Top 14 la saison prochaine.",
@@ -251,6 +261,20 @@ function Results({ review }) {
             muted={!review.objective_met}
           />
         )}
+        {review.cups.map((cup) => (
+          <Stat
+            key={cup.code}
+            label={cup.name}
+            value={CUP_RESULTS[cup.result]}
+            detail={[
+              `${cup.won} V · ${cup.drawn} N · ${cup.lost} D`,
+              cup.result !== "champion" && cup.champion && `Vainqueur : ${cup.champion.name}`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+            muted={cup.result === "pools"}
+          />
+        ))}
         {review.youth_rank && <Stat label="Espoirs" value={formatRank(review.youth_rank)} detail="Championnat espoirs" />}
         <Stat
           label="Trésorerie"
@@ -261,7 +285,7 @@ function Results({ review }) {
 
       {review.scorers.length > 0 && (
         <section>
-          <h3 className="eyebrow">Meilleurs marqueurs</h3>
+          <h3 className="eyebrow">Meilleurs marqueurs{review.cups.length > 0 && " · coupes comprises"}</h3>
           <ol className="review__scorers">
             {review.scorers.map((scorer) => (
               <li key={scorer.player_id}>

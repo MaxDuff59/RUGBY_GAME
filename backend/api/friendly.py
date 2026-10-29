@@ -310,6 +310,19 @@ def kick_off(session: Session, row: FriendlyRow) -> Live:
     return live
 
 
+def replay(user_id: int) -> FriendlyRow | None:
+    """Remet le match libre du compte avant le coup d'envoi : mêmes équipes, mêmes
+    sélections, même XV composé (None s'il n'en a pas)."""
+    with _accounts_session() as accounts_session:
+        stored = accounts_session.get(FriendlyRow, user_id)
+        if stored is None:
+            return None
+        stored.state = {}
+        stored.updated_at = accounts._now()
+        accounts_session.commit()
+        return stored
+
+
 def load(session: Session, user_id: int) -> Live | None:
     """Le match libre en cours du compte (None s'il n'en a pas, ou pas encore lancé)."""
     row = setup(user_id)

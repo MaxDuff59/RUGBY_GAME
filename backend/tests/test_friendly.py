@@ -76,8 +76,18 @@ def test_club_against_nation_without_any_save(guest):
     done = guest.post("/friendly/finish").json()
     assert done["finished"] is True
     assert guest.post("/friendly/advance", json={}).status_code == 400
+
+    # Rejouer : mêmes équipes, même XV, de retour avant le coup d'envoi.
+    replayed = guest.post("/friendly/replay")
+    assert replayed.status_code == 200
+    assert not replayed.json()["started"] and replayed.json()["team"]["lineup_custom"]
+    assert guest.get("/friendly").status_code == 404
+    again = guest.post("/friendly/kickoff").json()
+    assert again["minute"] == 0 and not again["finished"]
+    assert bench[-1] in [p["id"] for p in again["home"]["players"]][:15]
     assert guest.delete("/friendly").status_code == 204
     assert guest.get("/friendly").status_code == 404
+    assert guest.post("/friendly/replay").status_code == 404
 
 
 def test_friendly_refuses_bad_choices(guest):

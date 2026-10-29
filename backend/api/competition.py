@@ -15,7 +15,7 @@ Le club en Coupe d'Europe avance de match de coupe en match de coupe : l'interfa
 enchaîne les journées de championnat entre deux, menées par le staff.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -83,6 +83,7 @@ class Status:
     result: str | None  # « Vainqueur », « Demi-finaliste »... une fois la partie finie
     champion_id: int | None
     next_date: object | None  # date du prochain match de l'équipe
+    played: list = field(default_factory=list)  # ses matchs joués, dans l'ordre
 
 
 def status(session: Session, season: SeasonRow | None) -> Status | None:
@@ -112,11 +113,12 @@ def status(session: Session, season: SeasonRow | None) -> Status | None:
         key=lambda m: (m.date, m.id or 0),
     )
     upcoming = [m for m in mine if not m.is_played]
+    played = [m for m in mine if m.is_played]
     if upcoming or not mine:
         date = upcoming[0].date if upcoming else None
-        return Status(row.code, team, False, None, champion, date)
+        return Status(row.code, team, False, None, champion, date, played)
     result = WINNER if champion == team else REACHED.get(mine[-1].stage, "Éliminé")
-    return Status(row.code, team, True, result, champion, None)
+    return Status(row.code, team, True, result, champion, None, played)
 
 
 def require_running(session: Session, season: SeasonRow) -> None:

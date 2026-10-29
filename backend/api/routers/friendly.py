@@ -5,7 +5,8 @@ remplace le match précédent). Le joueur compose son XV (`PUT /friendly/lineup`
 l'écran Effectif ; le staff complète), puis `POST /friendly/kickoff` lance le match.
 Puis les mêmes gestes que le match en direct d'une carrière
 (routers/live.py) : avancer le chrono, la tactique, le discours, les remplacements, la
-pénalité décisive. `POST /friendly/finish` laisse le staff finir le match. Rien n'est
+pénalité décisive. `POST /friendly/finish` laisse le staff finir le match, `POST
+/friendly/replay` le remet avant le coup d'envoi, mêmes équipes et même XV. Rien n'est
 enregistré dans une partie : ni résultat, ni blessure, ni fatigue.
 
 Ces routes ne demandent qu'un compte (un invité suffit), pas de partie chargée.
@@ -135,6 +136,16 @@ def kick_off(user: UserDep) -> LiveOut:
     with friendly.reference() as session:
         live = friendly.kick_off(session, _setup_or_404(user))
         return live_out(live, friendly.names(session), live.row.my_id)
+
+
+@router.post("/replay", response_model=FriendlyTeamOut)
+def replay(user: UserDep) -> FriendlyTeamOut:
+    """Rejoue le match : mêmes équipes, même XV, de retour avant le coup d'envoi."""
+    with friendly.reference() as session:
+        row = friendly.replay(user.id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Aucun match libre en cours")
+        return _team_out(session, row)
 
 
 def _setup_or_404(user) -> friendly.FriendlyRow:

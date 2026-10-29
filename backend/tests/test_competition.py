@@ -6,6 +6,8 @@ from sqlalchemy import select
 
 import database
 from api import auth
+from api import cup as cups
+from api.ledger import current_season
 from api.main import app
 from models.orm import InternationalRow
 
@@ -49,6 +51,7 @@ def test_champions_cup_from_the_draw_to_the_end(client):
 
     # Des journées de championnat d'abord : le premier match de coupe n'est qu'en décembre.
     assert not client.get("/competition").json()["ready"]
+    assert client.post("/competition/restart").status_code == 409
     while not client.get("/competition").json()["ready"]:
         assert client.post("/seasons/current/play").status_code == 200
     assert client.get("/seasons/current").json()["next_match"]["cup"]
@@ -66,6 +69,40 @@ def test_champions_cup_from_the_draw_to_the_end(client):
     assert ended.status_code == 400 and "terminée" in ended.json()["detail"]
     assert client.post("/live").status_code == 400
     assert client.post("/seasons/next").status_code == 400
+
+    # Le parcours : chaque match de coupe joué ; en phase finale, le dernier est perdu
+    # sauf au titre (éliminé en poules, il a pu gagner son dernier match).
+    path = status["path"]
+    assert len(path) >= 4 and all(m["stage"] == "regular" for m in path[:4])
+    if path[-1]["stage"] != "regular":
+        assert (path[-1]["result"] == "won") == (status["result"] == "Vainqueur")
+    assert all(m["opponent"]["id"] != team["id"] for m in path)
+    # Le bilan de saison lit le même parcours (api/cup.py).
+    reached = {
+        "Vainqueur": "champion",
+        "Finaliste": "final",
+        "Demi-finaliste": "semi",
+        "Quart de finaliste": "quarter",
+        "Éliminé en poules": "pools",
+    }
+    with database.open_slot(client.get("/auth/me").json()["id"], 1) as session:
+        (run,) = [
+            r
+            for r in cups.runs(session, current_season(session), team["id"])
+            if r.code == "champions_cup"
+        ]
+    assert run.result == reached[status["result"]]
+    assert run.won + run.drawn + run.lost == len(path)
+
+    # Recommencer : même compétition, même club, même manager, dans un monde neuf.
+    again = client.post("/competition/restart")
+    assert again.status_code == 201
+    fresh = again.json()
+    assert fresh["code"] == "champions_cup" and not fresh["over"] and fresh["path"] == []
+    if fresh["team"] is not None:
+        assert fresh["team"]["id"] == team["id"]
+        assert client.get("/career").json()["manager_name"] == "Max"
+    assert len([s for s in client.get("/saves").json() if not s["empty"]]) == 1
 
 
 def test_world_cup_only_with_an_invited_nation(client):
@@ -91,6 +128,10 @@ def test_world_cup_only_with_an_invited_nation(client):
         assert client.post("/selection/advance").status_code == 200
     assert status["over"] and status["result"]
     assert client.post("/selection/advance").status_code == 400
+    assert status["path"] and status["path"][-1]["opponent"]["id"] != japan["id"]
+
+    again = client.post("/competition/restart").json()
+    assert again["team"]["id"] == japan["id"] and not again["over"]
 
 
 def test_a_started_game_is_not_a_competition(client):

@@ -71,9 +71,9 @@ const CAREER_CALLS = {
 // L'écran du match en direct, quel que soit le match : `calls` sont ses appels à l'API
 // (ceux de la carrière, ou du match libre), `empty(onStarted)` ce qu'on montre sans match
 // en cours. `finish` (« Terminer », ou le bouton du match fini) joue la fin ; sa réponse
-// va à `onFinished`, ou s'affiche sans lui. Avec `onDone`, le bouton du match fini
-// (`doneLabel`) appelle `onDone` à la place.
-export function LiveScreen({ calls, title, empty, onFinished, onDone, doneLabel = "Continuer", handOverText }) {
+// va à `onFinished`, ou s'affiche sans lui. Avec `endActions(live)`, le match fini montre
+// ces boutons à la place de celui-là (`doneLabel`).
+export function LiveScreen({ calls, title, empty, onFinished, endActions, doneLabel = "Continuer", handOverText }) {
   const current = useApi(calls.get);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -238,6 +238,7 @@ export function LiveScreen({ calls, title, empty, onFinished, onDone, doneLabel 
         live={live}
         title={title}
         doneLabel={doneLabel}
+        endActions={endActions}
         playing={playing}
         speed={speed}
         setSpeed={setSpeed}
@@ -248,7 +249,7 @@ export function LiveScreen({ calls, title, empty, onFinished, onDone, doneLabel 
         onPlay={start}
         onPause={() => setPlaying(false)}
         onHandOver={handOver}
-        onFinish={live.finished && onDone ? onDone : finish}
+        onFinish={finish}
       />
       <Actions live={live} side={mySide} onOpen={openPanel} />
       <Momentum
@@ -449,6 +450,7 @@ function Scoreboard({
   live,
   title,
   doneLabel,
+  endActions,
   playing,
   speed,
   setSpeed,
@@ -498,7 +500,9 @@ function Scoreboard({
           </span>
         )}
         <div className="scoreboard__controls">
-          {live.finished ? (
+          {live.finished && endActions ? (
+            endActions(live)
+          ) : live.finished ? (
             <button type="button" className="button button--primary" disabled={finishing} onClick={onFinish}>
               {finishing ? "Fin de journée…" : doneLabel}
             </button>

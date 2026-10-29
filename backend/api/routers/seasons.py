@@ -54,6 +54,7 @@ from api.schemas import (
     CupOut,
     CupPoolOut,
     CupRowOut,
+    CupRunOut,
     DismissalOut,
     InjuryCase,
     LeagueOut,
@@ -814,9 +815,11 @@ def get_season_review(session: SessionDep) -> SeasonReviewOut:
     )
     balance = session.get(ClubRow, club_id).balance
 
+    # Les marqueurs comptent aussi les matchs de coupe d'Europe.
+    cup_rows = [row for code in cup.codes(season) for row in cup.rows(season, code)]
     points: dict[int, int] = {}
     tries: dict[int, int] = {}
-    for row in matches:
+    for row in [*matches, *cup_rows]:
         if not row.is_played:
             continue
         for event in row.to_domain().events:
@@ -861,6 +864,20 @@ def get_season_review(session: SessionDep) -> SeasonReviewOut:
         balance_start=balance - season_total,
         balance_end=balance,
         scorers=scorers,
+        cups=[
+            CupRunOut(
+                code=run.code,
+                name=run.name,
+                result=run.result,
+                won=run.won,
+                drawn=run.drawn,
+                lost=run.lost,
+                champion=ClubRef(id=run.champion_id, name=names[run.champion_id])
+                if run.champion_id is not None
+                else None,
+            )
+            for run in cup.runs(session, season, club_id)
+        ],
     )
 
 
