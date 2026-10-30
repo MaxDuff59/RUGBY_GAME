@@ -1653,6 +1653,185 @@ select.tactics__select {
   text-align: center;
 }
 
+/* Ordinateur : le coup de pied au but (KickScene) occupe tout l'écran, la carte posée
+   à droite. L'affichage du tir (`.kick__hud`) tient dans la place laissée à gauche de
+   la carte, sa largeur donnée par la scène. */
+.login--kick {
+  position: relative;
+}
+
+.login--kick .login__inner {
+  position: relative;
+  margin: auto clamp(0px, 4vw, 72px) auto auto;
+}
+
+.kick {
+  position: fixed;
+  inset: 0;
+  cursor: crosshair;
+  user-select: none;
+  touch-action: none;
+}
+
+.kick canvas {
+  display: block;
+}
+
+.kick__hud {
+  position: absolute;
+  inset: 0 auto 0 0;
+  pointer-events: none;
+  color: #fff;
+}
+
+.kick__board {
+  position: absolute;
+  top: 28px;
+  left: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 170px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: rgb(18 22 28 / 0.62);
+  backdrop-filter: blur(6px);
+}
+
+.kick__kind {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.7);
+}
+
+.kick__distance {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.kick__line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.kick__arrow {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.kick__result {
+  position: absolute;
+  top: 30%;
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 72px;
+  font-weight: 700;
+  text-transform: uppercase;
+  text-shadow: 0 2px 18px rgb(0 0 0 / 0.45);
+  animation: kick-result 0.35s ease-out;
+}
+
+.kick__result:not(.is-made) {
+  color: rgb(255 255 255 / 0.85);
+}
+
+@keyframes kick-result {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+}
+
+.kick__power {
+  position: absolute;
+  left: 50%;
+  bottom: 36px;
+  width: 260px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.kick__power.is-on {
+  opacity: 1;
+}
+
+.kick__power-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 6px rgb(0 0 0 / 0.5);
+}
+
+.kick__gauge {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  background: rgb(18 22 28 / 0.55);
+  overflow: hidden;
+}
+
+.kick__fill {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.kick__fill.is-over {
+  background: #e2a33a;
+}
+
+/* Au-delà du trait, la frappe perd en précision. */
+.kick__over {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgb(18 22 28 / 0.7);
+}
+
+.kick__hint {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 36px;
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  text-shadow: 0 1px 8px rgb(0 0 0 / 0.6);
+}
+
+.kick__fade {
+  position: absolute;
+  inset: 0;
+  background: #0d1210;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s;
+}
+
+.kick__fade.is-on {
+  opacity: 1;
+}
+
 @media (max-width: 960px) {
   .login {
     padding: 32px 16px calc(24px + env(safe-area-inset-bottom, 0px));

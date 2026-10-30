@@ -1,23 +1,32 @@
-import { useCallback, useState } from "react";
+import { Suspense, lazy, useCallback, useRef, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 
 import { api } from "../api.js";
 import RugbyBall from "../components/RugbyBall.jsx";
 import { useApi } from "../hooks/useApi.js";
-import { useMediaQuery } from "../hooks/useMediaQuery.js";
+import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
+
+const KickScene = lazy(() => import("../components/KickScene.jsx"));
 
 // Écran de connexion : une adresse e-mail et un mot de passe, pour se connecter ou
 // créer son compte. Les parties sont rangées par compte ; une fois connecté, on
 // arrive sur ses parties. On peut aussi jouer sans compte : le jeu crée un invité, qui
 // arrive sur ses parties comme les autres (une carrière, ou un match libre). Un invité
 // revient ici créer son compte : sa partie le suit.
+// Sur ordinateur, la page est un coup de pied au but en 3D (KickScene), la carte posée
+// à droite ; sur téléphone (ou sans WebGL), le ballon qui tourne au-dessus de la carte.
 // Téléphone trop bas pour le ballon au-dessus de la carte : on le retire (même seuil
 // que la règle `@media` de styles.css).
 const NO_BALL_QUERY = "(max-width: 960px) and (max-height: 800px)";
 
 export default function Login() {
   const navigate = useNavigate();
-  const ball = !useMediaQuery(NO_BALL_QUERY);
+  const phone = useMediaQuery(PHONE_QUERY);
+  const short = useMediaQuery(NO_BALL_QUERY);
+  const [noScene, setNoScene] = useState(false);
+  const card = useRef(null);
+  const scene = !phone && !noScene;
+  const ball = !scene && !short;
   const me = useApi(useCallback(api.me, []));
   const guest = me.data?.guest ?? false;
   const [mode, setMode] = useState("login"); // "login" | "register"
@@ -67,7 +76,12 @@ export default function Login() {
   }
 
   return (
-    <div className="login">
+    <div className={`login${scene ? " login--kick" : ""}`}>
+      {scene && (
+        <Suspense fallback={null}>
+          <KickScene aside={card} onFail={() => setNoScene(true)} />
+        </Suspense>
+      )}
       <div className="login__inner">
         {ball && (
           <div className="login__ball">
@@ -75,7 +89,7 @@ export default function Login() {
           </div>
         )}
 
-        <main className="login__card">
+        <main className="login__card" ref={card}>
           <img className="login__logo" src="/logo.png" alt="Rugby Manager" />
           <header className="login__head">
             <h1 className="title">{registering ? "Créer un compte" : "Connexion"}</h1>

@@ -93,13 +93,24 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   et fraîcheur sur les notes du match (détail au survol), sans barre.
 - Limogeage : la page de choix du club s'ouvre sur « Limogé le … / Rebondis ailleurs »,
   le nom du manager prérempli et l'ancien club grisé.
-- Connexion (`/connexion`, `.login`) : une pelouse tondue en bandes (vert terrain, grain
-  fin), un ballon de rugby en 3D à gauche (`RugbyBall`, lancer de rayons dans un canvas,
+- Connexion (`/connexion`, `.login`) sur ordinateur (`.login--kick`) : un coup de pied
+  au but en 3D sur tout l'écran (`KickScene`, three.js, chargé à la demande), vu par le
+  buteur : ballon sur son tee, poteaux à protections bordeaux et fanions, pelouse tondue
+  et lignes du terrain, panneaux lumineux, tribunes garnies sous leur toit, ciel. On vise
+  à la souris (ligne en tirets sur l'herbe), on maintient le clic pour la puissance (jauge
+  en bas, trait de surpuissance au-delà duquel la frappe perd en précision), on relâche :
+  élan, vol freiné par l'air et poussé par le vent, culbute, rebonds sur les poteaux et
+  l'herbe, caméra qui suit et zoome. Verdict au centre (« Entre les perches ! », « À
+  gauche », « Trop court »…), puis un tir plus loin et plus venté après chaque réussite.
+  En haut à gauche, le tableau du tir sur fond sombre translucide : nature, distance,
+  vent (flèche vue du buteur), réussis. La scène est centrée sur la place laissée à gauche
+  de la carte. Sans WebGL, et sur téléphone : la pelouse tondue en bandes (vert terrain,
+  grain fin) et un ballon de rugby en 3D (`RugbyBall`, lancer de rayons dans un canvas,
   sans bibliothèque) qui tourne en vrille au-dessus de son ombre, s'incline vers la souris
-  et saute en culbutant au clic ; immobile avec « réduire les animations ». À droite la
-  carte de connexion (seule carte avec une ombre, posée sur l'herbe) : logo, titre centré,
-  champs et bouton pleine largeur, « Créer un compte » en lien, puis sous un filet
-  « Jouer sans compte ». Sur téléphone, le ballon au-dessus de la carte, retiré sous 800 px de haut. Écran bas
+  et saute en culbutant au clic ; immobile avec « réduire les animations ». La carte de
+  connexion (seule carte avec une ombre) : logo, titre centré, champs et bouton pleine
+  largeur, « Créer un compte » en lien, puis sous un filet « Jouer sans compte ». Sur
+  téléphone, le ballon au-dessus de la carte, retiré sous 800 px de haut. Écran bas
   (≤ 700 px) : carte resserrée, logo réduit, puis sans logo (≤ 600 px) et sans la note
   « Jouer sans compte » (≤ 540 px).
 - Choix de la carrière (`/start`, `.start--career`) sur ordinateur : une colonne de
