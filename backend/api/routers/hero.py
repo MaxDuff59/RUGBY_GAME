@@ -9,7 +9,7 @@ placer (`POST /hero/train`). Les réseaux sociaux parlent de lui (`GET /hero/soc
 """
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import delete
+from sqlalchemy import delete, func, select
 
 from api import hero as heroes
 from api import hero_market, plans
@@ -79,8 +79,10 @@ def start_hero(payload: HeroIn, session: SessionDep, user: UserDep) -> CareerOut
         season = create_season(session, FIRST_SEASON_YEAR)
         plans.count_season(user)
 
+    # L'id suit le plus grand existant, comme partout ailleurs : le monde est créé avec
+    # des id explicites, la séquence de Postgres n'a pas avancé avec eux.
     player = Player(
-        id=0,
+        id=(session.scalar(select(func.max(PlayerRow.id))) or 0) + 1,
         first_name=payload.first_name.strip(),
         last_name=payload.last_name.strip(),
         age=rules.START_AGE,
@@ -93,7 +95,6 @@ def start_hero(payload: HeroIn, session: SessionDep, user: UserDep) -> CareerOut
     )
     player.wage = wage_for(player)
     player_row = PlayerRow.from_domain(player)
-    player_row.id = None
     # Il progresse par ses points, pas tout seul : son potentiel est sa note du jour.
     player_row.potential = round(player.level, 1)
     session.add(player_row)
