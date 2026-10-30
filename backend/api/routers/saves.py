@@ -14,6 +14,7 @@ from sqlalchemy import select
 import accounts
 from api import competition, internationals, plans
 from api.auth import UserDep
+from api.hero import hero
 from api.ledger import current_season, game_date
 from api.schemas import SaveOut
 from data.leagues import league_config
@@ -28,7 +29,7 @@ from database import (
     saved_at,
     slot_exists,
 )
-from models.orm import CareerRow, ClubRow
+from models.orm import CareerRow, ClubRow, PlayerRow
 
 router = APIRouter(prefix="/saves", tags=["parties"])
 
@@ -56,6 +57,13 @@ def _save_out(user: accounts.User, slot: int) -> SaveOut:
             out.manager_name = career.manager_name
             out.club_name = club.name
             out.league_name = league_config(club.league).name
+        elif (row := hero(session)) is not None:
+            player = session.get(PlayerRow, row.player_id)
+            club = session.get(ClubRow, player.club_id) if player.club_id else None
+            out.manager_name = f"{player.first_name} {player.last_name}"
+            out.club_name = club.name if club else None
+            out.league_name = league_config(club.league).name if club else "Retraité"
+            out.player = True
         elif (human := internationals.selector(session)) is not None:
             out.manager_name = human.manager_name
             out.club_name = NATIONS_BY_CODE[human.nation].name

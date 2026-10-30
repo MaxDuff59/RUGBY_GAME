@@ -26,7 +26,7 @@ from engine.market import Deal, Market
 from engine.mercato import Transfer
 from engine.transfers import DealKind
 from models import Stage
-from models.orm import CareerRow, ClubRow, MoveRow, NegotiationRow, PlayerRow, SeasonRow
+from models.orm import CareerRow, ClubRow, HeroRow, MoveRow, NegotiationRow, PlayerRow, SeasonRow
 
 OPEN_STAGES = ("club", "player")
 
@@ -48,6 +48,11 @@ def _phases(season: SeasonRow) -> tuple[set[str], set[str]]:
         if not unplayed or max(played) > max(m.matchday for m in regular) // 2:
             late.add(league)
     return late, active
+
+
+def _hero_ids(session: Session) -> frozenset[int]:
+    """Le joueur incarné (carrière de joueur) : les clubs IA ne le prêtent ni ne le vendent."""
+    return frozenset(session.scalars(select(HeroRow.player_id)))
 
 
 def market_day(
@@ -82,7 +87,8 @@ def market_day(
         active=active,
         incoming=Counter(club_id for _, club_id, _ in signed),
         incoming_wages=incoming_wages,
-        taken={player_id for player_id, _, _ in signed} | set(talks),
+        # Le joueur incarné (api/hero.py) ne bouge que par son propre mercato.
+        taken={player_id for player_id, _, _ in signed} | set(talks) | _hero_ids(session),
     )
     deals = market.play(rng)
 
@@ -140,6 +146,7 @@ def summer_market(
             select(MoveRow.player_id).where(MoveRow.date == day, MoveRow.to_club_id.is_not(None))
         )
     )
+    arrived |= _hero_ids(session)  # le joueur incarné ne bouge que par son propre mercato
     deals = engine.mercato.summer_market([clubs[i] for i in sorted(clubs)], year, rng, arrived)
     for deal in deals:
         player, seller, buyer = deal.player, deal.seller, deal.buyer

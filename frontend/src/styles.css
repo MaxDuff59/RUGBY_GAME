@@ -7703,3 +7703,503 @@ td > .tag:first-child,
     display: none;
   }
 }
+
+/* --- Carrière de joueur ------------------------------------------------------------ */
+
+/* Création du joueur : prénom et nom côte à côte. */
+.start-hero__names {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+/* Match en direct : à la place du plan de jeu et des discours, le joueur incarné. */
+.live-hero {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 20px;
+  margin-top: -8px;
+  padding: 10px 16px;
+}
+
+.live-hero__name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.live-hero__note {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 12px;
+}
+
+.live-hero__note .num {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 40px;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.live-hero__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.live-hero__dots {
+  display: flex;
+  gap: 4px;
+}
+
+.live-hero__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.live-hero__dot--won {
+  background: var(--win);
+}
+
+.live-hero__dot--lost {
+  background: var(--loss);
+}
+
+/* Le joueur incarné, dans la composition de son équipe. */
+.live-row--hero td {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.live-row--hero .live-row__name {
+  font-weight: 700;
+}
+
+/* Tableau de bord : la fiche (note générale, expérience), puis attributs et matchs. */
+.hero-card__overall {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.hero-card__value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 52px;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.hero-xp {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.hero-points {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.hero-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+}
+
+.hero-grid > .section > .card {
+  flex: 1 1 auto;
+}
+
+.hero-attributes {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+
+.hero-attributes li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px 28px 64px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.hero-attributes li:last-child {
+  border-bottom: 0;
+}
+
+.hero-attribute--minor .hero-attribute__label {
+  color: var(--ink-muted);
+}
+
+.hero-attribute__label {
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hero-attribute__label .muted {
+  font-weight: 400;
+  font-size: 13px;
+}
+
+.hero-attribute__bar {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+
+.hero-attribute__bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.hero-attribute__value {
+  text-align: right;
+  font-weight: 700;
+}
+
+.hero-xp__bar {
+  width: 100%;
+}
+
+@media (max-width: 960px) {
+  .start-hero__names {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .live-hero {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+  }
+
+  .live-hero__actions {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .hero-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hero-attributes li {
+    grid-template-columns: minmax(0, 1fr) 64px 24px 64px;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+}
+
+/* Téléphone : la fiche puis les attributs, qui défilent dans leur carte. */
+.hero-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hero-progress > .section {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.hero-progress > .section > .card {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* La vue Progression tient dans l'écran du téléphone : la fiche, puis les attributs. */
+.app--phone .hero-progress.fill {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+/* Réseaux du joueur incarné : son compte à gauche, le fil à droite (qui défile). */
+.social {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 28px;
+  align-items: stretch;
+}
+
+.social > .section {
+  min-height: 0;
+}
+
+.social__profile {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-self: start;
+}
+
+.social__me {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.social__name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.social__followers {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.social__count {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 48px;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.social__gain {
+  color: var(--win);
+  font-weight: 600;
+}
+
+.social__mood {
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--line-soft);
+}
+
+.social__mood--praise {
+  background: var(--win);
+}
+
+.social__mood--neutral {
+  background: var(--neutral-soft);
+}
+
+.social__mood--critic {
+  background: var(--loss);
+}
+
+.social__avatar {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 14px;
+  color: #fff;
+  background: var(--neutral);
+}
+
+.social__avatar--me {
+  width: 52px;
+  height: 52px;
+  font-size: 18px;
+  background: var(--accent);
+}
+
+.social__avatar--media {
+  background: var(--ink);
+  color: var(--surface);
+}
+
+.social__avatar--journalist {
+  background: var(--pitch);
+}
+
+.social__avatar--fan {
+  background: var(--accent);
+}
+
+.social__feed {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.social__feed ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.social-post {
+  display: flex;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.social-post:last-child {
+  border-bottom: 0;
+}
+
+.social-post__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.social-post__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 14px;
+}
+
+.social-post__head .muted {
+  font-size: 13px;
+}
+
+.social-post__verified {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.social-post__text {
+  margin: 0;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.social-post__stats {
+  display: flex;
+  gap: 20px;
+  font-size: 13px;
+}
+
+@media (max-width: 960px) {
+  .social {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .app--phone .social.fill {
+    flex: 1 1 0;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .social__profile {
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .social__profile .facts__list,
+  .social__mood {
+    display: none;
+  }
+
+  .social__count {
+    font-size: 34px;
+  }
+
+  .social .section__head .chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .social .section__head > .muted {
+    display: none;
+  }
+}
+
+.live-hero__skip {
+  margin-top: 6px;
+}
+
+/* Un dilemme sous pression : ce qu'il pèse. */
+.dilemma__pressure {
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/* Le dernier mot de l'entraîneur, sous le prochain match. */
+.hero-coach {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  font-style: italic;
+}
+
+.hero-coach .eyebrow {
+  font-style: normal;
+}
+
+/* Fin de saison du joueur incarné : titres et trophées, offres du mercato. */
+.hero-honours {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.hero-offers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+.hero-offer .eyebrow {
+  color: inherit;
+  opacity: 0.8;
+}
+
+.hero-career {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: auto;
+}

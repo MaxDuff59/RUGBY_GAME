@@ -25,6 +25,7 @@ from api import careers, internationals, plans
 from api.auth import UserDep
 from api.deps import SessionDep, load_club
 from api.ledger import current_season, game_date
+from api.routers.hero import hero_career_out
 from api.routers.seasons import FIRST_SEASON_YEAR, create_season, offseason
 from api.schemas import (
     CareerHistoryOut,
@@ -48,6 +49,7 @@ from models.orm import (
     CareerRow,
     ClubRow,
     DismissalRow,
+    HeroRow,
     LiveInternationalRow,
     LiveMatchRow,
     SelectorRow,
@@ -122,7 +124,8 @@ def start_career(payload: CareerIn, session: SessionDep, user: UserDep) -> Caree
         takeover = not first_season and careers.league_over(season, club.league)
         if takeover:
             plans.require_season(user)
-    for table in (CareerRow, SelectorRow, DismissalRow, LiveMatchRow, LiveInternationalRow):
+    kinds = (CareerRow, SelectorRow, HeroRow, DismissalRow)
+    for table in (*kinds, LiveMatchRow, LiveInternationalRow):
         session.execute(delete(table))
     if club is not None:
         row = CareerRow(
@@ -157,6 +160,9 @@ def get_career(session: SessionDep) -> CareerOut:
     row = session.scalars(select(CareerRow)).first()
     if row is not None:
         return _career_out(row, load_club(session, row.club_id))
+    hero = session.scalars(select(HeroRow)).first()
+    if hero is not None:
+        return hero_career_out(session, hero)
     human = internationals.selector(session)
     if human is None:
         raise HTTPException(status_code=404, detail="Aucune carrière en cours")

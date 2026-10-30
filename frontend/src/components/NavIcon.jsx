@@ -9,6 +9,13 @@ const PATHS = {
       <path d="M7 8.5h6.5M7 12h6.5M7 15.5h4" />
     </>
   ),
+  // Réseaux : une bulle de discussion, ses lignes de texte
+  reseaux: (
+    <>
+      <path d="M4 5h16v11H10l-4.5 3.5V16H4z" />
+      <path d="M8 9h8M8 12.5h5" />
+    </>
+  ),
   calendrier: (
     <>
       <rect x="3.5" y="5" width="17" height="15" rx="2" />

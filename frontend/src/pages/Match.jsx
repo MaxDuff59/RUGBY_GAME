@@ -4,11 +4,13 @@ import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { api } from "../api.js";
 import ClubCrest from "../components/ClubCrest.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
+import DilemmaDialog from "../components/DilemmaDialog.jsx";
 import Modal from "../components/Modal.jsx";
 import Momentum from "../components/Momentum.jsx";
 import WeatherIcon from "../components/WeatherIcon.jsx";
 import {
   CRUNCH_OPTIONS,
+  DILEMMAS,
   EVENTS,
   MATCH_STATS,
   POSITION_SHORT,
@@ -44,16 +46,24 @@ const PAUSING = new Set(["injury", "yellow_card", "red_card"]);
 // Sous le tableau, « Plan de jeu » et « Discours » mettent le match en pause et
 // ouvrent leur fenêtre ; en pause, on fait aussi les remplacements. En fin de match
 // serrée, une pénalité décisive arrête le chrono : c'est le choix crucial.
+// En carrière de joueur, le staff mène l'équipe ; le chrono s'arrête sur les actions
+// du joueur incarné (ses dilemmes).
 export default function Match() {
   const { career } = useOutletContext();
   const navigate = useNavigate();
+  const player = career.kind === "player";
   return (
     <LiveScreen
       calls={CAREER_CALLS}
+      player={player}
       empty={(onStarted) => <NoLiveMatch career={career} onStarted={onStarted} />}
       // Fin de journée : les autres matchs se jouent, et le tableau de bord raconte la suite.
       onFinished={(result) => navigate("/", { replace: true, state: { played: result } })}
-      handOverText="Le reste du match se joue sans toi : le staff gère le banc. La journée se termine ensuite comme d'habitude."
+      handOverText={
+        player
+          ? "Le reste du match se joue sans toi : à chaque action, tu joues la sécurité. La journée se termine ensuite comme d'habitude."
+          : "Le reste du match se joue sans toi : le staff gère le banc. La journée se termine ensuite comme d'habitude."
+      }
     />
   );
 }
@@ -66,14 +76,26 @@ const CAREER_CALLS = {
   decide: api.decideLive,
   substitute: api.substituteLive,
   finish: api.finishLive,
+  choose: api.chooseLive,
+  toEntry: api.advanceLiveToEntry,
 };
 
 // L'écran du match en direct, quel que soit le match : `calls` sont ses appels à l'API
 // (ceux de la carrière, ou du match libre), `empty(onStarted)` ce qu'on montre sans match
 // en cours. `finish` (« Terminer », ou le bouton du match fini) joue la fin ; sa réponse
 // va à `onFinished`, ou s'affiche sans lui. Avec `endActions(live)`, le match fini montre
-// ces boutons à la place de celui-là (`doneLabel`).
-export function LiveScreen({ calls, title, empty, onFinished, endActions, doneLabel = "Continuer", handOverText }) {
+// ces boutons à la place de celui-là (`doneLabel`). `player` : carrière de joueur, sans
+// plan de jeu, discours ni changement ; ses dilemmes à la place (`calls.choose`).
+export function LiveScreen({
+  calls,
+  title,
+  empty,
+  onFinished,
+  endActions,
+  doneLabel = "Continuer",
+  handOverText,
+  player = false,
+}) {
   const current = useApi(calls.get);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -83,7 +105,7 @@ export function LiveScreen({ calls, title, empty, onFinished, endActions, doneLa
   const [finishing, setFinishing] = useState(false);
   const phone = useMediaQuery(PHONE_QUERY);
   const [lineupClub, setLineupClub] = useState(null); // téléphone : la composition montrée (la nôtre par défaut)
-  const [panel, setPanel] = useState(null); // fenêtre ouverte : "plan", "talk" ou "crunch"
+  const [panel, setPanel] = useState(null); // fenêtre ouverte : "plan", "talk", "crunch" ou "dilemma"
   const confirm = useConfirm();
   const live = current.data;
   const { setData } = current;
@@ -106,6 +128,9 @@ export function LiveScreen({ calls, title, empty, onFinished, endActions, doneLa
       } else if (next.crunch) {
         setPlaying(false);
         setNotice("Choix crucial");
+      } else if (next.dilemma) {
+        setPlaying(false);
+        setNotice("À toi de jouer");
       } else if (mine) {
         setPlaying(false);
         setNotice(`${EVENTS[mine.type]} : ${mine.player_name}`);
@@ -135,11 +160,17 @@ export function LiveScreen({ calls, title, empty, onFinished, endActions, doneLa
   useEffect(() => {
     if (crunchMinute !== undefined) setPanel("crunch");
   }, [crunchMinute]);
+  // De même pour une action du joueur incarné (carrière de joueur).
+  const dilemmaMinute = live?.dilemma?.minute;
+  useEffect(() => {
+    if (dilemmaMinute !== undefined) setPanel("dilemma");
+  }, [dilemmaMinute]);
 
   // La barre d'espace met en pause et relance, comme le bouton du tableau d'affichage ;
   // pas pendant une saisie, ni quand une fenêtre est ouverte (plan, discours, confirmation),
   // ni quand une décision attend.
-  const canToggle = Boolean(live) && !live.finished && !live.crunch && !finishing && panel === null;
+  const canToggle =
+    Boolean(live) && !live.finished && !live.crunch && !live.dilemma && !finishing && panel === null;
   useEffect(() => {
     if (!canToggle) return undefined;
     const onKey = (event) => {
@@ -174,6 +205,10 @@ export function LiveScreen({ calls, title, empty, onFinished, endActions, doneLa
   const start = () => {
     if (live.crunch) {
       setPanel("crunch");
+      return;
+    }
+    if (live.dilemma) {
+      setPanel("dilemma");
       return;
     }
     setNotice(null);
@@ -251,7 +286,22 @@ export function LiveScreen({ calls, title, empty, onFinished, endActions, doneLa
         onHandOver={handOver}
         onFinish={finish}
       />
-      <Actions live={live} side={mySide} onOpen={openPanel} />
+      {player ? (
+        <HeroBar
+          live={live}
+          side={mySide}
+          busy={busy || playing}
+          onToEntry={() =>
+            act(async () => {
+              const next = await calls.toEntry();
+              setNotice(next.dilemma ? "À toi de jouer" : "Tu entres en jeu");
+              return next;
+            })
+          }
+        />
+      ) : (
+        <Actions live={live} side={mySide} onOpen={openPanel} />
+      )}
       <Momentum
         bars={live.momentum}
         slots={live.last_minute}
@@ -282,6 +332,16 @@ export function LiveScreen({ calls, title, empty, onFinished, endActions, doneLa
           error={error}
           onDecide={(option) => act(() => calls.decide(option))}
           onClose={() => setPanel(null)}
+          onResume={resume}
+        />
+      )}
+      {panel === "dilemma" && (
+        <DilemmaDialog
+          live={live}
+          side={mySide}
+          busy={busy}
+          error={error}
+          onChoose={(option) => act(() => calls.choose(option))}
           onResume={resume}
         />
       )}
@@ -320,7 +380,8 @@ export function LiveScreen({ calls, title, empty, onFinished, endActions, doneLa
               key={shownSide.club.id}
               side={shownSide}
               mine={shownSide.club.id === myId}
-              paused={!playing && !live.finished}
+              heroId={live.hero?.player_id}
+              paused={!player && !playing && !live.finished}
               busy={busy}
               onSubstitute={(out, into) => act(() => calls.substitute(out, into))}
             />
@@ -335,7 +396,8 @@ export function LiveScreen({ calls, title, empty, onFinished, endActions, doneLa
                 key={side.club.id}
                 side={side}
                 mine={side.club.id === myId}
-                paused={!playing && !live.finished}
+                heroId={live.hero?.player_id}
+                paused={!player && !playing && !live.finished}
                 busy={busy}
                 onSubstitute={(out, into) => act(() => calls.substitute(out, into))}
               />
@@ -514,7 +576,15 @@ function Scoreboard({
                 title="Barre d'espace"
                 onClick={playing ? onPause : onPlay}
               >
-                {playing ? "Pause" : live.crunch ? "Choix crucial" : live.minute === 0 ? "Coup d'envoi" : "Reprendre"}
+                {playing
+                  ? "Pause"
+                  : live.crunch
+                    ? "Choix crucial"
+                    : live.dilemma
+                      ? "À toi de jouer"
+                      : live.minute === 0
+                        ? "Coup d'envoi"
+                        : "Reprendre"}
               </button>
               <div className="chips" role="group" aria-label="Vitesse du chrono">
                 {SPEEDS.map((s, index) => (
@@ -689,7 +759,7 @@ function Mark({ type }) {
 // Colonnes de la vue « Statistiques » d'une composition.
 const LIVE_STATS = ["carries", "tackles", "missed_tackles", "line_breaks"];
 
-function Lineup({ side, mine, paused, busy, onSubstitute }) {
+function Lineup({ side, mine, heroId, paused, busy, onSubstitute }) {
   const [outgoing, setOutgoing] = useState(null); // joueur qu'on va remplacer
   const [stats, setStats] = useState(false); // statistiques à la place de l'énergie
   const columns = stats ? 4 + LIVE_STATS.length : 5;
@@ -722,7 +792,7 @@ function Lineup({ side, mine, paused, busy, onSubstitute }) {
         </span>
       </div>
 
-      {mine && (
+      {mine && !heroId && (
         <p className="live-lineup__hint muted">
           {!paused
             ? "Mets le match en pause pour faire un remplacement."
@@ -762,6 +832,7 @@ function Lineup({ side, mine, paused, busy, onSubstitute }) {
               player={player}
               kickerId={side.kicker_id}
               captainId={side.captain_id}
+              heroId={heroId}
               stats={stats}
               columns={columns}
               selectable={canManage && player?.status === "field"}
@@ -781,6 +852,7 @@ function Lineup({ side, mine, paused, busy, onSubstitute }) {
               player={player}
               kickerId={side.kicker_id}
               captainId={side.captain_id}
+              heroId={heroId}
               stats={stats}
               columns={columns}
               bench
@@ -800,6 +872,7 @@ function PlayerRow({
   player,
   kickerId,
   captainId,
+  heroId,
   stats,
   columns,
   bench = false,
@@ -825,6 +898,7 @@ function PlayerRow({
     selected ? "table__row--selected" : "",
     bench && player.status !== "bench" ? "table__row--bench" : "",
     player.status === "sin_bin" ? "live-row--absent" : "",
+    player.id === heroId ? "live-row--hero" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -966,6 +1040,66 @@ function Actions({ live, side, onOpen }) {
 // L'élan va de −12 % à +15 % : la jauge part du centre, à droite quand il porte, à
 // gauche (en rouge) quand il pèse. Sous elle, le dernier discours.
 const SPIRIT_SCALE = 0.15;
+
+// Carrière de joueur : à la place du plan de jeu et des discours, le joueur incarné,
+// sa note du moment et ses actions déjà jouées.
+function HeroBar({ live, side, busy, onToEntry }) {
+  const me = side.players.find((p) => p.id === live.hero?.player_id);
+  if (!me) return null;
+  const outcomes = live.hero.outcomes;
+  const won = outcomes.filter((o) => o.success).length;
+  const where =
+    me.status === "field"
+      ? "Sur le terrain"
+      : me.status === "bench"
+        ? `Sur le banc · le staff te fait entrer à la ${live.hero.entry}e minute`
+        : me.status === "sin_bin"
+          ? `Carton jaune · retour à la ${me.back_at}e`
+          : me.status === "injured"
+            ? "Blessé, sorti"
+            : me.status === "sent_off"
+              ? "Exclu"
+              : "Remplacé";
+  return (
+    <section className="card live-hero">
+      <div>
+        <span className="eyebrow">Toi · n° {me.number}</span>
+        <div className="live-hero__name">{me.name}</div>
+        <span className="muted">
+          {where}
+          {live.hero.hurt && " · tu joues blessé"}
+          {live.hero.confidence >= 0.3 && " · en confiance"}
+          {live.hero.confidence <= -0.3 && " · en manque de confiance"}
+        </span>
+        {me.status === "bench" && !live.finished && (
+          <button type="button" className="button button--small live-hero__skip" disabled={busy} onClick={onToEntry}>
+            Simuler jusqu'à ton entrée
+          </button>
+        )}
+      </div>
+      <div className="live-hero__note">
+        <span className="num">{me.rating !== null ? formatNote(me.rating) : "–"}</span>
+        <span className="muted">note / 10</span>
+      </div>
+      <div className="live-hero__actions">
+        <span className="muted">
+          {outcomes.length === 0
+            ? "Aucune action jouée"
+            : `${won} action${won > 1 ? "s" : ""} réussie${won > 1 ? "s" : ""} sur ${outcomes.length}`}
+        </span>
+        <span className="live-hero__dots">
+          {outcomes.map((o) => (
+            <span
+              key={o.minute}
+              className={`live-hero__dot live-hero__dot--${o.success ? "won" : "lost"}`}
+              title={`${o.minute}' · ${DILEMMAS[o.situation].options[o.option].label}`}
+            />
+          ))}
+        </span>
+      </div>
+    </section>
+  );
+}
 
 function Spirit({ spirit, mood, lastTalk }) {
   const flat = Math.abs(spirit) < 0.005;

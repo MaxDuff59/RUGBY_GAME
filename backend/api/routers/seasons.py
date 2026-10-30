@@ -28,6 +28,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from accounts import User
 from api import competition, cup, internationals, plans
+from api import hero as heroes
 from api.affairs import (
     affair_out,
     draw_affair,
@@ -39,7 +40,7 @@ from api.auth import UserDep
 from api.deps import SessionDep, load_clubs
 from api.free_agents import age_free_agents, release, renew_pool
 from api.jokers import close_jokers, end_piges
-from api.ledger import current_season, record
+from api.ledger import current_season, game_date, record
 from api.live import live_match_row, load_live, load_live_test
 from api.market import market_day, summer_market
 from api.moves import delete_player, log_move
@@ -151,11 +152,20 @@ def _club_leagues(session: Session) -> dict[int, str]:
     return dict(session.execute(select(ClubRow.id, ClubRow.league).order_by(ClubRow.id)).all())
 
 
-def focus_league(session: Session) -> str:
-    """Le championnat du club dirigé (le Top 14 sans carrière, ou le premier venu)."""
+def followed_club_id(session: Session) -> int | None:
+    """Le club que suit la partie : celui du manager, ou celui du joueur incarné en
+    carrière de joueur (api/hero.py) ; None sans l'un ni l'autre."""
     career = session.scalars(select(CareerRow)).first()
     if career is not None:
-        return session.get(ClubRow, career.club_id).league
+        return career.club_id
+    return heroes.hero_club_id(session)
+
+
+def focus_league(session: Session) -> str:
+    """Le championnat du club suivi (le Top 14 sans carrière, ou le premier venu)."""
+    club_id = followed_club_id(session)
+    if club_id is not None:
+        return session.get(ClubRow, club_id).league
     leagues = set(session.scalars(select(ClubRow.league)))
     return DEFAULT_LEAGUE if DEFAULT_LEAGUE in leagues or not leagues else min(leagues)
 
@@ -241,11 +251,10 @@ def next_fixture(session: Session, season: SeasonRow) -> MatchRow | None:
 
     Les tours de phases finales prêts sont déjà ouverts (`_prepare_day`, après chaque
     journée)."""
-    career = session.scalars(select(CareerRow)).first()
-    if career is None:
+    club_id = followed_club_id(session)
+    if club_id is None:
         return None
     league = focus_league(session)
-    club_id = career.club_id
     unplayed = [m for m in season.matches if not m.is_played and m.league == league]
     league_day = min((m.date for m in unplayed), default=None)
     mine = [
@@ -566,6 +575,9 @@ def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayRes
 
     for row, match in zip([*todays, *youth_rows], [*matches, *youth_matches], strict=True):
         _write_result(row, match)
+    if live is not None:
+        # Carrière de joueur : ses actions du match restent (api/hero.py).
+        heroes.record_moments(session, live.match_row.id, live.match.outcomes)
 
     # Blessures de la journée : enregistrées en base, et renvoyées pour le club dirigé
     # (ou, pour un sélectionneur, pour les joueurs de sa liste).
@@ -599,14 +611,18 @@ def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayRes
     # Progression : chacun a avancé vers son potentiel (engine/development.py). Toutes
     # les colonnes de progression sont écrites pour chacun, même inchangées : les lignes
     # ont alors la même forme et partent en une requête groupée, pas une par joueur.
-    for player_id in report.developed:
+    # Le joueur incarné progresse par ses points (api/hero.py), pas tout seul.
+    hero_id = heroes.hero_player_id(session)
+    for player_id in report.developed - {hero_id}:
         player, player_row = players[player_id], session.get(PlayerRow, player_id)
         for name in PROGRESSION_COLUMNS:
             setattr(player_row, name, getattr(player, name))
             flag_modified(player_row, name)
 
     # Les matchs internationaux du jour, avec leur propre hasard : les clubs jouent
-    # la même journée qu'il y en ait ou non.
+    # la même journée qu'il y en ait ou non. Le joueur incarné peut jouer le sien en
+    # direct (api/routers/live.py) : ses minutes et sa note restent (api/hero.py).
+    hero_test = load_live_test(session) if human is None and heroes.hero(session) else None
     test_day = internationals.play_tests(
         session,
         season,
@@ -615,8 +631,10 @@ def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayRes
         history.appearances,
         clubs,
         my_club_id,
-        live=load_live_test(session) if human is not None else None,
+        live=load_live_test(session) if human is not None else hero_test,
     )
+    if hero_test is not None:
+        heroes.record_test(session, hero_test)
     for injury_row, injury in test_day.injuries:
         in_my_club = injury.player_id in players and (
             players[injury.player_id].club_id == my_club_id
@@ -699,8 +717,7 @@ def _play_matchday(session: Session, season: SeasonRow) -> tuple[MatchdayOut, li
     league = focus_league(session)
     if _phase(season, league) == "finished":
         raise HTTPException(status_code=400, detail="La saison est terminée")
-    career = session.scalars(select(CareerRow)).first()
-    my_club_id = career.club_id if career is not None else None
+    my_club_id = followed_club_id(session)
     injuries: list[InjuryCase] = []
     while (day := _prepare_day(session, season)) is not None:
         result = _play_day(session, season, day)
@@ -900,6 +917,8 @@ def play_next_matchday(session: SessionDep) -> PlayOut:
     ignore_pending(session)
     known_lists = {row.id for row in internationals.call_up_rows(session, season)}
     played, injuries = _play_matchday(session, season)
+    hero = heroes.reward(session, season)
+    session.commit()
     dismissal = _board_verdict(session, played)
     affairs, signings, call_ups = [], [], []
     if dismissal is None:
@@ -923,6 +942,7 @@ def play_next_matchday(session: SessionDep) -> PlayOut:
         affairs=[affair_out(row) for row in affairs],
         signings=signings,
         call_ups=call_ups,
+        hero=hero,
     )
 
 
@@ -1061,7 +1081,13 @@ def start_next_season(session: SessionDep, user: UserDep) -> SeasonOut:
                     "fais passer des espoirs pros ou recrute."
                 ),
             )
-    return _season_out(session, offseason(session, user, season, my_club_id))
+    # Le joueur incarné reste sous contrat avec son club, puis part s'il l'a choisi
+    # (api/hero.py), une fois les prêts finis.
+    heroes.keep_signed(session, season.year)
+    fresh = offseason(session, user, season, my_club_id)
+    heroes.apply_choice(session, fresh.year, game_date(session))
+    session.commit()
+    return _season_out(session, fresh)
 
 
 def offseason(session: Session, user: User, season: SeasonRow, my_club_id: int | None) -> SeasonRow:
@@ -1087,6 +1113,7 @@ def offseason(session: Session, user: User, season: SeasonRow, my_club_id: int |
     age_free_agents(session, year, rng)
     next_id = (session.scalar(select(func.max(PlayerRow.id))) or 0) + 1
     player_ids = itertools.count(next_id)
+    hero_id = heroes.hero_player_id(session)
 
     for club_row in _club_rows(session):
         club = club_row.to_domain()
@@ -1098,7 +1125,8 @@ def offseason(session: Session, user: User, season: SeasonRow, my_club_id: int |
         moves = club_offseason(
             club, player_ids, rng, year, promotes_youths=club_row.id != my_club_id
         )
-        retired = {player.id for player in moves.retired}
+        # Le joueur incarné ne raccroche que s'il le décide (api/routers/hero.py).
+        retired = {player.id for player in moves.retired} - {hero_id}
         for player in squad:
             row = rows[player.id]
             if player.id in retired:

@@ -390,6 +390,381 @@ export const CRUNCH_OPTIONS = {
   },
 };
 
+// Carrière de joueur : les dilemmes du joueur incarné en match (engine/dilemmas.py).
+// Pour chaque situation, ce qui se passe et ses voies : le libellé, ce qui se joue, et
+// ce qu'on voit quand elle réussit (`won`) ou échoue (`lost`).
+export const DILEMMAS = {
+  one_on_one: {
+    title: "Un contre un",
+    text: "Le ballon arrive dans tes mains, un défenseur monte sur toi.",
+    options: {
+      step: {
+        label: "Crochet",
+        scope: "Vitesse, appuis",
+        won: "Ton crochet le laisse sur place : franchissement !",
+        lost: "Il ne se laisse pas prendre : plaqué, ballon perdu.",
+      },
+      fend: {
+        label: "Raffût",
+        scope: "Puissance, jeu à la main",
+        won: "Ton raffût l'envoie au sol : tu files !",
+        lost: "Il encaisse et t'arrache le ballon.",
+      },
+      pass: {
+        label: "Passe au soutien",
+        scope: "Passe, la voie sûre",
+        won: "Passe propre, le jeu continue.",
+        lost: "Passe dans les pieds : ballon perdu.",
+      },
+    },
+  },
+  try_line: {
+    title: "À cinq mètres de la ligne",
+    text: "Tu portes le ballon à cinq mètres de l'en-but, la défense est regroupée.",
+    options: {
+      dive: {
+        label: "Plonger seul",
+        scope: "Puissance, vitesse : l'essai pour toi",
+        won: "Tu traverses et tu aplatis !",
+        lost: "Bloqué au-dessus de la ligne, ballon tenu.",
+      },
+      offload: {
+        label: "Décaler un partenaire",
+        scope: "Passe : l'essai pour l'équipe",
+        won: "Ta passe décisive envoie un partenaire à l'essai !",
+        lost: "La passe est interceptée.",
+      },
+      recycle: {
+        label: "Jouer le temps de jeu",
+        scope: "La voie sûre : la faute adverse",
+        won: "La défense craque : pénalité pour nous.",
+        lost: "Le ballon est ralenti, l'action s'éteint.",
+      },
+    },
+  },
+  tackle: {
+    title: "Un attaquant lancé",
+    text: "Un attaquant adverse arrive lancé dans ton couloir.",
+    options: {
+      smash: {
+        label: "Plaquage offensif",
+        scope: "Plaquage, puissance : le ballon à récupérer",
+        won: "Plaquage dévastateur, ballon récupéré !",
+        lost: "Tu le manques.",
+      },
+      hold: {
+        label: "Plaquer avec l'aide",
+        scope: "La voie sûre : attendre le deuxième plaqueur",
+        won: "Plaquage à deux, il ne passe pas.",
+        lost: "Tu glisses sur lui.",
+      },
+      ball: {
+        label: "Viser le ballon",
+        scope: "Puissance : le plaquage haut, risqué",
+        won: "Ballon arraché dans le contact !",
+        lost: "Plaquage trop haut : l'arbitre siffle.",
+      },
+    },
+  },
+  ruck: {
+    title: "Ballon au sol",
+    text: "Le porteur adverse est au sol, tu arrives le premier sur le ruck.",
+    options: {
+      jackal: {
+        label: "Gratter le ballon",
+        scope: "Puissance, plaquage : risqué devant l'arbitre",
+        won: "Tu grattes : ballon pour nous !",
+        lost: "Mains au sol : pénalité contre nous.",
+      },
+      counter: {
+        label: "Contre-ruck",
+        scope: "Puissance : repousser le ruck",
+        won: "Le ruck recule, ballon récupéré !",
+        lost: "Le ruck tient, rien de grave.",
+      },
+      fold: {
+        label: "Se replacer en défense",
+        scope: "La voie sûre",
+        won: "Tu tiens ta place dans la ligne.",
+        lost: "Un temps de retard sur le replacement.",
+      },
+    },
+  },
+  scrum: {
+    title: "Mêlée",
+    text: "Mêlée à trente mètres : le paquet attend ton signal.",
+    options: {
+      drive: {
+        label: "Faire reculer",
+        scope: "Mêlée, puissance : la pénalité à gagner",
+        won: "La mêlée adverse recule : pénalité pour nous !",
+        lost: "Tu te relèves : pénalité contre nous.",
+      },
+      steady: {
+        label: "Stabiliser",
+        scope: "La voie sûre : sortir un bon ballon",
+        won: "Mêlée stable, bon ballon pour les trois-quarts.",
+        lost: "La mêlée tourne, ballon perdu.",
+      },
+    },
+  },
+  lineout: {
+    title: "Touche dans leurs 22",
+    text: "Touche à dix mètres de leur ligne, le lancer est pour nous.",
+    options: {
+      maul: {
+        label: "Saisie et maul",
+        scope: "Touche, puissance : l'essai au bout du maul",
+        won: "Le maul avance et tu aplatis au bout !",
+        lost: "Le maul est stoppé, ballon perdu.",
+      },
+      front: {
+        label: "Sauter devant",
+        scope: "La voie sûre : un ballon propre",
+        won: "Ballon propre en tête de touche.",
+        lost: "Lancer contré, ballon perdu.",
+      },
+    },
+  },
+  kick: {
+    title: "À portée des perches",
+    text: "Tu reçois le ballon à 35 mètres des perches, la défense monte vite.",
+    options: {
+      drop: {
+        label: "Tenter le drop",
+        scope: "Jeu au pied : 3 points",
+        won: "Le drop passe entre les perches !",
+        lost: "Le drop passe à côté.",
+      },
+      grubber: {
+        label: "Petit coup de pied à suivre",
+        scope: "Jeu au pied, vitesse",
+        won: "Tu récupères ton propre coup de pied : franchissement !",
+        lost: "La défense récupère le ballon.",
+      },
+      hands: {
+        label: "Jouer à la main",
+        scope: "La voie sûre",
+        won: "Le jeu continue, bien lancé.",
+        lost: "Passe ratée, en-avant.",
+      },
+    },
+  },
+};
+
+// Situations ajoutées par poste, et le deux contre un qui suit un franchissement.
+Object.assign(DILEMMAS, {
+  cross_kick: {
+    title: "La défense monte en pointe",
+    text: "Tu as le ballon, ton ailier est seul à l'opposé du terrain.",
+    options: {
+      cross: {
+        label: "Transversale au pied",
+        scope: "Jeu au pied : l'essai de l'ailier",
+        won: "Ta transversale tombe dans les bras de l'ailier : essai !",
+        lost: "Le ballon file en touche.",
+      },
+      flat: {
+        label: "Passe plate dans l'intervalle",
+        scope: "Passe : percer la ligne",
+        won: "La passe trouve l'intervalle : la ligne est percée !",
+        lost: "La passe est interceptée.",
+      },
+      touch: {
+        label: "Trouver la touche",
+        scope: "La voie sûre : le territoire",
+        won: "Belle touche, quarante mètres gagnés.",
+        lost: "Le coup de pied reste en jeu, mal placé.",
+      },
+    },
+  },
+  box_kick: {
+    title: "Ballon de ruck dans ton camp",
+    text: "Le ballon sort du ruck dans ton camp, la défense adverse est en place.",
+    options: {
+      box: {
+        label: "Chandelle",
+        scope: "Jeu au pied : le ballon à disputer",
+        won: "Chandelle parfaite, ballon récupéré !",
+        lost: "Trop longue, l'arrière adverse la cueille.",
+      },
+      snipe: {
+        label: "Partir au ras",
+        scope: "Vitesse, puissance : surprendre",
+        won: "Tu pars au ras et tu perces !",
+        lost: "Pris au ras du ruck, ballon perdu.",
+      },
+      serve: {
+        label: "Servir l'ouvreur",
+        scope: "La voie sûre",
+        won: "Service propre, le jeu continue.",
+        lost: "Service raté, en-avant.",
+      },
+    },
+  },
+  touchline: {
+    title: "Le long de la touche",
+    text: "Tu reçois le ballon lancé le long de la touche, l'arrière adverse arrive.",
+    options: {
+      outside: {
+        label: "Déborder",
+        scope: "Vitesse : passer par l'extérieur",
+        won: "Tu le déposes sur l'aile !",
+        lost: "Poussé en touche.",
+      },
+      inside: {
+        label: "Repiquer à l'intérieur",
+        scope: "Appuis, jeu à la main",
+        won: "Ton repiqué le prend à contre-pied.",
+        lost: "Le repiqué est contré, ballon perdu.",
+      },
+      chip: {
+        label: "Petit par-dessus",
+        scope: "Jeu au pied : l'essai pour toi",
+        won: "Tu récupères ton par-dessus et tu aplatis !",
+        lost: "Le rebond te trahit.",
+      },
+    },
+  },
+  counter: {
+    title: "Long coup de pied adverse",
+    text: "Tu réceptionnes un long coup de pied dans tes 22.",
+    options: {
+      run: {
+        label: "Relancer",
+        scope: "Vitesse, jeu à la main : le contre",
+        won: "Relance de quarante mètres !",
+        lost: "Pris dans tes 22.",
+      },
+      up_and_under: {
+        label: "Chandelle",
+        scope: "Jeu au pied : le ballon à disputer",
+        won: "Chandelle récupérée par tes partenaires.",
+        lost: "Ils récupèrent ta chandelle.",
+      },
+      touch: {
+        label: "Trouver la touche",
+        scope: "La voie sûre",
+        won: "Touche trouvée, danger écarté.",
+        lost: "Le coup de pied reste en jeu.",
+      },
+    },
+  },
+  throw: {
+    title: "Lancer en touche",
+    text: "Touche dans leurs 22, c'est à toi de lancer.",
+    options: {
+      back: {
+        label: "Lancer au fond",
+        scope: "Touche : lancer les trois-quarts",
+        won: "Lancer parfait au fond, les trois-quarts percent !",
+        lost: "Lancer intercepté.",
+      },
+      maul: {
+        label: "Lancer devant, maul",
+        scope: "Touche, puissance : l'essai au bout du maul",
+        won: "Le maul avance et tu aplatis au bout !",
+        lost: "Le maul est stoppé.",
+      },
+      front: {
+        label: "Lancer devant",
+        scope: "La voie sûre",
+        won: "Ballon propre en tête de touche.",
+        lost: "Lancer pas droit.",
+      },
+    },
+  },
+  provocation: {
+    title: "Provocation",
+    text: "Après le coup de sifflet, un adversaire te pousse et te chambre.",
+    options: {
+      hit_back: {
+        label: "Riposter",
+        scope: "Montrer qu'on ne te marche pas dessus",
+        won: "L'arbitre n'a rien vu. Le message est passé.",
+        lost: "L'arbitre a tout vu.",
+      },
+      referee: {
+        label: "Prendre l'arbitre à témoin",
+        scope: "La faute peut lui coûter",
+        won: "L'arbitre sanctionne ton provocateur : pénalité pour nous.",
+        lost: "L'arbitre ne veut rien savoir.",
+      },
+      walk_away: {
+        label: "Tourner les talons",
+        scope: "La voie sûre",
+        won: "Tu ne réponds pas. Sang-froid.",
+        lost: "Tu restes troublé un moment.",
+      },
+    },
+  },
+  two_on_one: {
+    title: "Deux contre un",
+    text: "Tu as franchi ! Un seul défenseur devant toi, un partenaire à ta hauteur.",
+    options: {
+      finish: {
+        label: "Finir seul",
+        scope: "Vitesse, puissance : l'essai pour toi",
+        won: "Tu l'évites et tu files à l'essai !",
+        lost: "Rattrapé avant la ligne.",
+      },
+      dummy: {
+        label: "Feinte de passe",
+        scope: "Vitesse, jeu à la main : le défenseur mord ?",
+        won: "Il mord à la feinte : essai !",
+        lost: "Il ne mord pas, plaqué.",
+      },
+      give: {
+        label: "Servir le partenaire",
+        scope: "Passe : l'essai pour l'équipe",
+        won: "Passe parfaite, ton partenaire aplatit !",
+        lost: "La passe part en avant.",
+      },
+    },
+  },
+});
+
+// Ce que l'issue d'un dilemme a changé au match (engine/dilemmas.py, Effect), quand
+// le libellé de la voie ne suffit pas.
+export const DILEMMA_EFFECTS = {
+  try_conceded: "Ils filent à l'essai.",
+  yellow: "Carton jaune : dix minutes sur le banc.",
+  penalty_conceded: "Pénalité contre nous.",
+};
+
+// Ce que l'entraîneur dit au joueur incarné (api/hero.py, `coach_notes`).
+export const COACH_NOTES = {
+  card: "« Un carton, c'est l'équipe à quatorze. Je ne veux plus voir ça. »",
+  risks: "« Joue simple. Tu as voulu trop en faire. »",
+  praise: "« Très bon match. Continue comme ça. »",
+  starter: "« Tu as gagné ta place : tu commences le prochain match. »",
+  doubt: "« Tu dois regagner ma confiance. Tu entreras plus tard. »",
+  aggravated: "« Jouer blessé t'a coûté cher : ta blessure s'est aggravée. »",
+  brave: "« Tu as serré les dents. Le groupe l'a vu. »",
+};
+
+// Le mercato du joueur incarné (engine/hero_market.py) : les offres, sa place promise,
+// et les agents.
+export const OFFER_KINDS = { extend: "Prolongation", transfer: "Transfert", loan: "Prêt d'une saison" };
+export const OFFER_ROLES = { starter: "titulaire", rotation: "dans la rotation", prospect: "à faire ses preuves" };
+export const AGENTS = {
+  none: { label: "Sans agent", scope: "Tu négocies seul : pas de commission." },
+  local: { label: "Agent local", scope: "Une offre de plus, des salaires +10 %, 5 % de commission." },
+  star: {
+    label: "Agent star",
+    scope: "Deux offres de plus, de plus grands clubs, des salaires +25 %, 10 % de commission.",
+  },
+};
+
+// Où le joueur incarné en est dans son club (api/hero.py).
+export const HERO_STATUS = {
+  starter: "Titulaire",
+  bench: "Remplaçant",
+  injured: "Blessé",
+  suspended: "Suspendu",
+  retired: "Retraité",
+};
+
 // Où le manager prend la parole (engine/team_talk.py).
 export const TALK_MOMENTS = {
   kickoff: "Vestiaire · avant le coup d'envoi",

@@ -44,6 +44,10 @@ Principe :
    (`decide`) : les perches, la touche, la mêlée ou la jouer vite. Dans un match à
    enjeu (élimination directe, derby), si aucune ne vient d'elle-même, le jeu en
    offre une avant le coup de sifflet final.
+11. En carrière de joueur, le joueur incarné (`hero`) joue dans un club mené par son
+   staff : sur le terrain, le match s'arrête de temps en temps sur un dilemme
+   (`engine/dilemmas.py`) qu'il tranche (`choose`), pour sa note et parfois le score.
+   Remplaçant, il entre à l'heure de jeu ; le staff ne le sort pas.
 
 `LiveMatch` joue le match minute par minute : on peut l'arrêter, changer la
 tactique d'une équipe ou faire un remplacement, puis reprendre. `simulate_match`
@@ -62,7 +66,7 @@ from enum import StrEnum
 from itertools import accumulate
 
 from engine import crowd as crowds
-from engine import momentum, regulations, team_talk
+from engine import dilemmas, momentum, regulations, team_talk
 from engine.coaching import Coaching
 from engine.coaching import coaching as coaching_of
 from engine.crowd import Crowd
@@ -1017,11 +1021,12 @@ class Side:
             slot.absent_until = minute + SIN_BIN_MINUTES
         return MatchEvent(minute, EventType.YELLOW_CARD, self.club.id, player.id)
 
-    def auto_substitution(self, minute: int) -> MatchEvent | None:
+    def auto_substitution(self, minute: int, keep: int | None = None) -> MatchEvent | None:
         """Le changement que ferait le staff à cette minute, s'il y en a un à faire.
 
         Il remplace le joueur qui a le moins d'énergie parmi ceux qui ont un
         remplaçant de leur poste sur le banc, en gardant un changement pour une blessure.
+        Il ne sort jamais `keep` (le joueur incarné, en carrière de joueur).
         """
         if self.substitutions_left() <= AI_SUBSTITUTIONS_KEPT:
             return None
@@ -1030,6 +1035,7 @@ class Side:
             s
             for s in self.on_field(minute)
             if minute - s.since >= AI_MIN_MINUTES_ON_FIELD
+            and s.player.id != keep
             and any(p.position == s.position for p in bench)
         ]
         if not candidates:
@@ -1177,6 +1183,11 @@ class LiveMatch:
         weather: Weather = Weather.CLEAR,
         crowd: Crowd | None = None,
         derby: bool = False,
+        hero: int | None = None,
+        hero_entry: int = dilemmas.HERO_ENTRY_MINUTE,
+        hero_confidence: float = 0.0,
+        hero_hurt: bool = False,
+        final: bool = False,
     ) -> None:
         self.rng = rng or random.Random()
         self.matchday = matchday
@@ -1201,6 +1212,17 @@ class LiveMatch:
         self.finished = False
         self.crunch: Crunch | None = None  # la pénalité qui attend la décision du manager
         self.crunch_at: int | None = None  # minute du dernier choix crucial offert
+        # Carrière de joueur (engine/dilemmas.py) : le joueur incarné, le dilemme qui
+        # l'attend, et comment se sont finis les précédents.
+        self.hero = hero
+        self.hero_entry = hero_entry  # minute où il entre s'il est sur le banc
+        self.hero_confidence = hero_confidence  # de -1 à 1 (engine/dilemmas.py)
+        self.hero_hurt = hero_hurt  # joue blessé
+        self.final = final
+        self.dilemma: dilemmas.Dilemma | None = None
+        self.outcomes: list[dilemmas.Outcome] = []
+        if hero is not None:
+            self._call_up(hero)
 
     # -- Lecture ------------------------------------------------------------------------
 
@@ -1229,6 +1251,12 @@ class LiveMatch:
         """Match à enjeu (élimination directe, derby) : une fin serrée y donne toujours
         un choix crucial au manager."""
         return self.knockout or self.derby
+
+    def hero_side(self) -> Side | None:
+        """L'équipe du joueur incarné (None hors carrière de joueur, ou s'il ne joue pas)."""
+        if self.hero is None:
+            return None
+        return next((side for side in self.sides if self.hero in side.players()), None)
 
     @property
     def last_minute(self) -> int:
@@ -1378,7 +1406,7 @@ class LiveMatch:
         """Joue `minutes` minutes (ou jusqu'à la fin) et renvoie les événements survenus."""
         before = len(self.events)
         for _ in range(minutes):
-            if self.finished or self.crunch is not None:
+            if self.finished or self.crunch is not None or self.dilemma is not None:
                 break
             self.step()
         return self.events[before:]
@@ -1386,6 +1414,11 @@ class LiveMatch:
     def play_to_end(self) -> Match:
         """Joue jusqu'au bout ; le staff décide des pénalités en attente."""
         while not self.finished:
+            if self.dilemma is not None:
+                # Le joueur incarné qui ne choisit pas joue la sécurité.
+                situation = dilemmas.SITUATIONS_BY_KEY[self.dilemma.situation]
+                self.choose(dilemmas.safest(situation).key)
+                continue
             crunch = self.crunch
             if crunch is None:
                 self.step()
@@ -1397,7 +1430,7 @@ class LiveMatch:
 
     def step(self) -> None:
         """Joue la minute suivante (rien tant qu'une décision attend)."""
-        if self.finished or self.crunch is not None:
+        if self.finished or self.crunch is not None or self.dilemma is not None:
             return
         minute = self.minute + 1
         before = len(self.events)
@@ -1413,6 +1446,8 @@ class LiveMatch:
         self.minute = minute
         if self.crunch is None:
             self._whistle(minute)
+        if self.crunch is None and not self.finished:
+            self._dilemma_due(minute)
 
     def _whistle(self, minute: int) -> None:
         """La minute jouée finit-elle le match, ou mène-t-elle à la prolongation ?"""
@@ -1438,9 +1473,11 @@ class LiveMatch:
             side.fade()
         for side in self.sides:
             if side.club.id in self.auto and minute in AI_SUBSTITUTION_MINUTES:
-                event = side.auto_substitution(minute)
+                event = side.auto_substitution(minute, keep=self.hero)
                 if event is not None:
                     self.events.append(event)
+        if self.hero is not None and minute == self.hero_entry:
+            self._hero_enters(minute)
 
         home_ratings = self.home.collective(minute)
         away_ratings = self.away.collective(minute)
@@ -1571,19 +1608,34 @@ class LiveMatch:
             probability -= crowds.hostility(self.atmosphere)
         return min(max(0.05, probability), KICK_MAX)
 
-    def _try(self, attacking: Side, defending: Side, minute: int, forwards: bool = False) -> None:
+    def _try(
+        self,
+        attacking: Side,
+        defending: Side,
+        minute: int,
+        forwards: bool = False,
+        scorer: Player | None = None,
+        excluded: int | None = None,
+    ) -> None:
         """Un essai et sa transformation ; `forwards` : marqué au bout d'un maul,
-        par un avant (le talonneur et la troisième ligne le plus souvent)."""
+        par un avant (le talonneur et la troisième ligne le plus souvent). `scorer` :
+        le marqueur, s'il est déjà connu ; sinon tiré parmi les présents, sauf `excluded`
+        (celui qui a fait la passe)."""
         rng = self.rng
-        present = attacking.on_field(minute)
-        if forwards:
-            present = [s for s in present if s.position.is_forward] or present
-            weights = [MAUL_SCORER_WEIGHT.get(s.position, 1.0) * s.player.power for s in present]
-        else:
-            weights = [
-                TRY_SCORER_WEIGHT[s.position] * (s.player.pace + s.player.power) for s in present
-            ]
-        scorer = rng.choices([s.player for s in present], weights=weights)[0]
+        if scorer is None:
+            present = [s for s in attacking.on_field(minute) if s.player.id != excluded]
+            present = present or attacking.on_field(minute)
+            if forwards:
+                present = [s for s in present if s.position.is_forward] or present
+                weights = [
+                    MAUL_SCORER_WEIGHT.get(s.position, 1.0) * s.player.power for s in present
+                ]
+            else:
+                weights = [
+                    TRY_SCORER_WEIGHT[s.position] * (s.player.pace + s.player.power)
+                    for s in present
+                ]
+            scorer = rng.choices([s.player for s in present], weights=weights)[0]
         self.events.append(MatchEvent(minute, EventType.TRY, attacking.club.id, scorer.id))
         attacking.rate_present(minute, RATING_TEAM_SCORED)
         attacking.rate(scorer.id, RATING_EVENT[EventType.TRY])
@@ -1724,6 +1776,216 @@ class LiveMatch:
         self.crunch = Crunch(minute, side.club.id, dict(self._minute_play), self._minute_chance)
         self.crunch_at = minute
 
+    # -- Le joueur incarné (carrière de joueur) -------------------------------------------
+
+    def _call_up(self, player_id: int) -> None:
+        """Le staff garde au joueur incarné une place dans le groupe : sur le banc, à la
+        place du remplaçant de son poste (ou du dernier), s'il n'est pas dans le XV.
+        Rien s'il n'est pas apte (blessé, suspendu, retenu en sélection)."""
+        for side in self.sides:
+            if player_id in side.players():
+                return
+            player = next(
+                (p for p in side.club.available_players(self.day) if p.id == player_id), None
+            )
+            if player is None:
+                continue
+            same = [i for i, p in enumerate(side.bench) if p.position == player.position]
+            if same:
+                side.bench[same[-1]] = player
+            elif len(side.bench) >= BENCH_SIZE:
+                side.bench[-1] = player
+            else:
+                side.bench.append(player)
+            return
+
+    def _hero_enters(self, minute: int) -> None:
+        """Le joueur incarné, resté sur le banc, entre à son poste à l'heure de jeu, à la
+        place du plus fatigué."""
+        side = self.hero_side()
+        if side is None or side.club.id not in self.auto or side.substitutions_left() <= 0:
+            return
+        hero = next((p for p in side.available_bench() if p.id == self.hero), None)
+        if hero is None:
+            return
+        slots = [s for s in side.on_field(minute) if s.position == hero.position]
+        if not slots:
+            return
+        tired = min(slots, key=lambda s: side.energy(s.player))
+        self.events.append(side.substitute(tired.player.id, hero.id, minute))
+
+    def _hero_slot(self, minute: int) -> tuple[Side, Slot] | None:
+        side = self.hero_side()
+        slot = side.slot_of(self.hero) if side is not None else None
+        if slot is None or not slot.present(minute):
+            return None
+        return side, slot
+
+    def _dilemma_due(self, minute: int) -> None:
+        """Le match s'arrête-t-il sur un dilemme du joueur incarné ? Seulement s'il est sur
+        le terrain, pas trop tôt après le précédent, et pas à la dernière minute."""
+        if self.hero is None or minute >= self.last_minute:
+            return
+        found = self._hero_slot(minute)
+        if found is None or len(self.outcomes) >= dilemmas.DILEMMA_MAX:
+            return
+        last = self.outcomes[-1] if self.outcomes else None
+        if last is not None and minute - last.minute < dilemmas.DILEMMA_GAP:
+            return
+        if self.rng.random() >= dilemmas.DILEMMA_CHANCE:
+            return
+        side, slot = found
+        situation = dilemmas.draw(slot.position, last.situation if last else None, self.rng)
+        self.dilemma = dilemmas.Dilemma(
+            minute,
+            situation.key,
+            dict(self._minute_play),
+            self._minute_chance,
+            pressure=self._pressure(side, minute),
+        )
+
+    def _pressure(self, side: Side, minute: int) -> float:
+        margin = self.score(side.club.id) - self.score(self.opponent(side).club.id)
+        return dilemmas.pressure(minute, self.last_minute, margin, self.knockout, self.final)
+
+    def advance_to_hero(self) -> list[MatchEvent]:
+        """Joue jusqu'à l'entrée en jeu du joueur incarné resté sur le banc (ou jusqu'à
+        ce que le match s'arrête : un dilemme, un choix crucial, la fin)."""
+        before = len(self.events)
+        side = self.hero_side()
+        while not self.finished and self.crunch is None and self.dilemma is None:
+            waiting = side is not None and any(p.id == self.hero for p in side.available_bench())
+            if not waiting:
+                break
+            self.step()
+        return self.events[before:]
+
+    def dilemma_reward(self, choice: dilemmas.Option) -> float:
+        """Ce qu'une voie réussie rapporte à la note du joueur incarné, la pression du
+        moment et l'action qu'elle déclenche comprises (son essai, son drop, l'essai de
+        l'équipe)."""
+        bonus = {
+            dilemmas.Effect.TRY: RATING_EVENT[EventType.TRY] + RATING_TEAM_SCORED,
+            dilemmas.Effect.ASSIST: RATING_TEAM_SCORED,
+            dilemmas.Effect.DROP: RATING_EVENT[EventType.DROP_GOAL],
+        }
+        pressure = self.dilemma.pressure if self.dilemma else 1.0
+        return round(choice.reward * pressure + bonus.get(choice.on_success, 0.0), 2)
+
+    def dilemma_cost(self, choice: dilemmas.Option) -> float:
+        """Ce qu'une voie ratée coûte à la note, la pression du moment comprise."""
+        pressure = self.dilemma.pressure if self.dilemma else 1.0
+        return round(choice.cost * pressure, 2)
+
+    def dilemma_odds(self) -> dict[str, float]:
+        """Chances de réussite de chaque voie du dilemme en attente."""
+        dilemma = self.dilemma
+        if dilemma is None:
+            raise ValueError("Aucun dilemme en attente")
+        situation = dilemmas.SITUATIONS_BY_KEY[dilemma.situation]
+        side = self.hero_side()
+        hero = side.players()[self.hero]
+        opposition = None
+        if situation.opposition != dilemmas.Opposition.NONE:
+            other = self.opponent(side).collective(dilemma.minute)
+            opposition = getattr(other, situation.opposition.value)
+        fit = efficiency(side.energy(hero)) * (dilemmas.HURT_FACTOR if self.hero_hurt else 1.0)
+        return {
+            choice.key: round(
+                dilemmas.success_chance(
+                    dilemmas.skill(hero, choice, fit), opposition, choice, self.hero_confidence
+                ),
+                2,
+            )
+            for choice in situation.options
+        }
+
+    def choose(self, key: str) -> dilemmas.Outcome:
+        """Le joueur incarné tranche le dilemme en attente : sa note bouge, le score
+        parfois ; la minute se termine. ValueError s'il n'y a rien à trancher."""
+        dilemma = self.dilemma
+        if dilemma is None:
+            raise ValueError("Aucun dilemme en attente")
+        situation = dilemmas.SITUATIONS_BY_KEY[dilemma.situation]
+        choice = dilemmas.option(situation, key)
+        chance = self.dilemma_odds()[key]
+        side = self.hero_side()
+        other = self.opponent(side)
+        hero = side.players()[self.hero]
+        minute = dilemma.minute
+        before_rating = side.ratings.get(hero.id, RATING_START)
+        before = len(self.events)
+        success = self.rng.random() < chance
+        if success:
+            effect = choice.on_success
+            side.rate(hero.id, choice.reward * dilemma.pressure)
+        else:
+            effect = dilemmas.failure_effect(choice, self.rng)
+            side.rate(hero.id, choice.cost * dilemma.pressure)
+        self._apply(effect, side, other, hero, minute)
+        outcome = dilemmas.Outcome(
+            minute=minute,
+            situation=situation.key,
+            option=choice.key,
+            success=success,
+            chance=chance,
+            delta=round(side.ratings.get(hero.id, RATING_START) - before_rating, 2),
+            effect=effect,
+            pressure=dilemma.pressure,
+        )
+        self.outcomes.append(outcome)
+        self.dilemma = None
+        if success and choice.follow and not self.finished:
+            # La réussite en appelle une autre, aussitôt : un deux contre un...
+            self.dilemma = dilemmas.Dilemma(
+                minute,
+                choice.follow,
+                dilemma.play,
+                dilemma.chance,
+                pressure=dilemma.pressure,
+                chained=True,
+            )
+        fresh = self.events[before:]
+        self._crowd_reacts(fresh)
+        self.momentum[-1] = momentum.minute_bar(
+            self.home.club.id,
+            dilemma.play,
+            dilemma.chance,
+            [e for e in self.events if e.minute == minute],
+        )
+        return outcome
+
+    def _apply(
+        self, effect: dilemmas.Effect, side: Side, other: Side, hero: Player, minute: int
+    ) -> None:
+        """Ce que l'issue d'un dilemme change au match (engine/dilemmas.py, `Effect`)."""
+        Effect = dilemmas.Effect
+        if effect == Effect.TRY:
+            self._try(side, other, minute, scorer=hero)
+        elif effect == Effect.ASSIST:
+            self._try(side, other, minute, excluded=hero.id)
+        elif effect == Effect.DROP:
+            self.events.append(MatchEvent(minute, EventType.DROP_GOAL, side.club.id, hero.id))
+            side.rate(hero.id, RATING_EVENT[EventType.DROP_GOAL])
+        elif effect == Effect.PENALTY_WON:
+            self._penalty_kick(side, minute)
+        elif effect == Effect.PENALTY_CONCEDED:
+            self._penalty_kick(other, minute)
+        elif effect == Effect.TRY_CONCEDED:
+            side.count(hero.id, "missed_tackles")
+            self._try(other, side, minute)
+        elif effect == Effect.YELLOW:
+            self.events.append(side.card(hero, minute, red=False))
+            side.rate(hero.id, RATING_EVENT[EventType.YELLOW_CARD])
+            self._penalty_kick(other, minute)
+        elif effect == Effect.BREAK:
+            side.count(hero.id, "carries")
+            side.count(hero.id, "line_breaks")
+        elif effect == Effect.TURNOVER:
+            side.count(hero.id, "turnovers")
+        elif effect == Effect.MISSED:
+            side.count(hero.id, "missed_tackles")
+
     def _phases(self, minute: int, home_share: float, home: Collective, away: Collective) -> None:
         """Les temps de jeu de la minute : qui porte le ballon, qui plaque, qui
         manque son plaquage et laisse filer, qui gratte. La possession suit le
@@ -1862,6 +2124,13 @@ class LiveMatch:
             "finished": self.finished,
             "crunch": self.crunch.to_dict() if self.crunch else None,
             "crunch_at": self.crunch_at,
+            "hero": self.hero,
+            "hero_entry": self.hero_entry,
+            "hero_confidence": self.hero_confidence,
+            "hero_hurt": self.hero_hurt,
+            "final": self.final,
+            "dilemma": self.dilemma.to_dict() if self.dilemma else None,
+            "outcomes": [outcome.to_dict() for outcome in self.outcomes],
             "weather": self.weather.value,
             "crowd": self.crowd.to_dict() if self.crowd else None,
             "roar": self.roar,
@@ -1898,6 +2167,14 @@ class LiveMatch:
         live.finished = state["finished"]
         live.crunch = Crunch.from_dict(state["crunch"]) if state.get("crunch") else None
         live.crunch_at = state.get("crunch_at")
+        live.hero = state.get("hero")
+        live.hero_entry = state.get("hero_entry", dilemmas.HERO_ENTRY_MINUTE)
+        live.hero_confidence = state.get("hero_confidence", 0.0)
+        live.hero_hurt = state.get("hero_hurt", False)
+        live.final = state.get("final", False)
+        dilemma = state.get("dilemma")
+        live.dilemma = dilemmas.Dilemma.from_dict(dilemma) if dilemma else None
+        live.outcomes = [dilemmas.Outcome.from_dict(o) for o in state.get("outcomes", [])]
         live.events = [
             MatchEvent(
                 e["minute"],

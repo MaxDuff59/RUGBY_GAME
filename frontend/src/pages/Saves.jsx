@@ -246,7 +246,8 @@ export default function Saves() {
                     <>
                       {save.manager_name && (
                         <span>
-                          {save.manager_name} · {save.league_name}
+                          {save.manager_name}
+                          {save.player && " (joueur)"} · {save.league_name}
                         </span>
                       )}
                       {save.competition_result && <strong>{save.competition_result}</strong>}

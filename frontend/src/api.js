@@ -115,12 +115,28 @@ export const api = {
   getLive: () => request("/live"),
   startLive: () => post("/live"),
   advanceLive: (minutes = 1) => post("/live/advance", { minutes }),
+  // Carrière de joueur : jouer jusqu'à son entrée en jeu.
+  advanceLiveToEntry: () => post("/live/advance", { until_entry: true }),
   setLiveTactics: (tactics) => post("/live/tactics", tactics),
   talkLive: (key) => post("/live/talk", { key }),
   decideLive: (option) => post("/live/decide", { option }),
   substituteLive: (playerOut, playerIn) =>
     post("/live/substitute", { player_out: playerOut, player_in: playerIn }),
   finishLive: () => post("/live/finish"),
+  // Carrière de joueur : le dilemme du joueur incarné.
+  chooseLive: (option) => post("/live/choose", { option }),
+
+  // Carrière de joueur (le joueur que l'on crée, ses points à placer).
+  startHero: (hero) => post("/hero", hero),
+  getHero: () => request("/hero"),
+  trainHero: (attribute) => post("/hero/train", { attribute }),
+  getHeroSocial: () => request("/hero/social"),
+  setPlayHurt: (play) => post("/hero/play-hurt", { play }),
+  getHeroCareer: () => request("/hero/career"),
+  getHeroOffers: () => request("/hero/offers"),
+  chooseHeroOffer: (index) => post("/hero/offers/choose", { index }),
+  setHeroAgent: (agent) => post("/hero/agent", { agent }),
+  retireHero: () => post("/hero/retire"),
 
   // Mode compétition : une partie qui ne joue que la Coupe d'Europe ou la Coupe du monde.
   getCompetition: () => request("/competition"),

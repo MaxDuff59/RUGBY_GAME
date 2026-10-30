@@ -740,10 +740,54 @@ class LiveOut(BaseModel):
     momentum: list[int]
     talk: TalkOut  # discours possibles du club dirigé
     crunch: CrunchOut | None = None  # choix crucial en attente (le chrono est arrêté)
+    # Carrière de joueur : le joueur incarné, ses dilemmes, et celui qui l'attend.
+    hero: "LiveHeroOut | None" = None
+    dilemma: "DilemmaOut | None" = None
+
+
+class DilemmaOptionOut(BaseModel):
+    key: str
+    success: float
+    reward: float  # note gagnée en cas de réussite
+    cost: float  # note perdue en cas d'échec (négatif)
+
+
+class DilemmaOut(BaseModel):
+    minute: int
+    situation: str
+    options: list[DilemmaOptionOut]
+    pressure: float  # ce que pèse le moment (1 : ordinaire ; engine/dilemmas.py)
+    chained: bool  # enchaîné sur la réussite précédente
+
+
+class OutcomeOut(BaseModel):
+    minute: int
+    situation: str
+    option: str
+    success: bool
+    chance: float
+    delta: float
+    effect: str
+    pressure: float
+
+
+class LiveHeroOut(BaseModel):
+    player_id: int
+    club_id: int
+    outcomes: list[OutcomeOut]
+    entry: int  # minute où il entre s'il commence sur le banc
+    confidence: float  # de -1 à 1
+    hurt: bool  # joue blessé
+
+
+class ChooseIn(BaseModel):
+    option: str
 
 
 class AdvanceIn(BaseModel):
     minutes: int = Field(default=1, ge=1, le=100)
+    # Carrière de joueur : jouer jusqu'à son entrée en jeu (au lieu de `minutes`).
+    until_entry: bool = False
 
 
 class TalkIn(BaseModel):
@@ -828,12 +872,218 @@ class CareerIn(BaseModel):
     difficulty: Difficulty = Difficulty.NORMAL  # carrière de club (engine/difficulty.py)
 
 
+class HeroIn(BaseModel):
+    """Le joueur que l'on crée pour une carrière de joueur, et son premier club."""
+
+    first_name: str = Field(min_length=1, max_length=50)
+    last_name: str = Field(min_length=1, max_length=50)
+    position: Position
+    club_id: int
+
+
+class HeroTrainIn(BaseModel):
+    attribute: str
+
+
+class HeroAttributeOut(BaseModel):
+    key: str
+    value: int
+    cost: int | None  # points pour le point suivant (None : au maximum)
+    weight: float  # ce qu'il pèse dans la note générale à son poste (0 : rien)
+
+
+class HeroMatchOut(BaseModel):
+    """Un match de son club, vu par le joueur incarné."""
+
+    match_id: int
+    date: datetime.date
+    opponent: ClubRef
+    home: bool
+    score_for: int
+    score_against: int
+    minutes: int
+    rating: float | None
+    tries: int
+
+
+class HeroRewardOut(BaseModel):
+    """Ce qu'a rapporté la dernière journée de son club."""
+
+    match: HeroMatchOut | None  # None : il n'a pas joué
+    xp: int
+    points: int  # points d'attributs gagnés
+
+
+class CoachNoteOut(BaseModel):
+    """Ce que l'entraîneur a dit au joueur incarné (api/hero.py)."""
+
+    date: datetime.date
+    kind: Literal["card", "risks", "praise", "starter", "doubt", "aggravated", "brave"]
+
+
+class HeroHurtIn(BaseModel):
+    play: bool
+
+
+class HeroOfferOut(BaseModel):
+    """Une offre du mercato de fin de saison (api/hero_market.py)."""
+
+    index: int
+    kind: Literal["extend", "transfer", "loan"]
+    club: ClubRef
+    league_name: str
+    level: float  # niveau du XV du club
+    wage: int  # salaire annuel
+    net_wage: int  # après la commission de l'agent
+    years: int
+    role: Literal["starter", "rotation", "prospect"]  # sa place à son poste
+    chosen: bool
+
+
+class HeroOffersOut(BaseModel):
+    open: bool  # la saison de son championnat est finie
+    wage: int
+    contract_until: int
+    agent: Literal["none", "local", "star"]
+    offers: list[HeroOfferOut]
+
+
+class HeroChoiceIn(BaseModel):
+    index: int | None  # None : ne rien changer
+
+
+class HeroAgentIn(BaseModel):
+    agent: Literal["none", "local", "star"]
+
+
+class HeroSeasonOut(BaseModel):
+    """Une saison du joueur incarné : ses clubs et ses chiffres."""
+
+    year: int
+    clubs: list[ClubRef]
+    matches: int
+    starts: int
+    tries: int
+    average: float | None
+    best: float | None
+
+
+class HeroTitleOut(BaseModel):
+    year: int
+    competition: str
+    club: ClubRef
+
+
+class HeroAwardOut(BaseModel):
+    year: int
+    league_name: str
+    kind: str  # engine/awards.py, `AwardKind`
+    value: float
+
+
+class HeroCareerOut(BaseModel):
+    """Le palmarès personnel du joueur incarné, saison par saison."""
+
+    seasons: list[HeroSeasonOut]  # de la plus récente à la plus ancienne
+    titles: list[HeroTitleOut]
+    awards: list[HeroAwardOut]
+    matches: int
+    tries: int
+    average: float | None
+    best: float | None
+    caps: int  # sélections
+    retired: bool  # le bilan de sa retraite
+
+
+class HeroTestOut(BaseModel):
+    """Un match international où le joueur incarné est appelé (ou qu'il a joué)."""
+
+    match_id: int
+    date: datetime.date
+    competition: str
+    nation: str
+    opponent: str
+    home: bool
+    score_for: int | None = None
+    score_against: int | None = None
+    minutes: int | None = None
+    rating: float | None = None
+
+
+class HeroDayOut(BaseModel):
+    """Un jour de match international du joueur incarné, joué en direct puis fini."""
+
+    season: "SeasonOut"
+    hero: HeroRewardOut | None
+    played: None = None
+
+
+class HeroOut(BaseModel):
+    player_id: int
+    first_name: str
+    last_name: str
+    age: int
+    position: Position
+    club: ClubRef | None  # None : il a raccroché
+    league_name: str | None
+    overall: float
+    level: float
+    rank: int  # rang à son poste dans l'effectif (1 : le meilleur)
+    at_position: int  # joueurs de l'effectif à son poste
+    status: Literal["starter", "bench", "injured", "suspended", "retired"]
+    points: int
+    xp: int
+    xp_per_point: int
+    attributes: list[HeroAttributeOut]
+    matches: list[HeroMatchOut]  # ses matchs de la saison, du plus récent au plus ancien
+    last_reward: HeroRewardOut | None
+    confidence: float  # sa confiance, de -1 à 1 (engine/hero.py)
+    trust: float  # celle de l'entraîneur, sur 100
+    entry: int  # minute où l'entraîneur le fait entrer s'il est sur le banc
+    coach_notes: list[CoachNoteOut]  # les plus récentes d'abord
+    injury_weeks: int  # semaines d'indisponibilité restantes
+    play_hurt: bool  # blessé, il jouera quand même le prochain match
+    wage: int
+    contract_until: int
+    loaned_from: ClubRef | None  # prêté par ce club
+    choice: dict | None  # l'offre choisie, appliquée à l'intersaison
+    called_up: HeroTestOut | None  # son prochain match en sélection
+    caps: int
+
+
+class SocialPostOut(BaseModel):
+    """Une publication sur le joueur incarné (engine/social.py)."""
+
+    date: datetime.date
+    time: str
+    author: str
+    handle: str
+    voice: Literal["media", "journalist", "fan", "rival"]
+    verified: bool
+    text: str
+    tone: Literal["praise", "neutral", "critic"]
+    likes: int
+    reposts: int
+    match_id: int | None
+
+
+class SocialOut(BaseModel):
+    """Les réseaux du joueur incarné : son compte, ses abonnés, ce qu'on dit de lui."""
+
+    name: str
+    handle: str
+    followers: int
+    gain: int  # abonnés gagnés au dernier match joué
+    posts: list[SocialPostOut]  # du plus récent au plus ancien
+
+
 class CareerOut(BaseModel):
     id: int
     manager_name: str
     # nation : carrière de sélectionneur. `club_id` et `club_name` sont alors ceux de
     # la sélection (son identifiant d'équipe, son nom), `nation` son code.
-    kind: Literal["club", "nation"] = "club"
+    # player : carrière de joueur (`manager_name` est alors son nom, le club le sien).
+    kind: Literal["club", "nation", "player"] = "club"
     club_id: int
     club_name: str
     league: str
@@ -942,6 +1192,7 @@ class SaveOut(BaseModel):
     # Mode compétition (api/competition.py) : son code, et l'issue une fois finie.
     competition: str | None = None
     competition_result: str | None = None
+    player: bool = False  # carrière de joueur : `manager_name` est le nom du joueur
 
 
 class ManagerSeasonOut(BaseModel):
@@ -967,7 +1218,8 @@ class JobOfferOut(BaseModel):
     (engine/career.py)."""
 
     # nation : une sélection ; `club` est alors son identifiant d'équipe et son nom.
-    kind: Literal["club", "nation"] = "club"
+    # player : carrière de joueur (`manager_name` est alors son nom, le club le sien).
+    kind: Literal["club", "nation", "player"] = "club"
     club: ClubRef
     nation: str | None = None  # code de la sélection
     league: str
@@ -1064,6 +1316,8 @@ class PlayOut(BaseModel):
     signings: list["ContractOut"] = []
     # Listes des sélections annoncées depuis la journée précédente : nos joueurs retenus.
     call_ups: list["CallUpNotice"] = []
+    # Carrière de joueur : ce que la journée lui a rapporté.
+    hero: HeroRewardOut | None = None
 
 
 # --- Affaires entre deux matchs (engine/affairs.py) -----------------------------------

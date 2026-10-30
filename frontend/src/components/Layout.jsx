@@ -42,12 +42,25 @@ const SELECTOR_NAV_ITEMS = [
   { to: "/international", label: "Calendrier", icon: "calendrier", primary: true },
 ];
 
+// Carrière de joueur : son tableau de bord, et ce qui se lit du monde autour de lui.
+const PLAYER_NAV_ITEMS = [
+  { to: "/", label: "Carrière", icon: "club", primary: true },
+  { to: "/reseaux", label: "Réseaux", icon: "reseaux", primary: true },
+  { to: "/calendrier", label: "Calendrier", icon: "calendrier", primary: true },
+  { to: "/journal", label: "Journal", icon: "journal", primary: true },
+  { to: "/palmares", label: "Palmarès", icon: "palmares" },
+];
+
+// Qui l'on incarne, au pied de la navigation.
+const ROLES = { club: "Manager", nation: "Sélectionneur", player: "Joueur" };
+
 // Cadre commun à toutes les pages : sur ordinateur, navigation à gauche et en-tête avec
 // le club ; sur téléphone (PHONE_QUERY), en-tête compact et barre d'onglets en bas.
 // Les pages reçoivent la carrière via useOutletContext(), et `onContract` pour y
 // reporter le contrat du manager quand il change (prolongation). Un sélectionneur
 // (`career.kind === "nation"`) a sa propre navigation ; `career.club_id` et
-// `career.club_name` sont alors ceux de sa sélection.
+// `career.club_name` sont alors ceux de sa sélection. En carrière de joueur
+// (`career.kind === "player"`), ce sont ceux de son club, et `manager_name` son nom.
 export default function Layout() {
   const { data: career, error, loading, setData } = useApi(useCallback(api.getCareer, []));
   // Le contrat du manager se lit (et se prolonge) depuis le pied de la navigation.
@@ -63,7 +76,7 @@ export default function Layout() {
   if (error?.status === 404) return <Navigate to="/start" replace />;
   if (error) return <p className="status status--error">{error.message}</p>;
 
-  const items = career.kind === "nation" ? SELECTOR_NAV_ITEMS : NAV_ITEMS;
+  const items = { nation: SELECTOR_NAV_ITEMS, player: PLAYER_NAV_ITEMS }[career.kind] ?? NAV_ITEMS;
   const openContract = () => setContractOpen(true);
   const onContract = (contract) => setData({ ...career, contract_until: contract.until });
 
@@ -81,9 +94,9 @@ export default function Layout() {
             </div>
           </div>
           <CompetitionBar career={career} />
-          {career.kind !== "nation" && <Inbox />}
+          {career.kind === "club" && <Inbox />}
         </header>
-        {career.kind !== "nation" && <Guide />}
+        {career.kind === "club" && <Guide />}
         <Outlet context={{ career, onContract }} />
       </main>
 
@@ -117,7 +130,7 @@ function LeaveButton({ className = "" }) {
 // Ordinateur : colonne de navigation à gauche.
 // Le contrat du manager de club, en une ligne qui ouvre sa fenêtre.
 function ContractLink({ career, onContract, className = "" }) {
-  if (career.kind === "nation" || career.contract_until == null) return null;
+  if (career.kind !== "club" || career.contract_until == null) return null;
   return (
     <button type="button" className={`link-button ${className}`} onClick={onContract}>
       Contrat jusqu'en {formatContractEnd(career.contract_until)}
@@ -143,14 +156,14 @@ function Sidebar({ career, items, onContract }) {
       </ul>
       <div className="sidebar__footer">
         <div>
-          {career.kind === "nation" ? "Sélectionneur" : "Manager"} : {career.manager_name}
+          {ROLES[career.kind]} : {career.manager_name}
         </div>
         <div>
           Partie {chosenSlot()} · sauvegarde auto
           {career.difficulty && career.difficulty !== "normal" && ` · ${DIFFICULTIES[career.difficulty].label.toLowerCase()}`}
         </div>
         <ContractLink career={career} onContract={onContract} className="sidebar__contract" />
-        {career.kind !== "nation" && (
+        {career.kind === "club" && (
           <button type="button" className="link-button sidebar__guide" onClick={resetGuide}>
             Revoir le guide
           </button>
@@ -199,11 +212,11 @@ function TabBar({ career, items, onContract }) {
             </ul>
             <div className="sheet__footer">
               <div className="muted">
-                {career.kind === "nation" ? "Sélectionneur" : "Manager"} : {career.manager_name} · Partie{" "}
+                {ROLES[career.kind]} : {career.manager_name} · Partie{" "}
                 {chosenSlot()} · sauvegarde auto
               </div>
               <ContractLink career={career} onContract={onContract} />
-              {career.kind !== "nation" && (
+              {career.kind === "club" && (
                 <button type="button" className="link-button" onClick={resetGuide}>
                   Revoir le guide
                 </button>

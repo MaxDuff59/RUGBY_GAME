@@ -743,6 +743,48 @@ class SelectorRow(Base):
     lineup_choice: Mapped[list] = mapped_column(JSON, default=list)
 
 
+class HeroRow(Base):
+    """Partie sauvegardée d'une carrière de joueur (engine/hero.py) : le joueur incarné.
+
+    À part de `CareerRow`, comme `SelectorRow` : son club, et tous les autres, sont
+    menés par leur staff. Le club suivi est celui du joueur (`PlayerRow.club_id`).
+    """
+
+    __tablename__ = "heroes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id"))
+    points: Mapped[int] = mapped_column(default=0)  # points d'attributs à placer
+    xp: Mapped[int] = mapped_column(default=0)  # expérience vers le prochain point
+    # Matchs déjà comptés dans son expérience (identifiants de `MatchRow`).
+    rewarded: Mapped[list[int]] = mapped_column(JSON, default=list)
+    # Ce que lui a rapporté sa dernière journée, pour l'afficher (voir api/hero.py).
+    last_reward: Mapped[dict | None] = mapped_column(JSON, default=None)
+    # Le jour de sa signature, et ses actions en direct (engine/dilemmas.py, `Outcome`) par
+    # match (identifiant de `MatchRow`) : de quoi faire parler les réseaux (engine/social.py).
+    signed_on: Mapped[datetime.date | None] = mapped_column(Date, default=None)
+    moments: Mapped[dict] = mapped_column(JSON, default=dict)
+    # Sa confiance (de -1 à 1) et celle de l'entraîneur (sur 100), et ce que l'entraîneur
+    # lui a dit dernièrement ([{date, kind}], engine/hero.py).
+    confidence: Mapped[float] = mapped_column(default=0.0)
+    trust: Mapped[float] = mapped_column(default=40.0)
+    coach_notes: Mapped[list] = mapped_column(JSON, default=list)
+    # Blessé : jouer quand même le prochain match ; le match qu'il a joué blessé.
+    play_hurt: Mapped[bool] = mapped_column(default=False)
+    hurt_match_id: Mapped[int | None] = mapped_column(default=None)
+    # Mercato (engine/hero_market.py) : son agent, les offres de la fin de saison (gardées
+    # pour la saison, {year, agent, list}), celle qu'il a choisie, et ses mouvements
+    # ([{date, kind, from, to}] : signature, transfert, prêt).
+    agent: Mapped[str] = mapped_column(String(8), default="none")
+    offers: Mapped[dict | None] = mapped_column(JSON, default=None)
+    choice: Mapped[dict | None] = mapped_column(JSON, default=None)
+    history: Mapped[list] = mapped_column(JSON, default=list)
+    # Ses matchs internationaux joués en direct (identifiant de `InternationalRow`) : la
+    # table n'a pas de statistiques par joueur ; minutes, note, essais, actions, et s'ils
+    # ont déjà rapporté leur expérience.
+    tests: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
 class CareerRow(Base):
     """Partie sauvegardée : le club dirigé par le joueur."""
 

@@ -22,10 +22,14 @@ from api.schemas import (
     CrowdOut,
     CrunchOptionOut,
     CrunchOut,
+    DilemmaOptionOut,
+    DilemmaOut,
     LiveEventOut,
+    LiveHeroOut,
     LiveOut,
     LivePlayerOut,
     LiveSideOut,
+    OutcomeOut,
     PlayerMatchStatsOut,
     TacticsOut,
     TalkHeardOut,
@@ -33,7 +37,7 @@ from api.schemas import (
     TalkOut,
 )
 from data.derbies import derby
-from engine import europe
+from engine import dilemmas, europe
 from engine.form import Form
 from engine.match_engine import (
     HALF_TIME,
@@ -247,6 +251,44 @@ def _crunch_out(live: LiveMatch, club_id: int) -> CrunchOut | None:
     )
 
 
+def _hero_out(live: LiveMatch) -> LiveHeroOut | None:
+    """Le joueur incarné (carrière de joueur) et ses dilemmes déjà tranchés."""
+    side = live.hero_side()
+    if side is None:
+        return None
+    return LiveHeroOut(
+        player_id=live.hero,
+        club_id=side.club.id,
+        outcomes=[OutcomeOut(**outcome.to_dict()) for outcome in live.outcomes],
+        entry=live.hero_entry,
+        confidence=round(live.hero_confidence, 2),
+        hurt=live.hero_hurt,
+    )
+
+
+def _dilemma_out(live: LiveMatch) -> DilemmaOut | None:
+    """Le dilemme qui attend le joueur incarné, avec les chances de chaque voie."""
+    if live.dilemma is None:
+        return None
+    situation = dilemmas.SITUATIONS_BY_KEY[live.dilemma.situation]
+    odds = live.dilemma_odds()
+    return DilemmaOut(
+        minute=live.dilemma.minute,
+        situation=situation.key,
+        options=[
+            DilemmaOptionOut(
+                key=option.key,
+                success=odds[option.key],
+                reward=live.dilemma_reward(option),
+                cost=live.dilemma_cost(option),
+            )
+            for option in situation.options
+        ],
+        pressure=live.dilemma.pressure,
+        chained=live.dilemma.chained,
+    )
+
+
 def live_out(live: Live, names: dict[int, str], my_club_id: int) -> LiveOut:
     match = live.match
     # Un match de sélection (`InternationalRow`) n'a pas d'effectif : jamais de coupe.
@@ -297,4 +339,6 @@ def live_out(live: Live, names: dict[int, str], my_club_id: int) -> LiveOut:
         momentum=match.momentum,
         talk=_talk_out(match, my_club_id),
         crunch=_crunch_out(match, my_club_id),
+        hero=_hero_out(match),
+        dilemma=_dilemma_out(match),
     )

@@ -93,6 +93,42 @@ partie chargée. Les routes du jeu répondent 401 sans compte connecté et 409 t
 qu'aucune partie n'est chargée ; la partie chargée est retenue sur le compte,
 d'un navigateur à l'autre.
 
+« Nouvelle carrière » propose deux carrières. **Entraîneur** : on dirige un club ou une
+sélection (tout ce qui suit). **Joueur** (`backend/engine/hero.py`, `backend/api/hero.py`) :
+on crée un joueur de 18 ans (prénom, nom, poste) qui signe dans le club choisi, bien en
+dessous du niveau de ses coéquipiers. Son club, comme tous les autres, est mené par son
+staff ; le calendrier et les journées suivent le club du joueur. Le staff le garde toujours
+dans le groupe : titulaire si son niveau le vaut, sinon remplaçant qui entre à la 52e. En
+direct, le match s'arrête sur ses actions (`backend/engine/dilemmas.py`) : un contre un,
+plaquage, ruck, mêlée, touche, drop... Chaque voie a ses chances (ses attributs contre la
+ligne adverse, sa fatigue) et ce qu'elle rapporte ou coûte à sa note sur 10 ; une voie
+audacieuse peut marquer un essai, une imprudence coûter une pénalité, un essai ou un
+carton. Simulé, son match se joue pareil, la voie sûre à chaque action. Chaque journée de
+son club lui rapporte de l'expérience (l'entraînement, ses minutes, sa note au-dessus de
+6) ; 40 XP font un point d'attribut à placer, un attribut coûtant d'autant plus cher
+qu'il est haut. Il ne progresse pas tout seul, et reste sous contrat d'une saison à l'autre.
+Les dilemmes varient selon le poste (transversale de l'ouvreur, chandelle du demi de
+mêlée, débordement de l'ailier, relance de l'arrière, lancer du talonneur, provocation),
+une réussite peut en enchaîner une autre (un franchissement mène au deux contre un), et
+une fin de match serrée, une phase finale ou une finale font peser plus lourd chaque
+choix. En direct, « Simuler jusqu'à ton entrée » saute le temps passé sur le banc.
+
+Deux jauges suivent ses matchs (`backend/engine/hero.py`) : sa confiance, qui pèse sur
+ses chances en match, et celle de l'entraîneur, qui le titularise ou le fait entrer plus
+ou moins tard ; un carton ou trop de risques ratés lui valent un recadrage. Blessé, il
+peut jouer diminué, au risque d'aggraver sa blessure. À la fin de chaque saison, le
+bilan (`backend/engine/hero_market.py`) : prolonger, partir dans un club à sa portée
+(les grands clubs attendent qu'il ait le niveau), être prêté s'il a peu joué, avec ou
+sans agent ; ou raccrocher, sans âge imposé, puis enchaîner sur une carrière
+d'entraîneur dans le même monde. Les clubs IA ne le prêtent ni ne le vendent d'eux-mêmes.
+Assez fort, il est appelé en sélection et joue ses tests en direct, avec ses dilemmes.
+Son palmarès (saisons, titres, trophées, sélections) se lit sur son tableau de bord.
+
+L'onglet **Réseaux** (`backend/engine/social.py`) fait parler de lui : des médias et des
+journalistes inventés, les supporters de son club et ceux de l'adversaire réagissent à
+sa signature, à chacun de ses matchs (score, minutes, note, essais), à ses premières fois
+et à ses actions marquantes en direct ; le ton suit sa note, ses abonnés aussi.
+
 Formule du compte (`backend/api/plans.py`) : un compte gratuit garde **une seule
 partie** et joue **deux saisons en tout**. Les saisons se comptent sur le compte
 dès qu'elles commencent (la première au choix du club, les suivantes à
@@ -146,6 +182,11 @@ parties ailleurs (ex. pour une instance de test).
 | `GET /career/history`, `POST /career/offers/{club_id}` | Parcours du manager (clubs, saisons, réputation) et offres de fin de saison ; accepter une offre |
 | `POST /career/offers/nation/{code}` | Accepter l'offre d'une sélection : le manager devient sélectionneur |
 | `GET /career/contract`, `POST /career/contract/extend`, `POST /career/leave` | Contrat du manager (échéance, avis de la direction), demande de prolongation, départ du club |
+| `POST /hero`, `GET /hero`, `POST /hero/train` | Carrière de joueur : créer son joueur dans un club, sa fiche (attributs, prix du point suivant, place au poste, matchs, dernière journée), placer un point |
+| `GET /hero/social` | Carrière de joueur : son fil sur les réseaux (médias, journalistes, supporters) et ses abonnés |
+| `POST /hero/play-hurt`, `GET /hero/career`, `POST /hero/retire` | Jouer blessé le prochain match ; palmarès personnel ; prendre sa retraite (au bilan d'une saison) |
+| `GET /hero/offers`, `POST /hero/offers/choose`, `POST /hero/agent` | Mercato de fin de saison : les offres (prolongation, transfert, prêt), le choix, l'agent |
+| `POST /live/choose` | Carrière de joueur : trancher le dilemme qui attend le joueur en direct |
 | `GET /career/dismissal` | Dernier limogeage, tant qu'aucune nouvelle carrière n'a commencé |
 | `GET /players/{id}` | Fiche d'un joueur : comparaison à son poste, note à chaque poste, saison (statistiques comprises), blessures |
 | `POST /career`, `GET /career` | Choisir son club (et la difficulté : `easy`, `normal`, `hard`), ou sa sélection (`nation`) ; tire aussi le calendrier de la 1re saison |

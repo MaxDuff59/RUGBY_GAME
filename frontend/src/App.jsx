@@ -10,6 +10,7 @@ import Club from "./pages/Club.jsx";
 import Facilities from "./pages/Facilities.jsx";
 import Finances from "./pages/Finances.jsx";
 import FreeMatch from "./pages/FreeMatch.jsx";
+import Hero from "./pages/Hero.jsx";
 import Internationals from "./pages/Internationals.jsx";
 import Journal from "./pages/Journal.jsx";
 import Login from "./pages/Login.jsx";
@@ -18,6 +19,7 @@ import Medical from "./pages/Medical.jsx";
 import Player from "./pages/Player.jsx";
 import Saves from "./pages/Saves.jsx";
 import Selection from "./pages/Selection.jsx";
+import Social from "./pages/Social.jsx";
 import Squad from "./pages/Squad.jsx";
 import SquadList from "./pages/SquadList.jsx";
 import Staff from "./pages/Staff.jsx";
@@ -51,6 +53,7 @@ export default function App() {
       <Route element={<Layout />}>
         <Route index element={<Home />} />
         <Route path="/journal" element={<Journal />} />
+        <Route path="/reseaux" element={<Social />} />
         <Route path="/calendrier" element={<Calendar />} />
         <Route path="/international" element={<Internationals />} />
         <Route path="/liste" element={<SquadList />} />
@@ -70,8 +73,10 @@ export default function App() {
   );
 }
 
-// L'accueil dépend de la carrière : le tableau de bord du club, ou celui du sélectionneur.
+// L'accueil dépend de la carrière : le tableau de bord du club, celui du sélectionneur,
+// ou celui du joueur incarné.
 function Home() {
   const { career } = useOutletContext();
+  if (career.kind === "player") return <Hero />;
   return career.kind === "nation" ? <Selection /> : <Club />;
 }

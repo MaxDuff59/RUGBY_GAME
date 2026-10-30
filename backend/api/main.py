@@ -33,6 +33,7 @@ from api.routers import (
     facilities,
     finances,
     friendly,
+    hero,
     honours,
     inbox,
     internationals,
@@ -94,6 +95,7 @@ app.include_router(clubs.router)
 app.include_router(leagues.router)
 app.include_router(matches.router)
 app.include_router(career.router)
+app.include_router(hero.router)
 app.include_router(competition.router)
 app.include_router(seasons.router)
 app.include_router(finances.router)
