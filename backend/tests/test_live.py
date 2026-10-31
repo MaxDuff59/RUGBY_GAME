@@ -4,7 +4,7 @@ import random
 
 import pytest
 
-from engine import match_engine, team_talk
+from engine import dilemmas, match_engine, team_talk
 from engine.match_engine import (
     BENCH_SIZE,
     CRUNCH_MARGIN,
@@ -370,7 +370,9 @@ def _my_side(live: dict) -> dict:
     return live["home"] if live["home"]["club"]["id"] == live["my_club_id"] else live["away"]
 
 
-def test_live_match_flow(manager):
+def test_live_match_flow(manager, monkeypatch):
+    # Les dilemmes du manager arrêteraient le chrono : testés à part, plus bas.
+    monkeypatch.setattr(dilemmas, "COACH_DILEMMA_CHANCE", 0.0)
     assert manager.get("/live").status_code == 404
 
     started = manager.post("/live")
@@ -473,6 +475,7 @@ def test_live_match_flow(manager):
 
 def test_live_crunch_route(manager, monkeypatch):
     _penalties_everywhere(monkeypatch)
+    monkeypatch.setattr(dilemmas, "COACH_DILEMMA_CHANCE", 0.0)
     manager.post("/live")
     live = manager.post("/live/advance", json={"minutes": 100}).json()
     crunch = live["crunch"]
@@ -493,6 +496,72 @@ def test_live_crunch_route(manager, monkeypatch):
     assert kick["minute"] == crunch["minute"]
     assert kick["club_id"] == live["my_club_id"]
     assert manager.post("/live/decide", json={"option": "kick"}).status_code == 400
+
+
+def test_a_coach_decides_dilemmas_for_his_players(even_clubs):
+    """Le manager tranche, pour un joueur de son XV sur le terrain, la situation tirée
+    selon son poste : la note de ce joueur bouge ; une réussite peut en appeler une autre
+    pour le même joueur ; pas plus de COACH_DILEMMA_MAX, à COACH_DILEMMA_GAP d'écart."""
+    home, away = even_clubs
+    seen = 0
+    for seed in range(8):
+        live = LiveMatch(home, away, rng=random.Random(seed), coach=home.id)
+        while not live.finished:
+            if live.dilemma is None:
+                live.advance(5)
+                continue
+            seen += 1
+            dilemma = live.dilemma
+            on_field = {slot.player.id for slot in live.home.on_field(live.minute)}
+            assert dilemma.player_id in on_field
+            assert live.advance(3) == []  # le chrono attend le manager
+            before = live.home.ratings[dilemma.player_id]
+            outcome = live.choose(next(iter(live.dilemma_odds())))
+            assert outcome.player_id == dilemma.player_id
+            assert round(live.home.ratings[dilemma.player_id] - before, 2) == outcome.delta
+            if live.dilemma is not None:
+                assert live.dilemma.chained and live.dilemma.player_id == dilemma.player_id
+        drawn = [o for o in live.outcomes if o.situation != "two_on_one"]
+        gaps = [b.minute - a.minute for a, b in zip(drawn, drawn[1:], strict=False)]
+        assert all(gap >= dilemmas.COACH_DILEMMA_GAP for gap in gaps)
+        assert len(drawn) <= dilemmas.COACH_DILEMMA_MAX
+    assert seen > 0
+
+
+def test_a_coach_dilemma_survives_a_save_and_the_staff_plays_safe(even_clubs):
+    home, away = even_clubs
+    live = LiveMatch(home, away, rng=random.Random(5), coach=home.id)
+    while live.dilemma is None and not live.finished:
+        live.step()
+    assert live.dilemma is not None
+    copy = LiveMatch.from_state(home, away, live.to_state())
+    assert copy.coach == home.id and copy.dilemma == live.dilemma
+    assert copy.dilemma_odds() == live.dilemma_odds()
+    copy.play_to_end()
+    for outcome in copy.outcomes:
+        assert outcome.option == dilemmas.safest(dilemmas.SITUATIONS_BY_KEY[outcome.situation]).key
+
+
+def test_without_a_coach_the_match_never_stops_for_a_dilemma(even_clubs):
+    home, away = even_clubs
+    live = LiveMatch(home, away, rng=random.Random(2))
+    live.advance(MATCH_MINUTES + 30)
+    assert live.outcomes == [] and live.dilemma is None
+
+
+def test_live_coach_dilemma_route(manager, monkeypatch):
+    monkeypatch.setattr(dilemmas, "COACH_DILEMMA_CHANCE", 1.0)
+    manager.post("/live")
+    live = manager.post("/live/advance", json={"minutes": 10}).json()
+    dilemma = live["dilemma"]
+    assert dilemma is not None and live["minute"] == 1 and live["hero"] is None
+    mine = _my_side(live)
+    assert dilemma["player_id"] in {p["id"] for p in mine["players"] if p["status"] == "field"}
+    assert manager.post("/live/advance", json={"minutes": 1}).status_code == 400
+    assert manager.get("/live").json()["dilemma"] == dilemma
+    live = manager.post("/live/choose", json={"option": dilemma["options"][0]["key"]}).json()
+    assert [o["player_id"] for o in live["outcomes"]] == [dilemma["player_id"]]
+    assert live["dilemma"] is None or live["dilemma"]["chained"]
 
 
 def test_simulating_the_matchday_finishes_the_live_match(manager):

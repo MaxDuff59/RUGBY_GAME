@@ -406,8 +406,12 @@ des joueurs, des personnages low-poly en pixels. Nulle part ailleurs.
 
 Certaines décisions en match se jouent en scène 3D plutôt que dans leur fenêtre de
 texte (`src/scene`, three.js chargé à la demande) : le choix crucial du manager et les
-dilemmes du joueur incarné (chaque situation a sa scène, `src/scene/scripts` ;
-`SCENE_SITUATIONS` dans `src/scene/prefs.js` dit lesquelles sont branchées).
+dilemmes (chaque situation a sa scène, `src/scene/scripts` ;
+`SCENE_SITUATIONS` dans `src/scene/prefs.js` dit lesquelles sont branchées). Les
+dilemmes sont ceux du joueur incarné (« À toi de jouer », « ta note »), ou, pour un
+manager, un sélectionneur ou au match libre, ceux qu'il tranche pour un joueur de son XV
+(« Consigne · Dupont (12) », « sa note », « Note de Dupont » ; les situations restent à
+la deuxième personne, le manager parle à son joueur) ; le repère au sol marque ce joueur.
 Une décision sur trois, tirée au hasard à son ouverture (`SCENE_SHARE`) ; jamais sans
 WebGL, avec « réduire les animations », ou quand « Scènes 3D : non » (pied du menu, volet
 « Plus » sur téléphone, `ScenePrefs`). Quand le staff tranche à la place du joueur

@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from api import auth, friendly
 from api.main import app
+from engine import dilemmas
 from models.orm import PlayerRow
 
 
@@ -20,7 +21,9 @@ def _team(groups: list[dict], name: str) -> int:
     return next(t["id"] for g in groups for t in g["teams"] if t["name"] == name)
 
 
-def test_club_against_nation_without_any_save(guest):
+def test_club_against_nation_without_any_save(guest, monkeypatch):
+    # Les dilemmes du joueur arrêteraient le chrono avant dix minutes : testés plus bas.
+    monkeypatch.setattr(dilemmas, "COACH_DILEMMA_CHANCE", 0.0)
     groups = guest.get("/friendly/teams").json()
     assert groups[-1]["code"] == "nations"
     assert {"top14", "premiership", "urc"} <= {g["code"] for g in groups}
@@ -135,3 +138,21 @@ def test_a_guest_who_leaves_takes_their_friendly_along(guest):
     # Le compte suivant (SQLite peut lui redonner le même identifiant) part de zéro.
     guest.post("/auth/guest")
     assert guest.get("/friendly/team").status_code == 404
+
+
+def test_the_player_decides_dilemmas_in_a_friendly(guest, monkeypatch):
+    """Au match libre aussi, le joueur tranche des dilemmes pour son XV (/friendly/choose)."""
+    monkeypatch.setattr(dilemmas, "COACH_DILEMMA_CHANCE", 1.0)
+    groups = guest.get("/friendly/teams").json()
+    toulouse, france = _team(groups, "Stade Toulousain"), _team(groups, "France")
+    guest.post("/friendly", json={"home_id": toulouse, "away_id": france, "my_id": toulouse})
+    guest.post("/friendly/kickoff")
+    live = guest.post("/friendly/advance", json={"minutes": 10}).json()
+    dilemma = live["dilemma"]
+    assert dilemma is not None and live["minute"] == 1
+    mine = live["home"] if live["home"]["club"]["id"] == live["my_club_id"] else live["away"]
+    assert dilemma["player_id"] in {p["id"] for p in mine["players"] if p["status"] == "field"}
+    key = dilemma["options"][0]["key"]
+    live = guest.post("/friendly/choose", json={"option": key}).json()
+    assert [o["player_id"] for o in live["outcomes"]] == [dilemma["player_id"]]
+    assert guest.post("/friendly/choose", json={"option": key}).status_code in (200, 400)

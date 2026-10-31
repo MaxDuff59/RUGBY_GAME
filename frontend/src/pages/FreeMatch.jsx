@@ -23,6 +23,7 @@ const CALLS = {
   tactics: api.setFriendlyTactics,
   talk: api.talkFriendly,
   decide: api.decideFriendly,
+  choose: api.chooseFriendly,
   substitute: api.substituteFriendly,
   finish: api.finishFriendly,
 };

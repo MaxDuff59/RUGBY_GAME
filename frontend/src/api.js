@@ -161,6 +161,7 @@ export const api = {
   setFriendlyTactics: (tactics) => post("/friendly/tactics", tactics),
   talkFriendly: (key) => post("/friendly/talk", { key }),
   decideFriendly: (option) => post("/friendly/decide", { option }),
+  chooseFriendly: (option) => post("/friendly/choose", { option }),
   substituteFriendly: (playerOut, playerIn) =>
     post("/friendly/substitute", { player_out: playerOut, player_in: playerIn }),
   finishFriendly: () => post("/friendly/finish"),

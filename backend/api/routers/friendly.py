@@ -21,6 +21,7 @@ from api import friendly
 from api.auth import UserDep
 from api.live import Live, live_out
 from api.schemas import (
+    ChooseIn,
     ClubDetail,
     ClubRef,
     DecideIn,
@@ -232,6 +233,12 @@ def substitute(payload: SubstituteIn, user: UserDep) -> LiveOut:
 def decide(payload: DecideIn, user: UserDep) -> LiveOut:
     """Le joueur choisit quoi faire de la pénalité décisive."""
     return _act(user, lambda live: live.match.decide(live.row.my_id, payload.option))
+
+
+@router.post("/choose", response_model=LiveOut)
+def choose(payload: ChooseIn, user: UserDep) -> LiveOut:
+    """Le joueur tranche un dilemme pour un de ses joueurs."""
+    return _act(user, lambda live: live.match.choose(payload.option))
 
 
 @router.post("/finish", response_model=LiveOut)

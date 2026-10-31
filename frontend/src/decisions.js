@@ -61,3 +61,27 @@ export function crunchResult(option, fresh) {
   }
   return { scored: Boolean(scored), verdict, text };
 }
+
+// --- Qui joue l'action ------------------------------------------------------------------
+
+// Les dilemmes déjà tranchés : du joueur incarné, ou du manager pour ses joueurs.
+export const dilemmaOutcomes = (live) => live.outcomes ?? live.hero?.outcomes ?? [];
+
+// Le joueur d'un dilemme (`playerId` : celui du dilemme ou de son issue) et la voix des
+// textes : le joueur incarné (« À toi de jouer », « ta note »), ou le joueur pour qui le
+// manager tranche (« Consigne · Dupont (12) », « sa note »). Les situations restent à la
+// deuxième personne : c'est le manager qui parle à son joueur.
+export function dilemmaActor(live, side, playerId) {
+  const id = playerId ?? live.hero?.player_id;
+  const player = side.players.find((p) => p.id === id) ?? null;
+  const coach = playerId != null && playerId !== live.hero?.player_id;
+  const name = player ? (player.last_name ?? player.name) : "ton joueur";
+  const who = player ? `${name} (${player.slot_number ?? player.number})` : name;
+  return {
+    player,
+    coach,
+    call: (chained) => (coach ? `${chained ? "Dans la foulée" : "Consigne"} · ${who}` : chained ? "Dans la foulée" : "À toi de jouer"),
+    note: coach ? "sa note" : "ta note",
+    Note: coach ? `Note de ${name}` : "Ta note",
+  };
+}

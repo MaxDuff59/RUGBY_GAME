@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { dilemmaText, signed } from "../decisions.js";
+import { dilemmaActor, dilemmaOutcomes, dilemmaText, signed } from "../decisions.js";
 import { DILEMMAS, formatNote } from "../format.js";
 import Modal from "./Modal.jsx";
 
@@ -12,9 +12,11 @@ import Modal from "./Modal.jsx";
 export default function DilemmaDialog({ live, side, busy, error, onChoose, onResume }) {
   const [choice, setChoice] = useState(null); // { option, outcomes, events } : la voie et ce qu'il y avait avant
   const dilemma = live.dilemma;
-  const outcomes = live.hero?.outcomes ?? [];
+  const outcomes = dilemmaOutcomes(live);
   const outcome = choice && outcomes.length > choice.outcomes ? outcomes[outcomes.length - 1] : null;
-  const me = side.players.find((p) => p.id === live.hero?.player_id);
+  // Le joueur incarné, ou celui du manager pour qui il tranche.
+  const actor = dilemmaActor(live, side, outcome ? outcome.player_id : dilemma?.player_id);
+  const me = actor.player;
   const other = side === live.home ? live.away : live.home;
 
   if (outcome && !busy) {
@@ -33,7 +35,7 @@ export default function DilemmaDialog({ live, side, busy, error, onChoose, onRes
           <span className="talk__verdict">{outcome.success ? "Réussi" : "Raté"}</span>
           <p className="confirm__text">{text}</p>
           <span className="muted talk__effect">
-            Ta note {signed(outcome.delta)} · {me ? formatNote(me.rating ?? 6) : "–"} / 10 · {side.club.name}{" "}
+            {actor.Note} {signed(outcome.delta)} · {me ? formatNote(me.rating ?? 6) : "–"} / 10 · {side.club.name}{" "}
             {side.score} – {other.score} {other.club.name}
           </span>
         </div>
@@ -63,14 +65,14 @@ export default function DilemmaDialog({ live, side, busy, error, onChoose, onRes
     <Modal compact className="modal--dialog live-dialog" onClose={() => {}}>
       <div>
         <p className="eyebrow">
-          {dilemma.chained ? "Dans la foulée" : "À toi de jouer"} · {dilemma.minute}'
-          {me && ` · ta note ${formatNote(me.rating ?? 6)}`}
+          {actor.call(dilemma.chained)} · {dilemma.minute}'
+          {me && ` · ${actor.note} ${formatNote(me.rating ?? 6)}`}
         </p>
         <h2 className="confirm__title">{situation.title}</h2>
       </div>
       {dilemma.pressure > 1 && (
         <p className="dilemma__pressure">
-          Moment décisif : ta note gagne ou perd ×{formatNote(dilemma.pressure)}
+          Moment décisif : {actor.note} gagne ou perd ×{formatNote(dilemma.pressure)}
         </p>
       )}
       <p className="crunch__situation">{situation.text}</p>

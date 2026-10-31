@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "../api.js";
 import { clubInfo, clubTheme, inkOn } from "../clubs.js";
-import { crunchResult, crunchSituation, crunchStake, dilemmaText, signed } from "../decisions.js";
+import { crunchResult, crunchSituation, crunchStake, dilemmaActor, dilemmaOutcomes, dilemmaText, signed } from "../decisions.js";
 import { CRUNCH_OPTIONS, DILEMMAS, formatNote } from "../format.js";
 import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
 import { defaultJersey, distance } from "../jersey.js";
@@ -101,9 +101,8 @@ export default function MatchScene({ kind, live, side, busy, error, boards, onCh
   callbacks.current = { onFail, onHandOff };
 
   const other = side === live.home ? live.away : live.home;
-  const me = side.players.find((p) => p.id === live.hero?.player_id);
   const dilemma = live.dilemma;
-  const outcomes = live.hero?.outcomes ?? [];
+  const outcomes = dilemmaOutcomes(live);
   const outcome = kind === "dilemma" && choice && outcomes.length > choice.outcomes ? outcomes[outcomes.length - 1] : null;
   const fresh = choice ? live.events.slice(choice.events) : [];
   const crunchDone = kind === "crunch" && choice !== null && !live.crunch && !busy;
@@ -119,8 +118,13 @@ export default function MatchScene({ kind, live, side, busy, error, boards, onCh
   const [current, setCurrent] = useState(() => live.dilemma);
   const data = useMemo(() => {
     const kicker = side.players.find((p) => p.id === side.kicker_id);
-    return { kickerNumber: kicker?.slot_number ?? 10, hero: me?.slot_number ?? me?.number ?? 10 };
-  }, [side, me]);
+    // Le joueur de l'action : le joueur incarné, ou celui du manager (le même d'un bout à
+    // l'autre d'un enchaînement).
+    const actor = dilemmaActor(live, side, opening.dilemma?.player_id).player;
+    return { kickerNumber: kicker?.slot_number ?? 10, hero: actor?.slot_number ?? actor?.number ?? 10 };
+    // Fixé à l'ouverture de la décision.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // --- Le plateau -----------------------------------------------------------------
   useEffect(() => {
@@ -240,14 +244,16 @@ export default function MatchScene({ kind, live, side, busy, error, boards, onCh
           odds: option.key === "kick" ? "de réussite" : "d'essai",
         }));
 
+  // Le joueur de l'action (incarné, ou celui du manager) et la voix des textes.
+  const actor = dilemmaActor(live, side, kind === "dilemma" ? (current ?? opening.dilemma).player_id : null);
   let head;
   if (kind === "dilemma") {
     const shown = current ?? opening.dilemma;
     head = {
-      eyebrow: `${shown.chained ? "Dans la foulée" : "À toi de jouer"} · ${shown.minute}'${me ? ` · ta note ${formatNote(me.rating ?? 6)}` : ""}`,
+      eyebrow: `${actor.call(shown.chained)} · ${shown.minute}'${actor.player ? ` · ${actor.note} ${formatNote(actor.player.rating ?? 6)}` : ""}`,
       title: situation.title,
       text: situation.text,
-      pressure: pressure > 1 ? `Moment décisif : ta note gagne ou perd ×${formatNote(pressure)}` : null,
+      pressure: pressure > 1 ? `Moment décisif : ${actor.note} gagne ou perd ×${formatNote(pressure)}` : null,
     };
   } else {
     head = {
@@ -261,13 +267,14 @@ export default function MatchScene({ kind, live, side, busy, error, boards, onCh
   let card = null;
   if (phase === "result" && !chainScene) {
     if (kind === "dilemma" && outcome) {
+      const played = dilemmaActor(live, side, outcome.player_id);
       card = {
         eyebrow: `${DILEMMAS[outcome.situation].title} · ${outcome.minute}'`,
         title: DILEMMAS[outcome.situation].options[outcome.option].label,
         good: outcome.success,
         verdict: outcome.success ? "Réussi" : "Raté",
         text: dilemmaText(outcome, fresh),
-        effect: `Ta note ${signed(outcome.delta)} · ${me ? formatNote(me.rating ?? 6) : "–"} / 10 · ${side.club.name} ${side.score} – ${other.score} ${other.club.name}`,
+        effect: `${played.Note} ${signed(outcome.delta)} · ${played.player ? formatNote(played.player.rating ?? 6) : "–"} / 10 · ${side.club.name} ${side.score} – ${other.score} ${other.club.name}`,
       };
     } else if (kind === "crunch" && choice) {
       const result = crunchResult(choice.option, fresh);
@@ -319,7 +326,7 @@ export default function MatchScene({ kind, live, side, busy, error, boards, onCh
         </div>
         {banner && (
           <p className="match-scene__banner">
-            Réussi : {banner.title} · ta note {signed(banner.delta)}
+            Réussi : {banner.title} · {actor.note} {signed(banner.delta)}
           </p>
         )}
       </div>

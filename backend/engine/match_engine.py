@@ -47,7 +47,9 @@ Principe :
 11. En carrière de joueur, le joueur incarné (`hero`) joue dans un club mené par son
    staff : sur le terrain, le match s'arrête de temps en temps sur un dilemme
    (`engine/dilemmas.py`) qu'il tranche (`choose`), pour sa note et parfois le score.
-   Remplaçant, il entre à l'heure de jeu ; le staff ne le sort pas.
+   Remplaçant, il entre à l'heure de jeu ; le staff ne le sort pas. Un manager
+   (`coach` : son club) a les siens, plus rares, pour un joueur de son XV sur le terrain
+   tiré au hasard, la situation selon son poste.
 
 `LiveMatch` joue le match minute par minute : on peut l'arrêter, changer la
 tactique d'une équipe ou faire un remplacement, puis reprendre. `simulate_match`
@@ -1188,6 +1190,7 @@ class LiveMatch:
         hero_confidence: float = 0.0,
         hero_hurt: bool = False,
         final: bool = False,
+        coach: int | None = None,
     ) -> None:
         self.rng = rng or random.Random()
         self.matchday = matchday
@@ -1219,6 +1222,7 @@ class LiveMatch:
         self.hero_confidence = hero_confidence  # de -1 à 1 (engine/dilemmas.py)
         self.hero_hurt = hero_hurt  # joue blessé
         self.final = final
+        self.coach = coach  # le club dont le manager tranche des dilemmes pour ses joueurs
         self.dilemma: dilemmas.Dilemma | None = None
         self.outcomes: list[dilemmas.Outcome] = []
         if hero is not None:
@@ -1824,7 +1828,10 @@ class LiveMatch:
     def _dilemma_due(self, minute: int) -> None:
         """Le match s'arrête-t-il sur un dilemme du joueur incarné ? Seulement s'il est sur
         le terrain, pas trop tôt après le précédent, et pas à la dernière minute."""
-        if self.hero is None or minute >= self.last_minute:
+        if self.hero is None:
+            self._coach_dilemma_due(minute)
+            return
+        if minute >= self.last_minute:
             return
         found = self._hero_slot(minute)
         if found is None or len(self.outcomes) >= dilemmas.DILEMMA_MAX:
@@ -1843,6 +1850,39 @@ class LiveMatch:
             self._minute_chance,
             pressure=self._pressure(side, minute),
         )
+
+    def _coach_dilemma_due(self, minute: int) -> None:
+        """Le match s'arrête-t-il sur un dilemme pour le manager (`coach`) ? Pour un de ses
+        joueurs sur le terrain, tiré au hasard ; plus rarement qu'en carrière de joueur."""
+        if self.coach is None or minute >= self.last_minute:
+            return
+        if len(self.outcomes) >= dilemmas.COACH_DILEMMA_MAX:
+            return
+        last = self.outcomes[-1] if self.outcomes else None
+        if last is not None and minute - last.minute < dilemmas.COACH_DILEMMA_GAP:
+            return
+        if self.rng.random() >= dilemmas.COACH_DILEMMA_CHANCE:
+            return
+        side = self.side(self.coach)
+        present = side.on_field(minute)
+        if not present:
+            return
+        slot = self.rng.choice(present)
+        situation = dilemmas.draw(slot.position, last.situation if last else None, self.rng)
+        self.dilemma = dilemmas.Dilemma(
+            minute,
+            situation.key,
+            dict(self._minute_play),
+            self._minute_chance,
+            pressure=self._pressure(side, minute),
+            player_id=slot.player.id,
+        )
+
+    def _actor(self, dilemma: dilemmas.Dilemma) -> tuple[Side, Player]:
+        """Le joueur d'un dilemme et son équipe : le joueur incarné, ou celui du manager."""
+        player_id = self.hero if dilemma.player_id is None else dilemma.player_id
+        side = next(side for side in self.sides if player_id in side.players())
+        return side, side.players()[player_id]
 
     def _pressure(self, side: Side, minute: int) -> float:
         margin = self.score(side.club.id) - self.score(self.opponent(side).club.id)
@@ -1883,17 +1923,21 @@ class LiveMatch:
         if dilemma is None:
             raise ValueError("Aucun dilemme en attente")
         situation = dilemmas.SITUATIONS_BY_KEY[dilemma.situation]
-        side = self.hero_side()
-        hero = side.players()[self.hero]
+        side, actor = self._actor(dilemma)
         opposition = None
         if situation.opposition != dilemmas.Opposition.NONE:
             other = self.opponent(side).collective(dilemma.minute)
             opposition = getattr(other, situation.opposition.value)
-        fit = efficiency(side.energy(hero)) * (dilemmas.HURT_FACTOR if self.hero_hurt else 1.0)
+        # La confiance et la blessure sont celles du joueur incarné ; un joueur du manager
+        # n'apporte que ses attributs et son énergie.
+        incarnated = dilemma.player_id is None
+        hurt = dilemmas.HURT_FACTOR if incarnated and self.hero_hurt else 1.0
+        confidence = self.hero_confidence if incarnated else 0.0
+        fit = efficiency(side.energy(actor)) * hurt
         return {
             choice.key: round(
                 dilemmas.success_chance(
-                    dilemmas.skill(hero, choice, fit), opposition, choice, self.hero_confidence
+                    dilemmas.skill(actor, choice, fit), opposition, choice, confidence
                 ),
                 2,
             )
@@ -1901,17 +1945,17 @@ class LiveMatch:
         }
 
     def choose(self, key: str) -> dilemmas.Outcome:
-        """Le joueur incarné tranche le dilemme en attente : sa note bouge, le score
-        parfois ; la minute se termine. ValueError s'il n'y a rien à trancher."""
+        """Le joueur incarné (ou le manager, pour son joueur) tranche le dilemme en
+        attente : la note du joueur bouge, le score parfois ; la minute se termine.
+        ValueError s'il n'y a rien à trancher."""
         dilemma = self.dilemma
         if dilemma is None:
             raise ValueError("Aucun dilemme en attente")
         situation = dilemmas.SITUATIONS_BY_KEY[dilemma.situation]
         choice = dilemmas.option(situation, key)
         chance = self.dilemma_odds()[key]
-        side = self.hero_side()
+        side, hero = self._actor(dilemma)
         other = self.opponent(side)
-        hero = side.players()[self.hero]
         minute = dilemma.minute
         before_rating = side.ratings.get(hero.id, RATING_START)
         before = len(self.events)
@@ -1932,6 +1976,7 @@ class LiveMatch:
             delta=round(side.ratings.get(hero.id, RATING_START) - before_rating, 2),
             effect=effect,
             pressure=dilemma.pressure,
+            player_id=dilemma.player_id,
         )
         self.outcomes.append(outcome)
         self.dilemma = None
@@ -1944,6 +1989,7 @@ class LiveMatch:
                 dilemma.chance,
                 pressure=dilemma.pressure,
                 chained=True,
+                player_id=dilemma.player_id,
             )
         fresh = self.events[before:]
         self._crowd_reacts(fresh)
@@ -2129,6 +2175,7 @@ class LiveMatch:
             "hero_confidence": self.hero_confidence,
             "hero_hurt": self.hero_hurt,
             "final": self.final,
+            "coach": self.coach,
             "dilemma": self.dilemma.to_dict() if self.dilemma else None,
             "outcomes": [outcome.to_dict() for outcome in self.outcomes],
             "weather": self.weather.value,
@@ -2172,6 +2219,7 @@ class LiveMatch:
         live.hero_confidence = state.get("hero_confidence", 0.0)
         live.hero_hurt = state.get("hero_hurt", False)
         live.final = state.get("final", False)
+        live.coach = state.get("coach")
         dilemma = state.get("dilemma")
         live.dilemma = dilemmas.Dilemma.from_dict(dilemma) if dilemma else None
         live.outcomes = [dilemmas.Outcome.from_dict(o) for o in state.get("outcomes", [])]

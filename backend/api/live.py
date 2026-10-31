@@ -267,7 +267,8 @@ def _hero_out(live: LiveMatch) -> LiveHeroOut | None:
 
 
 def _dilemma_out(live: LiveMatch) -> DilemmaOut | None:
-    """Le dilemme qui attend le joueur incarné, avec les chances de chaque voie."""
+    """Le dilemme qui attend le joueur incarné (ou le manager, pour un de ses joueurs),
+    avec les chances de chaque voie."""
     if live.dilemma is None:
         return None
     situation = dilemmas.SITUATIONS_BY_KEY[live.dilemma.situation]
@@ -286,6 +287,7 @@ def _dilemma_out(live: LiveMatch) -> DilemmaOut | None:
         ],
         pressure=live.dilemma.pressure,
         chained=live.dilemma.chained,
+        player_id=live.dilemma.player_id,
     )
 
 
@@ -341,4 +343,5 @@ def live_out(live: Live, names: dict[int, str], my_club_id: int) -> LiveOut:
         crunch=_crunch_out(match, my_club_id),
         hero=_hero_out(match),
         dilemma=_dilemma_out(match),
+        outcomes=[OutcomeOut(**outcome.to_dict()) for outcome in match.outcomes],
     )

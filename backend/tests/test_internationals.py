@@ -30,6 +30,7 @@ from data.nations import (
     season_windows,
 )
 from database import init_db
+from engine import dilemmas
 from engine import internationals as rules
 from engine.calendar import SATURDAY, is_world_cup_year, season_dates, world_cup_saturdays
 from engine.match_engine import SLOT_POSITIONS, select_bench, select_lineup
@@ -643,7 +644,9 @@ def test_selector_picks_his_xv_and_plays_the_match(selector):
     assert client.delete("/selection/lineup").json()["lineup_custom"] is False
 
 
-def test_selector_plays_his_match_live(selector):
+def test_selector_plays_his_match_live(selector, monkeypatch):
+    # Les dilemmes du sélectionneur arrêteraient le chrono : testés à part (test_live.py).
+    monkeypatch.setattr(dilemmas, "COACH_DILEMMA_CHANCE", 0.0)
     client, _ = selector
     announce_staff_list(client)
 

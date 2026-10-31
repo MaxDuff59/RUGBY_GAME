@@ -38,6 +38,11 @@ DILEMMA_GAP = 5
 DILEMMA_MAX = 7
 # Un remplaçant que le staff garde au chaud entre à cette minute, à son poste.
 HERO_ENTRY_MINUTE = 52
+# Pour un manager (ou un sélectionneur), les dilemmes portent sur un joueur de son XV : un
+# peu plus rares, il a aussi les changements, les discours et le choix crucial.
+COACH_DILEMMA_CHANCE = 0.06
+COACH_DILEMMA_GAP = 8
+COACH_DILEMMA_MAX = 4
 
 # Chances de réussite : `Option.base` entre un joueur et une opposition de même niveau,
 # plus SKILL_SWING par point d'écart, entre CHANCE_MIN et CHANCE_MAX.
@@ -356,6 +361,8 @@ class Dilemma:
     chance: tuple[int, float] | None
     pressure: float = 1.0
     chained: bool = False  # enchaîné sur une réussite (`Option.follow`)
+    # Le joueur concerné : celui du manager qui tranche pour lui ; None, le joueur incarné.
+    player_id: int | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -365,6 +372,7 @@ class Dilemma:
             "chance": list(self.chance) if self.chance else None,
             "pressure": self.pressure,
             "chained": self.chained,
+            "player_id": self.player_id,
         }
 
     @classmethod
@@ -377,6 +385,7 @@ class Dilemma:
             chance=(chance[0], chance[1]) if chance else None,
             pressure=data.get("pressure", 1.0),
             chained=data.get("chained", False),
+            player_id=data.get("player_id"),
         )
 
 
@@ -393,6 +402,7 @@ class Outcome:
     delta: float
     effect: Effect
     pressure: float = 1.0
+    player_id: int | None = None  # le joueur concerné (None : le joueur incarné)
 
     def to_dict(self) -> dict:
         return {
@@ -404,6 +414,7 @@ class Outcome:
             "delta": self.delta,
             "effect": self.effect.value,
             "pressure": self.pressure,
+            "player_id": self.player_id,
         }
 
     @classmethod

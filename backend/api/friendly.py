@@ -304,6 +304,7 @@ def kick_off(session: Session, row: FriendlyRow) -> Live:
         # Une sélection n'a pas de stade dans le jeu : temps sec chez elle.
         weather=forecast(home, row.date if home.id not in NATIONS_BY_ID else None),
         derby=derby(known[row.home_id], known[row.away_id]) is not None,
+        coach=row.my_id,
     )
     live = Live(row=row, match=match, match_row=row)
     save(live)

@@ -743,6 +743,8 @@ class LiveOut(BaseModel):
     # Carrière de joueur : le joueur incarné, ses dilemmes, et celui qui l'attend.
     hero: "LiveHeroOut | None" = None
     dilemma: "DilemmaOut | None" = None
+    # Les dilemmes déjà tranchés, du joueur incarné ou du manager pour ses joueurs.
+    outcomes: list["OutcomeOut"] = []
 
 
 class DilemmaOptionOut(BaseModel):
@@ -758,6 +760,8 @@ class DilemmaOut(BaseModel):
     options: list[DilemmaOptionOut]
     pressure: float  # ce que pèse le moment (1 : ordinaire ; engine/dilemmas.py)
     chained: bool  # enchaîné sur la réussite précédente
+    # Le joueur concerné : celui du manager qui tranche pour lui (None : le joueur incarné).
+    player_id: int | None = None
 
 
 class OutcomeOut(BaseModel):
@@ -769,6 +773,7 @@ class OutcomeOut(BaseModel):
     delta: float
     effect: str
     pressure: float
+    player_id: int | None = None  # le joueur concerné (None : le joueur incarné)
 
 
 class LiveHeroOut(BaseModel):

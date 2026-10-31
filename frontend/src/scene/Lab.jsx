@@ -12,6 +12,8 @@ import MatchScene from "./MatchScene.jsx";
 const q = new URLSearchParams(location.search);
 const kind = q.get("kind") ?? "crunch";
 const situation = q.get("situation") ?? "kick";
+// `coach=1` : un manager tranche pour un de ses joueurs (le 12), sans joueur incarné.
+const coach = q.get("coach") === "1";
 
 const players = (base, start) =>
   Array.from({ length: 15 }, (_, i) => ({ id: base + i + 1, name: `Joueur ${start}${i + 1}`, slot_number: i + 1, number: i + 1, rating: 6.5 }));
@@ -56,6 +58,7 @@ const dilemmaOf = (key, chained) => ({
   situation: key,
   pressure: Number(q.get("pressure") ?? 1.5),
   chained,
+  player_id: coach ? 112 : null,
   options: OPTIONS[key].map((option, i) => ({ key: option, success: [0.4, 0.45, 0.75][i], reward: [0.6, 0.6, 0.2][i], cost: [-0.4, -0.3, -0.2][i] })),
 });
 const base = {
@@ -76,7 +79,8 @@ const base = {
     kind === "crunch"
       ? { minute: 76, conversion: 0.7, options: ["kick", "touch", "scrum", "play"].map((key, i) => ({ key, success: [0.72, 0.38, 0.33, 0.27][i] })) }
       : null,
-  hero: kind === "dilemma" ? { player_id: 110, outcomes: [] } : null,
+  hero: kind === "dilemma" && !coach ? { player_id: 110, outcomes: [] } : null,
+  outcomes: [],
   dilemma: kind === "dilemma" ? dilemmaOf(situation, false) : null,
 };
 
@@ -110,12 +114,13 @@ function Lab() {
         const now = current.dilemma.situation;
         const scoring = { drop: ["drop_goal", 3], try: ["try", 5], assist: ["try", 5] }[effect];
         const events = scoring ? [{ minute: 76, type: scoring[0], club_id: side.club.id, player_name: "Joueur A11", points: scoring[1] }] : [];
-        const outcomes = [...current.hero.outcomes, { minute: 76, situation: now, option: key, success: good, chance, delta: good ? 0.9 : -0.4, effect, pressure: 1.5 }];
+        const outcomes = [...current.outcomes, { minute: 76, situation: now, option: key, success: good, chance, delta: good ? 0.9 : -0.4, effect, pressure: 1.5, player_id: coach ? 112 : null }];
         return {
           ...current,
           dilemma: good && FOLLOW[key] ? dilemmaOf(FOLLOW[key], true) : null,
           events: [...current.events, ...events],
-          hero: { ...current.hero, outcomes },
+          hero: current.hero && { ...current.hero, outcomes },
+          outcomes,
           [mine]: { ...side, score: side.score + events.reduce((sum, e) => sum + e.points, 0) },
         };
       });

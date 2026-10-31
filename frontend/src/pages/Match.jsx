@@ -143,7 +143,7 @@ export function LiveScreen({
         setNotice("Choix crucial");
       } else if (next.dilemma) {
         setPlaying(false);
-        setNotice("À toi de jouer");
+        setNotice(next.hero ? "À toi de jouer" : "Une consigne à donner");
       } else if (mine) {
         setPlaying(false);
         setNotice(`${EVENTS[mine.type]} : ${mine.player_name}`);
@@ -635,7 +635,9 @@ function Scoreboard({
                   : live.crunch
                     ? "Choix crucial"
                     : live.dilemma
-                      ? "À toi de jouer"
+                      ? live.hero
+                        ? "À toi de jouer"
+                        : "Consigne"
                       : live.minute === 0
                         ? "Coup d'envoi"
                         : "Reprendre"}

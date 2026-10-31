@@ -15,6 +15,8 @@ tombe : mêmes routes, la sauvegarde est à part (`LiveInternationalRow`).
 En carrière de joueur (api/hero.py), le match est celui du club du joueur incarné,
 mené de bout en bout par les deux staffs : ni tactique, ni discours, ni changement.
 Le chrono s'arrête sur ses dilemmes (`dilemma`), qu'il tranche (`/live/choose`).
+Un manager ou un sélectionneur a aussi les siens, plus rares, pour un joueur de son
+XV (`dilemma.player_id`), par la même route.
 """
 
 from fastapi import APIRouter, HTTPException
@@ -251,6 +253,9 @@ def start_live(session: SessionDep) -> LiveOut:
         hero_confidence=hero_row.confidence if hero_row else 0.0,
         hero_hurt=hurt,
         final=stage == Stage.FINAL,
+        # Le manager tranche des dilemmes pour ses joueurs ; en carrière de joueur, le
+        # joueur incarné tranche les siens.
+        coach=my_club_id if hero is None else None,
     )
     row = LiveMatchRow(
         match_id=match_row.id,
@@ -348,6 +353,7 @@ def _start_test(session, human: SelectorRow) -> LiveOut:
         away_tactics=opponent_tactics if away is opponent else Tactics(),
         auto={opponent.id},
         derby=derby(NATION_NAMES[home.id], NATION_NAMES[away.id]) is not None,
+        coach=my_id,
     )
     row = LiveInternationalRow(match_id=match_row.id, state=live.to_state())
     session.add(row)
@@ -438,8 +444,8 @@ def decide(payload: DecideIn, session: SessionDep) -> LiveOut:
 
 @router.post("/choose", response_model=LiveOut)
 def choose(payload: ChooseIn, session: SessionDep) -> LiveOut:
-    """Le joueur incarné tranche son dilemme : sa note bouge, le score parfois. Le
-    chrono peut repartir."""
+    """Le joueur incarné tranche son dilemme (ou le manager, pour un de ses joueurs) :
+    la note du joueur bouge, le score parfois. Le chrono peut repartir."""
     live, names, my_club_id = _load(session)
     try:
         live.match.choose(payload.option)
