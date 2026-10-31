@@ -1036,10 +1036,8 @@ class HeroOut(BaseModel):
     rank: int  # rang à son poste dans l'effectif (1 : le meilleur)
     at_position: int  # joueurs de l'effectif à son poste
     status: Literal["starter", "bench", "injured", "suspended", "retired"]
-    # Ses chances d'être titulaire au prochain match (0 à 1, rotation comprise), et s'il
-    # l'est d'office : sur le banc, il souffle ; titulaire sans l'être, il doit sa place
-    # à la rotation.
-    start_chance: float
+    # Titulaire d'office au prochain match : sur le banc, il souffle ; titulaire sans
+    # l'être, il doit sa place à la rotation (engine/hero.py).
     first_choice: bool
     points: int
     xp: int
@@ -1058,6 +1056,12 @@ class HeroOut(BaseModel):
     loaned_from: ClubRef | None  # prêté par ce club
     choice: dict | None  # l'offre choisie, appliquée à l'intersaison
     called_up: HeroTestOut | None  # son prochain match en sélection
+    # Son pays (None : il ne joue pas dans ce monde), s'il peut y être retenu (certains ne
+    # prennent que les joueurs de leurs clubs), et ses chances d'être sur sa prochaine
+    # liste, de 0 à 1 (1 : il y est déjà).
+    nation: str | None
+    eligible: bool
+    call_up_chance: float | None
     caps: int
 
 

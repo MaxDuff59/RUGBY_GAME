@@ -20,9 +20,15 @@ souffle de temps en temps sur le banc, d'autant plus souvent qu'il enchaîne les
 (sa fraîcheur, engine/freshness.py) ; remplaçant, il gagne parfois une titularisation.
 Jamais en phase finale : les meilleurs jouent.
 
+En sélection, le staff de son pays retient les meilleurs à chaque poste
+(engine/internationals.py) : ses chances (`call_up_chance`) suivent l'écart entre sa
+note au poste et celle du dernier retenu, d'ici l'annonce de la prochaine liste.
+
 Blessé, il peut jouer diminué : ses attributs ne rendent pas tout, et la blessure
 risque de s'aggraver (`AGGRAVATION_CHANCE`, de 1 à 3 semaines de plus).
 """
+
+import math
 
 from models import ATTRIBUTE_MAX, ATTRIBUTE_MIN, ATTRIBUTE_NAMES, POSITION_PROFILES, Position
 
@@ -142,6 +148,20 @@ def start_chance(
         tired = REST_PER_FATIGUE * max(0.0, FRESHNESS_FULL - freshness)
         return round(1 - clamp(REST_FLOOR + tired, REST_FLOOR, REST_MAX), 2)
     return round(ROTATION_START * trust / 100 / max(1, behind), 2)
+
+
+# Sélection : d'ici l'annonce de la liste, tout peut bouger (progression, forme,
+# blessures). À égalité avec le dernier retenu, une chance sur deux ; chaque
+# SELECTION_SPREAD point d'écart pèse comme un facteur e sur la cote.
+SELECTION_SPREAD = 0.6
+SELECTION_BOUNDS = (0.01, 0.99)
+
+
+def call_up_chance(gap: float) -> float:
+    """Ses chances d'être sur la prochaine liste de son pays, de l'écart `gap` entre sa
+    note au poste et celle du dernier joueur que le staff retiendrait sans lui."""
+    odds = 1 / (1 + math.exp(-gap / SELECTION_SPREAD))
+    return round(clamp(odds, *SELECTION_BOUNDS), 2)
 
 
 def entry_minute(trust: float) -> int:

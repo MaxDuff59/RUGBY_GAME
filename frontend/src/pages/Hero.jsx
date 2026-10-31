@@ -321,8 +321,12 @@ export default function Hero() {
         </dd>
       </dl>
       <XpBar xp={me.xp} perPoint={me.xp_per_point} />
-      {available && (
-        <Gauge label="Chances d'être titulaire" value={me.start_chance} text={`${Math.round(me.start_chance * 100)} %`} />
+      {me.nation && (
+        <Gauge
+          label="Chances d'être sélectionné"
+          value={me.call_up_chance}
+          text={me.eligible ? `${Math.round(me.call_up_chance * 100)} % · ${me.nation}` : `${me.nation} ne retient que ses clubs`}
+        />
       )}
       <Gauge label="Ta confiance" value={(me.confidence + 1) / 2} text={confidenceLabel(me.confidence)} />
       <Gauge label="L'entraîneur" value={me.trust / 100} text={trustLabel(me.trust)} />

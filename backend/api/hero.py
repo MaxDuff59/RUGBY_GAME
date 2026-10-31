@@ -300,6 +300,37 @@ def _freshness(
     return player_freshness(starts, day, rate)
 
 
+def _national_chance(
+    session: Session, player, club_name: str | None, listed: bool
+) -> tuple[str | None, bool, float | None]:
+    """Son pays, s'il peut y être retenu, et ses chances d'être sur sa prochaine liste
+    (engine/hero.py) ; (None, False, None) si son pays ne joue pas dans ce monde."""
+    nation = NATIONS_BY_CODE.get(player.nationality)
+    if (
+        nation is None
+        or nation not in internationals.rules.participants()
+        or not internationals.has_nations(session)
+    ):
+        return None, False, None
+    if not internationals.rules.is_eligible(player, nation, club_name):
+        return nation.name, False, 0.0
+    if listed:
+        return nation.name, True, 1.0
+    rating = internationals.rules.position_rating
+    rivals = sorted(
+        (
+            rating(p)
+            for p in internationals.eligible_players(session, {nation.code})[nation.code]
+            if p.position == player.position and p.id != player.id
+        ),
+        reverse=True,
+    )
+    quota = internationals.rules.SQUAD_QUOTA[Position(player.position)]
+    if len(rivals) < quota:
+        return nation.name, True, rules.SELECTION_BOUNDS[1]
+    return nation.name, True, rules.call_up_chance(rating(player) - rivals[quota - 1])
+
+
 def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
     row = hero(session)
     player_row = session.get(PlayerRow, row.player_id)
@@ -317,7 +348,7 @@ def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
     ]
     club_ref = league_name = None
     status, rank, at_position, injury_weeks = "retired", 1, 1, 0
-    start_chance, first_choice = 0.0, False
+    first_choice = False
     matches: list[HeroMatchOut] = []
     if player.club_id is not None:
         # api/routers/seasons.py importe ce module : son prochain match se lit ici.
@@ -341,7 +372,7 @@ def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
                 internationals.rules.release(club, away, fixture.date)
             call = lineup_call(session, season, club, player.id, row.trust, fixture)
             status = "starter" if call.starts else "bench"
-            start_chance, first_choice = call.chance, call.first_choice
+            first_choice = call.first_choice
         rating = RATING_FOR_POSITION[position]
         rivals = sorted(
             (p for p in club.players if p.position == position), key=rating, reverse=True
@@ -359,6 +390,12 @@ def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
                 _match_out(m, player.id, club.id, names)
                 for m in sorted(played, key=lambda m: (m.date, m.id), reverse=True)
             ]
+    test = called_up(session, season) if player.club_id is not None else None
+    nation, eligible, call_up_chance = (
+        _national_chance(session, player, club_ref.name, test is not None)
+        if club_ref is not None
+        else (None, False, None)
+    )
     return HeroOut(
         player_id=player.id,
         first_name=player.first_name,
@@ -372,7 +409,6 @@ def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
         rank=rank,
         at_position=at_position,
         status=status,
-        start_chance=start_chance,
         first_choice=first_choice,
         points=row.points,
         xp=row.xp,
@@ -390,7 +426,10 @@ def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
         contract_until=player.contract_until,
         loaned_from=_ref(session, player.loaned_from),
         choice=row.choice,
-        called_up=called_up(session, season) if player.club_id is not None else None,
+        called_up=test,
+        nation=nation,
+        eligible=eligible,
+        call_up_chance=call_up_chance,
         caps=caps(session, player.id),
     )
 

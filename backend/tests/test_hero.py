@@ -348,6 +348,12 @@ def test_the_coach_rotates_even_his_best_players():
     assert rules.start_chance(False, 60, 20.0, 1, knockout=True) == 0.0
 
 
+def test_call_up_chances_follow_the_gap_to_the_last_one_picked():
+    assert rules.call_up_chance(0.0) == 0.5
+    assert rules.call_up_chance(-3.0) < rules.call_up_chance(-0.5) < 0.5
+    assert 0.5 < rules.call_up_chance(0.5) < rules.call_up_chance(3.0) <= 0.99
+
+
 def _db(client):
     return next(app.dependency_overrides[get_session]())
 
@@ -385,7 +391,7 @@ def test_a_rested_starter_begins_on_the_bench_as_announced(client, monkeypatch):
     session.scalars(select(HeroRow)).first().trust = 90
     session.commit()
     hero = client.get("/hero").json()
-    assert hero["status"] == "bench" and hero["first_choice"] and hero["start_chance"] == 0
+    assert hero["status"] == "bench" and hero["first_choice"]
     first, _ = _play_live(client)
     me = next(p for p in [*first["home"]["players"], *first["away"]["players"]]
               if p["id"] == hero["player_id"])  # fmt: skip
@@ -529,15 +535,20 @@ def test_a_great_player_is_called_up_and_plays_his_test_live(top14):
     client, TestSession = top14
     toulouse = next(c["id"] for c in client.get("/clubs").json() if c["name"] == "Stade Toulousain")
     _start(client, club_id=toulouse)
+    beginner = client.get("/hero").json()
+    assert beginner["nation"] == "France" and beginner["call_up_chance"] < 0.1
     with TestSession() as session:
         player = session.get(PlayerRow, session.scalars(select(HeroRow)).first().player_id)
         for name in ATTRIBUTE_NAMES:
             setattr(player, name, 20)
         session.commit()
+    # Assez fort pour la France, avant même l'annonce de la liste.
+    hero = client.get("/hero").json()
+    assert hero["nation"] == "France" and hero["eligible"] and hero["call_up_chance"] > 0.9
     while (hero := client.get("/hero").json())["called_up"] is None:
         assert client.post("/seasons/current/play").status_code == 200
     test = hero["called_up"]
-    assert test["nation"] == "France"
+    assert test["nation"] == "France" and hero["call_up_chance"] == 1
     # Les journées de son club d'ici là se jouent d'abord.
     while (nxt := client.get("/seasons/current").json()["next_match"]) and nxt["date"] < test[
         "date"
