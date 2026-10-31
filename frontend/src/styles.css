@@ -1387,6 +1387,17 @@ select.tactics__select {
   .standings .table {
     font-size: 14px;
   }
+  /* Le nom du club passe avant le détail : on retire N, Ess, BO et BD (puis J sur
+     petit écran) pour lui laisser la place. */
+  .standings .table :is(th, td):is(:nth-child(5), :nth-child(8), :nth-child(9), :nth-child(10)) {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .standings .table :is(th, td):nth-child(3) {
+    display: none;
+  }
 }
 
 .strength {
