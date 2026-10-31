@@ -206,6 +206,8 @@ def _after_match(session: Session, row: HeroRow, match_row: MatchRow, line: dict
         _note(row, match_row.date, "starter")
     elif before >= rules.ENTRY_BY_TRUST[1][0] > row.trust:
         _note(row, match_row.date, "doubt")
+    elif before >= rules.TRUST_KEEP_PLACE > row.trust:
+        _note(row, match_row.date, "dropped")
 
     if row.hurt_match_id == match_row.id:
         # Il a joué blessé : la blessure peut s'aggraver.
@@ -246,6 +248,7 @@ class LineupCall:
     chance: float  # ses chances d'être titulaire, de 0 à 1 (engine/hero.py)
     starts: bool  # titulaire (sinon sur le banc)
     first_choice: bool  # titulaire d'office : s'il ne l'est pas, il souffle
+    dropped: bool  # le meilleur à son poste, mis sur le banc après ses mauvais matchs
 
 
 def lineup_call(
@@ -262,9 +265,9 @@ def lineup_call(
     day = fixture.date if fixture is not None else game_date(session)
     me = next(p for p in club.players if p.id == player_id)
     club.forced_starters, club.rested = set(), set()
-    first_choice = trust >= rules.TRUST_START or any(
-        p.id == player_id for p in select_lineup(club, day)
-    )
+    best = any(p.id == player_id for p in select_lineup(club, day))
+    dropped = best and trust < rules.TRUST_KEEP_PLACE
+    first_choice = trust >= rules.TRUST_START or (best and not dropped)
     rating = RATING_FOR_POSITION[me.position]
     ahead = sum(1 for p in club.players if p.position == me.position and rating(p) > rating(me))
     behind = ahead + 1 - FORMATION[Position(me.position)]
@@ -279,7 +282,7 @@ def lineup_call(
         starts = first_choice
     else:
         starts = random.Random(f"rotation:{fixture.id}:{player_id}").random() < chance
-    return LineupCall(chance=chance, starts=starts, first_choice=first_choice)
+    return LineupCall(chance=chance, starts=starts, first_choice=first_choice, dropped=dropped)
 
 
 def _freshness(
@@ -301,7 +304,7 @@ def _freshness(
 
 
 def _national_chance(
-    session: Session, player, club_name: str | None, listed: bool
+    session: Session, season: SeasonRow | None, player, club_name: str | None, listed: bool
 ) -> tuple[str | None, bool, float | None]:
     """Son pays, s'il peut y être retenu, et ses chances d'être sur sa prochaine liste
     (engine/hero.py) ; (None, False, None) si son pays ne joue pas dans ce monde."""
@@ -316,19 +319,22 @@ def _national_chance(
         return nation.name, False, 0.0
     if listed:
         return nation.name, True, 1.0
-    rating = internationals.rules.position_rating
+    # Le staff classe un poste comme pour sa liste : note, forme, temps de jeu, continuité.
+    pool = internationals.eligible_players(session, {nation.code})[nation.code]
+    found = internationals.records(session, season, pool, nation.code)
+
+    def score(p) -> float:
+        return internationals.rules.selection_score(p, found.get(p.id))
+
     rivals = sorted(
-        (
-            rating(p)
-            for p in internationals.eligible_players(session, {nation.code})[nation.code]
-            if p.position == player.position and p.id != player.id
-        ),
+        (score(p) for p in pool if p.position == player.position and p.id != player.id),
         reverse=True,
     )
     quota = internationals.rules.SQUAD_QUOTA[Position(player.position)]
     if len(rivals) < quota:
         return nation.name, True, rules.SELECTION_BOUNDS[1]
-    return nation.name, True, rules.call_up_chance(rating(player) - rivals[quota - 1])
+    me = next((p for p in pool if p.id == player.id), player)
+    return nation.name, True, rules.call_up_chance(score(me) - rivals[quota - 1])
 
 
 def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
@@ -348,7 +354,7 @@ def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
     ]
     club_ref = league_name = None
     status, rank, at_position, injury_weeks = "retired", 1, 1, 0
-    first_choice = False
+    first_choice = dropped = False
     matches: list[HeroMatchOut] = []
     if player.club_id is not None:
         # api/routers/seasons.py importe ce module : son prochain match se lit ici.
@@ -372,7 +378,7 @@ def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
                 internationals.rules.release(club, away, fixture.date)
             call = lineup_call(session, season, club, player.id, row.trust, fixture)
             status = "starter" if call.starts else "bench"
-            first_choice = call.first_choice
+            first_choice, dropped = call.first_choice, call.dropped and not call.starts
         rating = RATING_FOR_POSITION[position]
         rivals = sorted(
             (p for p in club.players if p.position == position), key=rating, reverse=True
@@ -392,7 +398,7 @@ def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
             ]
     test = called_up(session, season) if player.club_id is not None else None
     nation, eligible, call_up_chance = (
-        _national_chance(session, player, club_ref.name, test is not None)
+        _national_chance(session, season, player, club_ref.name, test is not None)
         if club_ref is not None
         else (None, False, None)
     )
@@ -410,6 +416,7 @@ def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
         at_position=at_position,
         status=status,
         first_choice=first_choice,
+        dropped=dropped,
         points=row.points,
         xp=row.xp,
         xp_per_point=rules.XP_PER_POINT,

@@ -739,6 +739,7 @@ export const COACH_NOTES = {
   praise: "« Très bon match. Continue comme ça. »",
   starter: "« Tu as gagné ta place : tu commences le prochain match. »",
   doubt: "« Tu dois regagner ma confiance. Tu entreras plus tard. »",
+  dropped: "« Tu n'y es plus en ce moment. Tu commences sur le banc : à toi de me faire changer d'avis. »",
   aggravated: "« Jouer blessé t'a coûté cher : ta blessure s'est aggravée. »",
   brave: "« Tu as serré les dents. Le groupe l'a vu. »",
 };

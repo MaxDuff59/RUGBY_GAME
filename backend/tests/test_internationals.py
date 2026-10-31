@@ -272,6 +272,37 @@ def test_staff_squad_follows_the_quota_and_leaves_the_injured_out():
     assert rules.check_squad(squad) is None
 
 
+def test_the_staff_weighs_form_playing_time_and_continuity():
+    wing = generate_player(1, Position.WING, 14, 1, random.Random(0), nationality="FRA")
+    base = rules.selection_score(wing)
+    assert rules.selection_score(wing, rules.Record()) == base
+    good, bad = rules.Record(ratings=(8.0, 7.5, 7.0)), rules.Record(ratings=(4.5, 4.8))
+    assert rules.selection_score(wing, bad) < base < rules.selection_score(wing, good)
+    assert rules.selection_score(wing, rules.Record(ratings=(10.0,) * 6)) == base + rules.FORM_CAP
+    assert rules.selection_score(wing, rules.Record(ratings=(9.0,))) == base  # un match : trop tôt
+    starter, unused = rules.Record(share=0.9), rules.Record(share=0.0)
+    assert rules.selection_score(wing, starter) == base + rules.PLAYING_TIME_BONUS
+    assert rules.selection_score(wing, unused) == base + rules.PLAYING_TIME_FLOOR
+    assert rules.selection_score(wing, rules.Record(listed=True)) == base + rules.CONTINUITY
+
+
+def test_an_in_form_starter_passes_a_better_rated_player_out_of_form():
+    pool = national_pool()
+    wings = sorted(
+        (p for p in pool if p.position == Position.WING), key=rules.position_rating, reverse=True
+    )
+    quota = rules.SQUAD_QUOTA[Position.WING]
+    # Le dernier retenu sur sa note, et le premier laissé de côté.
+    last, outsider = wings[quota - 1], wings[quota]
+    assert last in rules.pick_squad(pool, None) and outsider not in rules.pick_squad(pool, None)
+    records = {
+        last.id: rules.Record(ratings=(4.5,) * 6, share=0.05),
+        outsider.id: rules.Record(ratings=(7.5,) * 6, share=0.9),
+    }
+    squad = rules.pick_squad(pool, None, records=records)
+    assert outsider in squad and last not in squad
+
+
 def test_a_list_needs_42_players_and_enough_of_each_position():
     pool = national_pool()
     squad = rules.pick_squad(pool, None)

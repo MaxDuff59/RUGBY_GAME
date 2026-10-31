@@ -13,6 +13,7 @@ et compose son XV par api/routers/selection.py.
 import datetime
 import itertools
 import random
+from collections import Counter
 from dataclasses import dataclass
 
 from sqlalchemy import func, or_, select
@@ -32,7 +33,7 @@ from data.nations import (
 from engine import internationals as rules
 from engine.form import Form
 from engine.internationals import SquadKey
-from engine.match_engine import team_strength
+from engine.match_engine import MATCH_MINUTES, team_strength
 from engine.offseason import RETIREMENT_AGE, develop_player
 from engine.season import rng_for
 from models import ATTRIBUTE_NAMES, Club, Injury, Match, Player, Squad, Stage
@@ -157,6 +158,46 @@ def eligible_players(
     return pool
 
 
+def records(
+    session: Session, season: SeasonRow | None, players: list[Player], nation_code: str
+) -> dict[int, rules.Record]:
+    """Ce que le staff sait de la saison de ces joueurs (`rules.selection_score`) : leurs
+    notes en club, leur part des minutes de leur club, et s'ils étaient sur la dernière
+    liste de leur sélection."""
+    if season is None:
+        return {}
+    wanted = {p.id for p in players}
+    lines: dict[int, list[tuple[datetime.date, int, float | None]]] = {}
+    club_matches: Counter[int] = Counter()
+    for match_row in [*season.matches, *season.cup_matches]:
+        if not match_row.is_played:
+            continue
+        club_matches.update((match_row.home_club_id, match_row.away_club_id))
+        for key, line in (match_row.stats or {}).items():
+            if int(key) in wanted:
+                lines.setdefault(int(key), []).append(
+                    (match_row.date, line.get("minutes", 0), line.get("rating"))
+                )
+    previous = session.scalars(
+        select(CallUpRow)
+        .where(CallUpRow.nation == nation_code)
+        .order_by(CallUpRow.announced_on.desc(), CallUpRow.id.desc())
+    ).first()
+    listed = set(previous.player_ids) if previous is not None else set()
+    out = {}
+    for player in players:
+        mine = sorted(lines.get(player.id, []), key=lambda line: line[0], reverse=True)
+        played = club_matches[player.club_id] if player.club_id is not None else 0
+        out[player.id] = rules.Record(
+            ratings=tuple(rating for _, minutes, rating in mine if minutes > 0 and rating),
+            share=sum(minutes for _, minutes, _ in mine) / (MATCH_MINUTES * played)
+            if played >= rules.PLAYING_TIME_FROM
+            else None,
+            listed=player.id in listed,
+        )
+    return out
+
+
 # --- Calendrier et listes -------------------------------------------------------------------
 
 
@@ -230,7 +271,8 @@ def announce_due(
     for code, team in due:
         nation = NATIONS_BY_ID[team]
         first = min(m.date for m in matches if m.league == code)
-        squad = rules.pick_squad(pool[nation.code], first)
+        found = records(session, season, pool[nation.code], nation.code)
+        squad = rules.pick_squad(pool[nation.code], first, records=found)
         new.append(
             CallUpRow(
                 season_id=season.id,

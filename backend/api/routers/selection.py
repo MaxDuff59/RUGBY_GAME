@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from api import competition, internationals
 from api.deps import SessionDep
-from api.ledger import game_date
+from api.ledger import current_season, game_date
 from api.notes import History
 from api.routers.internationals import (
     _standings,
@@ -322,7 +322,14 @@ def _pool_out(session: Session, season: SeasonRow, where: Situation) -> PoolOut:
         quota=rules.SQUAD_QUOTA,
         minimum=rules.SQUAD_MINIMUM,
         selected=selected,
-        suggested=[p.id for p in rules.pick_squad(eligible, _first_match(where) or day)],
+        suggested=[
+            p.id
+            for p in rules.pick_squad(
+                eligible,
+                _first_match(where) or day,
+                records=internationals.records(session, season, eligible, nation.code),
+            )
+        ],
         players=[squad_player_out(player, day, names, starts) for player in everyone],
     )
 
@@ -414,7 +421,8 @@ def _team(session: Session, human: SelectorRow, where: Situation) -> tuple[Club,
         players = _players(session, list(where.call.player_ids))
     else:
         eligible = internationals.eligible_players(session, {nation.code})[nation.code]
-        players = rules.pick_squad(eligible, day)
+        found = internationals.records(session, current_season(session), eligible, nation.code)
+        players = rules.pick_squad(eligible, day, records=found)
     return rules.national_team(nation, players, human.lineup_choice or []), day
 
 

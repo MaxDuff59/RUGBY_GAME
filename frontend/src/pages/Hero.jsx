@@ -210,7 +210,9 @@ export default function Hero() {
                   : "L'entraîneur fait tourner : tu es titularisé."
                 : me.first_choice
                   ? `L'entraîneur te fait souffler : tu commences sur le banc, il te fait entrer à la ${me.entry}e minute.`
-                  : `Tu commences sur le banc : l'entraîneur te fait entrer à la ${me.entry}e minute.`
+                  : me.dropped
+                    ? `Après tes derniers matchs, l'entraîneur te met sur le banc : il te fait entrer à la ${me.entry}e minute.`
+                    : `Tu commences sur le banc : l'entraîneur te fait entrer à la ${me.entry}e minute.`
               : me.status === "injured"
                 ? `Tu es blessé (${plural(me.injury_weeks, "semaine")}) : soigne-toi, ou serre les dents.`
                 : "Tu es suspendu : ton club joue sans toi."}

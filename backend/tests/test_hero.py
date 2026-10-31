@@ -346,6 +346,8 @@ def test_the_coach_rotates_even_his_best_players():
     assert 0 < rules.start_chance(False, 30, 20.0, 1, knockout=False) < backup < fresh
     assert rules.start_chance(False, 60, 20.0, 3, knockout=False) < backup
     assert rules.start_chance(False, 60, 20.0, 1, knockout=True) == 0.0
+    # Le meilleur à son poste dont l'entraîneur doute souffle plus souvent.
+    assert rules.start_chance(True, 60, 20.0, 0, knockout=False) < fresh
 
 
 def test_call_up_chances_follow_the_gap_to_the_last_one_picked():
@@ -392,6 +394,28 @@ def test_a_rested_starter_begins_on_the_bench_as_announced(client, monkeypatch):
     session.commit()
     hero = client.get("/hero").json()
     assert hero["status"] == "bench" and hero["first_choice"]
+    first, _ = _play_live(client)
+    me = next(p for p in [*first["home"]["players"], *first["away"]["players"]]
+              if p["id"] == hero["player_id"])  # fmt: skip
+    assert me["status"] == "bench"
+
+
+def test_bad_form_costs_the_best_player_his_place(client, monkeypatch):
+    monkeypatch.setattr(rules, "ROTATION_START", 0.0)  # pas de titularisation par la rotation
+    _start(client)
+    session = _db(client)
+    row = session.scalars(select(HeroRow)).first()
+    player = session.get(PlayerRow, row.player_id)
+    for name in ATTRIBUTE_NAMES:
+        setattr(player, name, 20)  # le meilleur à son poste, de loin
+    row.trust = 60
+    session.commit()
+    doubted = client.get("/hero").json()
+    assert doubted["rank"] == 1 and doubted["first_choice"] and not doubted["dropped"]
+    row.trust = rules.TRUST_KEEP_PLACE - 5  # après une série de mauvais matchs
+    session.commit()
+    hero = client.get("/hero").json()
+    assert hero["status"] == "bench" and hero["dropped"] and not hero["first_choice"]
     first, _ = _play_live(client)
     me = next(p for p in [*first["home"]["players"], *first["away"]["players"]]
               if p["id"] == hero["player_id"])  # fmt: skip

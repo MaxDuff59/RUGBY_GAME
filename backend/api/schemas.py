@@ -923,7 +923,7 @@ class CoachNoteOut(BaseModel):
     """Ce que l'entraîneur a dit au joueur incarné (api/hero.py)."""
 
     date: datetime.date
-    kind: Literal["card", "risks", "praise", "starter", "doubt", "aggravated", "brave"]
+    kind: Literal["card", "risks", "praise", "starter", "doubt", "dropped", "aggravated", "brave"]
 
 
 class HeroHurtIn(BaseModel):
@@ -1039,6 +1039,8 @@ class HeroOut(BaseModel):
     # Titulaire d'office au prochain match : sur le banc, il souffle ; titulaire sans
     # l'être, il doit sa place à la rotation (engine/hero.py).
     first_choice: bool
+    # Le meilleur à son poste, mis sur le banc du prochain match après ses mauvais matchs.
+    dropped: bool
     points: int
     xp: int
     xp_per_point: int

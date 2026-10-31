@@ -18,7 +18,9 @@ carton ou trop de prises de risque ratées la font chuter.
 L'entraîneur fait tourner son effectif (`start_chance`) : même indiscutable, le joueur
 souffle de temps en temps sur le banc, d'autant plus souvent qu'il enchaîne les matchs
 (sa fraîcheur, engine/freshness.py) ; remplaçant, il gagne parfois une titularisation.
-Jamais en phase finale : les meilleurs jouent.
+Jamais en phase finale : les meilleurs jouent. La forme compte aussi : le meilleur à
+son poste sur le papier perd sa place quand la confiance de l'entraîneur tombe sous
+`TRUST_KEEP_PLACE`, et souffle plus souvent tant qu'elle reste sous `TRUST_START`.
 
 En sélection, le staff de son pays retient les meilleurs à chaque poste
 (engine/internationals.py) : ses chances (`call_up_chance`) suivent l'écart entre sa
@@ -76,6 +78,11 @@ REST_FLOOR = 0.03
 REST_PER_FATIGUE = 0.025
 REST_MAX = 0.35
 ROTATION_START = 0.35
+# Le meilleur à son poste sur le papier : sous ce seuil de confiance, l'entraîneur le met
+# sur le banc après ses mauvais matchs ; au-dessus mais sous TRUST_START, il souffle plus
+# souvent (REST_DOUBT de plus : environ une fois sur trois en jouant chaque semaine).
+TRUST_KEEP_PLACE = 50.0
+REST_DOUBT = 0.12
 
 # Jouer blessé : risque d'aggraver la blessure, de 1 à 3 semaines.
 AGGRAVATION_CHANCE = 0.4
@@ -140,13 +147,15 @@ def start_chance(
     first_choice: bool, trust: float, freshness: float, behind: int, knockout: bool
 ) -> float:
     """Ses chances d'être titulaire au prochain match, de 0 à 1. `first_choice` : il
-    l'est d'office (confiance de l'entraîneur, ou le meilleur à son poste) ; sinon,
+    l'est d'office (confiance de l'entraîneur, ou le meilleur à son poste tant qu'elle
+    reste au-dessus de `TRUST_KEEP_PLACE`) ; sinon,
     `behind` joueurs de plus que les places de titulaires sont devant lui."""
     if knockout:
         return 1.0 if first_choice else 0.0
     if first_choice:
         tired = REST_PER_FATIGUE * max(0.0, FRESHNESS_FULL - freshness)
-        return round(1 - clamp(REST_FLOOR + tired, REST_FLOOR, REST_MAX), 2)
+        doubt = REST_DOUBT if trust < TRUST_START else 0.0
+        return round(1 - clamp(REST_FLOOR + tired + doubt, REST_FLOOR, REST_MAX), 2)
     return round(ROTATION_START * trust / 100 / max(1, behind), 2)
 
 

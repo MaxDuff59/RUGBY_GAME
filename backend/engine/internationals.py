@@ -4,8 +4,9 @@ Chaque saison a ses fenêtres internationales (data/nations.py) ; une sur quatre
 s'ouvre par la Coupe du monde : quatre poules de quatre sur terrain neutre, puis
 quarts, demies et finale, créés tour après tour (`next_round`). Deux semaines
 avant le premier match d'une fenêtre, chaque sélection annonce une liste de 42
-joueurs : son staff la compose (`pick_squad`), ou le sélectionneur quand c'est
-le joueur. Un match international se joue avec le moteur des clubs : la
+joueurs : son staff la compose (`pick_squad`, selon la note au poste, la forme,
+le temps de jeu et la continuité : `selection_score`), ou le sélectionneur quand
+c'est le joueur. Un match international se joue avec le moteur des clubs : la
 sélection y est un `Club` éphémère dont l'effectif est la liste (`national_team`).
 
 Doublon : le jour où sa sélection joue, un joueur de la liste manque à son club
@@ -22,7 +23,8 @@ du marché. Aucune dépendance à FastAPI ni à la base.
 import datetime
 import random
 from collections import Counter
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
+from dataclasses import dataclass
 
 from data.generator import generate_player
 from data.nations import (
@@ -349,16 +351,69 @@ def position_rating(player: Player) -> float:
     return RATING_FOR_POSITION[player.position](player)
 
 
+# Le staff regarde au-delà de la note au poste (`selection_score`) : la forme (la
+# moyenne des FORM_MATCHES dernières notes en club, FORM_PER_POINT par point autour de
+# 6, au plus FORM_CAP), le temps de jeu de la saison une fois que son club a joué
+# PLAYING_TIME_FROM matchs (de PLAYING_TIME_FLOOR sans une minute à PLAYING_TIME_BONUS
+# pour un titulaire régulier, 60 % des minutes), et la continuité (CONTINUITY s'il
+# était sur la liste précédente). Sans matchs en club dans le jeu, la note seule.
+FORM_MATCHES = 6
+FORM_MIN_MATCHES = 2
+FORM_PER_POINT = 0.5
+FORM_CAP = 1.5
+FORM_NEUTRAL = 6.0
+PLAYING_TIME_FROM = 3
+PLAYING_TIME_FLOOR = -1.0
+PLAYING_TIME_SLOPE = 2.5  # par part des minutes de son club : 40 % ne change rien
+PLAYING_TIME_BONUS = 0.5
+CONTINUITY = 0.3
+
+
+@dataclass(frozen=True)
+class Record:
+    """Ce que le staff sait de la saison d'un joueur."""
+
+    ratings: tuple[float, ...] = ()  # ses notes en club, les plus récentes d'abord
+    share: float | None = None  # part des minutes de son club jouées (None : trop tôt)
+    listed: bool = False  # sur la liste précédente de sa sélection
+
+
+def selection_score(player: Player, record: Record | None = None) -> float:
+    """Ce qui classe les joueurs d'un poste pour la liste du staff."""
+    score = position_rating(player)
+    if record is None:
+        return score
+    recent = record.ratings[:FORM_MATCHES]
+    if len(recent) >= FORM_MIN_MATCHES:
+        average = sum(recent) / len(recent)
+        score += max(-FORM_CAP, min(FORM_CAP, FORM_PER_POINT * (average - FORM_NEUTRAL)))
+    if record.share is not None:
+        time = PLAYING_TIME_FLOOR + PLAYING_TIME_SLOPE * record.share
+        score += max(PLAYING_TIME_FLOOR, min(PLAYING_TIME_BONUS, time))
+    if record.listed:
+        score += CONTINUITY
+    return score
+
+
 def pick_squad(
-    candidates: Iterable[Player], day: datetime.date | None, size: int = SQUAD_SIZE
+    candidates: Iterable[Player],
+    day: datetime.date | None,
+    size: int = SQUAD_SIZE,
+    records: Mapping[int, Record] | None = None,
 ) -> list[Player]:
-    """La liste que compose le staff : les meilleurs à chaque poste (`SQUAD_QUOTA`),
-    sans les joueurs blessés au jour `day` (le premier match de la fenêtre) ; s'il
-    manque du monde à un poste, les meilleurs restants complètent."""
+    """La liste que compose le staff : les meilleurs à chaque poste (`SQUAD_QUOTA`)
+    selon `selection_score` (avec la saison de chacun, `records`, quand on la
+    connaît), sans les joueurs blessés au jour `day` (le premier match de la
+    fenêtre) ; s'il manque du monde à un poste, les meilleurs restants complètent."""
+    records = records or {}
     fit = [p for p in candidates if not p.is_injured(day)]
     squad: list[Player] = []
     for position, quota in SQUAD_QUOTA.items():
-        at = sorted((p for p in fit if p.position == position), key=position_rating, reverse=True)
+        at = sorted(
+            (p for p in fit if p.position == position),
+            key=lambda p: selection_score(p, records.get(p.id)),
+            reverse=True,
+        )
         squad += at[:quota]
     taken = {p.id for p in squad}
     rest = sorted((p for p in fit if p.id not in taken), key=lambda p: p.overall, reverse=True)
