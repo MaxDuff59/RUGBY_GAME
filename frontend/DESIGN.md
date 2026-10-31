@@ -8,6 +8,9 @@ Maquette validée : https://claude.ai/artifact/DfB5aRKnoPWwc7Wacqy9xs
 Sobre et éditoriale, façon journal sportif : pas de personnages, pas de dégradés,
 pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
 
+Exception : les scènes 3D des décisions en match (section « Scènes de match ») montrent
+des joueurs, des personnages low-poly en pixels. Nulle part ailleurs.
+
 ## Couleurs
 
 | Rôle | Valeur |
@@ -398,6 +401,43 @@ pas d'étoiles ni d'emoji. L'information d'abord, la typographie fait le style.
   Sur téléphone : les rubriques défilent sur une ligne ; la une, deux articles, puis le
   fil. La carte des matchs n'apparaît que sous « Résultats » et « À venir » (la rubrique
   choisit ce qu'elle montre), celle des transferts sous « Transferts ».
+
+## Scènes de match
+
+Certaines décisions en match se jouent en scène 3D plutôt que dans leur fenêtre de
+texte (`src/scene`, three.js chargé à la demande) : le choix crucial du manager et les
+dilemmes du joueur incarné qui ont leur scène (`SCENE_SITUATIONS`, `src/scene/prefs.js`).
+Une décision sur trois, tirée au hasard à son ouverture (`SCENE_SHARE`) ; jamais sans
+WebGL, avec « réduire les animations », ou quand « Scènes 3D : non » (pied du menu, volet
+« Plus » sur téléphone, `ScenePrefs`). Quand le staff tranche à la place du joueur
+(accéléré, « Terminer »), pas de scène : le serveur ne montre pas la décision.
+
+- Le serveur décide, la scène met en scène : elle lit la situation, les voies et leurs
+  chances, puis l'issue tirée et les événements, et la joue telle quelle.
+- Trois temps : mise en place (la caméra de retransmission arrive, l'action ralentit et
+  se fige), choix (image figée mais vivante ; les voies en boutons posés en bas de
+  l'image, comme dans la fenêtre ; au survol, ou au premier toucher sur téléphone, la
+  voie se dessine sur la pelouse en blanc, son point d'arrivée à la couleur du club, et
+  la caméra prend de la hauteur), issue (l'action jouée, puis la carte de résultat de la
+  fenêtre de texte). Clic ou Espace : passer. Une réussite enchaînée continue dans la
+  même scène ; sans scène pour la suite, la fenêtre de texte prend le relais.
+- Rendu : basse résolution (300 lignes, 260 sur téléphone) agrandie en pixels nets,
+  contours tirés de la profondeur, palette de 64 couleurs en OKLab tirée des couleurs
+  ci-dessus et de celles des deux clubs (`palette.js`, `render.js`).
+- Décor : une portion de terrain (en-but à la médiane), bandes de tonte, lignes, poteaux
+  aux protections du club qui reçoit, panneaux aux sponsors du club (ou à son nom),
+  tribunes basses et public instancié aux couleurs des deux clubs (debout sous la
+  pression, il saute et fait tourner ses écharpes, siffle une pénalité contre son club).
+  Pluie, vent sur les fanions, chaleur ; projecteurs le soir (phases finales, un match
+  sur trois : l'heure du match n'est pas connue).
+- Joueurs : personnages en boîtes articulées, maillot du club (`defaultJersey`, tenue
+  extérieure si les deux se ressemblent), numéro dans le dos, repère au sol à la couleur
+  du club sous le joueur incarné ; arbitre dans une couleur qu'aucune équipe ne porte.
+- Son synthétisé (Web Audio) : rumeur, sifflet, impact, clameur, sifflets ; « Son : non »
+  le coupe (bouton sur la scène et dans le pied du menu).
+- Ordinateur : la scène dans un cadre sur la page assombrie, 60 images par seconde.
+  Téléphone : d'un bord à l'autre jusqu'à la barre d'onglets, voies empilées en bas,
+  30 images par seconde.
 
 ## Hauteur d'écran
 

@@ -1,0 +1,289 @@
+/* --- Scènes 3D des décisions en match (src/scene, MatchScene.jsx) -------------------
+   Sur ordinateur, la scène occupe la fenêtre dans un cadre, la page derrière assombrie ;
+   les voies sont posées en bas de l'image. Sur téléphone, la scène va d'un bord à
+   l'autre jusqu'à la barre d'onglets, les voies empilées au-dessus d'elle. La page ne
+   défile jamais : tout tient dans la scène. */
+
+.match-scene {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  padding: 16px;
+  background: rgba(22, 24, 27, 0.82);
+  display: flex;
+  overflow: hidden;
+}
+
+.match-scene--phone {
+  padding: 0;
+  bottom: var(--tabbar-h);
+  background: #16181b;
+}
+
+.match-scene--loading {
+  align-items: center;
+  justify-content: center;
+}
+
+.match-scene--loading .match-scene__status {
+  color: #f7f7f4;
+}
+
+.match-scene__stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #2e4a38;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.match-scene--phone .match-scene__stage {
+  border-radius: 0;
+}
+
+.match-scene__stage.is-skippable {
+  cursor: pointer;
+}
+
+.match-scene__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* En-tête : la situation, sur un cartouche clair en haut à gauche. */
+.match-scene__head {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  max-width: min(460px, calc(100% - 180px));
+  padding: 12px 16px;
+  background: rgba(247, 247, 244, 0.94);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.match-scene__head .eyebrow,
+.match-scene__head p {
+  margin: 0;
+}
+
+.match-scene__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 28px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.match-scene__text {
+  font-size: 14px;
+}
+
+.match-scene__tools {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.match-scene__tool {
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(247, 247, 244, 0.94);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.match-scene__hint {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(22, 24, 27, 0.6);
+  color: #f7f7f4;
+  font-size: 12px;
+}
+
+.match-scene__banner {
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Le bas de l'image : les voies, ou la carte de résultat. */
+.match-scene__dock {
+  position: absolute;
+  left: 32px;
+  right: 32px;
+  bottom: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.match-scene__dock > * {
+  pointer-events: auto;
+}
+
+.match-scene__options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.match-scene__option {
+  height: 100%;
+  background: rgba(247, 247, 244, 0.96);
+}
+
+.match-scene__option:focus-visible,
+.match-scene__option.is-selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.match-scene__option:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.match-scene__status {
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: rgba(247, 247, 244, 0.94);
+  font-weight: 600;
+}
+
+.match-scene__foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 6px 6px 12px;
+  border-radius: 8px;
+  background: rgba(247, 247, 244, 0.94);
+  font-size: 13px;
+}
+
+.match-scene__card {
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 18px 22px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.match-scene__card .eyebrow {
+  margin: 0;
+}
+
+.match-scene__error {
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgba(247, 247, 244, 0.94);
+}
+
+/* Téléphone : cartouche serré en haut, voies empilées en bas, gros doigts. */
+.match-scene--phone .match-scene__head {
+  top: 10px;
+  left: 10px;
+  max-width: calc(100% - 20px);
+  padding: 8px 12px;
+}
+
+.match-scene--phone .match-scene__title {
+  font-size: 22px;
+}
+
+.match-scene--phone .match-scene__text {
+  font-size: 13px;
+}
+
+.match-scene--phone .match-scene__tools {
+  position: absolute;
+  top: auto;
+  bottom: 12px;
+  right: 10px;
+  flex-direction: row-reverse;
+}
+
+.match-scene--phone .match-scene__dock {
+  left: 10px;
+  right: 10px;
+  bottom: 56px;
+}
+
+.match-scene--phone .match-scene__options {
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.match-scene--phone .match-scene__option {
+  min-height: 52px;
+  padding: 8px 12px;
+}
+
+.match-scene--phone .match-scene__card {
+  padding: 14px 16px;
+  gap: 10px;
+}
+
+.match-scene--phone .match-scene__card .confirm__title {
+  font-size: 24px;
+}
+
+.match-scene--phone .match-scene__banner {
+  top: auto;
+  bottom: 12px;
+  left: 10px;
+  transform: none;
+  max-width: calc(100% - 120px);
+  white-space: normal;
+  font-size: 13px;
+}
+
+/* Réglages des scènes, dans le pied du menu (ScenePrefs.jsx). */
+.scene-prefs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 13px;
+}

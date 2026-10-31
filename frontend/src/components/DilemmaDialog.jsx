@@ -1,9 +1,8 @@
 import { useState } from "react";
 
-import { DILEMMA_EFFECTS, DILEMMAS, formatNote } from "../format.js";
+import { dilemmaText, signed } from "../decisions.js";
+import { DILEMMAS, formatNote } from "../format.js";
 import Modal from "./Modal.jsx";
-
-const signed = (value) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${formatNote(Math.abs(value))}`;
 
 // Carrière de joueur : le match s'arrête sur une action du joueur incarné. Chaque voie
 // montre ses chances et ce qu'elle fait à sa note (gagné si elle réussit, perdu sinon).
@@ -21,14 +20,7 @@ export default function DilemmaDialog({ live, side, busy, error, onChoose, onRes
   if (outcome && !busy) {
     const situation = DILEMMAS[outcome.situation];
     const option = situation.options[outcome.option];
-    const fresh = live.events.slice(choice.events);
-    const scored = fresh.find((e) => e.type === "try" || e.type === "drop_goal" || e.type === "penalty_goal");
-    let text = outcome.success ? option.won : option.lost;
-    if (!outcome.success && DILEMMA_EFFECTS[outcome.effect]) text += ` ${DILEMMA_EFFECTS[outcome.effect]}`;
-    if (scored && outcome.effect === "assist") text = `${option.won} ${scored.player_name} aplatit.`;
-    if (scored && outcome.effect === "penalty_won") {
-      text = `${option.won} ${scored.player_name} ${scored.type === "penalty_goal" ? "passe la pénalité" : "manque la pénalité"}.`;
-    }
+    const text = dilemmaText(outcome, live.events.slice(choice.events));
     return (
       <Modal compact className="modal--dialog live-dialog" onClose={onResume}>
         <div>

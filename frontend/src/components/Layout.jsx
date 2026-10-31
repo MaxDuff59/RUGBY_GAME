@@ -12,6 +12,7 @@ import Guide, { resetGuide } from "./Guide.jsx";
 import Inbox from "./Inbox.jsx";
 import { ManagerContractModal } from "./ManagerContract.jsx";
 import NavIcon from "./NavIcon.jsx";
+import ScenePrefs from "./ScenePrefs.jsx";
 import { DIFFICULTIES, formatContractEnd } from "../format.js";
 
 // `primary` : les entrées de la barre d'onglets du téléphone ; les autres passent
@@ -168,6 +169,7 @@ function Sidebar({ career, items, onContract }) {
             Revoir le guide
           </button>
         )}
+        <ScenePrefs />
         <LeaveButton className="sidebar__leave" />
       </div>
     </nav>
@@ -221,6 +223,7 @@ function TabBar({ career, items, onContract }) {
                   Revoir le guide
                 </button>
               )}
+              <ScenePrefs />
               <LeaveButton />
             </div>
           </div>

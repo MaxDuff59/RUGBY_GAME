@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
@@ -8,6 +8,7 @@ import DilemmaDialog from "../components/DilemmaDialog.jsx";
 import Modal from "../components/Modal.jsx";
 import Momentum from "../components/Momentum.jsx";
 import WeatherIcon from "../components/WeatherIcon.jsx";
+import { crunchResult, crunchSituation, crunchStake } from "../decisions.js";
 import {
   CRUNCH_OPTIONS,
   DILEMMAS,
@@ -29,6 +30,11 @@ import {
 } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
+import { wantsScene } from "../scene/prefs.js";
+import "../scene/scene.css";
+
+// Les scènes 3D des décisions en match : three.js n'est chargé qu'à la première.
+const MatchScene = lazy(() => import("../scene/MatchScene.jsx"));
 
 // Vitesse du chrono : durée réelle d'une minute de jeu.
 const SPEEDS = [
@@ -56,6 +62,7 @@ export default function Match() {
     <LiveScreen
       calls={CAREER_CALLS}
       player={player}
+      boards={!player}
       empty={(onStarted) => <NoLiveMatch career={career} onStarted={onStarted} />}
       // Fin de journée : les autres matchs se jouent, et le tableau de bord raconte la suite.
       onFinished={(result) => navigate("/", { replace: true, state: { played: result } })}
@@ -86,6 +93,10 @@ const CAREER_CALLS = {
 // va à `onFinished`, ou s'affiche sans lui. Avec `endActions(live)`, le match fini montre
 // ces boutons à la place de celui-là (`doneLabel`). `player` : carrière de joueur, sans
 // plan de jeu, discours ni changement ; ses dilemmes à la place (`calls.choose`).
+// `boards` : les panneaux des scènes 3D portent les sponsors du club quand il reçoit.
+//
+// Une décision (choix crucial, dilemme) se joue tantôt dans sa fenêtre de texte,
+// tantôt en scène 3D (src/scene, `wantsScene` tire au sort à son ouverture).
 export function LiveScreen({
   calls,
   title,
@@ -95,6 +106,7 @@ export function LiveScreen({
   doneLabel = "Continuer",
   handOverText,
   player = false,
+  boards = false,
 }) {
   const current = useApi(calls.get);
   const [playing, setPlaying] = useState(false);
@@ -106,6 +118,7 @@ export function LiveScreen({
   const phone = useMediaQuery(PHONE_QUERY);
   const [lineupClub, setLineupClub] = useState(null); // téléphone : la composition montrée (la nôtre par défaut)
   const [panel, setPanel] = useState(null); // fenêtre ouverte : "plan", "talk", "crunch" ou "dilemma"
+  const [staged, setStaged] = useState(false); // la décision ouverte se joue en scène 3D
   const confirm = useConfirm();
   const live = current.data;
   const { setData } = current;
@@ -156,15 +169,24 @@ export function LiveScreen({
 
   // Une pénalité décisive attend le manager : sa fenêtre s'ouvre (aussi au retour sur
   // la page). Il peut la fermer pour faire un changement, puis la rouvrir.
+  // Le tirage scène ou texte se fait à ce moment-là, une fois par décision.
   const crunchMinute = live?.crunch?.minute;
+  const matchId = live?.match_id;
   useEffect(() => {
-    if (crunchMinute !== undefined) setPanel("crunch");
-  }, [crunchMinute]);
-  // De même pour une action du joueur incarné (carrière de joueur).
+    if (crunchMinute === undefined) return;
+    setPanel("crunch");
+    setStaged(wantsScene(`${matchId}:${crunchMinute}:crunch`));
+  }, [crunchMinute, matchId]);
+  // De même pour une action du joueur incarné (carrière de joueur). Une action
+  // enchaînée sur la précédente garde sa façon de se jouer.
   const dilemmaMinute = live?.dilemma?.minute;
+  const dilemmaSituation = live?.dilemma?.situation;
+  const dilemmaChained = live?.dilemma?.chained;
   useEffect(() => {
-    if (dilemmaMinute !== undefined) setPanel("dilemma");
-  }, [dilemmaMinute]);
+    if (dilemmaMinute === undefined) return;
+    setPanel("dilemma");
+    if (!dilemmaChained) setStaged(wantsScene(`${matchId}:${dilemmaMinute}:dilemma`, dilemmaSituation));
+  }, [dilemmaMinute, dilemmaSituation, dilemmaChained, matchId]);
 
   // La barre d'espace met en pause et relance, comme le bouton du tableau d'affichage ;
   // pas pendant une saisie, ni quand une fenêtre est ouverte (plan, discours, confirmation),
@@ -324,27 +346,59 @@ export function LiveScreen({
           onResume={resume}
         />
       )}
-      {panel === "crunch" && (
-        <CrunchDialog
-          live={live}
-          side={mySide}
-          busy={busy}
-          error={error}
-          onDecide={(option) => act(() => calls.decide(option))}
-          onClose={() => setPanel(null)}
-          onResume={resume}
-        />
-      )}
-      {panel === "dilemma" && (
-        <DilemmaDialog
-          live={live}
-          side={mySide}
-          busy={busy}
-          error={error}
-          onChoose={(option) => act(() => calls.choose(option))}
-          onResume={resume}
-        />
-      )}
+      {panel === "crunch" &&
+        (staged ? (
+          <Suspense fallback={<SceneLoading />}>
+            <MatchScene
+              kind="crunch"
+              live={live}
+              side={mySide}
+              busy={busy}
+              error={error}
+              boards={boards && live.home.club.id === myId}
+              onChoose={(option) => act(() => calls.decide(option))}
+              onClose={() => setPanel(null)}
+              onResume={resume}
+              onFail={() => setStaged(false)}
+            />
+          </Suspense>
+        ) : (
+          <CrunchDialog
+            live={live}
+            side={mySide}
+            busy={busy}
+            error={error}
+            onDecide={(option) => act(() => calls.decide(option))}
+            onClose={() => setPanel(null)}
+            onResume={resume}
+          />
+        ))}
+      {panel === "dilemma" &&
+        (staged ? (
+          <Suspense fallback={<SceneLoading />}>
+            <MatchScene
+              kind="dilemma"
+              live={live}
+              side={mySide}
+              busy={busy}
+              error={error}
+              onChoose={(option) => act(() => calls.choose(option))}
+              onClose={resume}
+              onResume={resume}
+              onFail={() => setStaged(false)}
+              onHandOff={() => setStaged(false)}
+            />
+          </Suspense>
+        ) : (
+          <DilemmaDialog
+            live={live}
+            side={mySide}
+            busy={busy}
+            error={error}
+            onChoose={(option) => act(() => calls.choose(option))}
+            onResume={resume}
+          />
+        ))}
       {panel === "talk" && (
         <TalkDialog
           live={live}
@@ -1237,21 +1291,13 @@ function TalkDialog({ live, side, busy, error, resumeLabel, onTalk, onClose, onR
 
 // --- Choix crucial ------------------------------------------------------------------------
 
-const points = (n) => `${n} pt${n > 1 ? "s" : ""}`;
-
-// Ce que `scored` points font au score, quand on a `margin` points d'avance.
-function swing(margin, scored) {
-  const after = margin + scored;
-  if (margin > 0) return after >= 8 ? "deux scores d'avance" : "creuse l'écart";
-  if (after === 0) return "égalise";
-  return after > 0 ? "passe devant" : "reste derrière";
-}
-
-// Où en est le match : l'écart et le temps qui reste.
-function situation(margin, left) {
-  const score = margin === 0 ? "À égalité" : margin > 0 ? `Devant de ${points(margin)}` : `Menés de ${points(-margin)}`;
-  const time = left <= 0 ? "dernière action du match" : `${left} minute${left > 1 ? "s" : ""} à jouer`;
-  return `${score}, ${time}`;
+// Le temps que three.js arrive : le cadre de la scène, vide.
+function SceneLoading() {
+  return (
+    <div className="match-scene match-scene--loading" role="dialog" aria-modal="true" aria-label="Mise en place">
+      <p className="match-scene__status">Mise en place…</p>
+    </div>
+  );
 }
 
 // La pénalité d'une fin de match serrée : les perches, la touche, la mêlée ou la jouer
@@ -1271,15 +1317,7 @@ function CrunchDialog({ live, side, busy, error, onDecide, onClose, onResume }) 
   };
 
   if (done) {
-    const scored = fresh.find((e) => e.type === "try" || e.type === "penalty_goal");
-    const conversion = fresh.find((e) => e.type === "conversion" || e.type === "conversion_missed");
-    const verdict = scored?.type === "try" ? "Essai !" : scored ? "Les 3 points" : "Raté";
-    let text = CRUNCH_OPTIONS[choice.option].missed;
-    if (scored?.type === "try") {
-      text = `${scored.player_name} aplatit. ${conversion?.type === "conversion" ? "Transformé par" : "Transformation manquée par"} ${conversion?.player_name}.`;
-    } else if (scored) {
-      text = `${scored.player_name} passe la pénalité.`;
-    }
+    const { scored, verdict, text } = crunchResult(choice.option, fresh);
     const after = side.score - other.score;
     return (
       <Modal compact className="modal--dialog live-dialog" onClose={onClose}>
@@ -1318,18 +1356,14 @@ function CrunchDialog({ live, side, busy, error, onDecide, onClose, onResume }) 
         </p>
         <h2 className="confirm__title">Pénalité pour nous</h2>
       </div>
-      <p className="crunch__situation">{situation(margin, live.last_minute - live.minute)}</p>
+      <p className="crunch__situation">{crunchSituation(margin, live.last_minute - live.minute)}</p>
       {choice !== null && !error ? (
         <p className="muted">Le ballon est posé…</p>
       ) : (
         <ul className="talk__options">
           {(crunch?.options ?? []).map((option) => {
             const kick = option.key === "kick";
-            const outcome = kick
-              ? `${points(3)} · ${swing(margin, 3)}`
-              : swing(margin, 5) === swing(margin, 7)
-                ? `${points(5)} ou 7 · ${swing(margin, 5)}`
-                : `${points(5)} · ${swing(margin, 5)}, ${swing(margin, 7)} si transformé`;
+            const outcome = crunchStake(option.key, margin);
             return (
               <li key={option.key}>
                 <button type="button" className="talk__option" disabled={busy} onClick={() => decide(option.key)}>
