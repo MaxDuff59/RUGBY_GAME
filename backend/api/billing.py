@@ -42,7 +42,14 @@ from api.plans import PAYMENT_REQUIRED, PRICE_CENTS
 
 STRIPE_API = "https://api.stripe.com/v1"
 PRODUCT_NAME = "Rugby Manager : jeu complet"
-PRODUCT_DESCRIPTION = "Autant de parties et de saisons que tu veux, pour toujours."
+PRODUCT_DESCRIPTION = (
+    "Trois parties en parallèle et des saisons sans fin : club, sélection, compétition "
+    "et carrière de joueur, sans limite."
+)
+# Image du produit sur la page de paiement, servie par l'interface (frontend/public).
+PRODUCT_IMAGE = "/logo.png"
+# Sous le bouton « Payer ».
+SUBMIT_MESSAGE = "Paiement unique, sans abonnement : le jeu complet reste à ton compte pour toujours."
 # Marque des paiements du jeu : le compte Stripe peut servir à d'autres ventes, dont les
 # événements arrivent aussi au webhook et ne débloquent rien ici.
 APP = "rugby-manager"
@@ -123,6 +130,10 @@ def checkout_fields(user: accounts.User, site: str) -> dict[str, str]:
             "line_items[0][price_data][product_data][name]": PRODUCT_NAME,
             "line_items[0][price_data][product_data][description]": PRODUCT_DESCRIPTION,
         }
+        # Stripe va chercher l'image lui-même : seulement depuis une adresse publique.
+        if site.startswith("https://"):
+            fields["line_items[0][price_data][product_data][images][0]"] = site + PRODUCT_IMAGE
+    fields["custom_text[submit][message]"] = SUBMIT_MESSAGE
     return fields
 
 

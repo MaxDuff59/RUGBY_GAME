@@ -219,6 +219,8 @@ def test_checkout_then_confirm_on_the_way_back(player, monkeypatch):
     assert fields["line_items[0][price_data][currency]"] == "eur"
     assert fields["success_url"].startswith("https://rugby.example/parties?paiement=ok")
     assert fields["allow_promotion_codes"] == "true"
+    image = fields["line_items[0][price_data][product_data][images][0]"]
+    assert image == "https://rugby.example/logo.png"
 
     assert player.post("/billing/confirm", json={"session_id": "../secret"}).status_code == 400
     confirmed = player.post("/billing/confirm", json={"session_id": "cs_test_1"})
