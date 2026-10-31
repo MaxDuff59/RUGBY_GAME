@@ -10,6 +10,7 @@ import {
   COACH_NOTES,
   HERO_STATUS,
   formatContractEnd,
+  formatDiff,
   formatMoney,
   POSITIONS,
   formatLongDate,
@@ -23,6 +24,13 @@ import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
 
 const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
 
+// Sous ses attributs : ses matchs de la saison, toute sa carrière, ou les classements.
+const PERIODS = [
+  { key: "season", label: "Cette saison" },
+  { key: "career", label: "Ta carrière" },
+  { key: "standings", label: "Classement" },
+];
+
 // Téléphone : les sous-onglets de la page.
 const PHONE_TABS = [
   { key: "match", label: "Match" },
@@ -35,7 +43,7 @@ const PHONE_TABS = [
 // ses attributs, où placer les points gagnés, et ses matchs de la saison. Sur téléphone,
 // un sous-onglet à la fois.
 export default function Hero() {
-  const { career } = useOutletContext();
+  const { career, refreshCareer } = useOutletContext();
   const navigate = useNavigate();
   const location = useLocation();
   const hero = useApi(useCallback(api.getHero, []));
@@ -47,11 +55,17 @@ export default function Hero() {
   const [lastDay, setLastDay] = useState(null); // la journée qui vient d'être jouée
   const phone = useMediaQuery(PHONE_QUERY);
   const [view, setView] = useState("match"); // téléphone : le sous-onglet ouvert
-  const [showCareer, setShowCareer] = useState(false); // toute la carrière, saison par saison
+  const [period, setPeriod] = useState("season"); // ses matchs, toute sa carrière ou les classements
   const [seasonEnd, setSeasonEnd] = useState(false); // la fenêtre du bilan et du mercato
 
   const { setData: setSeason } = season;
   const { reload: reloadHero } = hero;
+
+  // Transfert, prêt, retour de prêt : l'en-tête et les autres pages suivent son club.
+  const heroClubId = hero.data?.club?.id;
+  useEffect(() => {
+    if (heroClubId && heroClubId !== career.club_id) refreshCareer();
+  }, [heroClubId, career.club_id, refreshCareer]);
 
   // La page Match renvoie ici avec la journée qu'elle vient de finir (une seule fois).
   const applied = useRef(null);
@@ -124,10 +138,11 @@ export default function Hero() {
   const me = hero.data;
   const state = season.data;
   const next = state.next_match;
-  const myMatch = next?.matches.find((m) => m.home.id === career.club_id || m.away.id === career.club_id);
+  const clubId = me.club?.id;
+  const myMatch = next?.matches.find((m) => m.home.id === clubId || m.away.id === clubId);
   const available = me.status === "starter" || me.status === "bench";
   const finished = state.phase === "finished";
-  const standing = state.standings.find((row) => row.club_id === career.club_id);
+  const standing = state.standings.find((row) => row.club_id === clubId);
   const rank = standing?.played ? standing.rank : null;
   const reward = lastDay?.hero ?? me.last_reward;
   // Son match en sélection passe avant celui de son club s'il tombe avant.
@@ -190,8 +205,12 @@ export default function Hero() {
           <p className="hero__sub">
             {available
               ? me.status === "starter"
-                ? "L'entraîneur te titularise."
-                : `Tu commences sur le banc : l'entraîneur te fait entrer à la ${me.entry}e minute.`
+                ? me.first_choice
+                  ? "L'entraîneur te titularise."
+                  : "L'entraîneur fait tourner : tu es titularisé."
+                : me.first_choice
+                  ? `L'entraîneur te fait souffler : tu commences sur le banc, il te fait entrer à la ${me.entry}e minute.`
+                  : `Tu commences sur le banc : l'entraîneur te fait entrer à la ${me.entry}e minute.`
               : me.status === "injured"
                 ? `Tu es blessé (${plural(me.injury_weeks, "semaine")}) : soigne-toi, ou serre les dents.`
                 : "Tu es suspendu : ton club joue sans toi."}
@@ -241,7 +260,7 @@ export default function Hero() {
           </div>
         </>
       )}
-      {lastDay?.played && <LastDay played={lastDay.played} clubId={career.club_id} />}
+      {lastDay?.played && <LastDay played={lastDay.played} clubId={clubId} />}
       {me.coach_notes[0] && (
         <p className="hero-coach">
           <span className="eyebrow">L'entraîneur · {formatShortDate(me.coach_notes[0].date)}</span>
@@ -302,6 +321,9 @@ export default function Hero() {
         </dd>
       </dl>
       <XpBar xp={me.xp} perPoint={me.xp_per_point} />
+      {available && (
+        <Gauge label="Chances d'être titulaire" value={me.start_chance} text={`${Math.round(me.start_chance * 100)} %`} />
+      )}
       <Gauge label="Ta confiance" value={(me.confidence + 1) / 2} text={confidenceLabel(me.confidence)} />
       <Gauge label="L'entraîneur" value={me.trust / 100} text={trustLabel(me.trust)} />
     </aside>
@@ -357,19 +379,22 @@ export default function Hero() {
     <section className="section">
       <div className="section__head">
         <div className="chips" role="group" aria-label="Période">
-          <button type="button" className="chip" aria-pressed={!showCareer} onClick={() => setShowCareer(false)}>
-            Cette saison
-          </button>
-          <button type="button" className="chip" aria-pressed={showCareer} onClick={() => setShowCareer(true)}>
-            Ta carrière
-          </button>
+          {PERIODS.map((p) => (
+            <button key={p.key} type="button" className="chip" aria-pressed={period === p.key} onClick={() => setPeriod(p.key)}>
+              {p.label}
+            </button>
+          ))}
         </div>
-        <span className="muted">
-          {plural(played.length, "match")}, {plural(tries, "essai")}
-          {average !== null && ` · ${formatNote(average)} de moyenne`}
-        </span>
+        {period !== "standings" && (
+          <span className="muted">
+            {plural(played.length, "match")}, {plural(tries, "essai")}
+            {average !== null && ` · ${formatNote(average)} de moyenne`}
+          </span>
+        )}
       </div>
-      {showCareer ? (
+      {period === "standings" ? (
+        <HeroStandings season={state} clubId={clubId} />
+      ) : period === "career" ? (
         <div className="card card--padded hero-career">
           <HeroCareer />
         </div>
@@ -493,6 +518,77 @@ function HeroCareer() {
   if (career.loading) return <p className="status">Chargement…</p>;
   if (career.error) return <p className="status status--error">{career.error.message}</p>;
   return <CareerSummary career={career.data} />;
+}
+
+// Les classements des compétitions de son club : son championnat, et sa poule de chaque
+// coupe d'Europe qu'il dispute. Son club en accent.
+function HeroStandings({ season, clubId }) {
+  const competitions = [
+    { key: season.league.code, label: season.league.short_name, league: true, rows: season.standings },
+    ...season.cups.flatMap((cup) =>
+      cup.pools
+        .filter((pool) => pool.table.some((row) => row.club.id === clubId))
+        .map((pool) => ({ key: cup.code, label: `${cup.name} · poule ${pool.pool}`, rows: pool.table })),
+    ),
+  ];
+  const [code, setCode] = useState(competitions[0].key);
+  const shown = competitions.find((c) => c.key === code) ?? competitions[0];
+  return (
+    <div className="card table-wrap hero-standings">
+      {competitions.length > 1 && (
+        <div className="chips hero-standings__picker" role="group" aria-label="Compétition">
+          {competitions.map((c) => (
+            <button key={c.key} type="button" className="chip chip--small" aria-pressed={c.key === shown.key} onClick={() => setCode(c.key)}>
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <table className="table">
+        <thead>
+          <tr>
+            <th scope="col" className="left">#</th>
+            <th scope="col" className="left">Club</th>
+            <th scope="col">J</th>
+            <th scope="col">G</th>
+            {shown.league && <th scope="col" className="hero-standings__detail">N</th>}
+            {shown.league && <th scope="col" className="hero-standings__detail">P</th>}
+            <th scope="col">Diff</th>
+            <th scope="col">Pts</th>
+          </tr>
+        </thead>
+        <tbody>
+          {shown.rows.map((row, index) => {
+            const club = shown.league ? { id: row.club_id, name: row.club_name } : row.club;
+            const rank = shown.league ? row.rank : index + 1;
+            const cut = shown.league ? rank === season.playoff_qualifiers : index === 1;
+            return (
+              <tr
+                key={club.id}
+                className={[club.id === clubId ? "table__row--mine" : "", cut ? "table__row--cut" : ""].join(" ")}
+              >
+                <td className="left muted">{rank}</td>
+                <td className="left">
+                  <span className="with-crest" title={club.name}>
+                    <ClubCrest name={club.name} size={20} />
+                    <span className="standings__name">{club.name}</span>
+                  </span>
+                </td>
+                <td className="num">{row.played}</td>
+                <td className="num">{row.won}</td>
+                {shown.league && <td className="num hero-standings__detail">{row.drawn}</td>}
+                {shown.league && <td className="num hero-standings__detail">{row.lost}</td>}
+                <td className="num">{formatDiff(row.points_difference)}</td>
+                <td className="num" style={{ fontWeight: 700 }}>
+                  {row.league_points}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 // Ce que disent les deux jauges de la fiche (engine/hero.py).

@@ -1036,6 +1036,11 @@ class HeroOut(BaseModel):
     rank: int  # rang à son poste dans l'effectif (1 : le meilleur)
     at_position: int  # joueurs de l'effectif à son poste
     status: Literal["starter", "bench", "injured", "suspended", "retired"]
+    # Ses chances d'être titulaire au prochain match (0 à 1, rotation comprise), et s'il
+    # l'est d'office : sur le banc, il souffle ; titulaire sans l'être, il doit sa place
+    # à la rotation.
+    start_chance: float
+    first_choice: bool
     points: int
     xp: int
     xp_per_point: int

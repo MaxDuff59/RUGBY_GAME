@@ -15,6 +15,11 @@ pèse sur ses chances en match (engine/dilemmas.py). La confiance de l'entraîne
 `TRUST_START`, remplaçant qui entre plus tard quand elle baisse (`entry_minute`) ; un
 carton ou trop de prises de risque ratées la font chuter.
 
+L'entraîneur fait tourner son effectif (`start_chance`) : même indiscutable, le joueur
+souffle de temps en temps sur le banc, d'autant plus souvent qu'il enchaîne les matchs
+(sa fraîcheur, engine/freshness.py) ; remplaçant, il gagne parfois une titularisation.
+Jamais en phase finale : les meilleurs jouent.
+
 Blessé, il peut jouer diminué : ses attributs ne rendent pas tout, et la blessure
 risque de s'aggraver (`AGGRAVATION_CHANCE`, de 1 à 3 semaines de plus).
 """
@@ -54,6 +59,17 @@ PRAISE_FROM = 7.5  # note qui vaut des félicitations
 # Au-delà, il est titulaire ; sinon il entre d'autant plus tard qu'elle est basse.
 TRUST_START = 70.0
 ENTRY_BY_TRUST = ((50.0, 52), (30.0, 60), (0.0, 68))
+
+# Rotation. Premier choix à son poste : le risque de souffler, de REST_FLOOR tout frais
+# à REST_MAX, plus REST_PER_FATIGUE par point de fraîcheur perdu (un titulaire qui joue
+# chaque semaine se stabilise vers 13 sur 20 : environ une fois sur cinq). Remplaçant :
+# ROTATION_START à confiance pleine, premier derrière les titulaires ; moins à chaque
+# joueur de plus devant lui.
+FRESHNESS_FULL = 20.0
+REST_FLOOR = 0.03
+REST_PER_FATIGUE = 0.025
+REST_MAX = 0.35
+ROTATION_START = 0.35
 
 # Jouer blessé : risque d'aggraver la blessure, de 1 à 3 semaines.
 AGGRAVATION_CHANCE = 0.4
@@ -112,6 +128,20 @@ def next_trust(trust: float, rating: float | None, carded: bool, risky_failures:
     if risky_failures >= RISKY_FAILURES:
         value += TRUST_RISKS
     return round(clamp(value, 0.0, 100.0), 1)
+
+
+def start_chance(
+    first_choice: bool, trust: float, freshness: float, behind: int, knockout: bool
+) -> float:
+    """Ses chances d'être titulaire au prochain match, de 0 à 1. `first_choice` : il
+    l'est d'office (confiance de l'entraîneur, ou le meilleur à son poste) ; sinon,
+    `behind` joueurs de plus que les places de titulaires sont devant lui."""
+    if knockout:
+        return 1.0 if first_choice else 0.0
+    if first_choice:
+        tired = REST_PER_FATIGUE * max(0.0, FRESHNESS_FULL - freshness)
+        return round(1 - clamp(REST_FLOOR + tired, REST_FLOOR, REST_MAX), 2)
+    return round(ROTATION_START * trust / 100 / max(1, behind), 2)
 
 
 def entry_minute(trust: float) -> int:

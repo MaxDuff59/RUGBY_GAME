@@ -212,14 +212,17 @@ def start_live(session: SessionDep) -> LiveOut:
     hero_row = heroes.hero(session)
     hurt = False
     if hero is not None:
-        # L'entraîneur titularise le joueur incarné s'il a sa confiance. Blessé, il ne
-        # joue que s'il l'a choisi, diminué.
+        # L'entraîneur titularise le joueur incarné s'il a sa confiance, et fait tourner
+        # (api/hero.py) : tel que la fiche l'a annoncé. Blessé, il ne joue que s'il l'a
+        # choisi, diminué.
         team = clubs[my_club_id]
-        team.forced_starters = {hero} if hero_row.trust >= hero_rules.TRUST_START else set()
         me = next((p for p in team.players if p.id == hero), None)
         if me is not None and me.is_injured(day) and hero_row.play_hurt:
             me.injury, hurt = None, True
             hero_row.hurt_match_id, hero_row.play_hurt = match_row.id, False
+        call = heroes.lineup_call(session, season, team, hero, hero_row.trust, match_row)
+        team.forced_starters = {hero} if call.starts else set()
+        team.rested = set() if call.starts else {hero}
         mine_tactics = staff_tactics(team_strength(team, day, forms[my_club_id]))
     else:
         mine_tactics = Tactics()

@@ -634,8 +634,9 @@ def select_lineup(club: Club, day: datetime.date | None = None) -> list[Player]:
     Le joueur d'indice i occupe la place SLOT_POSITIONS[i] (numéro SLOT_NUMBERS[i]).
     Les places choisies par le manager (`club.lineup_choice`) sont gardées telles
     quelles, même hors poste, tant que le joueur est apte ; le staff pourvoit les autres.
-    Les titularisations promises (`club.forced_starters`) passent devant à leur poste.
-    Les blessés à la date `day` sont écartés (sans date, tout le monde est apte).
+    Les titularisations promises (`club.forced_starters`) passent devant à leur poste ;
+    ceux qui soufflent (`club.rested`) derrière, sauf s'il n'y a qu'eux. Les blessés
+    à la date `day` sont écartés (sans date, tout le monde est apte).
     S'il manque des joueurs à un poste, on complète avec les meilleurs restants
     (un effectif incomplet peut quand même jouer).
     """
@@ -654,7 +655,10 @@ def select_lineup(club: Club, day: datetime.date | None = None) -> list[Player]:
         candidates = [p for p in available if p.position == position and p.id not in taken]
         if candidates:
             rating = RATING_FOR_POSITION[position]
-            pick = max(candidates, key=lambda p: (p.id in club.forced_starters, rating(p)))
+            pick = max(
+                candidates,
+                key=lambda p: (p.id in club.forced_starters, p.id not in club.rested, rating(p)),
+            )
             slots[index] = pick
             taken.add(pick.id)
 

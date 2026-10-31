@@ -336,6 +336,18 @@ def test_confidence_and_trust_follow_the_matches():
     assert rules.entry_minute(80) < rules.entry_minute(40) < rules.entry_minute(10)
 
 
+def test_the_coach_rotates_even_his_best_players():
+    fresh = rules.start_chance(True, 90, 20.0, 0, knockout=False)
+    tired = rules.start_chance(True, 90, 12.0, 0, knockout=False)
+    assert 0.9 < fresh < 1 and 0.5 < tired < fresh  # il souffle, plus souvent fatigué
+    assert rules.start_chance(True, 90, 5.0, 0, knockout=True) == 1.0  # pas en phase finale
+    # Remplaçant : une titularisation de temps en temps, selon la confiance et la concurrence.
+    backup = rules.start_chance(False, 60, 20.0, 1, knockout=False)
+    assert 0 < rules.start_chance(False, 30, 20.0, 1, knockout=False) < backup < fresh
+    assert rules.start_chance(False, 60, 20.0, 3, knockout=False) < backup
+    assert rules.start_chance(False, 60, 20.0, 1, knockout=True) == 0.0
+
+
 def _db(client):
     return next(app.dependency_overrides[get_session]())
 
@@ -363,6 +375,21 @@ def test_the_coach_starts_a_player_he_trusts(client):
     me = next(p for p in [*first["home"]["players"], *first["away"]["players"]]
               if p["id"] == hero["player_id"])  # fmt: skip
     assert me["status"] == "field"
+
+
+def test_a_rested_starter_begins_on_the_bench_as_announced(client, monkeypatch):
+    monkeypatch.setattr(rules, "REST_FLOOR", 1.0)  # l'entraîneur le fait souffler
+    monkeypatch.setattr(rules, "REST_MAX", 1.0)
+    _start(client)
+    session = _db(client)
+    session.scalars(select(HeroRow)).first().trust = 90
+    session.commit()
+    hero = client.get("/hero").json()
+    assert hero["status"] == "bench" and hero["first_choice"] and hero["start_chance"] == 0
+    first, _ = _play_live(client)
+    me = next(p for p in [*first["home"]["players"], *first["away"]["players"]]
+              if p["id"] == hero["player_id"])  # fmt: skip
+    assert me["status"] == "bench"
 
 
 def test_an_injured_hero_can_play_hurt(client):
@@ -434,6 +461,7 @@ def test_the_end_of_season_mercato_moves_the_hero(client):
     assert client.post("/seasons/next").status_code == 201
     hero = client.get("/hero").json()
     assert hero["club"]["id"] == away["club"]["id"] and hero["choice"] is None
+    assert client.get("/career").json()["club_id"] == away["club"]["id"]
     if away["kind"] == "loan":
         assert hero["loaned_from"]["id"] == 3
     if away["kind"] != "extend":

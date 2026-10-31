@@ -58,12 +58,16 @@ const ROLES = { club: "Manager", nation: "Sélectionneur", player: "Joueur" };
 // Cadre commun à toutes les pages : sur ordinateur, navigation à gauche et en-tête avec
 // le club ; sur téléphone (PHONE_QUERY), en-tête compact et barre d'onglets en bas.
 // Les pages reçoivent la carrière via useOutletContext(), et `onContract` pour y
-// reporter le contrat du manager quand il change (prolongation). Un sélectionneur
-// (`career.kind === "nation"`) a sa propre navigation ; `career.club_id` et
+// reporter le contrat du manager quand il change (prolongation), et `refreshCareer` pour
+// la relire. Un sélectionneur (`career.kind === "nation"`) a sa propre navigation ;
+// `career.club_id` et
 // `career.club_name` sont alors ceux de sa sélection. En carrière de joueur
 // (`career.kind === "player"`), ce sont ceux de son club, et `manager_name` son nom.
 export default function Layout() {
   const { data: career, error, loading, setData } = useApi(useCallback(api.getCareer, []));
+  // Relit la carrière sans repasser par « Chargement… » : en carrière de joueur, son club
+  // change avec un transfert ou un prêt, et l'en-tête comme les pages le suivent.
+  const refreshCareer = useCallback(async () => setData(await api.getCareer()), [setData]);
   // Le contrat du manager se lit (et se prolonge) depuis le pied de la navigation.
   const [contractOpen, setContractOpen] = useState(false);
   useClubTheme(career?.club_name);
@@ -98,7 +102,7 @@ export default function Layout() {
           {career.kind === "club" && <Inbox />}
         </header>
         {career.kind === "club" && <Guide />}
-        <Outlet context={{ career, onContract }} />
+        <Outlet context={{ career, onContract, refreshCareer }} />
       </main>
 
       {phone && <TabBar career={career} items={items} onContract={openContract} />}

@@ -12,6 +12,7 @@ autres). Le club le garde sous contrat d'une saison à l'autre (`keep_signed`).
 
 import datetime
 import random
+from dataclasses import dataclass
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -39,10 +40,19 @@ from data.leagues import league_config
 from data.nations import NATIONS_BY_CODE, NATIONS_BY_ID, WINDOWS_BY_CODE, WORLD_CUP
 from engine import dilemmas, social
 from engine import hero as rules
+from engine.freshness import daily_recovery, player_freshness
 from engine.journal import MoveKind
-from engine.match_engine import RATING_FOR_POSITION, select_lineup
+from engine.match_engine import FORMATION, RATING_FOR_POSITION, select_lineup
 from engine.season import champion
-from models import ATTRIBUTE_NAMES, OVERALL_WEIGHTS, EventType, Position
+from models import (
+    ATTRIBUTE_NAMES,
+    OVERALL_WEIGHTS,
+    Club,
+    EventType,
+    Position,
+    StaffRole,
+    Stage,
+)
 from models.orm import (
     AwardRow,
     ClubRow,
@@ -229,6 +239,67 @@ def train(session: Session, attribute: str) -> None:
     setattr(player, attribute, getattr(player, attribute) + 1)
 
 
+@dataclass(frozen=True)
+class LineupCall:
+    """Ce que décide l'entraîneur pour le prochain match du joueur incarné."""
+
+    chance: float  # ses chances d'être titulaire, de 0 à 1 (engine/hero.py)
+    starts: bool  # titulaire (sinon sur le banc)
+    first_choice: bool  # titulaire d'office : s'il ne l'est pas, il souffle
+
+
+def lineup_call(
+    session: Session,
+    season: SeasonRow | None,
+    club: Club,
+    player_id: int,
+    trust: float,
+    fixture: MatchRow | None,
+) -> LineupCall:
+    """Titulaire ou remplaçant au match `fixture` de son club (None : aucun en vue, il
+    est titulaire s'il l'est d'office). Le tirage tient au match : la fiche annonce ce
+    que fera le coup d'envoi (api/routers/live.py)."""
+    day = fixture.date if fixture is not None else game_date(session)
+    me = next(p for p in club.players if p.id == player_id)
+    club.forced_starters, club.rested = set(), set()
+    first_choice = trust >= rules.TRUST_START or any(
+        p.id == player_id for p in select_lineup(club, day)
+    )
+    rating = RATING_FOR_POSITION[me.position]
+    ahead = sum(1 for p in club.players if p.position == me.position and rating(p) > rating(me))
+    behind = ahead + 1 - FORMATION[Position(me.position)]
+    chance = rules.start_chance(
+        first_choice,
+        trust,
+        _freshness(session, season, club, player_id, day),
+        behind,
+        fixture is not None and Stage(fixture.stage).is_playoff,
+    )
+    if fixture is None:
+        starts = first_choice
+    else:
+        starts = random.Random(f"rotation:{fixture.id}:{player_id}").random() < chance
+    return LineupCall(chance=chance, starts=starts, first_choice=first_choice)
+
+
+def _freshness(
+    session: Session, season: SeasonRow | None, club: Club, player_id: int, day: datetime.date
+) -> float:
+    """Sa fraîcheur sur 20 (engine/freshness.py) : ses titularisations de la saison, en
+    club et en sélection."""
+    if season is None:
+        return rules.FRESHNESS_FULL
+    tests = internationals.test_rows(session, season)
+    starts = [
+        m.date
+        for m in [*season.matches, *season.cup_matches, *tests]
+        if m.home_score is not None
+        and player_id in [*(m.home_lineup or []), *(m.away_lineup or [])]
+    ]
+    rate = daily_recovery(club.staff_level(StaffRole.FITNESS_COACH))
+    return player_freshness(starts, day, rate)
+
+
 def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
     row = hero(session)
     player_row = session.get(PlayerRow, row.player_id)
@@ -246,23 +317,31 @@ def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
     ]
     club_ref = league_name = None
     status, rank, at_position, injury_weeks = "retired", 1, 1, 0
+    start_chance, first_choice = 0.0, False
     matches: list[HeroMatchOut] = []
     if player.club_id is not None:
+        # api/routers/seasons.py importe ce module : son prochain match se lit ici.
+        from api.routers.seasons import next_fixture
+
         club = load_club(session, player.club_id)
         club_ref = ClubRef(id=club.id, name=club.name)
         league_name = league_config(club.league).name
         day = game_date(session)
         me = next((p for p in club.players if p.id == player.id), player)
         injury_weeks = me.injury.weeks_left(day) if me.is_injured(day) else 0
-        club.forced_starters = {player.id} if row.trust >= rules.TRUST_START else set()
         if me.is_injured(day):
             status = "injured"
         elif me.is_suspended:
             status = "suspended"
-        elif any(p.id == player.id for p in select_lineup(club, day)):
-            status = "starter"
         else:
-            status = "bench"
+            fixture = next_fixture(session, season) if season is not None else None
+            if fixture is not None:
+                # Doublon : comme au coup d'envoi, ses coéquipiers en sélection manquent.
+                away = internationals.absentees_on(session, season, fixture.date)
+                internationals.rules.release(club, away, fixture.date)
+            call = lineup_call(session, season, club, player.id, row.trust, fixture)
+            status = "starter" if call.starts else "bench"
+            start_chance, first_choice = call.chance, call.first_choice
         rating = RATING_FOR_POSITION[position]
         rivals = sorted(
             (p for p in club.players if p.position == position), key=rating, reverse=True
@@ -293,6 +372,8 @@ def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
         rank=rank,
         at_position=at_position,
         status=status,
+        start_chance=start_chance,
+        first_choice=first_choice,
         points=row.points,
         xp=row.xp,
         xp_per_point=rules.XP_PER_POINT,

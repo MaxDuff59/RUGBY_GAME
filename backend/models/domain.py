@@ -381,6 +381,9 @@ class Club:
     league: str = "top14"  # code du championnat (data/leagues.py)
     # Titularisations promises par le manager (engine/affairs.py) : non stocké, posé par l'API.
     forced_starters: set[int] = field(default_factory=set)
+    # Laissés sur le banc pour souffler (rotation du joueur incarné, api/hero.py) : non
+    # stocké, posé par l'API.
+    rested: set[int] = field(default_factory=set)
     # XV choisi par le manager, place par place (None : place laissée au staff) ; vide
     # pour les clubs de l'IA. Voir select_lineup.
     lineup_choice: list[int | None] = field(default_factory=list)
