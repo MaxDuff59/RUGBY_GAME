@@ -12,7 +12,22 @@ export const SCENE_SHARE = 1 / 3;
 
 // Les situations des dilemmes (engine/dilemmas.py) qui ont leur scène ; le choix
 // crucial a toujours la sienne.
-export const SCENE_SITUATIONS = new Set(["kick", "one_on_one", "tackle", "try_line", "two_on_one"]);
+export const SCENE_SITUATIONS = new Set([
+  "one_on_one",
+  "try_line",
+  "tackle",
+  "ruck",
+  "scrum",
+  "lineout",
+  "kick",
+  "cross_kick",
+  "box_kick",
+  "touchline",
+  "counter",
+  "throw",
+  "provocation",
+  "two_on_one",
+]);
 
 const KEY = "rugby.scenes";
 const DEFAULTS = { scenes: true, sound: true };

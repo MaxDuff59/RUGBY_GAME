@@ -10,8 +10,12 @@ import { loadLogos } from "../sponsors.js";
 import { useScenePrefs } from "./prefs.js";
 import { buildCrunch } from "./scripts/crunch.js";
 import { buildKick } from "./scripts/kick.js";
+import { buildBoxKick, buildCounter, buildCrossKick } from "./scripts/kicks.js";
 import { buildOneOnOne } from "./scripts/oneOnOne.js";
+import { buildRuck } from "./scripts/ruck.js";
+import { buildLineoutJump, buildScrum, buildThrow } from "./scripts/setPlays.js";
 import { buildTackle } from "./scripts/tackle.js";
+import { buildProvocation, buildTouchline } from "./scripts/touchline.js";
 import { buildTryLine } from "./scripts/tryLine.js";
 import { buildTwoOnOne } from "./scripts/twoOnOne.js";
 import { createStage } from "./stage.js";
@@ -31,10 +35,19 @@ import { createStage } from "./stage.js";
 
 // Les scènes des dilemmes, par situation (engine/dilemmas.py) ; prefs.js les nomme.
 const DILEMMA_SCENES = {
-  kick: buildKick,
   one_on_one: buildOneOnOne,
-  tackle: buildTackle,
   try_line: buildTryLine,
+  tackle: buildTackle,
+  ruck: buildRuck,
+  scrum: buildScrum,
+  lineout: buildLineoutJump,
+  kick: buildKick,
+  cross_kick: buildCrossKick,
+  box_kick: buildBoxKick,
+  touchline: buildTouchline,
+  counter: buildCounter,
+  throw: buildThrow,
+  provocation: buildProvocation,
   two_on_one: buildTwoOnOne,
 };
 

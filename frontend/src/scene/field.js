@@ -3,8 +3,8 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 import { BAR, GAP, PAD_H, PAD_R, POST_HEIGHT, POST_R } from "./ball.js";
 
-// Le décor des scènes de match : une portion de terrain (de l'en-but à la ligne
-// médiane, côté poteaux), pas un stade entier. Pelouse tondue en bandes, lignes,
+// Le décor des scènes de match : un terrain sans stade entier (les poteaux d'un seul
+// côté, où se jouent la plupart des actions ; l'autre moitié pour les relances). Pelouse tondue en bandes, lignes,
 // poteaux en H aux protections du club qui reçoit, panneaux aux sponsors, et deux
 // tribunes basses (le long de la touche d'en face et derrière l'en-but) garnies d'un
 // public instancié qui se lève, chante, siffle et agite ses écharpes. Le temps du match
@@ -15,6 +15,7 @@ import { BAR, GAP, PAD_H, PAD_R, POST_HEIGHT, POST_R } from "./ball.js";
 
 export const TOUCH = 35;
 export const DEAD_BALL = -10;
+export const FAR_LINE = 100; // la ligne d'essai d'en face (sans poteaux)
 
 const canvasOf = (width, height) => Object.assign(document.createElement("canvas"), { width, height });
 
@@ -61,12 +62,13 @@ function linesGeometry() {
   strip(-TOUCH, 0, TOUCH, 0); // essai
   strip(-TOUCH, 22, TOUCH, 22); // 22 m
   strip(-TOUCH, 50, TOUCH, 50); // médiane
-  strip(-TOUCH, DEAD_BALL, -TOUCH, 72);
-  strip(TOUCH, DEAD_BALL, TOUCH, 72);
-  dashedX(5, -TOUCH + 5, TOUCH - 5, 1.2, 1.8); // 5 m
-  dashedX(40, -TOUCH + 5, TOUCH - 5, 1.2, 1.8); // 10 m
+  strip(-TOUCH, 78, TOUCH, 78); // nos 22
+  strip(-TOUCH, FAR_LINE, TOUCH, FAR_LINE);
+  strip(-TOUCH, DEAD_BALL, -TOUCH, FAR_LINE);
+  strip(TOUCH, DEAD_BALL, TOUCH, FAR_LINE);
+  for (const z of [5, 40, 60, 95]) dashedX(z, -TOUCH + 5, TOUCH - 5, 1.2, 1.8); // 5 m, 10 m
   for (const x of [-30, -20, 20, 30]) {
-    for (let z = 2; z < 72; z += 5) if (Math.abs(z - 22) > 1 && Math.abs(z - 50) > 1) strip(x, z, x, z + 1.2);
+    for (let z = 2; z < FAR_LINE - 1; z += 5) if (![22, 50, 78].some((line) => Math.abs(z - line) < 1.5)) strip(x, z, x, z + 1.2);
   }
   return mergeGeometries(parts);
 }
@@ -270,7 +272,7 @@ export function buildField(scene, options) {
   const light = lambert(0xd9e6cf, { map: texture(grass, [16, 1]) });
   const dark = lambert(0xa9bd9d, { map: texture(grass, [16, 1]) });
   const bandGeometry = new THREE.PlaneGeometry(80, 5).rotateX(-Math.PI / 2);
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < 25; i++) {
     const band = new THREE.Mesh(bandGeometry, i % 2 ? dark : light);
     band.position.set(0, 0, -15 + 2.5 + i * 5);
     group.add(band);
@@ -311,7 +313,7 @@ export function buildField(scene, options) {
   const cornerFlag = lambert(homeColors[1] ?? homeColors[0], { side: THREE.DoubleSide });
   const smallFlag = new THREE.PlaneGeometry(0.4, 0.3).translate(0.2, 1.35, 0);
   for (const x of [-TOUCH, TOUCH]) {
-    for (const z of [DEAD_BALL, 0, 22]) {
+    for (const z of [DEAD_BALL, 0, 22, 78, FAR_LINE]) {
       const stick = new THREE.Mesh(stickGeometry, white);
       stick.position.set(x, 0, z);
       const flag = new THREE.Mesh(smallFlag, cornerFlag);
@@ -325,7 +327,7 @@ export function buildField(scene, options) {
   const boardMap = texture(boardCanvas(homeName, logos, accent), [1, 1]);
   const boardMaterial = new THREE.MeshLambertMaterial({ map: boardMap, emissive: 0xffffff, emissiveMap: boardMap, emissiveIntensity: evening ? 0.9 : 0.35 });
   const boards = [
-    [80, TOUCH + 4, 30, -Math.PI / 2, 8],
+    [112, TOUCH + 4, 46, -Math.PI / 2, 11],
     [76, 0, DEAD_BALL - 3, 0, 8],
   ];
   for (const [length, x, z, turn, repeat] of boards) {
@@ -369,7 +371,7 @@ export function buildField(scene, options) {
     const c = Math.cos(turn);
     const s = Math.sin(turn);
     for (let r = 0; r < rows; r++) {
-      for (let u = -length / 2 + 0.6; u < length / 2 - 0.6; u += 1.15) {
+      for (let u = -length / 2 + 0.6; u < length / 2 - 0.6; u += 1.3) {
         if (Math.random() < 0.18) continue;
         const lx = u + (Math.random() - 0.5) * 0.3;
         const lz = -r * 0.9 - 0.45;
@@ -383,7 +385,7 @@ export function buildField(scene, options) {
       }
     }
   };
-  stand(84, TOUCH + 7, 30, -Math.PI / 2);
+  stand(116, TOUCH + 7, 46, -Math.PI / 2);
   stand(70, 0, DEAD_BALL - 6, 0, 22);
   const crowd = new Crowd(group, seats, {
     homeColors,
@@ -397,9 +399,9 @@ export function buildField(scene, options) {
     const lamp = new THREE.MeshBasicMaterial({ color: 0xfff6d8 });
     for (const [x, z] of [
       [TOUCH + 16, -14],
-      [TOUCH + 16, 64],
+      [TOUCH + 16, 96],
       [-TOUCH - 16, -14],
-      [-TOUCH - 16, 64],
+      [-TOUCH - 16, 96],
     ]) {
       const pole = new THREE.Mesh(new THREE.BoxGeometry(0.6, 34, 0.6), mast);
       pole.position.set(x, 17, z);

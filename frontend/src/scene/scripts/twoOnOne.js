@@ -58,10 +58,19 @@ export function buildTwoOnOne(world, data, handover) {
   }
   const defender = world.player("them", 15);
 
+  // Parti de loin (une relance de son camp), il lui reste trop à courir : un fondu au
+  // noir, et l'action reprend quelques foulées plus loin, à 24 m de la ligne.
+  const CUT = 0.3;
+  const shift = h0[1] > 26 ? h0[1] - 24 : 0;
+  const cut = shift > 0;
+  const h1 = [h0[0], h0[1] - shift];
+  const s1 = [s0[0], s0[1] - shift];
+  const r1 = [r0[0], r0[1] - shift];
+
   // La course jusqu'à l'arrêt sur image, en gardant de quoi finir avant la ligne.
-  const run1 = Math.min(6, Math.max(0, h0[1] - 9));
-  const hx = h0[0] + side * -0.4;
-  const fz = h0[1] - run1;
+  const run1 = Math.min(6, Math.max(0, h1[1] - 9));
+  const hx = h1[0] + side * -0.4;
+  const fz = h1[1] - run1;
   const sup = [hx + side * 4, fz + 0.8];
   const gap = Math.min(5.5, fz - 1.5);
   const def = [hx + side * 1.6, fz - gap];
@@ -70,27 +79,44 @@ export function buildTwoOnOne(world, data, handover) {
   const from = new THREE.Vector3();
   const to = new THREE.Vector3();
   const shot = broadcast(hx + side * 1.5, fz - 2.5, { far: 0.95 });
-  const startShot = broadcast(h0[0], h0[1] - 1.5);
+  const startShot = broadcast(h1[0], h1[1] - 1.5);
+  const beforeShot = broadcast(h0[0], h0[1] - 3);
   const camera = keys([
     [0, [...startShot.pos, ...startShot.look, startShot.fov]],
     [1.2, [...shot.pos, ...shot.look, shot.fov]],
   ]);
 
-  function setupFrame(t) {
-    runner(hero, route([h0, [hx, fz]]), t, 0, 1.2, { from: 1, to: 0.9, speed: 0.95, carry: "one" });
-    runner(support, route([s0, sup]), t, 0, 1.2, { from: 1, to: 0.9, speed: 0.95 });
+  const duration = 1.2 + (cut ? CUT : 0);
+  function setupFrame(time) {
+    if (cut && time < CUT) {
+      runner(hero, route([h0, [h0[0], h0[1] - 2.5]]), time, 0, CUT, { speed: 0.95, carry: "one" });
+      runner(support, route([s0, [s0[0], s0[1] - 2.5]]), time, 0, CUT, { speed: 0.95 });
+      leftovers.forEach((start, player) => trail(player, time, start));
+      world.ballAt(carried(hero, "one", ball), new THREE.Vector3(0, 0, 1));
+      world.exposure(1 - smooth(time / CUT));
+      return beforeShot;
+    }
+    if (cut) world.exposure(smooth(span(time, CUT, CUT + 0.25)));
+    const t = cut ? time - CUT : time;
+    runner(hero, route([h1, [hx, fz]]), t, 0, 1.2, { from: 1, to: 0.9, speed: 0.95, carry: "one" });
+    runner(support, route([s1, sup]), t, 0, 1.2, { from: 1, to: 0.9, speed: 0.95 });
     runner(defender, route([d0, def]), t, 0, 1.2, { from: 0.5, to: 0.6, speed: 0.6 });
     defender.root.rotation.y = defender.heading = FACE_FIELD;
     if (t >= 1.2) defender.set(ready(0.6));
-    runner(ref, route([r0, [hx - side * 7, fz + 3]]), t, 0, 1.2, { from: 0.8, to: 0.6, speed: 0.6 });
-    leftovers.forEach((start, player) => trail(player, t, start));
+    // L'arbitre suit côté tribune d'en face (+x), derrière l'action vue de la caméra.
+    runner(ref, route([r1, [hx + 7, fz + 3]]), t, 0, 1.2, { from: 0.8, to: 0.6, speed: 0.6 });
+    leftovers.forEach((start, player) => {
+      // Après le fondu, ceux qui finissaient leur course sont restés loin derrière.
+      player.visible = !cut;
+      trail(player, t, start);
+    });
     world.ballAt(carried(hero, "one", ball), new THREE.Vector3(0, 0, 1));
     const [cx, cy, cz, lx, ly, lz, fov] = camera(t);
     return { pos: [cx, cy, cz], look: [lx, ly, lz], fov };
   }
 
   const setup = {
-    duration: 1.2,
+    duration,
     frame: setupFrame,
     cues: [{ at: 0.05, run: () => world.crowd("standing") }],
   };
@@ -169,7 +195,7 @@ export function buildTwoOnOne(world, data, handover) {
             },
           ],
       frame(t) {
-        setupFrame(1.2);
+        setupFrame(duration);
         leftovers.forEach((start, player) => trail(player, 1.2 + t, start));
         const carrier = key === "give" ? support : hero;
         if (key === "give") {
@@ -218,8 +244,8 @@ export function buildTwoOnOne(world, data, handover) {
           if (t > tEnd + 0.8) support.set(good ? cheer(t * 1.4) : dejected());
         }
         // L'arbitre arrive sur l'action et accorde l'essai (ou siffle l'en-avant).
-        const r = [hx - side * 7, fz + 3];
-        const target = [lerp(r[0], hx - side * 3, 0.7), clamp(fz - 6, 1.5, 30)];
+        const r = [hx + 7, fz + 3];
+        const target = [hx + 5, clamp(fz - 6, 1.5, 30)];
         runner(ref, route([r, target]), t, 0, Math.max(1, tEnd), { from: 0.6, to: 0.4, speed: 0.6 });
         if (!forward && caughtAt === null && t > scoreAt) ref.set(tryAward(smooth(span(t, scoreAt, scoreAt + 0.35))));
         if (forward && t > 1) ref.set(signal(side, smooth(span(t, 1, 1.3))));

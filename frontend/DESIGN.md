@@ -406,7 +406,8 @@ des joueurs, des personnages low-poly en pixels. Nulle part ailleurs.
 
 Certaines décisions en match se jouent en scène 3D plutôt que dans leur fenêtre de
 texte (`src/scene`, three.js chargé à la demande) : le choix crucial du manager et les
-dilemmes du joueur incarné qui ont leur scène (`SCENE_SITUATIONS`, `src/scene/prefs.js`).
+dilemmes du joueur incarné (chaque situation a sa scène, `src/scene/scripts` ;
+`SCENE_SITUATIONS` dans `src/scene/prefs.js` dit lesquelles sont branchées).
 Une décision sur trois, tirée au hasard à son ouverture (`SCENE_SHARE`) ; jamais sans
 WebGL, avec « réduire les animations », ou quand « Scènes 3D : non » (pied du menu, volet
 « Plus » sur téléphone, `ScenePrefs`). Quand le staff tranche à la place du joueur
@@ -419,12 +420,16 @@ WebGL, avec « réduire les animations », ou quand « Scènes 3D : non » (pied
   l'image, comme dans la fenêtre ; au survol, ou au premier toucher sur téléphone, la
   voie se dessine sur la pelouse en blanc, son point d'arrivée à la couleur du club, et
   la caméra prend de la hauteur), issue (l'action jouée, puis la carte de résultat de la
-  fenêtre de texte). Clic ou Espace : passer. Une réussite enchaînée continue dans la
-  même scène ; sans scène pour la suite, la fenêtre de texte prend le relais.
+  fenêtre de texte). Clic ou Espace : passer. Une réussite enchaînée (un franchissement
+  et son deux contre un) continue dans la même scène, le même joueur reparti d'où il est
+  (un fondu s'il lui reste trop à courir) ; sans scène pour la suite, la fenêtre de
+  texte prend le relais. Un échec joue l'effet tiré : plaquage manqué, essai encaissé,
+  pénalité, carton jaune sorti par l'arbitre.
 - Rendu : basse résolution (300 lignes, 260 sur téléphone) agrandie en pixels nets,
   contours tirés de la profondeur, palette de 64 couleurs en OKLab tirée des couleurs
   ci-dessus et de celles des deux clubs (`palette.js`, `render.js`).
-- Décor : une portion de terrain (en-but à la médiane), bandes de tonte, lignes, poteaux
+- Décor : le terrain sans le stade entier (poteaux d'un seul côté, celui où se jouent
+  les actions ; l'autre moitié sert aux relances), bandes de tonte, lignes, poteaux
   aux protections du club qui reçoit, panneaux aux sponsors du club (ou à son nom),
   tribunes basses et public instancié aux couleurs des deux clubs (debout sous la
   pression, il saute et fait tourner ses écharpes, siffle une pénalité contre son club).
