@@ -10,6 +10,10 @@ import { loadLogos } from "../sponsors.js";
 import { useScenePrefs } from "./prefs.js";
 import { buildCrunch } from "./scripts/crunch.js";
 import { buildKick } from "./scripts/kick.js";
+import { buildOneOnOne } from "./scripts/oneOnOne.js";
+import { buildTackle } from "./scripts/tackle.js";
+import { buildTryLine } from "./scripts/tryLine.js";
+import { buildTwoOnOne } from "./scripts/twoOnOne.js";
 import { createStage } from "./stage.js";
 
 // Une décision en match mise en scène en 3D, à la place de la fenêtre de texte : le
@@ -26,7 +30,13 @@ import { createStage } from "./stage.js";
 // scène, la fenêtre de texte prend le relais (`onHandOff`). Sans WebGL : `onFail`.
 
 // Les scènes des dilemmes, par situation (engine/dilemmas.py) ; prefs.js les nomme.
-const DILEMMA_SCENES = { kick: buildKick };
+const DILEMMA_SCENES = {
+  kick: buildKick,
+  one_on_one: buildOneOnOne,
+  tackle: buildTackle,
+  try_line: buildTryLine,
+  two_on_one: buildTwoOnOne,
+};
 
 // Les maillots des deux clubs : chacun le sien à domicile ; l'équipe qui se déplace
 // passe à sa tenue extérieure (puis au third) si les deux se ressemblent trop.

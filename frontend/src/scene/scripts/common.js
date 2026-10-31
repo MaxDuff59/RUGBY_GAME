@@ -1,7 +1,7 @@
 import * as THREE from "three";
 
 import { BAR, GAP, UP, advanceBall, flyingBall } from "../ball.js";
-import { run } from "../rig.js";
+import { ready, run } from "../rig.js";
 
 // Outils des scènes : le temps (avancement d'un instant à un autre, lissé), les
 // trajets des coureurs, les vols du ballon (passe, coup de pied à suivre, coup de pied
@@ -204,4 +204,54 @@ export function goalKick(from, wind, made, rng, { elevation = 33 } = {}) {
       return out;
     },
   };
+}
+
+// --- Le reste de la scène -------------------------------------------------------------
+
+// Le plan de retransmission sur un point du terrain : en hauteur, de biais, depuis la
+// tribune d'en face (côté -x). `far` éloigne la caméra.
+export function broadcast(x, z, { far = 1, fov = 31, y = 0.6 } = {}) {
+  return { pos: [x - 24 * far, 9.5 * far, z + 12 * far], look: [x * 0.85, y, z], fov };
+}
+
+// Un joueur d'une scène précédente qui n'a plus de rôle : il finit sa course en
+// ralentissant (au sol, il y reste). `start` : sa place et son cap au début.
+export function trail(player, s, start, until = 1.6) {
+  if (start.down) return;
+  const k = clamp(s / until);
+  const d = start.speed * until * (k - (k * k) / 2);
+  player.place(start.x + Math.sin(start.heading) * d, start.z + Math.cos(start.heading) * d, start.heading);
+  player.set(k < 1 ? run(d / 2.3, 0.6 * (1 - k)) : ready(0.15));
+}
+
+// Où en est un joueur : de quoi le faire continuer (`trail`).
+export const snapshot = (player, speed = 6) => ({
+  x: player.root.position.x,
+  z: player.root.position.z,
+  heading: player.heading,
+  speed,
+  down: Math.abs(player.current.pitch) > 0.8,
+});
+
+// Le public et le son quand une action tourne pour nous (`good`) ou contre nous.
+export function reaction(world, good) {
+  if (good) {
+    world.crowd("cheer", "us");
+    world.sound(world.homeIsUs ? "roar" : "groan");
+  } else {
+    world.crowd(world.homeIsUs ? "seated" : "cheer", world.homeIsUs ? "us" : "them");
+    world.sound(world.homeIsUs ? "groan" : "roar");
+  }
+}
+
+// Une pénalité sifflée contre `team` ("us" ou "them") : son public la siffle s'il reçoit.
+export function penaltyAgainst(world, team) {
+  const home = (team === "us") === world.homeIsUs;
+  world.sound("whistle", true);
+  if (home) {
+    world.crowd("boo", team);
+    world.sound("boo");
+  } else {
+    world.crowd("standing");
+  }
 }

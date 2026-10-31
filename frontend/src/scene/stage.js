@@ -126,6 +126,7 @@ export function createStage(host, context, events) {
         shared,
       });
       player.team = team;
+      player.role = hero ? "hero" : null; // le joueur incarné, repris d'une scène à la suivante
       scene.add(player.root);
       cast.push(player);
       return player;

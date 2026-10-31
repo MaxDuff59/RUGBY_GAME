@@ -345,7 +345,7 @@ const SHAPES = {
 
 const shadowGeometry = new THREE.CircleGeometry(0.42, 12).rotateX(-Math.PI / 2);
 const ringGeometry = new THREE.RingGeometry(0.5, 0.68, 20).rotateX(-Math.PI / 2);
-const cardGeometry = box(0.07, 0.1, 0.01);
+const cardGeometry = box(0.12, 0.17, 0.02); // grossi : il doit se voir de la tribune
 
 export class Player {
   // `kit` : createKit ; `number` : dans le dos ; `seed` : peau et cheveux ; `marker` :
@@ -471,10 +471,11 @@ export function sharedMaterials() {
   };
 }
 
-// La tenue de l'arbitre : une couleur qu'aucune des deux équipes ne porte.
+// La tenue de l'arbitre : une couleur qu'aucune des deux équipes ne porte, le jaune en
+// dernier (le carton doit se détacher sur le maillot).
 export function refereeJersey(kits) {
-  const candidates = ["#F2C230", "#16181B", "#6CACE4", "#E35205"];
+  const candidates = ["#16181B", "#5B2A86", "#6CACE4", "#E35205", "#F2C230"];
   const far = candidates.find((c) => kits.every((kit) => distance(c, kit.base) > 140 && distance(c, kit.motif) > 110));
-  const base = far ?? "#F2C230";
+  const base = far ?? "#5B2A86";
   return { pattern: "plain", base, motif: base, trim: base === "#16181B" ? "#F2C230" : "#16181B" };
 }
