@@ -60,7 +60,7 @@ class UserOut(BaseModel):
     seasons_left: int | None
     free_seasons: int = accounts.FREE_SEASONS
     free_saves: int = accounts.FREE_SAVES
-    # Formule en pause (api/plans.py) : tout est gratuit, l'interface n'en parle pas.
+    # Formule active (api/plans.py) ; en pause, tout est gratuit et l'interface n'en parle pas.
     paywall: bool
     # Invité : pas d'adresse à montrer, une seule partie, perdue s'il ne revient pas.
     guest: bool = False

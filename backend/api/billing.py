@@ -155,6 +155,8 @@ def checkout(user: UserDep, request: Request) -> CheckoutOut:
     """Ouvre une page de paiement Stripe pour le compte connecté."""
     if user.premium:
         raise HTTPException(status_code=409, detail="Ton compte a déjà le jeu complet")
+    if user.guest:
+        raise HTTPException(status_code=403, detail="Crée un compte avant de payer")
     site = os.environ.get("RUGBY_PUBLIC_URL") or request.headers.get("origin")
     site = (site or str(request.base_url)).rstrip("/")
     session = stripe_call("POST", "/checkout/sessions", checkout_fields(user, site))

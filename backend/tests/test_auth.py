@@ -33,7 +33,7 @@ def test_register_then_login(client):
         "seasons_left": 2,
         "free_seasons": 2,
         "free_saves": 1,
-        "paywall": False,
+        "paywall": True,
         "guest": False,
     }
     assert auth.COOKIE in client.cookies

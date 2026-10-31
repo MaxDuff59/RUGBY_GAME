@@ -22,7 +22,7 @@ SECRET = "whsec_test"
 
 @pytest.fixture(autouse=True)
 def paywall(monkeypatch) -> None:
-    """La formule est en pause dans le jeu (api/plans.py) : ses tests la remettent."""
+    """La formule est active (api/plans.py) : ses tests ne dépendent pas de l'interrupteur."""
     monkeypatch.setattr(plans, "PAYWALL", True)
 
 
@@ -72,6 +72,18 @@ def test_taking_another_club_in_the_same_world_costs_no_season(player):
     again = player.post("/career", json={"manager_name": "Alex", "club_id": clubs["Bath Rugby"]})
     assert again.status_code == 201
     assert plan(player) == (False, 1, 1)
+
+
+def test_a_guest_at_the_limit_is_sent_to_create_an_account(world):
+    auth._attempts.clear()
+    guest = TestClient(app)
+    guest.post("/auth/guest")
+    start(guest, 1, "Maxence", "Stade Toulousain")
+    user_id = guest.get("/auth/me").json()["id"]
+    accounts.count_season(user_id)  # ses deux saisons sont commencées
+    refused = guest.post("/seasons/next")
+    assert refused.status_code == 403 and "crée un compte" in refused.json()["detail"]
+    assert guest.post("/billing/checkout").status_code == 403
 
 
 def test_without_the_paywall_everything_is_free(player, monkeypatch):

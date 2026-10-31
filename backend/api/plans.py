@@ -3,9 +3,12 @@
 Les refus répondent 402 (paiement requis) : l'interface propose alors le jeu complet,
 payé une fois (api/billing.py).
 
-`PAYWALL` met la formule en pause : tant qu'il est faux, tout le jeu est gratuit, sans
+`PAYWALL` met la formule en pause : quand il est faux, tout le jeu est gratuit, sans
 limite de parties ni de saisons (les saisons se comptent toujours, pour le jour où il
-repassera à vrai). L'interface le lit dans `GET /auth/me`.
+repasse à vrai). L'interface le lit dans `GET /auth/me`.
+
+L'invité (sans compte) a les mêmes saisons, mais ne peut pas payer : à la limite, il est
+renvoyé vers la création d'un compte (403), qui garde sa partie et ses saisons.
 """
 
 from fastapi import HTTPException
@@ -16,12 +19,20 @@ from accounts import FREE_SAVES, FREE_SEASONS, User
 PRICE_CENTS = 200
 PRICE_LABEL = "2 €"
 PAYMENT_REQUIRED = 402
-PAYWALL = False
+PAYWALL = True
 
 
 def require_season(user: User) -> None:
     """Refuse de commencer une saison quand le compte gratuit les a toutes jouées."""
     if PAYWALL and user.seasons_left == 0:
+        if user.guest:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Sans compte, {FREE_SEASONS} saisons : crée un compte (ta partie te suit) "
+                    f"puis passe au jeu complet ({PRICE_LABEL}) pour continuer."
+                ),
+            )
         raise HTTPException(
             status_code=PAYMENT_REQUIRED,
             detail=(
