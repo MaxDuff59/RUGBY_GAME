@@ -182,6 +182,18 @@ def test_the_webhook_unlocks_the_account_it_is_told(player, monkeypatch):
     assert plan(player)[0] is True
 
 
+def test_a_100_percent_promotion_code_unlocks_the_account(player, monkeypatch):
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", SECRET)
+    offered = json.loads(paid_event(1, status="no_payment_required"))
+    offered["data"]["object"]["payment_intent"] = None  # rien n'a été débité
+    payload = json.dumps(offered).encode()
+    response = TestClient(app).post(
+        "/billing/webhook", content=payload, headers={"Stripe-Signature": signed(payload)}
+    )
+    assert response.status_code == 200
+    assert plan(player)[0] is True
+
+
 def test_checkout_then_confirm_on_the_way_back(player, monkeypatch):
     sent = []
 
@@ -206,6 +218,7 @@ def test_checkout_then_confirm_on_the_way_back(player, monkeypatch):
     assert fields["line_items[0][price_data][unit_amount]"] == "200"
     assert fields["line_items[0][price_data][currency]"] == "eur"
     assert fields["success_url"].startswith("https://rugby.example/parties?paiement=ok")
+    assert fields["allow_promotion_codes"] == "true"
 
     assert player.post("/billing/confirm", json={"session_id": "../secret"}).status_code == 400
     confirmed = player.post("/billing/confirm", json={"session_id": "cs_test_1"})

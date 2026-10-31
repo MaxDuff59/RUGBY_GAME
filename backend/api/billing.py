@@ -14,6 +14,10 @@ Configuration, par variables d'environnement :
 - `RUGBY_PUBLIC_URL` (facultatif) : adresse de l'interface pour le retour, sinon
   l'origine de la requête.
 
+Codes promo : la page de paiement en accepte (`allow_promotion_codes`). Un coupon de
+100 % créé dans le tableau de bord Stripe offre le jeu complet : la session se règle
+alors à 0 € (`no_payment_required`) et débloque le compte comme un paiement.
+
 L'API de Stripe s'appelle en bibliothèque standard (urllib), sans son SDK.
 """
 
@@ -47,6 +51,8 @@ SIGNATURE_TOLERANCE = 300
 _SESSION_ID = re.compile(r"^cs_[A-Za-z0-9_]{1,250}$")
 # Événements de Stripe qui signalent un paiement reçu (carte : aussitôt ; virement : après).
 PAID_EVENTS = {"checkout.session.completed", "checkout.session.async_payment_succeeded"}
+# Session réglée : payée, ou offerte par un code promo de 100 %.
+SETTLED = {"paid", "no_payment_required"}
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/billing", tags=["paiement"])
@@ -106,6 +112,7 @@ def checkout_fields(user: accounts.User, site: str) -> dict[str, str]:
         "success_url": f"{site}/parties?paiement=ok&session_id={{CHECKOUT_SESSION_ID}}",
         "cancel_url": f"{site}/parties?paiement=annule",
         "line_items[0][quantity]": "1",
+        "allow_promotion_codes": "true",
     }
     if price := os.environ.get("STRIPE_PRICE_ID"):
         fields["line_items[0][price]"] = price
@@ -136,11 +143,12 @@ def verify_signature(payload: bytes, header: str, secret: str, now: float | None
 
 
 def _grant_if_paid(checkout: dict) -> accounts.User | None:
-    """Débloque le compte d'une session de paiement du jeu, réglée (None sinon)."""
+    """Débloque le compte d'une session de paiement du jeu, réglée ou offerte (None
+    sinon)."""
     reference = checkout.get("client_reference_id") or ""
     if (
         (checkout.get("metadata") or {}).get("app") != APP
-        or checkout.get("payment_status") != "paid"
+        or checkout.get("payment_status") not in SETTLED
         or not reference.isdigit()
     ):
         return None
@@ -198,6 +206,6 @@ async def webhook(request: Request) -> dict[str, bool]:
         checkout = event["data"]["object"]
         granted = await run_in_threadpool(_grant_if_paid, checkout)
         ours = (checkout.get("metadata") or {}).get("app") == APP
-        if granted is None and ours and checkout.get("payment_status") == "paid":
+        if granted is None and ours and checkout.get("payment_status") in SETTLED:
             log.warning("Paiement Stripe %s sans compte à débloquer", checkout.get("id"))
     return {"received": True}
