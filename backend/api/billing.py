@@ -6,9 +6,10 @@ chaque 1er juillet. Sans renouvellement (résilié, carte refusée), le compte r
 gratuit.
 
 1. `POST /billing/checkout` crée une page de paiement Stripe pour le compte connecté
-   et renvoie son adresse : le navigateur y part. L'abonnement y est ancré au 1er
-   juillet (`billing_cycle_anchor`), sans prorata ; la saison en cours est une ligne
-   payée une fois, sur la première facture.
+   et renvoie son adresse : le navigateur y part. La saison en cours y est une ligne
+   payée une fois, sur la première facture ; l'abonnement annuel démarre au 1er
+   juillet, au bout d'une période d'essai (`trial_end`). Stripe refuse l'autre montage,
+   un ancrage au 1er juillet sans prorata, dès qu'il y a une ligne payée une fois.
 2. Stripe ramène le joueur sur `/parties?paiement=ok&session_id=...` ; l'interface
    appelle `POST /billing/confirm`, qui relit la session chez Stripe et débloque le compte.
 3. Stripe prévient aussi `POST /billing/webhook` : checkout.session.completed débloque
@@ -131,7 +132,7 @@ def long_day(day: datetime.date) -> str:
 def checkout_fields(user: accounts.User, site: str) -> dict[str, str]:
     """La session d'abonnement d'un compte, rattachée à lui par `client_reference_id` :
     2 € tout de suite pour la saison en cours, puis 2 € chaque 1er juillet."""
-    end = accounts.season_end()
+    end = accounts.sold_season_end()
     until = long_day(accounts.paris_day(end))
     yearly = "line_items[0][price_data]"
     season = "line_items[1][price_data]"
@@ -142,12 +143,9 @@ def checkout_fields(user: accounts.User, site: str) -> dict[str, str]:
         "metadata[app]": APP,
         "subscription_data[metadata][user_id]": str(user.id),
         "subscription_data[metadata][app]": APP,
-        # Renouvellement chaque 1er juillet ; rien n'est dû pour la période d'ici là,
-        # payée par la ligne de la saison en cours.
-        "subscription_data[billing_cycle_anchor]": str(
-            int(end.replace(tzinfo=datetime.UTC).timestamp())
-        ),
-        "subscription_data[proration_behavior]": "none",
+        # Premier prélèvement de l'abonnement le 1er juillet, puis chaque année ; la
+        # période d'ici là est payée par la ligne de la saison en cours.
+        "subscription_data[trial_end]": str(int(end.replace(tzinfo=datetime.UTC).timestamp())),
         "success_url": f"{site}/parties?paiement=ok&session_id={{CHECKOUT_SESSION_ID}}",
         "cancel_url": f"{site}/parties?paiement=annule",
         "allow_promotion_codes": "true",

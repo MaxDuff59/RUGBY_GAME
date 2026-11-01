@@ -83,7 +83,7 @@ def user_out(user: User) -> UserOut:
             accounts.paris_day(user.premium_until) if user.premium and user.premium_until else None
         ),
         subscribed=bool(user.stripe_customer),
-        season_end=accounts.paris_day(accounts.season_end()),
+        season_end=accounts.paris_day(accounts.sold_season_end()),
         seasons_played=user.seasons_played,
         seasons_left=user.seasons_left,
         paywall=plans.PAYWALL,

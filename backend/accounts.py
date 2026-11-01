@@ -63,6 +63,9 @@ _PARIS_SUMMER = datetime.timedelta(hours=2)
 # Le renouvellement est prélevé le 1er juillet ; Stripe réessaie une carte refusée
 # pendant quelques jours, le jeu complet attend autant avant de s'arrêter.
 RENEWAL_GRACE = datetime.timedelta(days=7)
+# L'abonnement démarre au 1er juillet par une période d'essai, que Stripe veut longue
+# d'au moins 48 h : dans les trois derniers jours d'une saison, on vend déjà la suivante.
+SALE_LEAD = datetime.timedelta(days=3)
 # Fin du jeu complet de ceux qui l'avaient payé une fois, avant l'abonnement.
 FIRST_SEASON_END = datetime.datetime(2027, 6, 30, 22, 0)
 
@@ -256,6 +259,12 @@ def season_end(at: datetime.datetime | None = None) -> datetime.datetime:
     return end - _PARIS_SUMMER
 
 
+def sold_season_end() -> datetime.datetime:
+    """La fin du jeu complet pris aujourd'hui : le prochain 1er juillet, ou le suivant
+    s'il tombe dans moins de trois jours (SALE_LEAD)."""
+    return season_end(_now() + SALE_LEAD)
+
+
 def paris_day(at: datetime.datetime) -> datetime.date:
     """Le jour, à Paris, d'une fin de jeu complet (UTC) : le 1er juillet."""
     return (at + _PARIS_SUMMER).date()
@@ -403,15 +412,15 @@ def _extend(row: UserRow, until: datetime.datetime) -> None:
 def grant_premium(
     user_id: int, payment_ref: str | None = None, customer: str | None = None
 ) -> User | None:
-    """Passe le compte en jeu complet jusqu'au prochain 1er juillet ; `customer` : le
-    client Stripe de l'abonnement, que les renouvellements retrouveront."""
+    """Passe le compte en jeu complet jusqu'au prochain 1er juillet (sold_season_end) ;
+    `customer` : le client Stripe de l'abonnement, que les renouvellements retrouveront."""
     with _session() as session:
         row = session.get(UserRow, user_id)
         if row is None:
             return None
         if not premium_active(row):
             row.premium_at, row.payment_ref, row.premium_until = _now(), payment_ref, None
-        _extend(row, season_end())
+        _extend(row, sold_season_end())
         if customer:
             row.stripe_customer = customer
         session.commit()

@@ -31,7 +31,7 @@ def test_register_then_login(client):
         "premium": False,
         "premium_until": None,
         "subscribed": False,
-        "season_end": accounts.paris_day(accounts.season_end()).isoformat(),
+        "season_end": accounts.paris_day(accounts.sold_season_end()).isoformat(),
         "seasons_played": 0,
         "seasons_left": 2,
         "free_seasons": 2,

@@ -174,6 +174,19 @@ def test_the_season_ends_on_july_first_at_midnight_in_paris():
     assert accounts.paris_day(end) == datetime.date(2027, 7, 1)
 
 
+def test_in_the_last_days_of_a_season_the_next_one_is_sold(monkeypatch):
+    # L'essai de Stripe dure au moins 48 h : un 1er juillet à moins de trois jours est sauté.
+    at(monkeypatch, 2027, 6, 27, 21, 0)
+    assert accounts.sold_season_end() == datetime.datetime(2027, 6, 30, 22, 0)
+    at(monkeypatch, 2027, 6, 28)
+    assert accounts.sold_season_end() == datetime.datetime(2028, 6, 30, 22, 0)
+    fields = billing.checkout_fields(accounts.User(id=1, email="a@b.fr", active_slot=None), "")
+    assert fields["subscription_data[trial_end]"] == str(
+        int(datetime.datetime(2028, 6, 30, 22, 0, tzinfo=datetime.UTC).timestamp())
+    )
+    assert "1er juillet 2028" in fields["custom_text[submit][message]"]
+
+
 def test_without_renewal_the_account_goes_back_to_free(player, monkeypatch):
     at(monkeypatch, 2026, 11, 1)
     accounts.grant_premium(1, "sub_1", "cus_1")
@@ -322,8 +335,8 @@ def test_checkout_then_confirm_on_the_way_back(player, monkeypatch):
     # 2 € par an, renouvelés le 1er juillet à minuit (Paris) ; 2 € tout de suite pour la saison.
     assert fields["line_items[0][price_data][unit_amount]"] == "200"
     assert fields["line_items[0][price_data][recurring][interval]"] == "year"
-    assert fields["subscription_data[billing_cycle_anchor]"] == "1814392800"
-    assert fields["subscription_data[proration_behavior]"] == "none"
+    assert fields["subscription_data[trial_end]"] == "1814392800"
+    assert "subscription_data[proration_behavior]" not in fields
     assert fields["line_items[1][price_data][unit_amount]"] == "200"
     assert "recurring" not in str([key for key in fields if key.startswith("line_items[1]")])
     assert "1er juillet 2027" in fields["line_items[1][price_data][product_data][name]"]
