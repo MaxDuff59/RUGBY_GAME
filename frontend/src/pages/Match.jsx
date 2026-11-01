@@ -45,6 +45,13 @@ const SPEEDS = [
   { label: "×8", ms: 180 },
 ];
 
+// Téléphone : les onglets sous le tableau de score.
+const PHONE_VIEWS = [
+  { key: "match", label: "Le match" },
+  { key: "events", label: "Événements" },
+  { key: "lineups", label: "Compositions" },
+];
+
 // Événements qui mettent le match en pause quand ils touchent notre équipe.
 const PAUSING = new Set(["injury", "yellow_card", "red_card"]);
 
@@ -118,6 +125,7 @@ export function LiveScreen({
   const [finishing, setFinishing] = useState(false);
   const phone = useMediaQuery(PHONE_QUERY);
   const [lineupClub, setLineupClub] = useState(null); // téléphone : la composition montrée (la nôtre par défaut)
+  const [phoneView, setPhoneView] = useState("match"); // téléphone : l'onglet ouvert sous le tableau de score
   const [panel, setPanel] = useState(null); // fenêtre ouverte : "plan", "talk", "crunch" ou "dilemma"
   const [staged, setStaged] = useState(false); // la décision ouverte se joue en scène 3D
   const confirm = useConfirm();
@@ -288,9 +296,12 @@ export function LiveScreen({
   const sides = [live.home, live.away];
   const shownSide = sides.find((side) => side.club.id === lineupClub) ?? sides.find((side) => side.club.id === myId) ?? live.home;
   const mySide = sides.find((side) => side.club.id === myId);
+  // Téléphone : les faits de jeu et les compositions ont chacun leur onglet, sous le
+  // tableau de score ; l'onglet du match garde la carte du joueur (ou les actions) et le momentum.
+  const otherView = phone && phoneView !== "match";
 
   return (
-    <div className="live">
+    <div className={`live${phone ? ` live--phone live--phone-${phoneView}` : ""}`}>
       {confirm.dialog}
       <Scoreboard
         live={live}
@@ -309,7 +320,22 @@ export function LiveScreen({
         onHandOver={handOver}
         onFinish={finish}
       />
-      {player ? (
+      {phone && (
+        <div className="chips live__views" role="group" aria-label="Vue">
+          {PHONE_VIEWS.map((view) => (
+            <button
+              key={view.key}
+              type="button"
+              className="chip"
+              aria-pressed={phoneView === view.key}
+              onClick={() => setPhoneView(view.key)}
+            >
+              {view.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {otherView ? null : player ? (
         <HeroBar
           live={live}
           side={mySide}
@@ -325,17 +351,22 @@ export function LiveScreen({
       ) : (
         <Actions live={live} side={mySide} onOpen={openPanel} />
       )}
-      <Momentum
-        bars={live.momentum}
-        slots={live.last_minute}
-        halfTime={live.half_time}
-        home={live.home.club}
-        away={live.away.club}
-        myId={myId}
-        finished={live.finished}
-        events={live.events}
-        nameOf={(e) => (e.type === "substitution" ? `${e.other_player_name} entre` : e.player_name)}
-      />
+      {!otherView && (
+        <Momentum
+          bars={live.momentum}
+          slots={live.last_minute}
+          halfTime={live.half_time}
+          home={live.home.club}
+          away={live.away.club}
+          myId={myId}
+          finished={live.finished}
+          events={live.events}
+          nameOf={(e) => (e.type === "substitution" ? `${e.other_player_name} entre` : e.player_name)}
+        />
+      )}
+      {phone && phoneView === "match" && (
+        <LastEvents sides={sides} events={live.events} onMore={() => setPhoneView("events")} />
+      )}
       {panel === "plan" && (
         <PlanDialog
           tactics={mySide.tactics}
@@ -412,11 +443,13 @@ export function LiveScreen({
           onResume={resume}
         />
       )}
-      <div className="live__grid fill">
-        {phone ? (
-          // Téléphone : un seul fil des faits de jeu, puis la composition d'une équipe au choix.
+      <div className={`live__grid fill${phone && phoneView === "match" ? " live__grid--hidden" : ""}`}>
+        {phone && phoneView === "events" ? (
+          // Téléphone, onglet des événements : un seul fil des faits de jeu.
+          <Feed sides={sides} events={live.events} />
+        ) : phone ? (
+          // Téléphone, onglet des compositions : celle d'une équipe au choix.
           <>
-            <Feed sides={sides} events={live.events} />
             <div className="chips live__teams" role="group" aria-label="Composition">
               {sides.map((side) => (
                 <button
@@ -607,12 +640,17 @@ function Scoreboard({
             </span>
           )}
         </span>
-        {live.crowd?.mood && (
+        {/* Toujours là, invisible sans ambiance : le tableau garde sa hauteur quand le stade s'enflamme. */}
+        {live.crowd?.mood ? (
           <span
             className={`scoreboard__mood scoreboard__mood--${live.crowd.mood}${live.home.club.id === live.my_club_id ? " scoreboard__mood--ours" : ""}`}
             title={crowdEffect(live.crowd)}
           >
             {CROWD_MOODS[live.crowd.mood]} · {live.home.club.name}
+          </span>
+        ) : (
+          <span className="scoreboard__mood scoreboard__mood--empty" aria-hidden="true">
+            {"\u00a0"}
           </span>
         )}
         {live.home.shootout !== null && (
@@ -779,6 +817,31 @@ function Feed({ sides, events }) {
       <ul className="live-events__list live-feed__list" ref={listRef}>
         {events.length === 0 && <li className="live-event live-event--none muted">Rien à signaler</li>}
         {events.map((e, index) => (
+          <EventRow key={`${e.minute}-${e.type}-${e.player_id}-${index}`} event={e} away={e.club_id === away.club.id} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+// Téléphone, onglet du match : les trois derniers faits de jeu, le plus récent en haut ;
+// le fil complet est dans l'onglet des événements.
+function LastEvents({ sides, events, onMore }) {
+  const away = sides[1];
+  const last = events.slice(-3).reverse();
+  return (
+    <section className="card live-events live-last">
+      <div className="live-card__head">
+        <span className="eyebrow">Derniers faits</span>
+        {events.length > 3 && (
+          <button type="button" className="link-button muted live-last__more" onClick={onMore}>
+            Tout voir ({events.length})
+          </button>
+        )}
+      </div>
+      <ul className="live-events__list">
+        {last.length === 0 && <li className="live-event live-event--none muted">Rien à signaler</li>}
+        {last.map((e, index) => (
           <EventRow key={`${e.minute}-${e.type}-${e.player_id}-${index}`} event={e} away={e.club_id === away.club.id} />
         ))}
       </ul>

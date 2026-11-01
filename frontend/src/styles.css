@@ -4570,8 +4570,18 @@ button.simulation__row:focus-visible {
   font-weight: 600;
 }
 
-.scoreboard__notice--empty {
+.scoreboard__notice--empty,
+.scoreboard__mood--empty {
   visibility: hidden;
+}
+
+/* Une seule ligne chacune, coupée au besoin : le tableau ne grandit pas quand elles changent. */
+.scoreboard__mood,
+.scoreboard__notice {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Sous le tableau : les faits de jeu de chaque équipe, puis sa composition */
@@ -5363,13 +5373,19 @@ button.simulation__row:focus-visible {
   display: block;
 }
 
-/* Choix de l'équipe dont on voit la composition, centré */
-.live__teams {
+/* Choix de l'équipe dont on voit la composition, et onglets du match sur téléphone : centrés */
+.live__teams,
+.live__views {
   justify-content: center;
 }
 
 .live__teams .chip {
   gap: 8px;
+}
+
+/* Téléphone, onglet du match : ni faits de jeu ni compositions sous le momentum. */
+.live__grid--hidden {
+  display: none;
 }
 
 /* --- Infrastructures : maillot (carte et éditeur) ---------------------------------- */
@@ -8418,4 +8434,43 @@ td > .tag:first-child,
 .app--phone .hero-matches th:last-child,
 .app--phone .hero-matches td:last-child {
   padding-right: 12px;
+}
+
+/* Téléphone, match en direct : onglet du match, la carte du joueur, le momentum puis
+   les trois derniers faits ; événements et compositions : la carte prend la place
+   restante sous le tableau de score et défile dedans. */
+.live--phone {
+  gap: 14px;
+}
+
+.live--phone .momentum {
+  margin-top: 0;
+}
+
+.live-last {
+  flex: 0 0 auto;
+}
+
+.live-last__more {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.live--phone-events .live__grid,
+.live--phone-lineups .live__grid {
+  flex: 1 1 0;
+  min-height: 260px;
+}
+
+.live--phone-events .live__grid {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.live--phone-lineups .live__grid {
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+}
+
+.live--phone-events .live-feed__list {
+  max-height: none;
 }
