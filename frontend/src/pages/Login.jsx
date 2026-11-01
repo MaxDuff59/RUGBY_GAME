@@ -131,6 +131,11 @@ export default function Login() {
               {registering && <span className="muted">8 caractères minimum.</span>}
             </div>
 
+            {registering && (
+              <p className="muted login__legal">
+                Nous pourrons t'écrire au sujet du jeu ; chaque mail porte un lien pour ne plus en recevoir.
+              </p>
+            )}
             {error && <p className="status--error login__error">{error.message}</p>}
 
             <button type="submit" className="button button--primary" disabled={!canSubmit}>

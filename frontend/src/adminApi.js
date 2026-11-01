@@ -39,6 +39,13 @@ export const adminApi = {
   setPremium: (id, premium) => put(`/backoffice/users/${id}/premium`, { premium }),
   resetSeasons: (id) => request(`/backoffice/users/${id}/seasons/reset`, { method: "POST" }),
 
+  // Relances par mail : `message` = { segment, subject, body, cta }.
+  mailing: () => request("/backoffice/relances"),
+  mailPreview: (message) => request("/backoffice/relances/apercu", { method: "POST", body: message }),
+  mailTest: (message) => request("/backoffice/relances/test", { method: "POST", body: message }),
+  mailSend: (message, userIds) =>
+    request("/backoffice/relances/envoi", { method: "POST", body: { ...message, user_ids: userIds } }),
+
   clubs: () => request("/backoffice/clubs"),
   createClub: (form) => request("/backoffice/clubs", { method: "POST", body: form }),
   club: (name) => request(club(name)),

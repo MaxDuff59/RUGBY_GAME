@@ -705,6 +705,116 @@ select.admin__cell {
   margin: 0;
 }
 
+/* --- Relances par mail ------------------------------------------------------- */
+
+.admin__split--mail {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+}
+
+.admin__note-line {
+  margin: 0;
+  font-size: 13px;
+}
+
+.admin__pick {
+  width: 36px;
+}
+
+.admin__pick input {
+  cursor: pointer;
+}
+
+.admin__mail-history {
+  padding: 16px 20px 20px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.admin__mail-history h3 {
+  margin: 0 0 10px;
+}
+
+.admin__mail-history ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.admin__mail-history li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+}
+
+.admin__mail-foot {
+  margin: 0;
+  padding: 10px 20px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
+}
+
+.admin__mail-warn {
+  margin: 4px 20px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.admin__mail-form {
+  padding: 12px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin__mail-form .field {
+  max-width: none;
+}
+
+.admin__mail-body {
+  flex: 1 0 auto;
+}
+
+.admin__textarea {
+  flex: 1 0 auto;
+  min-height: 260px;
+  padding: 12px 14px;
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.admin__mail-preview {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 20px 16px;
+}
+
+.admin__mail-preview p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.admin__mail-preview iframe {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #edede8;
+}
+
+.admin__mail-notice {
+  margin: 0 auto 0 0;
+  font-size: 13px;
+}
+
 /* --- Téléphone : une colonne, la fiche remplace la liste ------------------------ */
 
 @media (max-width: 960px) {
@@ -724,7 +834,8 @@ select.admin__cell {
   .admin__split,
   .admin__split--even,
   .admin__split--clubs,
-  .admin__split--players {
+  .admin__split--players,
+  .admin__split--mail {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -734,6 +845,12 @@ select.admin__cell {
 
   .admin__overview .admin__split {
     flex: none;
+  }
+
+  /* Relances : les deux cartes l'une sous l'autre, à hauteur fixe, dans une zone qui défile. */
+  .admin__split--mail {
+    overflow-y: auto;
+    grid-auto-rows: 560px;
   }
 
   .admin__overview .admin__panel {

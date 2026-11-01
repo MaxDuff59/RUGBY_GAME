@@ -7,13 +7,15 @@ import { byLeague, formatDay } from "../adminFormat.js";
 import AdminAccounts, { PlanBadge } from "../components/AdminAccounts.jsx";
 import AdminClubs from "../components/AdminClubs.jsx";
 import AdminLeagues from "../components/AdminLeagues.jsx";
+import AdminMailing from "../components/AdminMailing.jsx";
 import AdminPlayers from "../components/AdminPlayers.jsx";
 import ClubCrest from "../components/ClubCrest.jsx";
 import { useApi } from "../hooks/useApi.js";
 
 // Backoffice (/backoffice) : vue d'ensemble, comptes et formule, clubs (fiche, championnat,
 // couleurs, blason, effectif ; création), joueurs (fiche, club, photo, notes ; création,
-// suppression) et championnats (création, archivage). Réservé au compte de l'administrateur
+// suppression), championnats (création, archivage) et relances par mail des comptes sans jeu
+// complet. Réservé au compte de l'administrateur
 // (l'API répond 403 aux autres).
 const TABS = [
   { key: "overview", label: "Vue d'ensemble" },
@@ -21,6 +23,7 @@ const TABS = [
   { key: "clubs", label: "Clubs" },
   { key: "players", label: "Joueurs" },
   { key: "leagues", label: "Championnats" },
+  { key: "mailing", label: "Relances" },
 ];
 
 export default function Admin() {
@@ -73,6 +76,7 @@ export default function Admin() {
         {tab === "clubs" && <AdminClubs />}
         {tab === "players" && <AdminPlayers />}
         {tab === "leagues" && <AdminLeagues />}
+        {tab === "mailing" && <AdminMailing />}
       </div>
     </div>
   );

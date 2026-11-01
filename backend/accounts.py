@@ -93,6 +93,10 @@ class UserRow(AccountsBase):
     stripe_customer: Mapped[str | None] = mapped_column(String(255), index=True)
     # Invité : compte créé sans adresse ni mot de passe, le temps d'une partie.
     guest: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    # Relances par mail (api/routers/mailing.py) : date de la désinscription, et la clé
+    # du lien « se désinscrire » (tirée au premier envoi).
+    mail_opt_out_at: Mapped[datetime.datetime | None] = mapped_column(DateTime)
+    mail_token: Mapped[str | None] = mapped_column(String(64))
 
 
 class SessionRow(AccountsBase):
@@ -102,6 +106,19 @@ class SessionRow(AccountsBase):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime)
     expires_at: Mapped[datetime.datetime] = mapped_column(DateTime)
+
+
+class MailRow(AccountsBase):
+    """Un mail de relance envoyé à un compte : `batch` regroupe ceux d'un même envoi."""
+
+    __tablename__ = "mails"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    batch: Mapped[str] = mapped_column(String(32), index=True)
+    segment: Mapped[str] = mapped_column(String(32))
+    subject: Mapped[str] = mapped_column(String(200))
+    sent_at: Mapped[datetime.datetime] = mapped_column(DateTime)
 
 
 @dataclass(frozen=True)
@@ -157,6 +174,8 @@ _NEW_COLUMNS = {
     "premium_at": "TIMESTAMP",
     "payment_ref": "VARCHAR(255)",
     "guest": "BOOLEAN NOT NULL DEFAULT FALSE",
+    "mail_opt_out_at": "TIMESTAMP",
+    "mail_token": "VARCHAR(64)",
     "premium_until": "TIMESTAMP",
     "stripe_customer": "VARCHAR(255)",
 }

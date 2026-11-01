@@ -40,6 +40,7 @@ from api.routers import (
     journal,
     leagues,
     live,
+    mailing,
     matches,
     medical,
     photos,
@@ -120,6 +121,8 @@ app.include_router(photos.router)
 app.include_router(catalog.router)
 app.include_router(admin.router)
 app.include_router(admin_players.router)
+app.include_router(mailing.router)
+app.include_router(mailing.public)
 
 
 def make_site(api: FastAPI, static_dir: Path) -> FastAPI:
