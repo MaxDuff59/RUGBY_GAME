@@ -1,18 +1,29 @@
-"""Paiement du jeu complet : 2 €, une fois, par Stripe Checkout (voir api/plans.py).
+"""Abonnement au jeu complet : 2 € par an, par Stripe (voir api/plans.py).
+
+Le jeu complet vaut pour la saison du jeu, jusqu'au 1er juillet (accounts.season_end) :
+la première saison se paie tout de suite, en entier, puis l'abonnement se renouvelle
+chaque 1er juillet. Sans renouvellement (résilié, carte refusée), le compte repasse en
+gratuit.
 
 1. `POST /billing/checkout` crée une page de paiement Stripe pour le compte connecté
-   et renvoie son adresse : le navigateur y part.
+   et renvoie son adresse : le navigateur y part. L'abonnement y est ancré au 1er
+   juillet (`billing_cycle_anchor`), sans prorata ; la saison en cours est une ligne
+   payée une fois, sur la première facture.
 2. Stripe ramène le joueur sur `/parties?paiement=ok&session_id=...` ; l'interface
    appelle `POST /billing/confirm`, qui relit la session chez Stripe et débloque le compte.
-3. Stripe prévient aussi `POST /billing/webhook` (checkout.session.completed) : le
-   compte est débloqué même si le joueur ferme l'onglet avant de revenir.
+3. Stripe prévient aussi `POST /billing/webhook` : checkout.session.completed débloque
+   le compte même si le joueur ferme l'onglet avant de revenir, invoice.paid (chaque
+   1er juillet) le prolonge d'un an.
+4. `POST /billing/portal` ouvre l'espace client de Stripe : carte, factures, résiliation.
 
 Configuration, par variables d'environnement :
 - `STRIPE_SECRET_KEY` (sk_live_... ou sk_test_...) : sans elle, le paiement est fermé ;
 - `STRIPE_WEBHOOK_SECRET` (whsec_...) : signature des appels de Stripe au webhook ;
-- `STRIPE_PRICE_ID` (facultatif) : un prix créé dans le tableau de bord Stripe, sinon 2 € ;
 - `RUGBY_PUBLIC_URL` (facultatif) : adresse de l'interface pour le retour, sinon
   l'origine de la requête.
+Dans le tableau de bord Stripe : le webhook écoute checkout.session.completed,
+checkout.session.async_payment_succeeded et invoice.paid ; l'espace client
+(Paramètres → Facturation → Portail client) est activé, résiliation comprise.
 
 Codes promo : la page de paiement en accepte (`allow_promotion_codes`). Un coupon de
 100 % créé dans le tableau de bord Stripe offre le jeu complet : la session se règle
@@ -21,6 +32,7 @@ alors à 0 € (`no_payment_required`) et débloque le compte comme un paiement.
 L'API de Stripe s'appelle en bibliothèque standard (urllib), sans son SDK.
 """
 
+import datetime
 import hashlib
 import hmac
 import json
@@ -44,12 +56,14 @@ STRIPE_API = "https://api.stripe.com/v1"
 PRODUCT_NAME = "Rugby Manager : jeu complet"
 PRODUCT_DESCRIPTION = (
     "Trois parties en parallèle et des saisons sans fin : club, sélection, compétition "
-    "et carrière de joueur, sans limite."
+    "et carrière de joueur, sans limite. Abonnement annuel, renouvelé chaque 1er juillet."
 )
 # Image du produit sur la page de paiement, servie par l'interface (frontend/public).
 PRODUCT_IMAGE = "/logo.png"
-# Sous le bouton « Payer ».
-SUBMIT_MESSAGE = "Paiement unique, sans abonnement : le jeu complet reste à ton compte pour toujours."
+MONTHS = (
+    "janvier", "février", "mars", "avril", "mai", "juin",
+    "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+)  # fmt: skip
 # Marque des paiements du jeu : le compte Stripe peut servir à d'autres ventes, dont les
 # événements arrivent aussi au webhook et ne débloquent rien ici.
 APP = "rugby-manager"
@@ -58,6 +72,8 @@ SIGNATURE_TOLERANCE = 300
 _SESSION_ID = re.compile(r"^cs_[A-Za-z0-9_]{1,250}$")
 # Événements de Stripe qui signalent un paiement reçu (carte : aussitôt ; virement : après).
 PAID_EVENTS = {"checkout.session.completed", "checkout.session.async_payment_succeeded"}
+# Une facture d'abonnement payée : le renouvellement du 1er juillet.
+RENEWAL_EVENT = "invoice.paid"
 # Session réglée : payée, ou offerte par un code promo de 100 %.
 SETTLED = {"paid", "no_payment_required"}
 
@@ -107,33 +123,60 @@ def stripe_call(method: str, path: str, fields: dict[str, str] | None = None) ->
         raise HTTPException(status_code=502, detail="Stripe ne répond pas : réessaie") from error
 
 
+def long_day(day: datetime.date) -> str:
+    """« 1er juillet 2027 »."""
+    return f"{'1er' if day.day == 1 else day.day} {MONTHS[day.month - 1]} {day.year}"
+
+
 def checkout_fields(user: accounts.User, site: str) -> dict[str, str]:
-    """La session de paiement d'un compte : 2 € (ou le prix `STRIPE_PRICE_ID`), une
-    fois, rattachée au compte par `client_reference_id`."""
+    """La session d'abonnement d'un compte, rattachée à lui par `client_reference_id` :
+    2 € tout de suite pour la saison en cours, puis 2 € chaque 1er juillet."""
+    end = accounts.season_end()
+    until = long_day(accounts.paris_day(end))
+    yearly = "line_items[0][price_data]"
+    season = "line_items[1][price_data]"
     fields = {
-        "mode": "payment",
+        "mode": "subscription",
         "client_reference_id": str(user.id),
-        "customer_email": user.email,
         "metadata[user_id]": str(user.id),
         "metadata[app]": APP,
+        "subscription_data[metadata][user_id]": str(user.id),
+        "subscription_data[metadata][app]": APP,
+        # Renouvellement chaque 1er juillet ; rien n'est dû pour la période d'ici là,
+        # payée par la ligne de la saison en cours.
+        "subscription_data[billing_cycle_anchor]": str(
+            int(end.replace(tzinfo=datetime.UTC).timestamp())
+        ),
+        "subscription_data[proration_behavior]": "none",
         "success_url": f"{site}/parties?paiement=ok&session_id={{CHECKOUT_SESSION_ID}}",
         "cancel_url": f"{site}/parties?paiement=annule",
-        "line_items[0][quantity]": "1",
         "allow_promotion_codes": "true",
+        "line_items[0][quantity]": "1",
+        f"{yearly}[currency]": "eur",
+        f"{yearly}[unit_amount]": str(PRICE_CENTS),
+        f"{yearly}[recurring][interval]": "year",
+        f"{yearly}[product_data][name]": PRODUCT_NAME,
+        f"{yearly}[product_data][description]": PRODUCT_DESCRIPTION,
+        "line_items[1][quantity]": "1",
+        f"{season}[currency]": "eur",
+        f"{season}[unit_amount]": str(PRICE_CENTS),
+        f"{season}[product_data][name]": f"{PRODUCT_NAME} : saison en cours, jusqu'au {until}",
+        # Sous le bouton « S'abonner ».
+        "custom_text[submit][message]": (
+            f"Le jeu complet vaut pour la saison, jusqu'au {until}. L'abonnement se "
+            "renouvelle ensuite chaque 1er juillet, avec la nouvelle version du jeu ; "
+            "résiliable à tout moment depuis le jeu."
+        ),
     }
-    if price := os.environ.get("STRIPE_PRICE_ID"):
-        fields["line_items[0][price]"] = price
+    # Stripe va chercher l'image lui-même : seulement depuis une adresse publique.
+    if site.startswith("https://"):
+        fields[f"{yearly}[product_data][images][0]"] = site + PRODUCT_IMAGE
+        fields[f"{season}[product_data][images][0]"] = site + PRODUCT_IMAGE
+    # Un compte déjà client (abonnement arrêté, puis repris) garde sa fiche chez Stripe.
+    if user.stripe_customer:
+        fields["customer"] = user.stripe_customer
     else:
-        fields |= {
-            "line_items[0][price_data][currency]": "eur",
-            "line_items[0][price_data][unit_amount]": str(PRICE_CENTS),
-            "line_items[0][price_data][product_data][name]": PRODUCT_NAME,
-            "line_items[0][price_data][product_data][description]": PRODUCT_DESCRIPTION,
-        }
-        # Stripe va chercher l'image lui-même : seulement depuis une adresse publique.
-        if site.startswith("https://"):
-            fields["line_items[0][price_data][product_data][images][0]"] = site + PRODUCT_IMAGE
-    fields["custom_text[submit][message]"] = SUBMIT_MESSAGE
+        fields["customer_email"] = user.email
     return fields
 
 
@@ -163,10 +206,20 @@ def _grant_if_paid(checkout: dict) -> accounts.User | None:
         or not reference.isdigit()
     ):
         return None
-    return accounts.grant_premium(int(reference), checkout.get("payment_intent") or checkout["id"])
+    return accounts.grant_premium(
+        int(reference),
+        checkout.get("subscription") or checkout.get("payment_intent") or checkout["id"],
+        checkout.get("customer"),
+    )
 
 
 # --- Routes ---------------------------------------------------------------------------
+
+
+def _site(request: Request) -> str:
+    """L'adresse de l'interface, où Stripe ramène le joueur."""
+    site = os.environ.get("RUGBY_PUBLIC_URL") or request.headers.get("origin")
+    return (site or str(request.base_url)).rstrip("/")
 
 
 @router.post("/checkout", response_model=CheckoutOut)
@@ -176,9 +229,7 @@ def checkout(user: UserDep, request: Request) -> CheckoutOut:
         raise HTTPException(status_code=409, detail="Ton compte a déjà le jeu complet")
     if user.guest:
         raise HTTPException(status_code=403, detail="Crée un compte avant de payer")
-    site = os.environ.get("RUGBY_PUBLIC_URL") or request.headers.get("origin")
-    site = (site or str(request.base_url)).rstrip("/")
-    session = stripe_call("POST", "/checkout/sessions", checkout_fields(user, site))
+    session = stripe_call("POST", "/checkout/sessions", checkout_fields(user, _site(request)))
     return CheckoutOut(url=session["url"])
 
 
@@ -202,6 +253,19 @@ def confirm(payload: ConfirmIn, user: UserDep) -> UserOut:
     return user_out(granted)
 
 
+@router.post("/portal", response_model=CheckoutOut)
+def portal(user: UserDep, request: Request) -> CheckoutOut:
+    """Ouvre l'espace client de Stripe (carte, factures, résiliation) du compte abonné."""
+    if not user.stripe_customer:
+        raise HTTPException(status_code=404, detail="Pas d'abonnement à gérer")
+    session = stripe_call(
+        "POST",
+        "/billing_portal/sessions",
+        {"customer": user.stripe_customer, "return_url": f"{_site(request)}/parties"},
+    )
+    return CheckoutOut(url=session["url"])
+
+
 @router.post("/webhook", include_in_schema=False)
 async def webhook(request: Request) -> dict[str, bool]:
     """Stripe prévient d'un paiement ; seuls ses appels signés sont crus."""
@@ -219,4 +283,8 @@ async def webhook(request: Request) -> dict[str, bool]:
         ours = (checkout.get("metadata") or {}).get("app") == APP
         if granted is None and ours and checkout.get("payment_status") in SETTLED:
             log.warning("Paiement Stripe %s sans compte à débloquer", checkout.get("id"))
+    elif event.get("type") == RENEWAL_EVENT:
+        # Les clients des autres ventes du compte Stripe ne sont rattachés à aucun compte.
+        if customer := event["data"]["object"].get("customer"):
+            await run_in_threadpool(accounts.renew_premium, customer)
     return {"received": True}

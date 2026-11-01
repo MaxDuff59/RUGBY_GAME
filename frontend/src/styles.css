@@ -7472,7 +7472,7 @@ td > .tag:first-child,
   font-size: 13px;
 }
 
-/* --- Jeu complet (compte gratuit : une partie, deux saisons) ----------------------- */
+/* --- Jeu complet (compte gratuit : une partie, deux saisons ; abonnement annuel) --- */
 
 .full-game {
   display: flex;
@@ -7526,8 +7526,6 @@ td > .tag:first-child,
 }
 
 .full-game--done {
-  flex-wrap: nowrap;
-  justify-content: flex-start;
   border-left-color: var(--win);
 }
 

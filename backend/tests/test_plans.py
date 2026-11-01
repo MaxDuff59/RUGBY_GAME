@@ -1,6 +1,8 @@
 """Formule du compte : le compte gratuit garde une partie et joue deux saisons en tout,
-supprimées comprises ; le jeu complet, payé une fois par Stripe, n'a plus de limite."""
+supprimées comprises ; le jeu complet, abonnement annuel chez Stripe, n'a plus de limite
+jusqu'au 1er juillet, et chaque renouvellement le prolonge d'un an."""
 
+import datetime
 import hashlib
 import hmac
 import json
@@ -129,6 +131,106 @@ def test_accounts_from_before_get_the_new_columns(world):
     assert accounts.get(1).seasons_left == 1
 
 
+def test_those_who_paid_once_keep_the_full_game_until_july_2027(world):
+    if database.uses_postgres():
+        old = database.shared_engine()
+    else:
+        old = create_engine(f"sqlite:///{database.SAVES_DIR / 'users.db'}")
+    with old.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE users (id INTEGER PRIMARY KEY, email VARCHAR(254) UNIQUE, "
+                "password_hash VARCHAR(300), created_at TIMESTAMP, active_slot INTEGER, "
+                "premium_at TIMESTAMP, payment_ref VARCHAR(255))"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO users VALUES (1, 'paye@example.com', 'x', '2026-01-01', NULL, "
+                "'2026-10-01', 'pi_1'), (2, 'gratuit@example.com', 'x', '2026-01-01', NULL, "
+                "NULL, NULL)"
+            )
+        )
+    if not database.uses_postgres():
+        old.dispose()
+    paid, free = accounts.get(1), accounts.get(2)
+    assert paid.premium and paid.premium_until == datetime.datetime(2027, 6, 30, 22, 0)
+    assert not free.premium and free.premium_until is None
+
+
+# --- Abonnement : jusqu'au 1er juillet, renouvelé d'année en année --------------------
+
+
+def at(monkeypatch, *when: int) -> None:
+    """L'horloge des comptes (UTC) marque `when`."""
+    monkeypatch.setattr(accounts, "_now", lambda: datetime.datetime(*when))
+
+
+def test_the_season_ends_on_july_first_at_midnight_in_paris():
+    end = datetime.datetime(2027, 6, 30, 22, 0)
+    assert accounts.season_end(datetime.datetime(2026, 11, 1)) == end
+    assert accounts.season_end(datetime.datetime(2027, 6, 30, 21, 59)) == end
+    assert accounts.season_end(end) == datetime.datetime(2028, 6, 30, 22, 0)
+    assert accounts.paris_day(end) == datetime.date(2027, 7, 1)
+
+
+def test_without_renewal_the_account_goes_back_to_free(player, monkeypatch):
+    at(monkeypatch, 2026, 11, 1)
+    accounts.grant_premium(1, "sub_1", "cus_1")
+    me = player.get("/auth/me").json()
+    assert me["premium"] and me["subscribed"] and me["premium_until"] == "2027-07-01"
+    # (l'horloge avancée, la session du joueur a expiré : on lit son compte)
+    at(monkeypatch, 2027, 7, 4)  # Stripe réessaie encore la carte
+    assert accounts.get(1).premium
+    at(monkeypatch, 2027, 7, 8)
+    lapsed = auth.user_out(accounts.get(1))
+    assert not lapsed.premium and lapsed.seasons_left == 2 and lapsed.premium_until is None
+    assert lapsed.season_end == datetime.date(2028, 7, 1)
+
+
+def test_each_renewal_paid_adds_a_season(player, monkeypatch):
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", SECRET)
+    at(monkeypatch, 2026, 11, 1)
+    accounts.grant_premium(1, "sub_1", "cus_1")
+
+    def invoice_paid(customer: str):
+        invoice = {"id": "in_1", "customer": customer, "billing_reason": "subscription_cycle"}
+        payload = json.dumps({"type": "invoice.paid", "data": {"object": invoice}}).encode()
+        return TestClient(app).post(
+            "/billing/webhook", content=payload, headers={"Stripe-Signature": signed(payload)}
+        )
+
+    at(monkeypatch, 2027, 7, 1, 1)
+    assert invoice_paid("cus_1").status_code == 200
+    assert invoice_paid("cus_1").status_code == 200  # Stripe prévient parfois deux fois
+    assert auth.user_out(accounts.get(1)).premium_until == datetime.date(2028, 7, 1)
+    # Le client d'une autre vente du compte Stripe : rien ne bouge.
+    assert invoice_paid("cus_autre").status_code == 200
+    at(monkeypatch, 2028, 6, 1)
+    assert accounts.get(1).premium
+
+
+def test_the_subscriber_manages_it_in_stripe(player, monkeypatch):
+    sent = []
+
+    def stripe_call(method, path, fields=None):
+        sent.append((method, path, fields))
+        return {"url": "https://billing.stripe.com/p/session/test_1"}
+
+    monkeypatch.setattr(billing, "stripe_call", stripe_call)
+    assert player.post("/billing/portal").status_code == 404
+    accounts.grant_premium(1, "sub_1", "cus_1")
+    opened = player.post("/billing/portal", headers={"Origin": "https://rugby.example"})
+    assert opened.json()["url"].startswith("https://billing.stripe.com/")
+    assert sent == [
+        (
+            "POST",
+            "/billing_portal/sessions",
+            {"customer": "cus_1", "return_url": "https://rugby.example/parties"},
+        )
+    ]
+
+
 # --- Paiement Stripe -------------------------------------------------------------------
 
 
@@ -143,7 +245,8 @@ def paid_event(user_id: int, status: str = "paid", app: str = billing.APP) -> by
         "id": "cs_test_1",
         "client_reference_id": str(user_id),
         "payment_status": status,
-        "payment_intent": "pi_test_1",
+        "customer": "cus_test_1",
+        "subscription": "sub_test_1",
         "metadata": {"app": app},
     }
     return json.dumps({"type": "checkout.session.completed", "data": {"object": checkout}}).encode()
@@ -185,7 +288,6 @@ def test_the_webhook_unlocks_the_account_it_is_told(player, monkeypatch):
 def test_a_100_percent_promotion_code_unlocks_the_account(player, monkeypatch):
     monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", SECRET)
     offered = json.loads(paid_event(1, status="no_payment_required"))
-    offered["data"]["object"]["payment_intent"] = None  # rien n'a été débité
     payload = json.dumps(offered).encode()
     response = TestClient(app).post(
         "/billing/webhook", content=payload, headers={"Stripe-Signature": signed(payload)}
@@ -205,18 +307,28 @@ def test_checkout_then_confirm_on_the_way_back(player, monkeypatch):
             "id": "cs_test_1",
             "client_reference_id": "1",
             "payment_status": "paid",
-            "payment_intent": "pi_test_1",
+            "customer": "cus_test_1",
+            "subscription": "sub_test_1",
             "metadata": {"app": billing.APP},
         }
 
     monkeypatch.setattr(billing, "stripe_call", stripe_call)
+    at(monkeypatch, 2026, 11, 1)
     created = player.post("/billing/checkout", headers={"Origin": "https://rugby.example"})
     assert created.json()["url"].startswith("https://checkout.stripe.com/")
     fields = sent[0][2]
-    assert fields["client_reference_id"] == "1" and fields["mode"] == "payment"
-    assert fields["metadata[app]"] == billing.APP
+    assert fields["client_reference_id"] == "1" and fields["mode"] == "subscription"
+    assert fields["metadata[app]"] == fields["subscription_data[metadata][app]"] == billing.APP
+    # 2 € par an, renouvelés le 1er juillet à minuit (Paris) ; 2 € tout de suite pour la saison.
     assert fields["line_items[0][price_data][unit_amount]"] == "200"
-    assert fields["line_items[0][price_data][currency]"] == "eur"
+    assert fields["line_items[0][price_data][recurring][interval]"] == "year"
+    assert fields["subscription_data[billing_cycle_anchor]"] == "1814392800"
+    assert fields["subscription_data[proration_behavior]"] == "none"
+    assert fields["line_items[1][price_data][unit_amount]"] == "200"
+    assert "recurring" not in str([key for key in fields if key.startswith("line_items[1]")])
+    assert "1er juillet 2027" in fields["line_items[1][price_data][product_data][name]"]
+    assert "1er juillet 2027" in fields["custom_text[submit][message]"]
+    assert fields["customer_email"] == "maxence@example.com"
     assert fields["success_url"].startswith("https://rugby.example/parties?paiement=ok")
     assert fields["allow_promotion_codes"] == "true"
     image = fields["line_items[0][price_data][product_data][images][0]"]
@@ -225,6 +337,7 @@ def test_checkout_then_confirm_on_the_way_back(player, monkeypatch):
     assert player.post("/billing/confirm", json={"session_id": "../secret"}).status_code == 400
     confirmed = player.post("/billing/confirm", json={"session_id": "cs_test_1"})
     assert confirmed.status_code == 200 and confirmed.json()["premium"]
+    assert confirmed.json()["premium_until"] == "2027-07-01" and confirmed.json()["subscribed"]
     assert sent[1][:2] == ("GET", "/checkout/sessions/cs_test_1")
     assert player.post("/billing/checkout").status_code == 409
 

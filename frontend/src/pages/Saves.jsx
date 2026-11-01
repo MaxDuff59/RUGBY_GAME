@@ -6,7 +6,7 @@ import { api } from "../api.js";
 import { clubTheme } from "../clubs.js";
 import ClubCrest from "../components/ClubCrest.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
-import { ActionError, PlanCard, newSaveBlocked } from "../components/FullGame.jsx";
+import { ActionError, PlanCard, formatUntil, newSaveBlocked } from "../components/FullGame.jsx";
 import { formatLongDate, formatSavedAt } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { chooseSlot, leaveSlot } from "../save.js";
@@ -41,7 +41,8 @@ export default function Saves() {
       .confirmPayment(sessionId)
       .then((user) => {
         setMe(user);
-        setPayment({ ok: true, text: "Merci ! Le jeu complet est débloqué." });
+        const until = user.premium_until ? ` jusqu'au ${formatUntil(user.premium_until)}` : "";
+        setPayment({ ok: true, text: `Merci ! Le jeu complet est débloqué${until}.` });
       })
       .catch((err) => setPayment({ ok: false, text: err.message }));
   }, [paid, sessionId, setParams, setMe]);

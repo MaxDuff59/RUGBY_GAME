@@ -67,6 +67,9 @@ class AccountOut(BaseModel):
     last_login_at: datetime.datetime | None
     premium: bool
     premium_at: datetime.datetime | None
+    # Fin du jeu complet sans renouvellement (UTC), et abonné chez Stripe.
+    premium_until: datetime.datetime | None
+    subscribed: bool
     # « stripe » : payé ; « offert » : accordé depuis le backoffice ; None : gratuit.
     premium_source: Literal["stripe", "offert"] | None
     payment_ref: str | None
@@ -124,7 +127,7 @@ def _last_logins(session: Session) -> dict[int, datetime.datetime]:
 def _account_out(
     row: accounts.UserRow, saves: dict[int, int], logins: dict[int, datetime.datetime]
 ) -> AccountOut:
-    premium = row.premium_at is not None
+    premium = accounts.premium_active(row)
     seasons = row.seasons_played or 0
     source = None
     if premium:
@@ -135,7 +138,9 @@ def _account_out(
         created_at=row.created_at,
         last_login_at=logins.get(row.id),
         premium=premium,
-        premium_at=row.premium_at,
+        premium_at=row.premium_at if premium else None,
+        premium_until=row.premium_until if premium else None,
+        subscribed=bool(row.stripe_customer),
         premium_source=source,
         payment_ref=row.payment_ref,
         seasons_played=seasons,
@@ -224,7 +229,8 @@ class PremiumIn(BaseModel):
 
 @router.put("/users/{user_id}/premium", response_model=AccountDetail)
 def set_premium(user_id: int, body: PremiumIn, _: AdminDep) -> AccountDetail:
-    """Offre la version complète, ou la retire (un paiement Stripe garde sa trace chez Stripe)."""
+    """Offre la version complète jusqu'au prochain 1er juillet, ou la retire (un paiement
+    Stripe garde sa trace chez Stripe, et l'abonnement s'y résilie)."""
     if accounts.get(user_id) is None:
         raise HTTPException(status_code=404, detail="Compte introuvable")
     if body.premium:

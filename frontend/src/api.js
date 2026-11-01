@@ -47,9 +47,11 @@ export const api = {
   logout: () => post("/auth/logout"),
   // Jouer sans compte : un invité, retrouvé par son seul cookie.
   guest: () => post("/auth/guest"),
-  // Jeu complet (2 €, Stripe) : page de paiement, puis confirmation au retour.
+  // Jeu complet (2 € par an, Stripe) : page d'abonnement, puis confirmation au retour ;
+  // l'espace client de Stripe pour la carte, les factures et la résiliation.
   checkout: () => post("/billing/checkout"),
   confirmPayment: (sessionId) => post("/billing/confirm", { session_id: sessionId }),
+  billingPortal: () => post("/billing/portal"),
 
   // Parties sauvegardées (trois emplacements par compte)
   listSaves: () => request("/saves"),

@@ -142,7 +142,7 @@ function AccountCard({ id, onChange, onBack }) {
     confirm.ask({
       eyebrow: a.email,
       title: "Offrir la version complète",
-      text: "Le compte passe en version complète sans paiement : parties et saisons sans limite.",
+      text: "Le compte passe en version complète sans paiement : parties et saisons sans limite, jusqu'au prochain 1er juillet.",
       confirmLabel: "Offrir",
       onConfirm: () => run(() => adminApi.setPremium(a.id, true)),
     });
@@ -152,7 +152,7 @@ function AccountCard({ id, onChange, onBack }) {
       title: "Retirer la version complète",
       text:
         a.premium_source === "stripe"
-          ? "Ce compte a payé : retirer la formule ne le rembourse pas (à faire chez Stripe)."
+          ? "Ce compte a payé : retirer la formule ne le rembourse pas et ne résilie pas son abonnement (à faire chez Stripe)."
           : "Le compte redevient gratuit : une partie, et les saisons qu'il lui reste.",
       confirmLabel: "Retirer",
       cautious: true,
@@ -189,6 +189,12 @@ function AccountCard({ id, onChange, onBack }) {
               <div>
                 <dt>{a.premium_source === "stripe" ? "Payée le" : "Offerte le"}</dt>
                 <dd>{formatDayTime(a.premium_at)}</dd>
+              </div>
+            )}
+            {a.premium_until && (
+              <div>
+                <dt>{a.subscribed ? "Renouvellement le" : "Jusqu'au"}</dt>
+                <dd>{formatDayTime(a.premium_until)}</dd>
               </div>
             )}
             {a.payment_ref && a.premium_source === "stripe" && (

@@ -1,23 +1,29 @@
 import { useState } from "react";
 
 import { api } from "../api.js";
+import { parseDate } from "../format.js";
 
-// Jeu complet : 2 €, une fois, par Stripe (backend/api/billing.py). Le compte gratuit
-// garde une partie et joue deux saisons en tout, supprimées comprises.
-export const PRICE_LABEL = "2 €";
+// Jeu complet : abonnement de 2 € par an chez Stripe (backend/api/billing.py), qui vaut
+// jusqu'au 1er juillet, fin de la saison du jeu, et se renouvelle chaque 1er juillet.
+// Le compte gratuit garde une partie et joue deux saisons en tout, supprimées comprises.
+export const PRICE_LABEL = "2 € par an";
 // Réponse de l'API quand c'est la formule gratuite qui bloque (backend/api/plans.py).
 export const PAYMENT_REQUIRED = 402;
 
-// Part vers la page de paiement Stripe ; le retour se fait sur /parties.
-export function UnlockButton({ label = `Débloquer le jeu complet · ${PRICE_LABEL}` }) {
+// « 1er juillet 2027 », d'une date "AAAA-MM-JJ" de l'API.
+const untilDay = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+export const formatUntil = (iso) => untilDay.format(parseDate(iso)).replace(/^1 /, "1er ");
+
+// Part vers une page de Stripe (`open` renvoie son adresse) ; le retour se fait sur /parties.
+function StripeButton({ open, label, primary = true }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
-  async function checkout() {
+  async function go() {
     setBusy(true);
     setError(null);
     try {
-      const { url } = await api.checkout();
+      const { url } = await open();
       window.location.assign(url);
     } catch (err) {
       setError(err);
@@ -27,12 +33,16 @@ export function UnlockButton({ label = `Débloquer le jeu complet · ${PRICE_LAB
 
   return (
     <>
-      <button type="button" className="button button--primary" disabled={busy} onClick={checkout}>
-        {busy ? "Ouverture du paiement…" : label}
+      <button type="button" className={primary ? "button button--primary" : "button"} disabled={busy} onClick={go}>
+        {busy ? "Ouverture de Stripe…" : label}
       </button>
       {error && <p className="status--error full-game__error">{error.message}</p>}
     </>
   );
+}
+
+export function UnlockButton({ label = `S'abonner au jeu complet · ${PRICE_LABEL}` }) {
+  return <StripeButton open={api.checkout} label={label} />;
 }
 
 // Le refus d'une action : son message, et l'offre du jeu complet quand c'est la
@@ -53,11 +63,24 @@ export function ActionError({ error, className = "status--error" }) {
 export function PlanCard({ me, saves }) {
   if (!me.paywall) return null;
   if (me.premium) {
+    let text = "Parties et saisons sans limite. Merci !";
+    if (me.premium_until) {
+      text = me.subscribed
+        ? `Parties et saisons sans limite jusqu'au ${formatUntil(me.premium_until)} ; l'abonnement se renouvelle chaque 1er juillet, sauf résiliation. Merci !`
+        : `Parties et saisons sans limite jusqu'au ${formatUntil(me.premium_until)}, fin de la saison du jeu. Merci !`;
+    }
     return (
-      <p className="full-game full-game--done">
-        <span className="eyebrow">Jeu complet</span>
-        <span className="muted">Parties et saisons sans limite. Merci !</span>
-      </p>
+      <div className="full-game full-game--done">
+        <div className="full-game__body">
+          <p className="eyebrow">Jeu complet</p>
+          <p className="muted full-game__hint">{text}</p>
+        </div>
+        {me.subscribed && (
+          <div className="full-game__action">
+            <StripeButton open={api.billingPortal} label="Gérer mon abonnement" primary={false} />
+          </div>
+        )}
+      </div>
     );
   }
   // Une saison compte dès qu'elle commence : celle en cours est déjà comptée.
@@ -79,7 +102,9 @@ export function PlanCard({ me, saves }) {
         <p className="full-game__text">{status}</p>
         <p className="muted full-game__hint">
           Une seule partie, et {me.free_seasons} saisons en tout : supprimer une carrière ne rend pas ses saisons. Le
-          jeu complet ouvre trois parties et des saisons sans fin, pour {PRICE_LABEL}, une fois.
+          jeu complet ouvre trois parties et des saisons sans fin, pour {PRICE_LABEL} : il vaut pour la saison, jusqu'au{" "}
+          {formatUntil(me.season_end)}, puis l'abonnement se renouvelle chaque 1er juillet, avec la nouvelle version du
+          jeu. Résiliable à tout moment.
         </p>
       </div>
       <div className="full-game__action">

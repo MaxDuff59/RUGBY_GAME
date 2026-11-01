@@ -9,6 +9,7 @@ une session de la même façon ; s'il s'inscrit ensuite, son compte devient un v
 compte et garde sa partie.
 """
 
+import datetime
 import os
 import threading
 import time
@@ -56,6 +57,12 @@ class UserOut(BaseModel):
     active_slot: int | None
     # Formule (accounts.py) : jeu complet, ou saisons qu'il reste au compte gratuit.
     premium: bool
+    # Jour (à Paris) où le jeu complet s'arrête sans renouvellement ; None : sans fin.
+    premium_until: datetime.date | None = None
+    # Abonné chez Stripe : l'interface ouvre son espace client (api/billing.py).
+    subscribed: bool = False
+    # Fin de la saison du jeu : jusqu'où vaut un abonnement pris aujourd'hui.
+    season_end: datetime.date
     seasons_played: int
     seasons_left: int | None
     free_seasons: int = accounts.FREE_SEASONS
@@ -72,6 +79,11 @@ def user_out(user: User) -> UserOut:
         email="" if user.guest else user.email,
         active_slot=user.active_slot,
         premium=user.premium,
+        premium_until=(
+            accounts.paris_day(user.premium_until) if user.premium and user.premium_until else None
+        ),
+        subscribed=bool(user.stripe_customer),
+        season_end=accounts.paris_day(accounts.season_end()),
         seasons_played=user.seasons_played,
         seasons_left=user.seasons_left,
         paywall=plans.PAYWALL,

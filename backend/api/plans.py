@@ -1,7 +1,7 @@
 """Formule du compte : ce qu'un compte gratuit peut encore commencer (voir accounts.py).
 
 Les refus répondent 402 (paiement requis) : l'interface propose alors le jeu complet,
-payé une fois (api/billing.py).
+un abonnement annuel renouvelé chaque 1er juillet (api/billing.py).
 
 `PAYWALL` met la formule en pause : quand il est faux, tout le jeu est gratuit, sans
 limite de parties ni de saisons (les saisons se comptent toujours, pour le jour où il
@@ -17,7 +17,7 @@ import accounts
 from accounts import FREE_SAVES, FREE_SEASONS, User
 
 PRICE_CENTS = 200
-PRICE_LABEL = "2 €"
+PRICE_LABEL = "2 € par an"
 PAYMENT_REQUIRED = 402
 PAYWALL = True
 

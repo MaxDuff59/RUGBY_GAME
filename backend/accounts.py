@@ -13,8 +13,9 @@ retrouvé par son seul cookie. Il garde une partie, tant qu'il revient la jouer
 
 Un compte gratuit garde une seule partie et joue deux saisons en tout. Les saisons
 se comptent sur le compte, pas dans la partie, dès qu'elles commencent : supprimer
-une carrière ne rend pas les saisons jouées. Le compte complet (payé une fois, voir
-api/billing.py) n'a plus de limite.
+une carrière ne rend pas les saisons jouées. Le jeu complet (abonnement annuel, voir
+api/billing.py) n'a plus de limite jusqu'au 1er juillet qui suit, fin de la saison du
+jeu : chaque renouvellement payé le prolonge d'un an, sinon le compte repasse en gratuit.
 """
 
 import datetime
@@ -55,6 +56,16 @@ _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 FREE_SAVES = 1
 FREE_SEASONS = 2
 
+# Le jeu complet court jusqu'au 1er juillet, minuit à Paris (22 h UTC la veille : l'heure
+# d'été y tient toujours), puis se renouvelle d'année en année.
+SEASON_END_MONTH, SEASON_END_DAY = 7, 1
+_PARIS_SUMMER = datetime.timedelta(hours=2)
+# Le renouvellement est prélevé le 1er juillet ; Stripe réessaie une carte refusée
+# pendant quelques jours, le jeu complet attend autant avant de s'arrêter.
+RENEWAL_GRACE = datetime.timedelta(days=7)
+# Fin du jeu complet de ceux qui l'avaient payé une fois, avant l'abonnement.
+FIRST_SEASON_END = datetime.datetime(2027, 6, 30, 22, 0)
+
 # scrypt : paramètres recommandés (16 Mio de mémoire par calcul).
 _SCRYPT_N, _SCRYPT_R, _SCRYPT_P = 2**14, 8, 1
 
@@ -74,9 +85,12 @@ class UserRow(AccountsBase):
     active_slot: Mapped[int | None] = mapped_column(Integer)
     # Saisons commencées par ce compte, toutes parties confondues (supprimées comprises).
     seasons_played: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
-    # Compte complet : date du paiement, et sa référence chez Stripe.
+    # Jeu complet : date du paiement, sa référence chez Stripe, et sa fin (UTC ; None :
+    # sans fin). Le client Stripe porte l'abonnement : ses renouvellements le retrouvent.
     premium_at: Mapped[datetime.datetime | None] = mapped_column(DateTime)
     payment_ref: Mapped[str | None] = mapped_column(String(255))
+    premium_until: Mapped[datetime.datetime | None] = mapped_column(DateTime)
+    stripe_customer: Mapped[str | None] = mapped_column(String(255), index=True)
     # Invité : compte créé sans adresse ni mot de passe, le temps d'une partie.
     guest: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
@@ -98,6 +112,9 @@ class User:
     premium: bool = False
     seasons_played: int = 0
     guest: bool = False
+    # Fin du jeu complet (UTC), et le client Stripe de l'abonnement.
+    premium_until: datetime.datetime | None = None
+    stripe_customer: str | None = None
 
     @property
     def seasons_left(self) -> int | None:
@@ -140,6 +157,8 @@ _NEW_COLUMNS = {
     "premium_at": "TIMESTAMP",
     "payment_ref": "VARCHAR(255)",
     "guest": "BOOLEAN NOT NULL DEFAULT FALSE",
+    "premium_until": "TIMESTAMP",
+    "stripe_customer": "VARCHAR(255)",
 }
 
 
@@ -149,6 +168,12 @@ def _add_columns(engine: Engine) -> None:
         for name, definition in _NEW_COLUMNS.items():
             if name not in existing:
                 connection.execute(text(f"ALTER TABLE users ADD COLUMN {name} {definition}"))
+        if "premium_until" not in existing:
+            # Le jeu complet payé une fois valait pour la première saison du jeu.
+            connection.execute(
+                text("UPDATE users SET premium_until = :end WHERE premium_at IS NOT NULL"),
+                {"end": FIRST_SEASON_END},
+            )
 
 
 def reset() -> None:
@@ -202,14 +227,38 @@ def normalize_email(email: str) -> str:
 # --- Comptes ---------------------------------------------------------------------------
 
 
+def season_end(at: datetime.datetime | None = None) -> datetime.datetime:
+    """Le prochain 1er juillet, minuit à Paris, après `at` (UTC, maintenant par défaut) :
+    la fin du jeu complet pris ou renouvelé à ce moment-là."""
+    paris = (at or _now()) + _PARIS_SUMMER
+    end = datetime.datetime(paris.year, SEASON_END_MONTH, SEASON_END_DAY)
+    if end <= paris:
+        end = end.replace(year=paris.year + 1)
+    return end - _PARIS_SUMMER
+
+
+def paris_day(at: datetime.datetime) -> datetime.date:
+    """Le jour, à Paris, d'une fin de jeu complet (UTC) : le 1er juillet."""
+    return (at + _PARIS_SUMMER).date()
+
+
+def premium_active(row: UserRow) -> bool:
+    """Le jeu complet court-il encore (renouvellement en retard compris) ?"""
+    if row.premium_at is None:
+        return False
+    return row.premium_until is None or _now() < row.premium_until + RENEWAL_GRACE
+
+
 def _user(row: UserRow) -> User:
     return User(
         id=row.id,
         email=row.email,
         active_slot=row.active_slot,
-        premium=row.premium_at is not None,
+        premium=premium_active(row),
         seasons_played=row.seasons_played or 0,
         guest=bool(row.guest),
+        premium_until=row.premium_until,
+        stripe_customer=row.stripe_customer,
     )
 
 
@@ -325,26 +374,53 @@ def count_season(user_id: int) -> None:
         session.commit()
 
 
-def grant_premium(user_id: int, payment_ref: str | None = None) -> User | None:
-    """Passe le compte en version complète (sans effet s'il l'est déjà : Stripe peut
-    prévenir deux fois du même paiement)."""
+def _extend(row: UserRow, until: datetime.datetime) -> None:
+    """Le jeu complet court au moins jusqu'à `until` (jamais raccourci : Stripe peut
+    prévenir deux fois du même paiement, ou dans le désordre)."""
+    if row.premium_until is None or row.premium_until < until:
+        row.premium_until = until
+
+
+def grant_premium(
+    user_id: int, payment_ref: str | None = None, customer: str | None = None
+) -> User | None:
+    """Passe le compte en jeu complet jusqu'au prochain 1er juillet ; `customer` : le
+    client Stripe de l'abonnement, que les renouvellements retrouveront."""
     with _session() as session:
         row = session.get(UserRow, user_id)
         if row is None:
             return None
-        if row.premium_at is None:
-            row.premium_at, row.payment_ref = _now(), payment_ref
+        if not premium_active(row):
+            row.premium_at, row.payment_ref, row.premium_until = _now(), payment_ref, None
+        _extend(row, season_end())
+        if customer:
+            row.stripe_customer = customer
+        session.commit()
+        return _user(row)
+
+
+def renew_premium(customer: str) -> User | None:
+    """Un renouvellement payé par ce client Stripe : son compte garde le jeu complet
+    jusqu'au 1er juillet suivant (None : client inconnu, d'une autre vente).
+    Sans effet sur un jeu complet retiré depuis le backoffice."""
+    with _session() as session:
+        row = session.scalars(select(UserRow).where(UserRow.stripe_customer == customer)).first()
+        if row is None:
+            return None
+        if row.premium_at is not None:
+            _extend(row, season_end())
             session.commit()
         return _user(row)
 
 
 def revoke_premium(user_id: int) -> User | None:
-    """Repasse le compte en gratuit (remboursement) : ses saisons jouées restent comptées."""
+    """Repasse le compte en gratuit (remboursement) : ses saisons jouées restent comptées.
+    L'abonnement, lui, se résilie chez Stripe."""
     with _session() as session:
         row = session.get(UserRow, user_id)
         if row is None:
             return None
-        row.premium_at = row.payment_ref = None
+        row.premium_at = row.payment_ref = row.premium_until = None
         session.commit()
         return _user(row)
 
