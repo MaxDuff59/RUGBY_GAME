@@ -383,10 +383,10 @@ export default function Hero() {
   );
   const matches = (
     <section className="section">
-      <div className="section__head">
+      <div className="section__head hero-matches__head">
         <div className="chips" role="group" aria-label="Période">
           {PERIODS.map((p) => (
-            <button key={p.key} type="button" className="chip" aria-pressed={period === p.key} onClick={() => setPeriod(p.key)}>
+            <button key={p.key} type="button" className={phone ? "chip chip--small" : "chip"} aria-pressed={period === p.key} onClick={() => setPeriod(p.key)}>
               {p.label}
             </button>
           ))}
@@ -406,31 +406,46 @@ export default function Hero() {
         </div>
       ) : (
         <div className="card table-wrap">
-          <table className="table table--nowrap">
+          <table className="table table--nowrap hero-matches">
             <thead>
               <tr>
-                <th scope="col" className="left">
-                  Date
-                </th>
+                {!phone && (
+                  <th scope="col" className="left">
+                    Date
+                  </th>
+                )}
                 <th scope="col" className="left">
                   Adversaire
                 </th>
                 <th scope="col">Score</th>
                 <th scope="col">Min.</th>
-                <th scope="col">Essais</th>
+                <th scope="col" title="Essais">{phone ? "Ess." : "Essais"}</th>
                 <th scope="col">Note</th>
               </tr>
             </thead>
             <tbody>
               {me.matches.map((match) => (
                 <tr key={match.match_id}>
-                  <td className="left muted">{formatShortDate(match.date)}</td>
+                  {!phone && <td className="left muted">{formatShortDate(match.date)}</td>}
                   <td className="left">
-                    <span className="with-crest">
-                      <ClubCrest name={match.opponent.name} size={20} />
-                      {match.opponent.name}
-                      <span className="muted">{match.home ? "dom." : "ext."}</span>
-                    </span>
+                    {/* Téléphone : la date passe sous l'adversaire, pour que tout tienne en largeur. */}
+                    {phone ? (
+                      <span className="with-crest" title={match.opponent.name}>
+                        <ClubCrest name={match.opponent.name} size={24} />
+                        <span className="hero-matches__who">
+                          <span className="standings__name">{match.opponent.name}</span>
+                          <span className="muted">
+                            {formatShortDate(match.date)} · {match.home ? "dom." : "ext."}
+                          </span>
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="with-crest">
+                        <ClubCrest name={match.opponent.name} size={20} />
+                        {match.opponent.name}
+                        <span className="muted">{match.home ? "dom." : "ext."}</span>
+                      </span>
+                    )}
                   </td>
                   <td className="num">
                     {match.score_for} – {match.score_against}

@@ -183,8 +183,7 @@ body,
   .app--phone .main > .card.fill {
     max-height: 70dvh;
   }
-  .app--phone .title,
-  .app--phone .hero__title {
+  .app--phone .title {
     font-size: 40px;
   }
 }
@@ -2588,6 +2587,11 @@ select.tactics__select {
     border-left: 0;
     border-top: 1px solid var(--line-soft);
   }
+  /* Le titre de la rencontre tient sur deux lignes à côté des écussons. */
+  .app--phone .hero__title {
+    font-size: 26px;
+    line-height: 1.05;
+  }
 }
 
 /* Vie du club : une ligne par note, une barre par match joué, la dernière en accent */
@@ -4516,6 +4520,13 @@ button.simulation__row:focus-visible {
   letter-spacing: 0.02em;
 }
 
+.scoreboard__time {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
 .scoreboard__period {
   font-size: 12px;
   font-weight: 600;
@@ -5216,13 +5227,97 @@ button.simulation__row:focus-visible {
 }
 
 @media (max-width: 520px) {
+  /* Téléphone : un tableau de score ramassé, pour voir le match sous lui. */
+  .scoreboard {
+    gap: 6px 10px;
+    padding: 12px 14px;
+  }
+  .scoreboard__team {
+    gap: 2px;
+    font-size: 12px;
+  }
+  .scoreboard__team .club-crest {
+    width: 30px !important;
+    height: 30px !important;
+  }
   .scoreboard__name {
-    font-size: 16px;
+    font-size: 14px;
     overflow-wrap: normal;
     hyphens: auto;
   }
   .scoreboard__score {
-    font-size: 44px;
+    font-size: 38px;
+  }
+  .scoreboard__score--home::after {
+    margin-left: 8px;
+  }
+  .scoreboard__center {
+    gap: 2px;
+  }
+  .scoreboard__clock {
+    font-size: 30px;
+  }
+  .scoreboard__period {
+    font-size: 11px;
+  }
+  .scoreboard__meta {
+    font-size: 11px;
+  }
+  /* Le chrono, puis la période à sa droite. */
+  .scoreboard__time {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+  .scoreboard__controls {
+    gap: 6px;
+    padding-top: 6px;
+  }
+  .scoreboard__controls .button {
+    min-height: 40px;
+    padding: 0 14px;
+    font-size: 14px;
+  }
+  .scoreboard__play {
+    min-width: 0;
+  }
+  /* En cours de match : lancer (large) et Terminer, puis les vitesses en un
+     sélecteur segmenté sur toute la largeur. */
+  .scoreboard__controls--live {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-self: stretch;
+  }
+  .scoreboard__controls--live .scoreboard__end {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .scoreboard__controls--live .chips {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    padding: 2px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--surface);
+  }
+  .scoreboard__controls--live .chip--small {
+    min-height: 28px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .scoreboard__controls--live .chip--small[aria-pressed="true"] {
+    background: var(--accent);
+  }
+  .scoreboard__notice {
+    font-size: 12px;
+  }
+
+  .momentum__chart {
+    height: 44px;
   }
 }
 
@@ -7919,28 +8014,12 @@ td > .tag:first-child,
   }
 }
 
-/* Téléphone : la fiche puis les attributs, qui défilent dans leur carte. */
+/* Téléphone : la fiche puis les attributs, à leur hauteur naturelle ; la page défile
+   sous l'en-tête (bornée à l'écran, la fiche ne laissait qu'une ligne d'attributs). */
 .hero-progress {
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-.hero-progress > .section {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.hero-progress > .section > .card {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-}
-
-/* La vue Progression tient dans l'écran du téléphone : la fiche, puis les attributs. */
-.app--phone .hero-progress.fill {
-  flex: 1 1 0;
-  min-height: 0;
 }
 
 /* Réseaux du joueur incarné : son compte à gauche, le fil à droite (qui défile). */
@@ -8129,9 +8208,13 @@ td > .tag:first-child,
     grid-template-rows: auto minmax(0, 1fr);
   }
 
+  /* Téléphone : le compte sur une ligne, le nom à gauche, les abonnés à droite. */
   .social__profile {
-    padding: 16px;
+    padding: 14px 16px;
     gap: 12px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
   }
 
   .social__profile .facts__list,
@@ -8139,8 +8222,45 @@ td > .tag:first-child,
     display: none;
   }
 
+  .social__me {
+    min-width: 0;
+    gap: 10px;
+  }
+
+  .social__me > div {
+    min-width: 0;
+  }
+
+  .social__name {
+    font-size: 17px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .social__me .muted {
+    font-size: 12px;
+  }
+
+  .social__avatar--me {
+    width: 40px;
+    height: 40px;
+    font-size: 14px;
+  }
+
+  .social__followers {
+    flex: 0 0 auto;
+    align-items: flex-end;
+    text-align: right;
+    font-size: 12px;
+  }
+
   .social__count {
-    font-size: 34px;
+    font-size: 26px;
+  }
+
+  .social__gain {
+    display: block;
   }
 
   .social .section__head .chips {
@@ -8155,6 +8275,28 @@ td > .tag:first-child,
 
 .live-hero__skip {
   margin-top: 6px;
+}
+
+/* Téléphone : la carte du joueur incarné et la météo du tableau de score, ramassées. */
+@media (max-width: 520px) {
+  .scoreboard__weather {
+    font-size: 11px;
+  }
+  .live-hero {
+    padding: 10px 14px;
+  }
+  .live-hero__name {
+    font-size: 17px;
+  }
+  .live-hero .muted {
+    font-size: 12px;
+  }
+  .live-hero__note .num {
+    font-size: 30px;
+  }
+  .live-hero__note {
+    font-size: 11px;
+  }
 }
 
 /* Un dilemme sous pression : ce qu'il pèse. */
@@ -8233,4 +8375,47 @@ td > .tag:first-child,
 /* Téléphone : le classement tient dans l'écran, sans nuls ni défaites. */
 .app--phone .hero-standings__detail {
   display: none;
+}
+
+/* Téléphone : les pastilles sur une ligne, le bilan dessous ; la date passe sous
+   l'adversaire et son nom s'abrège, pour que le tableau tienne en largeur. */
+.app--phone .hero-matches__head {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.app--phone .hero-matches td:first-child {
+  max-width: 0;
+  width: 100%;
+}
+
+.app--phone .hero-matches .with-crest {
+  display: flex;
+}
+
+.hero-matches__who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hero-matches__who > .muted {
+  font-size: 12px;
+}
+
+.app--phone .hero-matches th,
+.app--phone .hero-matches td {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.app--phone .hero-matches th:first-child,
+.app--phone .hero-matches td:first-child {
+  padding-left: 12px;
+}
+
+.app--phone .hero-matches th:last-child,
+.app--phone .hero-matches td:last-child {
+  padding-right: 12px;
 }

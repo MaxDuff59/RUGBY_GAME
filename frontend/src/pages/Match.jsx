@@ -26,6 +26,7 @@ import {
   formatCrowd,
   formatLongDate,
   formatNote,
+  formatShortDate,
   matchdayTitle,
 } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
@@ -580,16 +581,20 @@ function Scoreboard({
   onFinish,
 }) {
   const label = title ?? matchdayTitle(live);
+  const phone = useMediaQuery(PHONE_QUERY);
   return (
     <header className="scoreboard card">
       <Team side={live.home} mine={live.home.club.id === live.my_club_id} />
       <span className="scoreboard__score scoreboard__score--home">{live.home.score}</span>
       <div className="scoreboard__center">
-        <Clock minute={live.minute} running={playing} interval={SPEEDS[speed].ms} />
-        <span className="scoreboard__period">{period(live)}</span>
+        {/* Téléphone : la période à côté du chrono plutôt que dessous. */}
+        <div className="scoreboard__time">
+          <Clock minute={live.minute} running={playing} interval={SPEEDS[speed].ms} />
+          <span className="scoreboard__period">{period(live)}</span>
+        </div>
         <span className="muted scoreboard__meta">
           {label}
-          {live.derby && ` · ${live.derby}`} · {formatLongDate(live.date)}
+          {live.derby && ` · ${live.derby}`} · {phone ? formatShortDate(live.date) : formatLongDate(live.date)}
           {live.neutral && " · terrain neutre"}
         </span>
         <span className="muted scoreboard__weather" title={WEATHER[live.weather].scope}>
@@ -615,7 +620,7 @@ function Scoreboard({
             Tirs au but {live.home.shootout} – {live.away.shootout}
           </span>
         )}
-        <div className="scoreboard__controls">
+        <div className={`scoreboard__controls${live.finished ? "" : " scoreboard__controls--live"}`}>
           {live.finished && endActions ? (
             endActions(live)
           ) : live.finished ? (
@@ -655,7 +660,12 @@ function Scoreboard({
                   </button>
                 ))}
               </div>
-              <button type="button" className="button button--small" disabled={busy || finishing} onClick={onHandOver}>
+              <button
+                type="button"
+                className="button button--small scoreboard__end"
+                disabled={busy || finishing}
+                onClick={onHandOver}
+              >
                 Terminer
               </button>
             </>
