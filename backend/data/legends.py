@@ -1,14 +1,17 @@
-"""Les équipes de légende : les plus grands joueurs de l'histoire d'une nation, réunis.
+"""Les équipes de légende : les plus grands joueurs de l'histoire d'une nation, ou d'un
+grand club, réunis.
 
 Une équipe de légende se joue en match libre (api/friendly.py), contre un club, une
-sélection ou une autre légende, et en mode compétition à la place de son pays en
-Coupe du monde (api/competition.py) : même poule, même tableau, mais son effectif est
-fait de ses légendes.
+sélection ou une autre légende. Celle d'une nation se joue aussi en mode compétition à
+la place de son pays en Coupe du monde (api/competition.py) : même poule, même tableau,
+mais son effectif est fait de ses légendes. Un club de légende réunit les grands joueurs
+passés par le club, d'où qu'ils viennent : chacun garde sa nationalité.
 
 Chaque légende a une note visée (sur 20, la note générale à son poste) et ses points
 forts ; ses attributs s'en déduisent (`players`), toujours les mêmes. Les meilleurs
 joueurs actuels du jeu tournent autour de 18 à 19 : une légende est un cran au-dessus.
-On ajoute une équipe, ou un joueur, en complétant `LEGENDS` ; une liste doit garder de
+On ajoute une équipe, ou un joueur, en complétant `NATION_LEGENDS` ou `CLUB_LEGENDS` ;
+une même légende passée par plusieurs équipes y garde sa note. Une liste doit garder de
 quoi remplir une feuille de match à chaque poste (`SQUAD_MINIMUM`), plus des doublures.
 """
 
@@ -29,6 +32,8 @@ from models import (
 
 # Identifiants d'équipe des légendes dans les matchs : après ceux des sélections.
 LEGEND_ID_BASE = NATION_ID_BASE + 100
+# Les clubs de légende viennent après les nations de légende.
+CLUB_OFFSET = 50
 # Identifiants de leurs joueurs : loin de ceux d'un monde, un bloc par équipe.
 LEGEND_PLAYER_ID_BASE = 10_000_000
 PLAYER_BLOCK = 1000
@@ -52,17 +57,23 @@ class Legend:
     position: Position
     rating: float  # note générale visée, sur 20
     strengths: tuple[str, ...] = ()  # attributs (models.ATTRIBUTE_NAMES)
+    nationality: str | None = None  # celle de l'équipe si None
+    number: int | None = None  # titulaire attitré, sous ce numéro (le staff fait le reste)
 
 
 @dataclass(frozen=True)
 class LegendTeam:
-    nation: str  # code du pays (data/nations.py), aussi celui de l'équipe
+    # Code du pays (data/nations.py) : celui de l'équipe pour une nation, celui de la
+    # plupart de ses légendes pour un club.
+    nation: str
     id: int
     legends: tuple[Legend, ...]
+    club: str | None = None  # le nom du club dans le jeu, None pour une nation
+    code: str | None = None  # les initiales du club sur son blason
 
     @property
     def name(self) -> str:
-        return NATIONS_BY_CODE[self.nation].name + SUFFIX
+        return (self.club or NATIONS_BY_CODE[self.nation].name) + SUFFIX
 
     @property
     def nation_id(self) -> int:
@@ -70,6 +81,15 @@ class LegendTeam:
 
     def player_id(self, index: int) -> int:
         return LEGEND_PLAYER_ID_BASE + (self.id - LEGEND_ID_BASE) * PLAYER_BLOCK + index
+
+    @property
+    def starters(self) -> dict[int, int]:
+        """Les titulaires attitrés : numéro -> identifiant du joueur."""
+        return {
+            legend.number: self.player_id(index)
+            for index, legend in enumerate(self.legends)
+            if legend.number is not None
+        }
 
     @property
     def player_ids(self) -> frozenset[int]:
@@ -80,13 +100,24 @@ def _team(index: int, nation: str, *legends: Legend) -> LegendTeam:
     return LegendTeam(nation, LEGEND_ID_BASE + index, legends)
 
 
-def _l(name: str, position: Position, rating: float, *strengths: str) -> Legend:
+def _club(index: int, club: str, code: str, nation: str, *legends: Legend) -> LegendTeam:
+    return LegendTeam(nation, LEGEND_ID_BASE + CLUB_OFFSET + index, legends, club, code)
+
+
+def _l(
+    name: str,
+    position: Position,
+    rating: float,
+    *strengths: str,
+    nat: str | None = None,
+    number: int | None = None,
+) -> Legend:
     first, last = name.split(" ", 1)
-    return Legend(first, last, position, rating, strengths)
+    return Legend(first, last, position, rating, strengths, nat, number)
 
 
 # fmt: off
-LEGENDS = [
+NATION_LEGENDS = [
     _team(1, "FRA",
         _l("Robert Paparemborde", P, 18.8, "scrum"),
         _l("Christian Califano", P, 18.5),
@@ -342,9 +373,401 @@ LEGENDS = [
         _l("Leigh Halfpenny", FB, 18.7, "kicking"),
     ),
 ]
+
+# Les XV historiques des plus grands clubs : les joueurs passés par le club, d'où qu'ils
+# viennent (`nat`, quand ce n'est pas le pays du club).
+CLUB_LEGENDS = [
+    _club(1, "Racing 92", "R92", "FRA",
+        _l("Eddy Ben Arous", P, 18.0),
+        _l("Ben Tameifuna", P, 18.1, "scrum", "power", nat="TON"),
+        _l("Luc Ducalcon", P, 17.9, "scrum"),
+        _l("Cedate Gomes Sa", P, 17.8),
+        _l("Hassane Kolingar", P, 17.8, "scrum"),
+        _l("Camille Chat", H, 18.3, "power"),
+        _l("Virgile Lacombe", H, 17.9),
+        _l("Teddy Baubigny", H, 17.8),
+        _l("Leone Nakarawa", L, 18.8, "handling", "lineout", nat="FIJ"),
+        _l("Bernard Le Roux", L, 18.3, "tackling"),
+        _l("Fabrice Metz", L, 17.9),
+        _l("Boris Palu", L, 17.9, "power"),
+        _l("Laurent Cabannes", B, 18.5, "pace"),
+        _l("Yannick Nyanga", B, 18.3, "handling"),
+        _l("Wenceslas Lauret", B, 18.2, "tackling"),
+        _l("Sébastien Chabal", B, 18.2, "power"),
+        _l("Antonie Claassen", B, 18.0),
+        _l("Maxime Machenaud", SH, 18.4, "kicking"),
+        _l("Nolann Le Garrec", SH, 18.2, "passing"),
+        _l("Teddy Iribaren", SH, 17.9),
+        _l("Dan Carter", FH, 19.8, "kicking", "passing", nat="NZL"),
+        _l("Finn Russell", FH, 18.8, "passing", "handling", nat="SCO"),
+        _l("Johan Goosen", FH, 18.2, "kicking", nat="RSA"),
+        _l("Virimi Vakatawa", C, 18.7, "power", "handling"),
+        _l("Gaël Fickou", C, 18.4, "tackling"),
+        _l("Franck Mesnel", C, 18.2, "passing"),
+        _l("Henry Chavancy", C, 18.0, "tackling"),
+        _l("Juan Imhoff", W, 18.5, "pace", nat="ARG"),
+        _l("Teddy Thomas", W, 18.5, "pace"),
+        _l("Marc Andreu", W, 18.0, "pace"),
+        _l("Yvon Rousset", W, 17.9),
+        _l("Brice Dulin", FB, 18.3, "handling"),
+        _l("Jean-Baptiste Lafond", FB, 18.2, "kicking"),
+    ),
+    _club(2, "Stade Toulousain", "ST", "FRA",
+        _l("Cyril Baille", P, 18.6, "scrum", "handling"),
+        _l("Christian Califano", P, 18.5),
+        _l("Census Johnston", P, 18.3, "scrum", nat="SAM"),
+        _l("Jean-Baptiste Poux", P, 18.1),
+        _l("Claude Portolan", P, 18.0, "scrum"),
+        _l("Julien Marchand", H, 18.6, "tackling"),
+        _l("William Servat", H, 18.4, "scrum"),
+        _l("Yannick Bru", H, 18.1),
+        _l("Fabien Pelous", L, 19.0, "lineout", "stamina"),
+        _l("Emmanuel Meafou", L, 18.5, "power"),
+        _l("Patricio Albacete", L, 18.3, "lineout", nat="ARG"),
+        _l("Thibaud Flament", L, 18.2, "lineout"),
+        _l("Hugues Miorin", L, 18.0),
+        _l("Thierry Dusautoir", B, 19.4, "tackling", "stamina"),
+        _l("Jean-Pierre Rives", B, 19.0, "tackling", "pace"),
+        _l("Louis Picamoles", B, 18.6, "power"),
+        _l("François Cros", B, 18.4, "tackling"),
+        _l("Anthony Jelonch", B, 18.4, "tackling"),
+        _l("Jean Bouilhou", B, 18.2),
+        _l("Antoine Dupont", SH, 19.9, "pace", "handling", "passing"),
+        _l("Byron Kelleher", SH, 18.5, "power", nat="NZL"),
+        _l("Jean-Baptiste Élissalde", SH, 18.4, "kicking"),
+        _l("Romain Ntamack", FH, 18.9, "passing", "kicking"),
+        _l("Frédéric Michalak", FH, 18.7, "handling", "kicking"),
+        _l("Yann Delaigue", FH, 18.2),
+        _l("Yannick Jauzion", C, 18.8, "power"),
+        _l("Thomas Castaignède", C, 18.6, "pace", "kicking"),
+        _l("Florian Fritz", C, 18.3, "power"),
+        _l("Pita Ahki", C, 18.3, "handling", nat="NZL"),
+        _l("Émile Ntamack", W, 18.8, "pace", "handling"),
+        _l("Vincent Clerc", W, 18.6, "pace"),
+        _l("Cédric Heymans", W, 18.4),
+        _l("Maxime Médard", W, 18.4, "kicking"),
+        _l("Thomas Ramos", FB, 18.6, "kicking"),
+        _l("Clément Poitrenaud", FB, 18.4, "handling"),
+        _l("Pierre Villepreux", FB, 18.4, "handling"),
+    ),
+    _club(3, "RC Toulon", "RCT", "FRA",
+        _l("Carl Hayman", P, 18.8, "scrum", nat="NZL"),
+        _l("Andrew Sheridan", P, 18.4, "scrum", "power", nat="ENG"),
+        _l("Davit Kubriashvili", P, 18.0, "scrum", nat="GEO"),
+        _l("Laurent Emmanuelli", P, 17.9),
+        _l("Xavier Chiocci", P, 17.9),
+        _l("Guilhem Guirado", H, 18.6, "tackling"),
+        _l("Sébastien Bruno", H, 18.0, "scrum"),
+        _l("Jean-Charles Orioli", H, 17.8),
+        _l("Bakkies Botha", L, 18.8, "power"),
+        _l("Ali Williams", L, 18.4, "lineout", nat="NZL"),
+        _l("Danie Rossouw", L, 18.3, "power", nat="RSA"),
+        _l("Romain Taofifénua", L, 18.0, "power"),
+        _l("Juan Martín Fernández Lobbe", B, 18.6, "tackling", nat="ARG"),
+        _l("Steffon Armitage", B, 18.7, "tackling", nat="ENG"),
+        _l("Juan Smith", B, 18.6, "power", nat="RSA"),
+        _l("Charles Ollivon", B, 18.6, "lineout"),
+        _l("Éric Champ", B, 18.4, "power"),
+        _l("Chris Masoe", B, 18.4, "tackling", nat="NZL"),
+        _l("Mamuka Gorgodze", B, 18.4, "power", nat="GEO"),
+        _l("Jérôme Gallion", SH, 18.4, "pace"),
+        _l("Sébastien Tillous-Borde", SH, 18.0),
+        _l("Aubin Hueber", SH, 18.0),
+        _l("Jonny Wilkinson", FH, 19.6, "kicking", "tackling", nat="ENG"),
+        _l("Matt Giteau", FH, 18.7, "kicking", nat="AUS"),
+        _l("Ma'a Nonu", C, 18.9, "power", nat="NZL"),
+        _l("Tana Umaga", C, 18.8, "tackling", nat="NZL"),
+        _l("Mathieu Bastareaud", C, 18.5, "power"),
+        _l("Bryan Habana", W, 19.2, "pace", nat="RSA"),
+        _l("Josua Tuisova", W, 18.4, "power", nat="FIJ"),
+        _l("Drew Mitchell", W, 18.3, "pace", nat="AUS"),
+        _l("Leigh Halfpenny", FB, 18.7, "kicking", nat="WAL"),
+        _l("Delon Armitage", FB, 18.3, "kicking", nat="ENG"),
+    ),
+    _club(4, "ASM Clermont Auvergne", "ASM", "FRA",
+        _l("Davit Zirakashvili", P, 18.5, "scrum", nat="GEO"),
+        _l("Rabah Slimani", P, 18.3, "scrum"),
+        _l("Thomas Domingo", P, 18.2, "scrum"),
+        _l("Martín Scelzo", P, 18.0, nat="ARG"),
+        _l("Vincent Debaty", P, 18.0),
+        _l("Mario Ledesma", H, 18.4, "scrum", nat="ARG"),
+        _l("Benjamin Kayser", H, 18.1),
+        _l("Olivier Azam", H, 17.9, "power"),
+        _l("Jamie Cudmore", L, 18.3, "power", nat="CAN"),
+        _l("Nathan Hines", L, 18.3, nat="SCO"),
+        _l("Julien Pierre", L, 18.1, "lineout"),
+        _l("Sébastien Vahaamahina", L, 18.1, "power"),
+        _l("Julien Bonnaire", B, 18.6, "lineout"),
+        _l("Fritz Lee", B, 18.4, "power", nat="SAM"),
+        _l("Peceli Yato", B, 18.3, "handling", nat="FIJ"),
+        _l("Damien Chouly", B, 18.2),
+        _l("Alexandre Lapandry", B, 18.1, "tackling"),
+        _l("Elvis Vermeulen", B, 18.0, "power"),
+        _l("Morgan Parra", SH, 18.6, "kicking", "passing"),
+        _l("Pierre Mignoni", SH, 18.1),
+        _l("Brock James", FH, 18.3, "kicking", nat="AUS"),
+        _l("Camille Lopez", FH, 18.2, "kicking"),
+        _l("Gérald Merceron", FH, 18.1, "kicking"),
+        _l("Wesley Fofana", C, 18.8, "pace", "handling"),
+        _l("Aurélien Rougerie", C, 18.6, "power"),
+        _l("Tony Marsh", C, 18.2),
+        _l("George Moala", C, 18.1, "power", nat="NZL"),
+        _l("Philippe Saint-André", W, 18.6),
+        _l("Napolioni Nalaga", W, 18.5, "power", "pace", nat="FIJ"),
+        _l("Sitiveni Sivivatu", W, 18.5, "pace", nat="NZL"),
+        _l("Julien Malzieu", W, 18.1, "pace"),
+        _l("Nick Abendanon", FB, 18.4, "handling", nat="ENG"),
+        _l("Anthony Floch", FB, 18.0),
+    ),
+    _club(5, "Stade Français Paris", "SF", "FRA",
+        _l("Sylvain Marconnet", P, 18.3),
+        _l("Pieter de Villiers", P, 18.3, "scrum"),
+        _l("Rodrigo Roncero", P, 18.3, "scrum", nat="ARG"),
+        _l("David Attoub", P, 17.9),
+        _l("Sakaria Taulafo", P, 17.9, nat="SAM"),
+        _l("Dimitri Szarzewski", H, 18.3, "pace"),
+        _l("Mathieu Blin", H, 18.0),
+        _l("Laurent Sempéré", H, 17.9),
+        _l("Pascal Papé", L, 18.2, "power"),
+        _l("Mike James", L, 18.1, "lineout", nat="CAN"),
+        _l("David Auradou", L, 18.0),
+        _l("Paul Gabrillagues", L, 17.9),
+        _l("Sergio Parisse", B, 19.1, "handling", "kicking", nat="ITA"),
+        _l("Mauro Bergamasco", B, 18.5, "tackling", nat="ITA"),
+        _l("Christophe Juillet", B, 18.1),
+        _l("Rémy Martin", B, 18.1, "tackling"),
+        _l("Pierre Rabadan", B, 17.9),
+        _l("Antoine Burban", B, 17.9, "tackling"),
+        _l("Agustín Pichot", SH, 18.5, "passing", nat="ARG"),
+        _l("Julien Dupuy", SH, 18.0, "kicking"),
+        _l("Jérôme Fillol", SH, 17.9),
+        _l("Diego Domínguez", FH, 18.8, "kicking", nat="ITA"),
+        _l("Juan Martín Hernández", FH, 18.6, "kicking", "handling", nat="ARG"),
+        _l("Lionel Beauxis", FH, 18.0, "kicking"),
+        _l("Jonathan Danty", C, 18.5, "power"),
+        _l("Brian Liebenberg", C, 18.1),
+        _l("Mirco Bergamasco", C, 18.1, nat="ITA"),
+        _l("Waisea Nayacalevu", C, 18.1, "power", nat="FIJ"),
+        _l("Christophe Dominici", W, 18.8, "pace"),
+        _l("Julien Arias", W, 18.3, "pace", number=14),
+        _l("Djibril Camara", W, 17.9, "pace"),
+        _l("Ignacio Corleto", FB, 18.2, "pace", nat="ARG"),
+        _l("Hugo Bonneval", FB, 17.9),
+    ),
+    _club(6, "Leinster Rugby", "LEI", "IRE",
+        _l("Tadhg Furlong", P, 18.9, "scrum", "handling"),
+        _l("Cian Healy", P, 18.5, "power"),
+        _l("Andrew Porter", P, 18.4),
+        _l("Mike Ross", P, 18.0, "scrum"),
+        _l("Reggie Corrigan", P, 17.9),
+        _l("Dan Sheehan", H, 18.7, "pace"),
+        _l("Seán Cronin", H, 18.1, "pace"),
+        _l("Shane Byrne", H, 18.0),
+        _l("Leo Cullen", L, 18.3, "lineout"),
+        _l("James Ryan", L, 18.5, "tackling"),
+        _l("Malcolm O'Kelly", L, 18.3, "lineout"),
+        _l("Devin Toner", L, 18.1, "lineout"),
+        _l("Seán O'Brien", B, 18.8, "power"),
+        _l("Josh van der Flier", B, 18.8, "tackling", "stamina"),
+        _l("Caelan Doris", B, 18.8, "handling"),
+        _l("Rocky Elsom", B, 18.7, "power", nat="AUS"),
+        _l("Jamie Heaslip", B, 18.6),
+        _l("Shane Jennings", B, 18.1, "tackling"),
+        _l("Jamison Gibson-Park", SH, 18.6, "pace"),
+        _l("Eoin Reddan", SH, 18.0, "passing"),
+        _l("Chris Whitaker", SH, 17.9, nat="AUS"),
+        _l("Johnny Sexton", FH, 19.3, "kicking", "passing"),
+        _l("Felipe Contepomi", FH, 18.5, "kicking", nat="ARG"),
+        _l("Brian O'Driscoll", C, 19.6, "handling", "tackling"),
+        _l("Garry Ringrose", C, 18.6, "handling"),
+        _l("Gordon D'Arcy", C, 18.5, "power"),
+        _l("Robbie Henshaw", C, 18.5, "tackling"),
+        _l("James Lowe", W, 18.5, "kicking"),
+        _l("Denis Hickie", W, 18.4, "pace"),
+        _l("Isa Nacewa", W, 18.4, "kicking", nat="FIJ"),
+        _l("Shane Horgan", W, 18.2, "power"),
+        _l("Rob Kearney", FB, 18.5, "kicking"),
+        _l("Hugo Keenan", FB, 18.5),
+    ),
+    _club(7, "Munster Rugby", "MUN", "IRE",
+        _l("John Hayes", P, 18.3, "scrum"),
+        _l("Peter Clohessy", P, 18.1, "scrum"),
+        _l("Marcus Horan", P, 18.0),
+        _l("BJ Botha", P, 18.0, "scrum", nat="RSA"),
+        _l("Dave Kilcoyne", P, 17.8),
+        _l("Keith Wood", H, 19.0, "pace", "handling"),
+        _l("Jerry Flannery", H, 18.2, "lineout"),
+        _l("Frankie Sheahan", H, 17.9),
+        _l("Paul O'Connell", L, 19.2, "lineout", "stamina"),
+        _l("Tadhg Beirne", L, 18.6, "tackling", "lineout"),
+        _l("Donncha O'Callaghan", L, 18.3),
+        _l("Donnacha Ryan", L, 18.1, "lineout"),
+        _l("Mick Galwey", L, 18.0, "power"),
+        _l("Peter O'Mahony", B, 18.5, "lineout"),
+        _l("Anthony Foley", B, 18.5, "handling"),
+        _l("David Wallace", B, 18.5, "pace"),
+        _l("CJ Stander", B, 18.5, "power"),
+        _l("Denis Leamy", B, 18.2),
+        _l("Alan Quinlan", B, 18.1, "tackling"),
+        _l("Conor Murray", SH, 18.8, "kicking"),
+        _l("Peter Stringer", SH, 18.2, "passing"),
+        _l("Ronan O'Gara", FH, 18.9, "kicking"),
+        _l("Jack Crowley", FH, 18.3, "passing"),
+        _l("Lifeimi Mafi", C, 18.1, nat="NZL"),
+        _l("Rua Tipoki", C, 18.0, "tackling", nat="NZL"),
+        _l("Jason Holland", C, 17.9, nat="NZL"),
+        _l("Chris Farrell", C, 17.9, "power"),
+        _l("Doug Howlett", W, 18.5, "pace", nat="NZL"),
+        _l("Keith Earls", W, 18.4, "pace"),
+        _l("Simon Zebo", W, 18.3, "handling"),
+        _l("Anthony Horgan", W, 17.9),
+        _l("Felix Jones", FB, 17.9),
+        _l("Shaun Payne", FB, 17.9, nat="RSA"),
+    ),
+    _club(8, "Saracens", "SAR", "ENG",
+        _l("Mako Vunipola", P, 18.6, "power", "handling"),
+        _l("Vincent Koch", P, 18.2, "scrum", nat="RSA"),
+        _l("Juan Figallo", P, 18.0, "scrum", nat="ARG"),
+        _l("Petrus du Plessis", P, 17.9, nat="RSA"),
+        _l("Titi Lamositele", P, 17.8, nat="USA"),
+        _l("Jamie George", H, 18.5, "lineout"),
+        _l("Schalk Brits", H, 18.4, "pace", "handling", nat="RSA"),
+        _l("Maro Itoje", L, 19.1, "lineout", "tackling"),
+        _l("Will Skelton", L, 18.4, "power", nat="AUS"),
+        _l("George Kruis", L, 18.3, "lineout"),
+        _l("Steve Borthwick", L, 18.0, "lineout"),
+        _l("Richard Hill", B, 18.9, "tackling"),
+        _l("Billy Vunipola", B, 18.7, "power"),
+        _l("Francois Pienaar", B, 18.7, nat="RSA"),
+        _l("Ben Earl", B, 18.5, "pace"),
+        _l("Jacques Burger", B, 18.4, "tackling", nat="NAM"),
+        _l("Jackson Wray", B, 17.9, "tackling"),
+        _l("Kyran Bracken", SH, 18.2),
+        _l("Neil de Kock", SH, 18.0, nat="RSA"),
+        _l("Richard Wigglesworth", SH, 18.0, "kicking"),
+        _l("Michael Lynagh", FH, 18.9, "kicking", nat="AUS"),
+        _l("Owen Farrell", FH, 18.7, "kicking"),
+        _l("Glen Jackson", FH, 17.9, "kicking", nat="NZL"),
+        _l("Philippe Sella", C, 19.3, "tackling", "handling", nat="FRA"),
+        _l("Brad Barritt", C, 18.2, "tackling"),
+        _l("Duncan Taylor", C, 18.0, nat="SCO"),
+        _l("Alex Lozowski", C, 17.9),
+        _l("Chris Ashton", W, 18.4, "pace"),
+        _l("Elliot Daly", W, 18.4, "kicking"),
+        _l("Sean Maitland", W, 18.0, nat="SCO"),
+        _l("David Strettle", W, 18.0, "pace"),
+        _l("Alex Goode", FB, 18.4, "handling", "passing"),
+        _l("Liam Williams", FB, 18.4, nat="WAL"),
+    ),
+    _club(9, "Leicester Tigers", "LT", "ENG",
+        _l("Martín Castrogiovanni", P, 18.4, "scrum", nat="ITA"),
+        _l("Dan Cole", P, 18.3, "scrum"),
+        _l("Graham Rowntree", P, 18.2),
+        _l("Julian White", P, 18.2, "scrum"),
+        _l("Marcos Ayerza", P, 18.1, "scrum", nat="ARG"),
+        _l("Tom Youngs", H, 18.2),
+        _l("Richard Cockerill", H, 18.0),
+        _l("George Chuter", H, 17.9),
+        _l("Martin Johnson", L, 19.3, "lineout", "power"),
+        _l("Ben Kay", L, 18.4, "lineout"),
+        _l("Ollie Chessum", L, 18.3, "power"),
+        _l("Louis Deacon", L, 17.9),
+        _l("Neil Back", B, 18.8, "pace"),
+        _l("Dean Richards", B, 18.6, "power"),
+        _l("Lewis Moody", B, 18.5, "tackling"),
+        _l("Tom Croft", B, 18.4, "pace", "lineout"),
+        _l("Martin Corry", B, 18.2),
+        _l("Jordan Crane", B, 18.0, "power"),
+        _l("Ben Youngs", SH, 18.3),
+        _l("Austin Healey", SH, 18.2, "pace"),
+        _l("Harry Ellis", SH, 18.0),
+        _l("George Ford", FH, 18.5, "passing"),
+        _l("Joel Stransky", FH, 18.4, "kicking", nat="RSA"),
+        _l("Toby Flood", FH, 18.0, "kicking"),
+        _l("Manu Tuilagi", C, 18.6, "power"),
+        _l("Pat Howard", C, 18.0, "passing", nat="AUS"),
+        _l("Anthony Allen", C, 17.9),
+        _l("Rory Underwood", W, 18.8, "pace"),
+        _l("Alesana Tuilagi", W, 18.2, "power", nat="SAM"),
+        _l("Tom Varndell", W, 18.0, "pace"),
+        _l("Tony Underwood", W, 17.9, "pace"),
+        _l("Geordan Murphy", FB, 18.4, "handling", nat="IRE"),
+        _l("Dusty Hare", FB, 18.0, "kicking"),
+    ),
+    _club(10, "Crusaders", "CRU", "NZL",
+        _l("Owen Franks", P, 18.5, "scrum"),
+        _l("Joe Moody", P, 18.3, "scrum"),
+        _l("Greg Somerville", P, 18.2, "scrum"),
+        _l("Wyatt Crockett", P, 18.0),
+        _l("Ben Franks", P, 17.9),
+        _l("Codie Taylor", H, 18.6, "pace"),
+        _l("Corey Flynn", H, 18.0),
+        _l("Mark Hammett", H, 18.0, "power"),
+        _l("Sam Whitelock", L, 19.0, "lineout", "stamina"),
+        _l("Brad Thorn", L, 18.6, "power"),
+        _l("Chris Jack", L, 18.4, "lineout"),
+        _l("Scott Barrett", L, 18.4, "power"),
+        _l("Richie McCaw", B, 19.8, "tackling", "stamina"),
+        _l("Kieran Read", B, 19.1, "handling", "lineout"),
+        _l("Reuben Thorne", B, 18.3, "lineout"),
+        _l("Todd Blackadder", B, 18.2),
+        _l("Matt Todd", B, 18.1, "tackling"),
+        _l("Mose Tuiali'i", B, 18.0, "power"),
+        _l("Justin Marshall", SH, 18.5),
+        _l("Andy Ellis", SH, 18.0),
+        _l("Dan Carter", FH, 19.8, "kicking", "passing"),
+        _l("Andrew Mehrtens", FH, 18.8, "kicking", "passing"),
+        _l("Richie Mo'unga", FH, 18.8, "pace", "passing"),
+        _l("Aaron Mauger", C, 18.3, "passing"),
+        _l("Ryan Crotty", C, 18.3, "tackling"),
+        _l("Casey Laulala", C, 18.0),
+        _l("Daryl Gibson", C, 18.0),
+        _l("Will Jordan", W, 18.8, "pace", "handling"),
+        _l("Sevu Reece", W, 18.3, "pace"),
+        _l("Rico Gear", W, 18.2, "pace"),
+        _l("Caleb Ralph", W, 18.0),
+        _l("Israel Dagg", FB, 18.5, "pace"),
+        _l("Leon MacDonald", FB, 18.3, "kicking"),
+    ),
+    _club(11, "Blues", "BLU", "NZL",
+        _l("Tony Woodcock", P, 18.8, "scrum"),
+        _l("Olo Brown", P, 18.5, "scrum"),
+        _l("Craig Dowd", P, 18.2),
+        _l("Charlie Faumuina", P, 18.2, "handling"),
+        _l("Ofa Tu'ungafasi", P, 18.0, "power"),
+        _l("Sean Fitzpatrick", H, 19.2, "lineout", "stamina"),
+        _l("Keven Mealamu", H, 18.5, "power"),
+        _l("Robin Brooke", L, 18.4, "lineout"),
+        _l("Ali Williams", L, 18.4, "lineout"),
+        _l("Patrick Tuipulotu", L, 18.2, "power"),
+        _l("Troy Flavell", L, 18.1, "power"),
+        _l("Michael Jones", B, 19.0, "pace", "tackling"),
+        _l("Zinzan Brooke", B, 18.9, "handling", "kicking"),
+        _l("Jerome Kaino", B, 18.5, "power"),
+        _l("Xavier Rush", B, 18.2, "power"),
+        _l("Akira Ioane", B, 18.1, "power"),
+        _l("Daniel Braid", B, 18.0, "tackling"),
+        _l("Ofisa Tonu'u", SH, 18.0),
+        _l("Steve Devine", SH, 18.0, "passing"),
+        _l("Finlay Christie", SH, 17.8, nat="SCO"),
+        _l("Carlos Spencer", FH, 18.7, "handling", "passing"),
+        _l("Beauden Barrett", FH, 18.9, "pace"),
+        _l("Rieko Ioane", C, 18.5, "pace", "power"),
+        _l("Luke McAlister", C, 18.1, "kicking"),
+        _l("Eroni Clarke", C, 18.0),
+        _l("Lee Stensness", C, 17.9, "passing"),
+        _l("Jonah Lomu", W, 19.4, "power", "pace"),
+        _l("Joe Rokocoko", W, 18.6, "pace"),
+        _l("Doug Howlett", W, 18.5, "pace"),
+        _l("Joeli Vidiri", W, 18.2, "pace"),
+        _l("Mils Muliaina", FB, 18.6, "handling"),
+        _l("Adrian Cashmore", FB, 18.0, "kicking"),
+    ),
+]
 # fmt: on
+LEGENDS = NATION_LEGENDS + CLUB_LEGENDS
 LEGENDS_BY_ID = {team.id: team for team in LEGENDS}
-LEGENDS_BY_NATION = {team.nation: team for team in LEGENDS}
+LEGENDS_BY_NATION = {team.nation: team for team in NATION_LEGENDS}
 
 
 def _clamp(value: float) -> int:
@@ -382,7 +805,7 @@ def players(team: LegendTeam) -> list[Player]:
             age=PEAK_AGE,
             position=legend.position,
             squad=Squad.AWAY,
-            nationality=team.nation,
+            nationality=legend.nationality or team.nation,
             **attributes(legend),
         )
         for index, legend in enumerate(team.legends)

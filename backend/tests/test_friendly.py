@@ -1,11 +1,15 @@
 """Le match libre : deux équipes au choix, hors de toute partie."""
 
+from collections import Counter
+
 import pytest
 from fastapi.testclient import TestClient
 
 from api import auth, friendly
 from api.main import app
+from data import legends as legends_data
 from engine import dilemmas
+from engine.internationals import SQUAD_MINIMUM
 from models.orm import PlayerRow
 
 
@@ -25,7 +29,7 @@ def test_club_against_nation_without_any_save(guest, monkeypatch):
     # Les dilemmes du joueur arrêteraient le chrono avant dix minutes : testés plus bas.
     monkeypatch.setattr(dilemmas, "COACH_DILEMMA_CHANCE", 0.0)
     groups = guest.get("/friendly/teams").json()
-    assert [g["code"] for g in groups[-2:]] == ["nations", "legends"]
+    assert [g["code"] for g in groups[-3:]] == ["nations", "legends", "club_legends"]
     assert {"top14", "premiership", "urc"} <= {g["code"] for g in groups}
     toulouse = _team(groups, "Stade Toulousain")
     france = _team(groups, "France")
@@ -116,6 +120,53 @@ def test_legends_against_their_nation(guest):
     assert live["home"]["club"]["name"] == "France de légende"
     done = guest.post("/friendly/finish").json()
     assert done["finished"] is True
+
+
+def test_club_legends_against_their_club(guest):
+    groups = guest.get("/friendly/teams").json()
+    clubs = next(g for g in groups if g["code"] == "club_legends")
+    assert len(clubs["teams"]) == 11
+    # Chaque équipe au choix a ses notes et son niveau, les légendes tout en haut.
+    teams = [t for g in groups for t in g["teams"]]
+    assert all(t["attack"] and t["forwards"] and t["defense"] for t in teams)
+    assert {t["level"] for t in teams} <= {1 + n / 2 for n in range(9)}
+    assert max(t["level"] for t in teams) == 5 and min(t["level"] for t in teams) == 1
+    assert min(t["level"] for t in clubs["teams"]) >= 4
+    legends = _team(groups, "Stade Français Paris de légende")
+    paris = _team(groups, "Stade Français Paris")
+    setup = guest.post(
+        "/friendly", json={"home_id": paris, "away_id": legends, "my_id": legends}
+    ).json()
+    players = {f"{p['first_name']} {p['last_name']}": p for p in setup["team"]["players"]}
+    assert {"Julien Arias", "Sergio Parisse", "Christophe Dominici"} <= set(players)
+    # Chacun garde sa nationalité, le club donne la sienne aux autres.
+    assert players["Sergio Parisse"]["nationality"] == "ITA"
+    assert players["Julien Arias"]["nationality"] == "FRA"
+    # Julien Arias, titulaire attitré, porte le 14 (13e place du XV) ; le joueur reste
+    # libre de composer autrement.
+    arias = players["Julien Arias"]["id"]
+    assert setup["team"]["strength"]["lineup_ids"][13] == arias
+    assert setup["team"]["lineup_custom"] is False
+    camara = players["Djibril Camara"]["id"]
+    xv = guest.put("/friendly/lineup", json={"player_ids": [None] * 13 + [camara]}).json()
+    assert xv["team"]["strength"]["lineup_ids"][13] == camara and xv["team"]["lineup_custom"]
+    xv = guest.delete("/friendly/lineup").json()
+    assert xv["team"]["strength"]["lineup_ids"][13] == arias
+
+    live = guest.post("/friendly/kickoff").json()
+    assert live["away"]["club"]["name"] == "Stade Français Paris de légende"
+    assert guest.post("/friendly/finish").json()["finished"] is True
+
+
+def test_a_legend_keeps_his_rating_from_team_to_team():
+    seen: dict[str, float] = {}
+    for team in legends_data.LEGENDS:
+        counts = Counter(legend.position for legend in team.legends)
+        assert all(counts[position] >= n for position, n in SQUAD_MINIMUM.items()), team.name
+        for legend in team.legends:
+            name = f"{legend.first_name} {legend.last_name}"
+            assert seen.setdefault(name, legend.rating) == legend.rating, name
+    assert len({team.id for team in legends_data.LEGENDS}) == len(legends_data.LEGENDS)
 
 
 def test_friendly_refuses_bad_choices(guest):

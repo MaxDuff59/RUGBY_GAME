@@ -143,6 +143,8 @@ def test_world_cup_only_with_an_invited_nation(client):
 def test_world_cup_with_a_legend_team_in_place_of_its_nation(client):
     cup = client.post("/competition", json={"code": "world_cup"}).json()
     legends = next(t for t in cup["legends"] if t["name"] == "France de légende")
+    # Les clubs de légende n'y sont pas : seules les nations prennent la place d'un pays.
+    assert "Stade Toulousain de légende" not in {t["name"] for t in cup["legends"]}
     france = next(t for t in cup["teams"] if t["name"] == "France")
     taken = client.post(
         "/competition/team", json={"manager_name": "Max", "team_id": legends["id"]}

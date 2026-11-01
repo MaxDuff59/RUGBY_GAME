@@ -9,6 +9,11 @@
     "colors": ["#FFD100", "#002B5C"],
     "light": false
   },
+  "ASM Clermont Auvergne de légende": {
+    "logo": "/clubs/legendes/asm-clermont-auvergne.svg",
+    "colors": ["#002B5C", "#FFD100"],
+    "light": false
+  },
   "Afrique du Sud": {
     "logo": "/clubs/afrique-du-sud.png",
     "colors": ["#0B5A3C", "#F2C230"],
@@ -69,6 +74,11 @@
     "colors": ["#002B7F", "#6CACE4"],
     "light": false
   },
+  "Blues de légende": {
+    "logo": "/clubs/legendes/blues.svg",
+    "colors": ["#002B7F", "#6CACE4"],
+    "light": false
+  },
   "Bristol Bears": {
     "logo": "/clubs/bristol-bears.png",
     "colors": ["#13294B", "#FFFFFF"],
@@ -109,6 +119,11 @@
   },
   "Crusaders": {
     "colors": ["#D00F16", "#000000"]
+  },
+  "Crusaders de légende": {
+    "logo": "/clubs/legendes/crusaders.svg",
+    "colors": ["#D00F16", "#111111"],
+    "light": false
   },
   "Edinburgh Rugby": {
     "logo": "/clubs/edinburgh-rugby.png",
@@ -205,9 +220,19 @@
     "colors": ["#006A4E", "#C8102E"],
     "light": false
   },
+  "Leicester Tigers de légende": {
+    "logo": "/clubs/legendes/leicester-tigers.svg",
+    "colors": ["#00553B", "#D9A93A"],
+    "light": false
+  },
   "Leinster Rugby": {
     "logo": "/clubs/leinster-rugby.png",
     "colors": ["#0055A4", "#FFFFFF"],
+    "light": false
+  },
+  "Leinster Rugby de légende": {
+    "logo": "/clubs/legendes/leinster-rugby.svg",
+    "colors": ["#0055A4", "#D9A93A"],
     "light": false
   },
   "Lions": {
@@ -228,6 +253,11 @@
   "Munster Rugby": {
     "logo": "/clubs/munster-rugby.png",
     "colors": ["#C8102E", "#002B5C"],
+    "light": false
+  },
+  "Munster Rugby de légende": {
+    "logo": "/clubs/legendes/munster-rugby.svg",
+    "colors": ["#C8102E", "#D9A93A"],
     "light": false
   },
   "NSW Waratahs": {
@@ -290,12 +320,22 @@
     "colors": ["#E2001A", "#000000"],
     "light": false
   },
+  "RC Toulon de légende": {
+    "logo": "/clubs/legendes/rc-toulon.svg",
+    "colors": ["#C8102E", "#111111"],
+    "light": false
+  },
   "RC Vannes": {
     "colors": ["#003C71", "#FFFFFF"]
   },
   "Racing 92": {
     "logo": "/clubs/racing-92.png",
     "colors": ["#7CC4EA", "#0A1F44"],
+    "light": false
+  },
+  "Racing 92 de légende": {
+    "logo": "/clubs/legendes/racing-92.svg",
+    "colors": ["#0A1F44", "#8FD0F2"],
     "light": false
   },
   "SU Agen": {
@@ -316,6 +356,11 @@
   "Saracens": {
     "logo": "/clubs/saracens.png",
     "colors": ["#000000", "#D00F16"],
+    "light": false
+  },
+  "Saracens de légende": {
+    "logo": "/clubs/legendes/saracens.svg",
+    "colors": ["#111111", "#E4002B"],
     "light": false
   },
   "Section Paloise": {
@@ -343,6 +388,11 @@
     "colors": ["#E5007E", "#00205B"],
     "light": false
   },
+  "Stade Français Paris de légende": {
+    "logo": "/clubs/legendes/stade-francais-paris.svg",
+    "colors": ["#E4007C", "#0A1F5C"],
+    "light": false
+  },
   "Stade Montois": {
     "colors": ["#FFD200", "#000000"]
   },
@@ -354,6 +404,11 @@
   "Stade Toulousain": {
     "logo": "/clubs/stade-toulousain.png",
     "colors": ["#D00F16", "#000000"],
+    "light": false
+  },
+  "Stade Toulousain de légende": {
+    "logo": "/clubs/legendes/stade-toulousain.svg",
+    "colors": ["#111111", "#E30613"],
     "light": false
   },
   "Stormers": {

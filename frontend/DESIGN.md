@@ -120,6 +120,15 @@ des joueurs, des personnages low-poly en pixels. Nulle part ailleurs.
   1200 px au milieu de l'écran ; titre, champ, pastilles, en-tête de liste et bouton
   centrés ; les cartes (championnats, clubs, sélections) sur toute la largeur, toutes à
   la hauteur de la plus haute.
+- Match libre, choix de l'affiche (`/match-libre`, `.team-card`) : deux cartes face à
+  face, « VS » en gris entre elles. Chaque carte : qui la dirige (« Tu diriges » en
+  accent, ou « Le staff · diriger »), la famille en pastilles (Clubs, Sélections,
+  Légendes), le championnat entre deux flèches, puis l'équipe en grand : nom en
+  capitales, blason (120 px) entre deux flèches, niveau en cinq crans par demi-crans
+  (pas d'étoiles), attaque / avants / défense sur 20. « Toutes les équipes » montre le
+  championnat en liste dans la carte, « Au hasard » en tire une. La carte du joueur porte
+  un filet à la couleur de son club, et l'interface prend cette couleur. Téléphone : les
+  cartes l'une sous l'autre, blason à 80 px, la page défile.
 - Bilan de fin de saison : grande fenêtre (`Modal`) qui s'ouvre après la finale (ou par
   « Bilan de la saison »), en trois étapes repérées par des pastilles : résultats (titre
   en capitales, chiffres clés, meilleurs marqueurs), vie du club (les lignes de la carte

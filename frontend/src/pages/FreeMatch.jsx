@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 
 import { api } from "../api.js";
+import { useClubTheme } from "../clubs.js";
 import ClubCrest from "../components/ClubCrest.jsx";
 import { ActionError } from "../components/FullGame.jsx";
 import LineupPicker from "../components/LineupPicker.jsx";
@@ -143,6 +144,17 @@ function Setup({ picks, onStarted }) {
 
 // --- Le choix des deux équipes ----------------------------------------------------------
 
+// Les familles d'équipes, en tête de chaque carte ; les groupes du serveur s'y rangent.
+const CATEGORIES = [
+  ["clubs", "Clubs"],
+  ["nations", "Sélections"],
+  ["legends", "Légendes"],
+];
+const categoryOf = (code) => (code === "nations" ? "nations" : code.endsWith("legends") ? "legends" : "clubs");
+
+// Deux cartes face à face, une par équipe : la famille (clubs, sélections, légendes), le
+// championnat, puis l'équipe, qui défile aux flèches, avec son niveau et ses notes. Chaque
+// carte dit qui la dirige : toi, ou le staff. L'interface prend les couleurs de ton équipe.
 function Picker({ initial, onPrepared }) {
   const groups = useApi(useCallback(api.friendlyTeams, []));
   const [home, setHome] = useState(initial?.home ?? null);
@@ -151,19 +163,25 @@ function Picker({ initial, onPrepared }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
+  const teams = new Map((groups.data ?? []).flatMap((group) => group.teams.map((team) => [team.id, team])));
+  // Sans affiche d'avant, les deux premières équipes du premier championnat.
+  const first = groups.data?.[0]?.teams ?? [];
+  const homeId = home ?? first[0]?.id ?? null;
+  const awayId = away ?? first[1]?.id ?? null;
+  useClubTheme(teams.get(mine === "home" ? homeId : awayId)?.name);
+
   if (groups.error?.status === 401) return <Navigate to="/connexion" replace />;
   if (groups.loading) return <p className="status">Préparation des équipes…</p>;
   if (groups.error) return <p className="status status--error">{groups.error.message}</p>;
-  if (groups.data.length === 0) return <p className="status status--error">Aucune équipe à choisir.</p>;
+  if (teams.size < 2) return <p className="status status--error">Aucune équipe à choisir.</p>;
 
-  const names = new Map(groups.data.flatMap((group) => group.teams.map((team) => [team.id, team.name])));
-  const ready = home !== null && away !== null && home !== away;
+  const ready = homeId !== null && awayId !== null && homeId !== awayId;
 
   async function prepare() {
     setBusy(true);
     setError(null);
     try {
-      onPrepared(await api.prepareFriendly(home, away, mine === "home" ? home : away));
+      onPrepared(await api.prepareFriendly(homeId, awayId, mine === "home" ? homeId : awayId));
     } catch (err) {
       setError(err);
       setBusy(false);
@@ -172,47 +190,217 @@ function Picker({ initial, onPrepared }) {
 
   return (
     <>
-      <header className="page-head">
+      <header className="page-head friendly__title">
         <div>
           <h1 className="title">Choisis l'affiche</h1>
           <p className="muted" style={{ margin: "8px 0 0" }}>
-            Clubs et sélections se mélangent. Rien n'est gardé : ni résultat, ni blessure.
+            Clubs, sélections et légendes se mélangent. Rien n'est gardé : ni résultat, ni blessure.
           </p>
         </div>
       </header>
 
       <div className="friendly__teams">
-        <TeamColumn label="À domicile" groups={groups.data} chosen={home} other={away} onPick={setHome} />
-        <TeamColumn label="À l'extérieur" groups={groups.data} chosen={away} other={home} onPick={setAway} />
+        <TeamCard
+          label="À domicile"
+          groups={groups.data}
+          chosen={homeId}
+          other={awayId}
+          onPick={setHome}
+          mine={mine === "home"}
+          onMine={() => setMine("home")}
+        />
+        <p className="friendly__versus" aria-hidden="true">
+          VS
+        </p>
+        <TeamCard
+          label="À l'extérieur"
+          groups={groups.data}
+          chosen={awayId}
+          other={homeId}
+          onPick={setAway}
+          mine={mine === "away"}
+          onMine={() => setMine("away")}
+        />
       </div>
 
       <ActionError error={error} />
 
       <div className="friendly__submit">
-        {ready && (
-          <div className="chips" role="group" aria-label="Tu diriges">
-            {[
-              ["home", home],
-              ["away", away],
-            ].map(([side, id]) => (
-              <button
-                key={side}
-                type="button"
-                className="chip with-crest"
-                aria-pressed={mine === side}
-                onClick={() => setMine(side)}
-              >
-                <ClubCrest name={names.get(id)} size={18} />
-                Je dirige {names.get(id)}
-              </button>
-            ))}
-          </div>
-        )}
+        <p className="muted friendly__mine">
+          Tu diriges <strong>{teams.get(mine === "home" ? homeId : awayId)?.name}</strong>, le staff l'autre équipe.
+        </p>
         <button type="button" className="button button--primary" disabled={!ready || busy} onClick={prepare}>
           {busy ? "Composition des équipes…" : "Composer mon XV"}
         </button>
       </div>
     </>
+  );
+}
+
+// Une carte : qui la dirige, la famille, le championnat, puis l'équipe. « Toutes les
+// équipes » montre le championnat d'un coup, à la place de l'équipe ; « Au hasard » en
+// tire une, toutes familles confondues. L'équipe d'en face ne se choisit pas deux fois.
+function TeamCard({ label, groups, chosen, other, onPick, mine, onMine }) {
+  const phone = useMediaQuery(PHONE_QUERY);
+  const [listing, setListing] = useState(false);
+  const group = groups.find((item) => item.teams.some((team) => team.id === chosen)) ?? groups[0];
+  const team = group.teams.find((item) => item.id === chosen) ?? group.teams[0];
+  const category = categoryOf(group.code);
+  const siblings = groups.filter((item) => categoryOf(item.code) === category);
+  const free = (list) => list.filter((item) => item.id !== other);
+
+  // La première équipe libre d'un groupe (ou du suivant, s'il n'a que l'adversaire).
+  function openGroup(next) {
+    const pick = free(next.teams)[0];
+    if (pick) onPick(pick.id);
+    setListing(false);
+  }
+
+  function step(list, current, delta) {
+    return list[(list.indexOf(current) + delta + list.length) % list.length];
+  }
+
+  // L'équipe d'à côté dans l'ordre du championnat, en sautant l'adversaire.
+  function stepTeam(delta) {
+    const count = group.teams.length;
+    const index = group.teams.indexOf(team);
+    for (let move = 1; move < count; move += 1) {
+      const next = group.teams[(((index + delta * move) % count) + count) % count];
+      if (next.id !== other) {
+        onPick(next.id);
+        return;
+      }
+    }
+  }
+
+  function random() {
+    const all = free(groups.flatMap((item) => item.teams)).filter((item) => item.id !== team.id);
+    if (all.length) onPick(all[Math.floor(Math.random() * all.length)].id);
+    setListing(false);
+  }
+
+  return (
+    <section className={`card team-card${mine ? " team-card--mine" : ""}`} aria-label={label}>
+      <div className="team-card__head">
+        <p className="eyebrow">{label}</p>
+        <button type="button" className="chip chip--small" aria-pressed={mine} onClick={onMine}>
+          {mine ? "Tu diriges" : "Le staff · diriger"}
+        </button>
+      </div>
+
+      <div className="chips team-card__families" role="group" aria-label={`${label} : famille d'équipes`}>
+        {CATEGORIES.filter(([key]) => groups.some((item) => categoryOf(item.code) === key)).map(([key, name]) => (
+          <button
+            key={key}
+            type="button"
+            className="chip chip--small"
+            aria-pressed={key === category}
+            onClick={() => openGroup(groups.find((item) => categoryOf(item.code) === key))}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+
+      <Stepper
+        label={`${label} : championnat`}
+        disabled={siblings.length < 2}
+        onPrevious={() => openGroup(step(siblings, group, -1))}
+        onNext={() => openGroup(step(siblings, group, 1))}
+      >
+        <span className="team-card__group">{group.name}</span>
+      </Stepper>
+
+      {listing ? (
+        <div className="club-list__scroll team-card__list">
+          <ul className="club-list">
+            {group.teams.map((item) => (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  className="club-option"
+                  aria-pressed={item.id === team.id}
+                  disabled={item.id === other}
+                  onClick={() => {
+                    onPick(item.id);
+                    setListing(false);
+                  }}
+                >
+                  <span className="club-option__name with-crest">
+                    <ClubCrest name={item.name} size={28} />
+                    {item.name}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <div className="team-card__team">
+          <h2 className="team-card__name">{team.name}</h2>
+          <Stepper
+            label={`${label} : équipe`}
+            disabled={free(group.teams).length < 2}
+            onPrevious={() => stepTeam(-1)}
+            onNext={() => stepTeam(1)}
+          >
+            <ClubCrest name={team.name} size={phone ? 80 : 120} className="team-card__crest" />
+          </Stepper>
+          {team.level != null && <Level value={team.level} />}
+          {team.attack != null && (
+            <dl className="team-card__notes">
+              {[
+                ["Attaque", team.attack],
+                ["Avants", team.forwards],
+                ["Défense", team.defense],
+              ].map(([name, value]) => (
+                <div key={name}>
+                  <dt>{name}</dt>
+                  <dd>{formatNote(value)}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </div>
+      )}
+
+      <div className="team-card__foot">
+        <button type="button" className="button button--small" onClick={() => setListing((open) => !open)}>
+          {listing ? "Retour à l'équipe" : "Toutes les équipes"}
+        </button>
+        <button type="button" className="button button--small" onClick={random}>
+          Au hasard
+        </button>
+      </div>
+    </section>
+  );
+}
+
+// Un contenu entre deux flèches (championnat, équipe).
+function Stepper({ label, disabled, onPrevious, onNext, children }) {
+  return (
+    <div className="stepper" role="group" aria-label={label}>
+      <button type="button" className="stepper__arrow" aria-label="Précédent" disabled={disabled} onClick={onPrevious}>
+        ‹
+      </button>
+      <div className="stepper__body">{children}</div>
+      <button type="button" className="stepper__arrow" aria-label="Suivant" disabled={disabled} onClick={onNext}>
+        ›
+      </button>
+    </div>
+  );
+}
+
+// Le niveau de l'équipe parmi toutes celles au choix : cinq crans, par demi-crans.
+function Level({ value }) {
+  return (
+    <div className="level" role="img" aria-label={`Niveau ${formatNote(value)} sur 5`}>
+      {[1, 2, 3, 4, 5].map((cell) => (
+        <span key={cell} className="level__cell">
+          <span style={{ width: `${Math.max(0, Math.min(1, value - cell + 1)) * 100}%` }} />
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -341,71 +529,5 @@ function Composition({ setup, onChange, onBack, onStarted }) {
         />
       )}
     </>
-  );
-}
-
-// Une colonne : le championnat (ou les sélections), puis l'équipe. Sur téléphone, le
-// championnat se choisit dans un menu : les pastilles mangeraient la liste.
-function TeamColumn({ label, groups, chosen, other, onPick }) {
-  const phone = useMediaQuery(PHONE_QUERY);
-  const [code, setCode] = useState(
-    () => groups.find((group) => group.teams.some((team) => team.id === chosen))?.code ?? groups[0].code,
-  );
-  const group = groups.find((item) => item.code === code) ?? groups[0];
-  return (
-    <section className="section friendly__column">
-      <div className="section__head">
-        <p className="eyebrow">{label}</p>
-        {phone && (
-          <select
-            className="input tactics__select"
-            aria-label={`${label} : championnat`}
-            value={group.code}
-            onChange={(event) => setCode(event.target.value)}
-          >
-            {groups.map((item) => (
-              <option key={item.code} value={item.code}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
-      {!phone && (
-        <div className="chips friendly__groups" role="group" aria-label={`${label} : championnat`}>
-          {groups.map((item) => (
-            <button
-              key={item.code}
-              type="button"
-              className="chip chip--small"
-              aria-pressed={item.code === group.code}
-              onClick={() => setCode(item.code)}
-            >
-              {item.name}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="club-list__scroll">
-        <ul className="club-list friendly__list">
-          {group.teams.map((team) => (
-            <li key={team.id}>
-              <button
-                type="button"
-                className="club-option"
-                aria-pressed={team.id === chosen}
-                disabled={team.id === other}
-                onClick={() => onPick(team.id)}
-              >
-                <span className="club-option__name with-crest">
-                  <ClubCrest name={team.name} size={28} />
-                  {team.name}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
   );
 }

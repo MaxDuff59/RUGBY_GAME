@@ -68,7 +68,7 @@ def legend_choices(code: str) -> list[legends.LegendTeam]:
     """Les équipes de légende qui peuvent prendre la place de leur pays (Coupe du monde)."""
     if code != WORLD_CUP:
         return []
-    return [team for team in legends.LEGENDS if team.nation in rules.WORLD_CUP.nations]
+    return [team for team in legends.NATION_LEGENDS if team.nation in rules.WORLD_CUP.nations]
 
 
 def add_legends(session: Session, team: legends.LegendTeam) -> None:

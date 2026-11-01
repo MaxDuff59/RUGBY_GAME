@@ -32,7 +32,14 @@ from data.derbies import derby
 from data.leagues import LEAGUES, league_config
 from data.nations import NATIONS, NATIONS_BY_ID
 from engine import internationals as rules
-from engine.match_engine import SLOT_POSITIONS, LiveMatch, Tactics, staff_tactics, team_strength
+from engine.match_engine import (
+    SLOT_NUMBERS,
+    SLOT_POSITIONS,
+    LiveMatch,
+    Tactics,
+    staff_tactics,
+    team_strength,
+)
 from engine.weather import forecast
 from models import Club, Squad, Stage
 from models.orm import ClubRow, PlayerRow
@@ -112,8 +119,10 @@ accounts.ON_PURGE.append(_forget)
 def reference() -> Session:
     """Une session sur le monde de référence, créé au premier appel (quelques secondes).
     Un monde resté à moitié fait (création interrompue) est refait de zéro."""
+    global _ratings
     with _reference_lock:
         if not _complete():
+            _ratings = None
             try:
                 database.new_slot(*REFERENCE, seed=REFERENCE_SEED)
                 with database.open_slot(*REFERENCE) as session:
@@ -158,7 +167,8 @@ class Group:
 
 def groups(session: Session) -> list[Group]:
     """Les équipes que l'on peut choisir : les clubs par championnat (dans l'ordre de
-    data/leagues.py, Top 14 en tête), puis les sélections et les équipes de légende."""
+    data/leagues.py, Top 14 en tête), puis les sélections, les nations et les clubs de
+    légende."""
     clubs: dict[str, list[tuple[int, str]]] = {}
     for club_id, name, league in session.execute(
         select(ClubRow.id, ClubRow.name, ClubRow.league).order_by(ClubRow.name)
@@ -173,8 +183,11 @@ def groups(session: Session) -> list[Group]:
         nations = sorted(((n.id, n.name) for n in NATIONS), key=lambda team: team[1])
         out.append(Group("nations", "Sélections nationales", nations))
         out.append(
-            Group("legends", "Équipes de légende", [(t.id, t.name) for t in legends.LEGENDS])
+            Group("legends", "Nations de légende", [(t.id, t.name) for t in legends.NATION_LEGENDS])
         )
+    out.append(
+        Group("club_legends", "Clubs de légende", [(t.id, t.name) for t in legends.CLUB_LEGENDS])
+    )
     return out
 
 
@@ -184,6 +197,58 @@ def names(session: Session) -> dict[int, str]:
         **{nation.id: nation.name for nation in NATIONS},
         **{team.id: team.name for team in legends.LEGENDS},
     }
+
+
+@dataclass(frozen=True)
+class Rating:
+    """Les notes d'une équipe au choix de l'affiche, sur 20, et son niveau de 1 à 5 (par
+    demi-crans) parmi toutes les équipes au choix."""
+
+    attack: float
+    forwards: float  # conquête et paquet
+    defense: float
+    level: float
+
+
+_ratings: dict[int, Rating] | None = None
+# Le niveau va de 1 à 5 entre la plus faible et la plus forte des équipes au choix.
+LEVELS = 5
+
+
+def ratings(session: Session) -> dict[int, Rating]:
+    """Les notes de chaque équipe au choix, telles que son staff l'alignerait : calculées
+    une fois (le monde de référence ne bouge pas), puis gardées en mémoire."""
+    global _ratings
+    if _ratings is not None:
+        return _ratings
+    day = datetime.date.today()
+    teams = list(load_clubs(session, session.scalars(select(ClubRow.id))).values())
+    if internationals.has_nations(session):
+        pools = internationals.eligible_players(session)
+        teams += [
+            rules.national_team(nation, rules.pick_squad(pools.get(nation.code, []), day))
+            for nation in NATIONS
+        ]
+    teams += [
+        Club(id=t.id, name=t.name, players=legends.players(t), lineup_choice=_legend_xv(t))
+        for t in legends.LEGENDS
+    ]
+    notes = {}
+    for team in teams:
+        strength = team_strength(team, day)
+        notes[team.id] = (strength.attack, strength.forward_dominance, strength.defense)
+    overall = {team_id: sum(values) / 3 for team_id, values in notes.items()}
+    low, high = min(overall.values()), max(overall.values())
+
+    def level(value: float) -> float:
+        share = (value - low) / (high - low) if high > low else 1.0
+        return round(2 * (1 + (LEVELS - 1) * share)) / 2
+
+    _ratings = {
+        team_id: Rating(round(a, 1), round(f, 1), round(d, 1), level(overall[team_id]))
+        for team_id, (a, f, d) in notes.items()
+    }
+    return _ratings
 
 
 def _has_ground(team_id: int) -> bool:
@@ -203,6 +268,15 @@ def _squad(session: Session, nation_id: int, opponent: int, day: datetime.date) 
     return [p.id for p in rules.pick_squad(pool, day)]
 
 
+def _legend_xv(team: legends.LegendTeam) -> list[int | None]:
+    """Le XV d'une équipe de légende avant le staff : ses titulaires attitrés à leur
+    numéro (Julien Arias en 14 au Stade Français), les autres places vides."""
+    xv: list[int | None] = [None] * len(SLOT_NUMBERS)
+    for number, player_id in team.starters.items():
+        xv[SLOT_NUMBERS.index(number)] = player_id
+    return xv
+
+
 def _teams(session: Session, row: FriendlyRow) -> tuple[Club, Club]:
     """Les deux équipes du match, reconstruites depuis le monde de référence."""
     ids = (row.home_id, row.away_id)
@@ -219,12 +293,25 @@ def _teams(session: Session, row: FriendlyRow) -> tuple[Club, Club]:
             teams.append(rules.national_team(NATIONS_BY_ID[team], squad))
         elif team in legends.LEGENDS_BY_ID:
             legend = legends.LEGENDS_BY_ID[team]
-            teams.append(Club(id=legend.id, name=legend.name, players=legends.players(legend)))
+            teams.append(
+                Club(
+                    id=legend.id,
+                    name=legend.name,
+                    players=legends.players(legend),
+                    lineup_choice=_legend_xv(legend),
+                )
+            )
         else:
             teams.append(clubs[team])
-        # Le XV composé par le joueur ; celui de l'adversaire reste au staff.
+        # Le XV composé par le joueur, place par place, par-dessus celui d'avant le staff
+        # (vide, ou les titulaires attitrés d'une légende) ; l'adversaire reste au staff.
         if team == row.my_id:
-            teams[-1].lineup_choice = list(row.lineup or [])
+            before = teams[-1].lineup_choice
+            mine = list(row.lineup or [])
+            teams[-1].lineup_choice = [
+                mine[i] if i < len(mine) and mine[i] is not None else before[i]
+                for i in range(len(before))
+            ] + mine[len(before) :]
     return teams[0], teams[1]
 
 

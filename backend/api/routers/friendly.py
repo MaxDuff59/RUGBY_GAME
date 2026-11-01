@@ -39,12 +39,21 @@ from engine.match_engine import Tactics, team_strength
 router = APIRouter(prefix="/friendly", tags=["match libre"])
 
 
+class FriendlyTeamRef(ClubRef):
+    """Une équipe au choix et ses notes sur 20 (son XV du staff), niveau de 1 à 5."""
+
+    attack: float | None = None
+    forwards: float | None = None
+    defense: float | None = None
+    level: float | None = None
+
+
 class FriendlyGroupOut(BaseModel):
     """Un championnat et ses clubs, ou les sélections nationales."""
 
     code: str
     name: str
-    teams: list[ClubRef]
+    teams: list[FriendlyTeamRef]
 
 
 class FriendlyIn(BaseModel):
@@ -69,14 +78,22 @@ class FriendlyTeamOut(BaseModel):
 
 @router.get("/teams", response_model=list[FriendlyGroupOut])
 def teams(user: UserDep) -> list[FriendlyGroupOut]:
-    """Les équipes au choix : les clubs de chaque championnat, puis les sélections.
-    Le premier appel crée le monde de référence (quelques secondes)."""
+    """Les équipes au choix et leurs notes : les clubs de chaque championnat, puis les
+    sélections et les légendes. Le premier appel crée le monde de référence (quelques
+    secondes)."""
     with friendly.reference() as session:
+        notes = friendly.ratings(session)
+
+        def ref(team_id: int, name: str) -> FriendlyTeamRef:
+            rating = notes.get(team_id)
+            extra = vars(rating) if rating else {}
+            return FriendlyTeamRef(id=team_id, name=name, **extra)
+
         return [
             FriendlyGroupOut(
                 code=group.code,
                 name=group.name,
-                teams=[ClubRef(id=team_id, name=name) for team_id, name in group.teams],
+                teams=[ref(team_id, name) for team_id, name in group.teams],
             )
             for group in friendly.groups(session)
         ]
@@ -170,7 +187,7 @@ def _team_out(session, row: friendly.FriendlyRow) -> FriendlyTeamOut:
             facilities=FacilitiesOut.model_validate(team.facilities),
             strength=StrengthOut.from_team(team_strength(team, row.date)),
             players=[PlayerOut.from_player(player, row.date, known) for player in team.players],
-            lineup_custom=any(player_id is not None for player_id in team.lineup_choice),
+            lineup_custom=any(player_id is not None for player_id in row.lineup or []),
         ),
     )
 

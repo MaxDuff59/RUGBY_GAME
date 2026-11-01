@@ -7548,8 +7548,8 @@ td > .tag:first-child,
 
 /* --- Match libre ------------------------------------------------------------- */
 
-/* Le choix de l'affiche : deux colonnes (domicile, extérieur), chacune ses pastilles de
-   championnat et sa liste qui défile dans son cadre ; puis l'équipe dirigée et le bouton. */
+/* Le choix de l'affiche : deux cartes face à face (domicile, extérieur), un « VS » entre
+   elles ; puis l'équipe dirigée et le bouton. */
 .friendly {
   gap: 20px;
 }
@@ -7615,32 +7615,208 @@ td > .tag:first-child,
   text-align: right;
 }
 
+.friendly__title {
+  justify-content: center;
+  text-align: center;
+}
+
 .friendly__teams {
   flex: 1 1 0;
   min-height: 0;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
+  grid-template-columns: minmax(0, 460px) auto minmax(0, 460px);
+  justify-content: center;
+  align-items: stretch;
+  gap: 32px;
 }
 
-.friendly__column {
-  min-height: 0;
-}
-
-.friendly__groups {
-  flex-wrap: wrap;
-}
-
-.friendly__list {
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+.friendly__versus {
+  align-self: center;
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 40px;
+  color: var(--neutral-soft);
 }
 
 .friendly__submit {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   align-items: center;
-  gap: 16px;
+  gap: 24px;
   flex-wrap: wrap;
+}
+
+.friendly__mine {
+  margin: 0;
+}
+
+/* Une équipe au choix : qui la dirige, sa famille, son championnat, puis l'équipe en
+   grand (nom, blason entre deux flèches, niveau, notes). Celle du joueur porte un filet
+   à la couleur de son club. */
+.team-card {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 22px;
+}
+
+.team-card--mine {
+  border-color: var(--accent);
+  border-top-width: 4px;
+  padding-top: 15px;
+}
+
+.team-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.team-card__head .eyebrow {
+  margin: 0;
+}
+
+.team-card__families {
+  justify-content: center;
+}
+
+.team-card__group {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 13px;
+}
+
+.team-card__team {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px 0 4px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.team-card__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 34px;
+  line-height: 1;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.team-card__crest {
+  display: block;
+}
+
+.team-card__notes {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  text-align: center;
+}
+
+.team-card__notes dt {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.team-card__notes dd {
+  margin: 2px 0 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 40px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* « Toutes les équipes » : le championnat en liste, qui défile dans la carte. */
+.team-card__list {
+  flex: 1 1 0;
+  min-height: 160px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 12px;
+}
+
+.team-card__list .club-list {
+  grid-template-columns: 1fr;
+}
+
+.team-card__foot {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* Un contenu entre deux flèches. */
+.stepper {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.stepper__body {
+  display: flex;
+  justify-content: center;
+  text-align: center;
+  min-width: 0;
+}
+
+.stepper__arrow {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.stepper__arrow:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.stepper__arrow:disabled {
+  visibility: hidden;
+}
+
+/* Le niveau : cinq crans, remplis à la couleur du club (par demi-crans). */
+.level {
+  display: flex;
+  gap: 6px;
+}
+
+.level__cell {
+  width: 30px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+
+.level__cell > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.team-card:not(.team-card--mine) .level__cell > span {
+  background: var(--ink);
 }
 
 /* Téléphone : les deux colonnes l'une sous l'autre (les marges et les lignes de club
@@ -7678,13 +7854,58 @@ td > .tag:first-child,
     flex: 0 0 auto;
   }
 
+  /* Le choix de l'affiche défile lui aussi : les deux cartes l'une sous l'autre, plus
+     serrées. */
+  .friendly:has(.team-card) {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
   .friendly__teams {
-    grid-template-columns: 1fr;
-    gap: 16px;
+    flex: 0 0 auto;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .friendly__versus {
+    justify-self: center;
+    font-size: 24px;
+  }
+
+  .team-card {
+    gap: 10px;
+    padding: 14px 16px;
+  }
+
+  .team-card--mine {
+    padding-top: 11px;
+  }
+
+  .team-card__team {
+    gap: 10px;
+    padding-top: 12px;
+  }
+
+  .team-card__name {
+    font-size: 26px;
+  }
+
+  .team-card__notes dd {
+    font-size: 30px;
+  }
+
+  .team-card__list {
+    flex: none;
+    max-height: 320px;
   }
 
   .friendly__submit {
     justify-content: stretch;
+  }
+
+  .friendly__mine {
+    flex: 1 1 100%;
+    text-align: center;
   }
 
   .friendly__submit > .button {
