@@ -398,8 +398,8 @@ def _add_international_stage(engine: Engine) -> None:
 
 # Colonnes ajoutées après coup, SQLite comme Postgres, avec leur valeur pour les
 # parties d'avant : la météo et les statistiques des matchs (les matchs déjà joués
-# n'en ont pas), leur public et leur momentum, la discipline des joueurs et le capitaine
-# choisi par le manager.
+# n'en ont pas), leur public et leur momentum, la discipline des joueurs, le capitaine
+# choisi par le manager et l'équipe de légende d'une partie en compétition.
 ADDED_COLUMNS = {
     "matches": {
         "weather": "VARCHAR(8)",
@@ -437,6 +437,7 @@ ADDED_COLUMNS = {
         "tests": "JSON NOT NULL DEFAULT '{}'",
     },
     "cup_pools": {"competition": "VARCHAR(16) NOT NULL DEFAULT 'champions_cup'"},
+    "competition": {"legend": "VARCHAR(3)"},
     "clubs": {
         "captain_id": "INTEGER",
         "training_intensity": "VARCHAR(8) NOT NULL DEFAULT 'normal'",

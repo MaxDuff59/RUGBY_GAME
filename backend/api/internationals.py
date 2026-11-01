@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from api.deps import load_club
 from api.ledger import current_season, game_date
 from api.moves import delete_player
+from data.legends import LEGENDS_BY_NATION, LegendTeam
 from data.nations import (
     NATIONS_BY_CODE,
     NATIONS_BY_ID,
@@ -134,6 +135,21 @@ def next_test_date(session: Session, season: SeasonRow) -> datetime.date | None:
 # --- Les joueurs sélectionnables ------------------------------------------------------------
 
 
+def legend(session: Session) -> LegendTeam | None:
+    """L'équipe de légende qui joue à la place de son pays (mode compétition), ou None."""
+    code = session.scalar(select(CompetitionRow.legend))
+    return LEGENDS_BY_NATION.get(code) if code else None
+
+
+def list_size(session: Session, nation_code: str) -> int:
+    """Le nombre de joueurs d'une liste : 42, ou toute l'équipe de légende si elle en
+    compte moins."""
+    team = legend(session)
+    if team is not None and team.nation == nation_code:
+        return min(rules.SQUAD_SIZE, len(team.legends))
+    return rules.SQUAD_SIZE
+
+
 def club_names(session: Session) -> dict[int, str]:
     return dict(session.execute(select(ClubRow.id, ClubRow.name)).all())
 
@@ -155,6 +171,10 @@ def eligible_players(
         nation = NATIONS_BY_CODE[player.nationality]
         if rules.is_eligible(player, nation, names.get(player.club_id)):
             pool[nation.code].append(player)
+    team = legend(session)
+    if team is not None and team.nation in pool:
+        # Ses légendes, et elles seules, portent le maillot de leur pays.
+        pool[team.nation] = [p for p in pool[team.nation] if p.id in team.player_ids]
     return pool
 
 

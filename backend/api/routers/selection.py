@@ -143,7 +143,7 @@ def selection_out(session: Session, season: SeasonRow, where: Situation) -> Sele
         next_match=summary(where.upcoming[0]) if where.upcoming else None,
         next_day=where.next_day,
         record=record,
-        squad_size=rules.SQUAD_SIZE,
+        squad_size=internationals.list_size(session, nation.code),
     )
 
 
@@ -318,7 +318,7 @@ def _pool_out(session: Session, season: SeasonRow, where: Situation) -> PoolOut:
         nation=nation_out(nation),
         window=window,
         announced=where.call is not None,
-        size=rules.SQUAD_SIZE,
+        size=internationals.list_size(session, nation.code),
         quota=rules.SQUAD_QUOTA,
         minimum=rules.SQUAD_MINIMUM,
         selected=selected,
@@ -344,7 +344,8 @@ def get_pool(session: SessionDep) -> PoolOut:
 @router.post("/list", response_model=PoolOut, status_code=201)
 def announce_list(payload: SquadListIn, session: SessionDep) -> PoolOut:
     """Annonce la liste pour la prochaine fenêtre de la sélection : 42 joueurs
-    sélectionnables, de quoi remplir une feuille de match à chaque poste."""
+    sélectionnables (toute l'équipe de légende si elle en compte moins), de quoi remplir
+    une feuille de match à chaque poste."""
     _, season, where = _load(session)
     if where.window is None:
         raise HTTPException(status_code=400, detail="Plus aucun rendez-vous cette saison")
@@ -359,7 +360,10 @@ def announce_list(payload: SquadListIn, session: SessionDep) -> PoolOut:
         raise HTTPException(
             status_code=400, detail="Un joueur de la liste n'est pas sélectionnable"
         )
-    problem = rules.check_squad([eligible[player_id] for player_id in payload.player_ids])
+    problem = rules.check_squad(
+        [eligible[player_id] for player_id in payload.player_ids],
+        internationals.list_size(session, nation.code),
+    )
     if problem is not None:
         raise HTTPException(status_code=400, detail=problem)
     session.add(
@@ -496,7 +500,8 @@ def advance(session: SessionDep) -> AdvanceOut:
     if where.phase == "list":
         raise HTTPException(
             status_code=400,
-            detail=f"Annonce ta liste de {rules.SQUAD_SIZE} joueurs avant de continuer",
+            detail=f"Annonce ta liste de {internationals.list_size(session, where.nation.code)} "
+            "joueurs avant de continuer",
         )
     day = where.next_day
     result = _play_day(session, season, day)

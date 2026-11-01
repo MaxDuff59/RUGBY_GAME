@@ -1960,6 +1960,11 @@ select.tactics__select {
   gap: 12px;
 }
 
+/* Un second groupe dans la même liste (les équipes de légende après les nations). */
+.club-list__heading {
+  margin: 24px 0 12px;
+}
+
 .club-option {
   width: 100%;
   height: 100%;

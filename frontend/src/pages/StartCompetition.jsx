@@ -34,7 +34,8 @@ export default function StartCompetition() {
   const [managerName, setManagerName] = useState("");
   const [teamId, setTeamId] = useState(null);
   const [difficulty, setDifficulty] = useState("normal");
-  const chosen = competition.data?.teams.find((team) => team.id === teamId);
+  const choices = [...(competition.data?.teams ?? []), ...(competition.data?.legends ?? [])];
+  const chosen = choices.find((team) => team.id === teamId);
   useClubTheme(chosen?.name);
 
   if (competition.error?.status === 401) return <Navigate to="/connexion" replace />;
@@ -149,23 +150,13 @@ export default function StartCompetition() {
           </p>
         </div>
         <div className="club-list__scroll">
-          <ul className="club-list">
-            {competition.data.teams.map((team) => (
-              <li key={team.id}>
-                <button
-                  type="button"
-                  className="club-option"
-                  aria-pressed={team.id === teamId}
-                  onClick={() => setTeamId(team.id)}
-                >
-                  <span className="club-option__name with-crest">
-                    <ClubCrest name={team.name} size={32} />
-                    {team.name}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <TeamList teams={competition.data.teams} chosen={teamId} onPick={setTeamId} />
+          {competition.data.legends.length > 0 && (
+            <>
+              <p className="eyebrow club-list__heading">Équipes de légende · à la place de leur pays</p>
+              <TeamList teams={competition.data.legends} chosen={teamId} onPick={setTeamId} />
+            </>
+          )}
         </div>
       </div>
 
@@ -177,5 +168,22 @@ export default function StartCompetition() {
         </button>
       </div>
     </form>
+  );
+}
+
+function TeamList({ teams, chosen, onPick }) {
+  return (
+    <ul className="club-list">
+      {teams.map((team) => (
+        <li key={team.id}>
+          <button type="button" className="club-option" aria-pressed={team.id === chosen} onClick={() => onPick(team.id)}>
+            <span className="club-option__name with-crest">
+              <ClubCrest name={team.name} size={32} />
+              {team.name}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }

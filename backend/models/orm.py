@@ -725,6 +725,9 @@ class CompetitionRow(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     # Code de la compétition : `champions_cup` ou `world_cup`.
     code: Mapped[str] = mapped_column(String(LEAGUE_CODE_LENGTH))
+    # Coupe du monde : l'équipe de légende qui joue à la place de son pays (le code du
+    # pays, data/legends.py), None pour la vraie sélection.
+    legend: Mapped[str | None] = mapped_column(String(3), default=None)
 
 
 class SelectorRow(Base):

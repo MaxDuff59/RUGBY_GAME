@@ -1,4 +1,5 @@
-"""Le match libre : deux équipes au choix, clubs ou sélections, hors de toute carrière.
+"""Le match libre : deux équipes au choix, clubs, sélections ou équipes de légende
+(data/legends.py), hors de toute carrière.
 
 Les équipes viennent d'un monde de référence partagé par tous les comptes : une partie
 rangée sous un compte qui n'existe pas (`REFERENCE`), créée au premier match libre avec
@@ -8,7 +9,8 @@ un joueur sans partie, ou un invité, peut en jouer un, et aucune carrière n'es
 
 Entre deux requêtes, l'état complet du moteur dort dans la ligne, comme pour le match
 en direct d'une carrière (api/live.py) ; les équipes se reconstruisent à chaque fois
-depuis le monde de référence (le club entier, ou la liste de la sélection).
+depuis le monde de référence (le club entier, ou la liste de la sélection). Une équipe de
+légende n'est pas dans ce monde : ses joueurs se recréent depuis data/legends.py.
 """
 
 import datetime
@@ -25,6 +27,7 @@ import database
 from api import internationals
 from api.deps import load_clubs
 from api.live import Live
+from data import legends
 from data.derbies import derby
 from data.leagues import LEAGUES, league_config
 from data.nations import NATIONS, NATIONS_BY_ID
@@ -155,7 +158,7 @@ class Group:
 
 def groups(session: Session) -> list[Group]:
     """Les équipes que l'on peut choisir : les clubs par championnat (dans l'ordre de
-    data/leagues.py, Top 14 en tête), puis les sélections."""
+    data/leagues.py, Top 14 en tête), puis les sélections et les équipes de légende."""
     clubs: dict[str, list[tuple[int, str]]] = {}
     for club_id, name, league in session.execute(
         select(ClubRow.id, ClubRow.name, ClubRow.league).order_by(ClubRow.name)
@@ -169,6 +172,9 @@ def groups(session: Session) -> list[Group]:
     if internationals.has_nations(session):
         nations = sorted(((n.id, n.name) for n in NATIONS), key=lambda team: team[1])
         out.append(Group("nations", "Sélections nationales", nations))
+        out.append(
+            Group("legends", "Équipes de légende", [(t.id, t.name) for t in legends.LEGENDS])
+        )
     return out
 
 
@@ -176,7 +182,13 @@ def names(session: Session) -> dict[int, str]:
     return {
         **dict(session.execute(select(ClubRow.id, ClubRow.name)).all()),
         **{nation.id: nation.name for nation in NATIONS},
+        **{team.id: team.name for team in legends.LEGENDS},
     }
+
+
+def _has_ground(team_id: int) -> bool:
+    """Un club a son stade ; une sélection ou une légende joue par temps sec chez elle."""
+    return team_id not in NATIONS_BY_ID and team_id not in legends.LEGENDS_BY_ID
 
 
 # --- Les équipes du match ----------------------------------------------------------------
@@ -194,7 +206,7 @@ def _squad(session: Session, nation_id: int, opponent: int, day: datetime.date) 
 def _teams(session: Session, row: FriendlyRow) -> tuple[Club, Club]:
     """Les deux équipes du match, reconstruites depuis le monde de référence."""
     ids = (row.home_id, row.away_id)
-    clubs = load_clubs(session, [team for team in ids if team not in NATIONS_BY_ID])
+    clubs = load_clubs(session, [team for team in ids if _has_ground(team)])
     wanted = [player_id for team in ids for player_id in row.squads.get(str(team), [])]
     players = {
         p.id: p.to_domain()
@@ -205,6 +217,9 @@ def _teams(session: Session, row: FriendlyRow) -> tuple[Club, Club]:
         if team in NATIONS_BY_ID:
             squad = [players[i] for i in row.squads[str(team)] if i in players]
             teams.append(rules.national_team(NATIONS_BY_ID[team], squad))
+        elif team in legends.LEGENDS_BY_ID:
+            legend = legends.LEGENDS_BY_ID[team]
+            teams.append(Club(id=legend.id, name=legend.name, players=legends.players(legend)))
         else:
             teams.append(clubs[team])
         # Le XV composé par le joueur ; celui de l'adversaire reste au staff.
@@ -301,8 +316,7 @@ def kick_off(session: Session, row: FriendlyRow) -> Live:
         home_tactics=opponent_tactics if home is opponent else Tactics(),
         away_tactics=opponent_tactics if away is opponent else Tactics(),
         auto={opponent.id},
-        # Une sélection n'a pas de stade dans le jeu : temps sec chez elle.
-        weather=forecast(home, row.date if home.id not in NATIONS_BY_ID else None),
+        weather=forecast(home, row.date if _has_ground(home.id) else None),
         derby=derby(known[row.home_id], known[row.away_id]) is not None,
         coach=row.my_id,
     )

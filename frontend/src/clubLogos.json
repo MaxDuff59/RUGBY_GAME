@@ -14,9 +14,19 @@
     "colors": ["#0B5A3C", "#F2C230"],
     "light": false
   },
+  "Afrique du Sud de légende": {
+    "logo": "/clubs/legendes/afrique-du-sud.svg",
+    "colors": ["#0B5A3C", "#F2C230"],
+    "light": false
+  },
   "Angleterre": {
     "logo": "/clubs/angleterre.png",
     "colors": ["#C8102E", "#FFFFFF"],
+    "light": false
+  },
+  "Angleterre de légende": {
+    "logo": "/clubs/legendes/angleterre.svg",
+    "colors": ["#C8102E", "#D9A93A"],
     "light": false
   },
   "Argentine": {
@@ -27,6 +37,11 @@
   "Australie": {
     "logo": "/clubs/australie.png",
     "colors": ["#B57A00", "#0B5A3C"],
+    "light": false
+  },
+  "Australie de légende": {
+    "logo": "/clubs/legendes/australie.svg",
+    "colors": ["#F0B323", "#0B5A3C"],
     "light": false
   },
   "Aviron Bayonnais": {
@@ -125,6 +140,11 @@
     "colors": ["#0B2A6F", "#FFFFFF"],
     "light": false
   },
+  "France de légende": {
+    "logo": "/clubs/legendes/france.svg",
+    "colors": ["#0B2A6F", "#D9A93A"],
+    "light": false
+  },
   "Glasgow Warriors": {
     "logo": "/clubs/glasgow-warriors.png",
     "colors": ["#002D72", "#6EC1E4"],
@@ -158,6 +178,11 @@
   "Irlande": {
     "logo": "/clubs/irlande.png",
     "colors": ["#0E7C4A", "#FFFFFF"],
+    "light": false
+  },
+  "Irlande de légende": {
+    "logo": "/clubs/legendes/irlande.svg",
+    "colors": ["#0E7C4A", "#D9A93A"],
     "light": false
   },
   "Italie": {
@@ -225,6 +250,11 @@
     "colors": ["#111111", "#FFFFFF"],
     "light": true
   },
+  "Nouvelle-Zélande de légende": {
+    "logo": "/clubs/legendes/nouvelle-zelande.svg",
+    "colors": ["#111111", "#D9A93A"],
+    "light": false
+  },
   "Oyonnax Rugby": {
     "logo": "/clubs/oyonnax-rugby.png",
     "colors": ["#D50032", "#000000"],
@@ -233,6 +263,11 @@
   "Pays de Galles": {
     "logo": "/clubs/pays-de-galles.png",
     "colors": ["#B5121B", "#FFFFFF"],
+    "light": false
+  },
+  "Pays de Galles de légende": {
+    "logo": "/clubs/legendes/pays-de-galles.svg",
+    "colors": ["#B5121B", "#D9A93A"],
     "light": false
   },
   "Portugal": {

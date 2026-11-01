@@ -11,6 +11,11 @@ championnats se jouent, le joueur gère son effectif entre deux matchs. Ce qui c
 - la direction ne limoge pas le manager (routers/seasons.py) ;
 - la partie s'arrête au titre ou à l'élimination (`status`) : plus de journée à jouer.
 
+En Coupe du monde, le joueur peut aussi prendre une équipe de légende (data/legends.py) :
+elle joue à la place de son pays, sous son identifiant (même poule, même tableau), et
+ses légendes sont les seuls joueurs sélectionnables de ce pays (api/internationals.py).
+Elles entrent dans le monde au choix de l'équipe (`add_legends`), hors du marché.
+
 Le club en Coupe d'Europe avance de match de coupe en match de coupe : l'interface
 enchaîne les journées de championnat entre deux, menées par le staff.
 """
@@ -22,11 +27,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api import cup, internationals
+from data import legends
 from data.nations import NATIONS_BY_CODE, NATIONS_BY_ID
 from engine import europe
 from engine import internationals as rules
 from models import Stage
-from models.orm import CareerRow, ClubRow, CompetitionRow, SeasonRow
+from models.orm import CareerRow, ClubRow, CompetitionRow, PlayerRow, SeasonRow
 
 CHAMPIONS_CUP = europe.CODE
 WORLD_CUP = rules.WORLD_CUP.code
@@ -56,6 +62,20 @@ def participants(session: Session, season: SeasonRow, code: str) -> list[tuple[i
     else:
         teams = [(NATIONS_BY_CODE[c].id, NATIONS_BY_CODE[c].name) for c in rules.WORLD_CUP.nations]
     return sorted(teams, key=lambda team: team[1])
+
+
+def legend_choices(code: str) -> list[legends.LegendTeam]:
+    """Les équipes de légende qui peuvent prendre la place de leur pays (Coupe du monde)."""
+    if code != WORLD_CUP:
+        return []
+    return [team for team in legends.LEGENDS if team.nation in rules.WORLD_CUP.nations]
+
+
+def add_legends(session: Session, team: legends.LegendTeam) -> None:
+    """Fait entrer l'équipe de légende dans le monde, à la place de son pays."""
+    session.add_all(PlayerRow.from_domain(player) for player in legends.players(team))
+    current(session).legend = team.nation
+    session.commit()
 
 
 def team_id(session: Session) -> int | None:

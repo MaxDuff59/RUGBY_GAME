@@ -140,6 +140,39 @@ def test_world_cup_only_with_an_invited_nation(client):
     assert again["team"]["id"] == japan["id"] and not again["over"]
 
 
+def test_world_cup_with_a_legend_team_in_place_of_its_nation(client):
+    cup = client.post("/competition", json={"code": "world_cup"}).json()
+    legends = next(t for t in cup["legends"] if t["name"] == "France de légende")
+    france = next(t for t in cup["teams"] if t["name"] == "France")
+    taken = client.post(
+        "/competition/team", json={"manager_name": "Max", "team_id": legends["id"]}
+    )
+    assert taken.status_code == 201 and taken.json()["nation"] == "FRA"
+    assert client.get("/competition").json()["team"] == legends
+
+    # Ses légendes sont les seules sélectionnables, et toutes de la liste.
+    selection = client.get("/selection").json()
+    pool = client.get("/selection/pool").json()
+    names = {f"{p['player']['first_name']} {p['player']['last_name']}" for p in pool["players"]}
+    assert "Antoine Dupont" in names and "Serge Blanco" in names
+    assert pool["size"] == selection["squad_size"] == len(pool["players"]) < 42
+
+    for _ in range(MAX_DAYS):
+        status = client.get("/competition").json()
+        if status["over"]:
+            break
+        if client.get("/selection").json()["phase"] == "list":
+            suggested = client.get("/selection/pool").json()["suggested"]
+            assert client.post("/selection/list", json={"player_ids": suggested}).status_code == 201
+        assert client.post("/selection/advance").status_code == 200
+    assert status["over"] and status["result"]
+    # Elle a joué sous l'identifiant de son pays, dans la poule de la France.
+    assert france["id"] in [r["club"]["id"] for r in status["pool"]["table"]]
+
+    again = client.post("/competition/restart").json()
+    assert again["team"] == legends and not again["over"]
+
+
 def test_a_started_game_is_not_a_competition(client):
     assert client.get("/competition").status_code == 404
     toulouse = next(c for c in client.get("/clubs").json() if c["name"] == "Stade Toulousain")

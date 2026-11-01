@@ -25,7 +25,7 @@ def test_club_against_nation_without_any_save(guest, monkeypatch):
     # Les dilemmes du joueur arrêteraient le chrono avant dix minutes : testés plus bas.
     monkeypatch.setattr(dilemmas, "COACH_DILEMMA_CHANCE", 0.0)
     groups = guest.get("/friendly/teams").json()
-    assert groups[-1]["code"] == "nations"
+    assert [g["code"] for g in groups[-2:]] == ["nations", "legends"]
     assert {"top14", "premiership", "urc"} <= {g["code"] for g in groups}
     toulouse = _team(groups, "Stade Toulousain")
     france = _team(groups, "France")
@@ -91,6 +91,31 @@ def test_club_against_nation_without_any_save(guest, monkeypatch):
     assert guest.delete("/friendly").status_code == 204
     assert guest.get("/friendly").status_code == 404
     assert guest.post("/friendly/replay").status_code == 404
+
+
+def test_legends_against_their_nation(guest):
+    groups = guest.get("/friendly/teams").json()
+    legends = _team(groups, "France de légende")
+    france = _team(groups, "France")
+    setup = guest.post(
+        "/friendly", json={"home_id": legends, "away_id": france, "my_id": legends}
+    ).json()
+    assert setup["home"]["name"] == "France de légende"
+    names = {f"{p['first_name']} {p['last_name']}" for p in setup["team"]["players"]}
+    assert {"Antoine Dupont", "Serge Blanco", "Philippe Sella"} <= names
+    # Les légendes sont un cran au-dessus de la sélection d'aujourd'hui.
+    mine = setup["team"]["strength"]
+    guest.delete("/friendly")
+    today = guest.post(
+        "/friendly", json={"home_id": legends, "away_id": france, "my_id": france}
+    ).json()["team"]["strength"]
+    assert mine["attack"] > today["attack"] and mine["defense"] > today["defense"]
+
+    guest.post("/friendly", json={"home_id": legends, "away_id": france, "my_id": legends})
+    live = guest.post("/friendly/kickoff").json()
+    assert live["home"]["club"]["name"] == "France de légende"
+    done = guest.post("/friendly/finish").json()
+    assert done["finished"] is True
 
 
 def test_friendly_refuses_bad_choices(guest):

@@ -3,8 +3,9 @@
 Dans un emplacement neuf, `POST /competition` choisit la Coupe d'Europe ou la Coupe du
 monde et tire la saison (les qualifiés de la Coupe d'Europe en dépendent) ; puis
 `POST /competition/team` prend un des participants, comme une carrière de club ou de
-sélectionneur. `GET /competition` dit où en est l'équipe : en course, ou la partie
-finie (titre ou élimination), et son parcours. Une fois finie,
+sélectionneur, ou en Coupe du monde une équipe de légende, à la place de son pays.
+`GET /competition` dit où en est l'équipe : en course, ou la partie finie (titre ou
+élimination), et son parcours. Une fois finie,
 `POST /competition/restart` rejoue la même compétition avec la même équipe, dans un
 monde neuf du même emplacement.
 """
@@ -24,6 +25,7 @@ from api.routers.career import selector_out, start_career
 from api.routers.internationals import _standings
 from api.routers.seasons import FIRST_SEASON_YEAR, _cup_out, create_season, next_fixture
 from api.schemas import CareerIn, CareerOut, ClubRef, CupPoolOut, CupRowOut
+from data import legends
 from data.nations import NATIONS_BY_ID
 from database import NoSaveLoaded, new_slot, open_slot, slot_exists
 from engine import internationals as rules
@@ -62,6 +64,8 @@ class CompetitionOut(BaseModel):
     code: str
     name: str
     teams: list[ClubRef]  # les participants, au choix tant que l'équipe n'est pas prise
+    # Coupe du monde : les équipes de légende, chacune à la place de son pays.
+    legends: list[ClubRef] = []
     team: ClubRef | None
     over: bool
     result: str | None  # « Vainqueur », « Quart de finaliste »... une fois finie
@@ -83,19 +87,28 @@ def _out(session) -> CompetitionOut:
         raise HTTPException(status_code=404, detail="Cette partie n'est pas une compétition")
     teams = competition.participants(session, season, found.code) if season else []
 
+    legend = internationals.legend(session)
+
     def ref(team_id: int | None) -> ClubRef | None:
         if team_id is None:
             return None
         return ClubRef(id=team_id, name=competition.team_name(session, team_id))
 
+    def own(team_id: int | None) -> ClubRef | None:
+        """L'équipe du joueur, ou le champion : la légende plutôt que son pays."""
+        if legend is not None and team_id == legend.nation_id:
+            return ClubRef(id=legend.id, name=legend.name)
+        return ref(team_id)
+
     return CompetitionOut(
         code=found.code,
         name=competition.NAMES[found.code],
         teams=[ClubRef(id=team_id, name=name) for team_id, name in teams],
-        team=ref(found.team_id),
+        legends=[ClubRef(id=t.id, name=t.name) for t in competition.legend_choices(found.code)],
+        team=own(found.team_id),
         over=found.over,
         result=found.result,
-        champion=ref(found.champion_id),
+        champion=own(found.champion_id),
         next_date=found.next_date,
         ready=_ready(session, season, found),
         path=_path(found, ref),
@@ -203,11 +216,13 @@ def choose_competition(
 @router.post("/team", response_model=CareerOut, status_code=201)
 def choose_team(payload: CompetitionTeamIn, session: SessionDep, user: UserDep) -> CareerOut:
     """Prend une équipe de la compétition : un club qualifié pour la Coupe d'Europe,
-    ou une des seize nations de la Coupe du monde (invitées comprises)."""
+    une des seize nations de la Coupe du monde (invitées comprises), ou une équipe de
+    légende, qui joue alors la Coupe du monde à la place de son pays."""
     found = _out(session)
     if found.team is not None:
         raise HTTPException(status_code=409, detail=f"Tu diriges déjà {found.team.name}")
-    if payload.team_id not in {team.id for team in found.teams}:
+    choices = {team.id for team in found.teams} | {team.id for team in found.legends}
+    if payload.team_id not in choices:
         raise HTTPException(status_code=400, detail=f"Cette équipe ne joue pas la {found.name}")
     if found.code == competition.CHAMPIONS_CUP:
         return start_career(
@@ -219,7 +234,11 @@ def choose_team(payload: CompetitionTeamIn, session: SessionDep, user: UserDep) 
             session,
             user,
         )
-    row = SelectorRow(manager_name=payload.manager_name, nation=NATIONS_BY_ID[payload.team_id].code)
+    legend = legends.LEGENDS_BY_ID.get(payload.team_id)
+    if legend is not None:
+        competition.add_legends(session, legend)
+    nation = legend.nation if legend is not None else NATIONS_BY_ID[payload.team_id].code
+    row = SelectorRow(manager_name=payload.manager_name, nation=nation)
     session.add(row)
     session.commit()
     return selector_out(row)
@@ -246,7 +265,7 @@ def restart(user: UserDep) -> CompetitionOut:
     new_slot(user.id, slot)
     with open_slot(user.id, slot) as session:
         fresh = choose_competition(CompetitionIn(code=found.code), session, user)
-        if found.team.id in {team.id for team in fresh.teams}:
+        if found.team.id in {team.id for team in [*fresh.teams, *fresh.legends]}:
             choose_team(
                 CompetitionTeamIn(
                     manager_name=manager, team_id=found.team.id, difficulty=difficulty
