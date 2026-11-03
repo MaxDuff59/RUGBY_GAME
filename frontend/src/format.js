@@ -724,6 +724,346 @@ Object.assign(DILEMMAS, {
   },
 });
 
+// Les situations de la seconde vague, et la contre-attaque qui suit un ballon récupéré.
+Object.assign(DILEMMAS, {
+  high_ball: {
+    title: "Chandelle adverse",
+    text: "Une chandelle redescend sur toi dans tes 22, leurs chasseurs arrivent lancés.",
+    options: {
+      full: {
+        label: "La prendre de volée",
+        scope: "Jeu à la main, puissance : la disputer en l'air",
+        won: "Tu t'élèves plus haut que tout le monde : ballon pour nous !",
+        lost: "Le ballon t'échappe au contact, ils récupèrent.",
+      },
+      bounce: {
+        label: "La laisser rebondir",
+        scope: "Vitesse, appuis : partir sur le rebond",
+        won: "Le rebond est pour toi et tu pars dans le dos des chasseurs !",
+        lost: "Le rebond te trahit, ils ramassent.",
+      },
+      mark: {
+        label: "Arrêt de volée",
+        scope: "La voie sûre : le mark dans tes 22",
+        won: "« Marque ! » L'arbitre siffle, le danger est écarté.",
+        lost: "Tu relâches le ballon sous la pression.",
+      },
+    },
+  },
+  interception: {
+    title: "La passe à lire",
+    text: "Leur ouvreur arme une passe vers ton vis-à-vis, tu as lu l'intention.",
+    options: {
+      shoot: {
+        label: "Sortir de la ligne",
+        scope: "Vitesse, jeu à la main : tout ou rien",
+        won: "Interception ! Tu as le ballon et le champ libre.",
+        lost: "Il a vu venir : la passe passe dans ton dos.",
+      },
+      hold_line: {
+        label: "Tenir sa place",
+        scope: "La voie sûre : la ligne reste droite",
+        won: "La ligne ne bouge pas, ils ne gagnent rien.",
+        lost: "Ton vis-à-vis te prend quand même de vitesse.",
+      },
+      drift: {
+        label: "Glisser en défense",
+        scope: "Vitesse, plaquage : le pousser vers la touche",
+        won: "Tu l'accompagnes jusqu'au bord, il n'a plus d'espace.",
+        lost: "Il repique dans le trou que tu laisses.",
+      },
+    },
+  },
+  long_penalty: {
+    title: "Pénalité lointaine",
+    text: "Pénalité pour nous à 45 mètres, le ballon est pour toi.",
+    options: {
+      posts: {
+        label: "Viser les perches",
+        scope: "Jeu au pied : 3 points de loin",
+        won: "Le ballon passe entre les perches : trois points !",
+        lost: "Trop court : le ballon retombe devant les perches.",
+      },
+      touch_kick: {
+        label: "Jouer la touche",
+        scope: "La voie sûre : le lancer dans leurs 22",
+        won: "Superbe touche, le lancer est pour nous dans leurs 22.",
+        lost: "Le ballon reste en jeu, mal placé.",
+      },
+      quick_tap: {
+        label: "La jouer vite",
+        scope: "Vitesse, jeu à la main : les surprendre",
+        won: "Ils ont le dos tourné : tu files à toute allure !",
+        lost: "Ils étaient en place, tu te fais prendre.",
+      },
+    },
+  },
+  last_ditch: {
+    title: "La dernière chance",
+    text: "Leur ailier a percé, plus personne derrière toi. Tu reviens de toutes tes forces.",
+    options: {
+      ankle: {
+        label: "Plonger aux jambes",
+        scope: "Plaquage, vitesse : le faucher à la cheville",
+        won: "Du bout des doigts, tu le fais tomber !",
+        lost: "Ta main glisse sur sa cheville.",
+      },
+      push_touch: {
+        label: "Pousser en touche",
+        scope: "Puissance, vitesse : la voie la plus sûre",
+        won: "Tu l'envoies en touche à un mètre de la ligne !",
+        lost: "Il résiste et reste dans le terrain.",
+      },
+      hold_up: {
+        label: "Ceinturer et tenir le ballon",
+        scope: "Puissance, plaquage : l'empêcher d'aplatir",
+        won: "Il franchit la ligne mais ne pose jamais le ballon : tenu !",
+        lost: "Il s'arrache et plonge malgré toi.",
+      },
+    },
+  },
+  goal_scrum: {
+    title: "Mêlée sur notre ligne",
+    text: "Mêlée à cinq mètres de notre ligne, introduction pour eux.",
+    options: {
+      shove: {
+        label: "Pousser à la limite",
+        scope: "Mêlée, puissance : le ballon à reprendre",
+        won: "Leur mêlée recule, le ballon est pour nous !",
+        lost: "Tu te relèves trop tôt.",
+      },
+      hold_scrum: {
+        label: "Tenir sans risque",
+        scope: "La voie sûre : ne pas reculer",
+        won: "La mêlée ne bouge pas d'un centimètre.",
+        lost: "Le pack recule d'un pas.",
+      },
+      collapse: {
+        label: "Écrouler",
+        scope: "Puissance : la faute cachée, risquée",
+        won: "La mêlée s'écroule, l'arbitre fait rejouer.",
+        lost: "L'arbitre a tout vu.",
+      },
+    },
+  },
+  defend_maul: {
+    title: "Le maul avance",
+    text: "Ils ont formé leur maul à dix mètres de la ligne, et il avance.",
+    options: {
+      stop: {
+        label: "Entrer pour l'arrêter",
+        scope: "Puissance : arracher le ballon du maul",
+        won: "Le maul s'arrête net, le ballon est à nous !",
+        lost: "Le maul t'emporte avec lui.",
+      },
+      sack: {
+        label: "Écrouler",
+        scope: "Puissance, plaquage : à la limite de la faute",
+        won: "Le maul s'effondre sans que l'arbitre bronche.",
+        lost: "L'arbitre siffle l'effondrement.",
+      },
+      wait: {
+        label: "Attendre à la sortie",
+        scope: "La voie sûre : plaquer celui qui sort",
+        won: "Le porteur sort et tu le cueilles.",
+        lost: "Le maul continue d'avancer sans toi.",
+      },
+    },
+  },
+  steal_lineout: {
+    title: "Touche adverse",
+    text: "Touche pour eux, l'alignement se met en place devant toi.",
+    options: {
+      jump_front: {
+        label: "Sauter devant",
+        scope: "Touche, puissance : contrer le lancer court",
+        won: "Tu t'élèves le premier : lancer contré !",
+        lost: "Le lancer passe au-dessus de toi.",
+      },
+      jump_back: {
+        label: "Sauter au fond",
+        scope: "Touche, vitesse : le pari sur le lancer long",
+        won: "Tu avais deviné : ballon volé au fond !",
+        lost: "Le lancer part devant, tu es hors du coup.",
+      },
+      stay_down: {
+        label: "Rester au sol",
+        scope: "La voie sûre : défendre le maul qui suit",
+        won: "Tu tiens ta place, leur maul ne part pas.",
+        lost: "Leur maul démarre mieux que prévu.",
+      },
+    },
+  },
+  carry: {
+    title: "Charge au près",
+    text: "Le ballon sort pour toi au ras du ruck, deux défenseurs montent.",
+    options: {
+      charge: {
+        label: "Tête baissée",
+        scope: "Puissance : gagner la ligne d'avantage",
+        won: "Tu les fais reculer de trois mètres.",
+        lost: "Stoppé net, le ballon est ralenti.",
+      },
+      hit_offload: {
+        label: "Passe après contact",
+        scope: "Jeu à la main, puissance : percer dans la foulée",
+        won: "Ta passe après contact ouvre la défense !",
+        lost: "Le ballon tombe au contact.",
+      },
+      tip_on: {
+        label: "Passe courte à l'ouvreur",
+        scope: "La voie sûre : garder le rythme",
+        won: "Petite passe propre, le jeu continue.",
+        lost: "Passe trop courte, en-avant.",
+      },
+    },
+  },
+  charge_down: {
+    title: "Le dégagement adverse",
+    text: "Leur demi s'apprête à dégager au pied, tu arrives lancé.",
+    options: {
+      block: {
+        label: "Charger le dégagement",
+        scope: "Vitesse, puissance : contrer le ballon",
+        won: "Contré ! Le ballon rebondit pour toi.",
+        lost: "Il a tapé juste à temps, le ballon file.",
+      },
+      cut: {
+        label: "Couper la ligne de passe",
+        scope: "Vitesse, plaquage : le forcer à garder",
+        won: "Il n'a plus de solution, il tape mal.",
+        lost: "Il trouve son ouvreur dans ton dos.",
+      },
+      cover: {
+        label: "Rester en couverture",
+        scope: "La voie sûre",
+        won: "Tu restes en place pour la suite.",
+        lost: "Tu arrives en retard sur le replacement.",
+      },
+    },
+  },
+  fifty_22: {
+    title: "Le 50-22",
+    text: "Tu as le ballon dans ton camp, l'ailier adverse est monté et son couloir est ouvert.",
+    options: {
+      fifty: {
+        label: "Tenter le 50-22",
+        scope: "Jeu au pied : le lancer dans leurs 22",
+        won: "Le ballon rebondit en touche dans leurs 22 : le lancer est pour nous !",
+        lost: "Il reste en jeu et leur arrière récupère.",
+      },
+      long_kick: {
+        label: "Taper long et sûr",
+        scope: "La voie sûre : le territoire",
+        won: "Belle longueur, ils repartent de loin.",
+        lost: "Le coup de pied est trop court.",
+      },
+      play_on: {
+        label: "Jouer à la main",
+        scope: "Passe, jeu à la main : exploiter l'espace",
+        won: "Le ballon va vite, on perce au large.",
+        lost: "Passe ratée, en-avant.",
+      },
+    },
+  },
+  in_goal: {
+    title: "Ballon dans l'en-but",
+    text: "Leur coup de pied rasant roule vers notre en-but, leur ailier est à ta hauteur.",
+    options: {
+      pounce: {
+        label: "Plonger dessus",
+        scope: "Vitesse, jeu à la main : le ballon pour nous",
+        won: "Tu plonges le premier et tu sécurises le ballon !",
+        lost: "Tu arrives une fraction trop tard.",
+      },
+      dead: {
+        label: "Pousser en ballon mort",
+        scope: "La voie sûre : le renvoi aux 22",
+        won: "Tu le pousses hors de l'en-but, danger écarté.",
+        lost: "Le ballon s'arrête avant la ligne.",
+      },
+      clear: {
+        label: "Dégager au pied",
+        scope: "Jeu au pied : relancer loin",
+        won: "Superbe dégagement en pleine course !",
+        lost: "Ton pied dévisse, le ballon reste à portée.",
+      },
+    },
+  },
+  pressure_clear: {
+    title: "Dégagement sous pression",
+    text: "Tu reçois le ballon dans tes 22, leurs avants arrivent sur toi.",
+    options: {
+      boot: {
+        label: "Taper tout de suite",
+        scope: "La voie sûre : le ballon loin d'ici",
+        won: "Tu tapes avant qu'ils arrivent, la touche est trouvée.",
+        lost: "Ton pied est contré de justesse.",
+      },
+      fake_kick: {
+        label: "Feinter puis taper",
+        scope: "Jeu au pied, vitesse : gagner du temps",
+        won: "Ton vis-à-vis saute dans le vide, tu tapes à ton aise.",
+        lost: "Ils ne mordent pas : pris avec le ballon.",
+      },
+      run_out: {
+        label: "Relancer à la main",
+        scope: "Vitesse, jeu à la main : le coup de folie",
+        won: "Tu sors de tes 22 balle en main !",
+        lost: "Pris dans tes 22, tout près de ta ligne.",
+      },
+    },
+  },
+  last_play: {
+    title: "Dernière action",
+    text: "Le temps est presque écoulé, le match se joue à rien. Le ballon est pour toi.",
+    options: {
+      boot_out: {
+        label: "Taper en touche",
+        scope: "La voie sûre : laisser filer le temps",
+        won: "Le ballon sort, le temps file.",
+        lost: "Le ballon reste en jeu : ils peuvent relancer.",
+      },
+      go_long: {
+        label: "Repartir de notre camp",
+        scope: "Vitesse, jeu à la main : tout tenter",
+        won: "Tu perces au milieu de terrain : tout le stade est debout !",
+        lost: "Pris au milieu de terrain, ballon perdu.",
+      },
+      hunt_penalty: {
+        label: "Chercher la pénalité au près",
+        scope: "Puissance, jeu à la main : la faute adverse",
+        won: "Ils craquent au sol : pénalité pour nous !",
+        lost: "Le ballon est arraché dans le ruck.",
+      },
+    },
+  },
+  counter_attack: {
+    title: "Contre-attaque éclair",
+    text: "Tu viens de récupérer le ballon, leur défense est à l'envers !",
+    options: {
+      solo: {
+        label: "Filer seul",
+        scope: "Vitesse, puissance : l'essai pour toi",
+        won: "Personne ne te rattrape : essai !",
+        lost: "Rattrapé dans les derniers mètres.",
+      },
+      spread: {
+        label: "Écarter vite",
+        scope: "Passe : l'essai pour l'équipe",
+        won: "Ta passe trouve l'ailier seul : il aplatit !",
+        lost: "La passe part en avant.",
+      },
+      kick_on: {
+        label: "Taper à suivre",
+        scope: "Jeu au pied, vitesse : le pari",
+        won: "Tu suis ton coup de pied et tu aplatis !",
+        lost: "Le rebond les favorise.",
+      },
+    },
+  },
+});
+
 // Ce que l'issue d'un dilemme a changé au match (engine/dilemmas.py, Effect), quand
 // le libellé de la voie ne suffit pas.
 export const DILEMMA_EFFECTS = {

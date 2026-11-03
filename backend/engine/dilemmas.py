@@ -13,7 +13,11 @@ si elle échoue. Un échec peut aussi coûter à l'équipe : un ballon perdu, un
 concédée, un essai encaissé, un carton jaune.
 
 Certaines réussites en appellent une autre aussitôt (`Option.follow`) : un
-franchissement débouche sur un deux contre un, finir seul ou servir le partenaire.
+franchissement débouche sur un deux contre un, finir seul ou servir le partenaire ; un
+ballon récupéré dans les mains du joueur, sur une contre-attaque.
+
+Certaines situations ne se présentent qu'à certains : au buteur du moment (`kicker_only`),
+ou dans les toutes dernières minutes d'un match serré (`closing`, alors toujours elle).
 
 La pression du moment (`pressure`) grossit ce que la note gagne ou perd : une fin de
 match serrée, un match à élimination directe, plus encore une finale. Le joueur
@@ -62,6 +66,9 @@ PRESSURE_KNOCKOUT = 1.25
 PRESSURE_FINAL = 1.5
 PRESSURE_MAX = 2.5
 
+# La dernière action (`closing`) : les dernières minutes, à l'écart de PRESSURE_MARGIN.
+CLOSING_MINUTES = 2
+
 
 class Effect(StrEnum):
     """Ce que l'issue d'un dilemme change au match, au-delà de la note du joueur."""
@@ -71,6 +78,8 @@ class Effect(StrEnum):
     ASSIST = "assist"  # un partenaire marque sur son offrande
     BREAK = "break"  # franchissement
     DROP = "drop"  # drop réussi
+    GOAL = "goal"  # pénalité passée par le joueur lui-même
+    GOAL_MISSED = "goal_missed"  # pénalité manquée par le joueur lui-même
     PENALTY_WON = "penalty_won"  # pénalité obtenue, tentée par le buteur
     TURNOVER = "turnover"  # ballon récupéré
     LOST = "lost"  # ballon perdu
@@ -115,6 +124,8 @@ class Situation:
     positions: frozenset[Position]
     options: tuple[Option, ...]
     drawable: bool = True  # False : seulement enchaînée sur une autre
+    kicker_only: bool = False  # seulement pour le buteur du moment
+    closing: bool = False  # seulement dans les dernières minutes d'un match serré
 
 
 FORWARDS = frozenset({Position.PROP, Position.HOOKER, Position.LOCK, Position.BACK_ROW})
@@ -158,7 +169,8 @@ SITUATIONS = (
             Option("hold", {"tackling": 0.7, "pace": 0.3}, 0.8, 0.2, -0.4,
                    Effect.NONE, ((Effect.TRY_CONCEDED, 0.2), (Effect.MISSED, 1.0))),
             Option("ball", {"power": 0.6, "tackling": 0.4}, 0.55, 0.5, -0.7,
-                   Effect.TURNOVER, ((Effect.YELLOW, 0.35), (Effect.PENALTY_CONCEDED, 1.0))),
+                   Effect.TURNOVER, ((Effect.YELLOW, 0.35), (Effect.PENALTY_CONCEDED, 1.0)),
+                   "counter_attack"),
         ),
     ),
     Situation(
@@ -167,7 +179,7 @@ SITUATIONS = (
         FORWARDS | {Position.CENTRE, Position.SCRUM_HALF},
         (
             Option("jackal", {"power": 0.5, "tackling": 0.5}, 0.4, 0.7, -0.5,
-                   Effect.TURNOVER, ((Effect.PENALTY_CONCEDED, 0.7),)),
+                   Effect.TURNOVER, ((Effect.PENALTY_CONCEDED, 0.7),), "counter_attack"),
             Option("counter", {"power": 0.8, "stamina": 0.2}, 0.55, 0.4, -0.25,
                    Effect.TURNOVER),
             Option("fold", {"tackling": 0.6, "stamina": 0.4}, 0.85, 0.1, -0.2),
@@ -294,6 +306,187 @@ SITUATIONS = (
         ),
         drawable=False,
     ),
+    Situation(
+        "high_ball",
+        Opposition.ATTACK,
+        frozenset({Position.FULLBACK, Position.WING}),
+        (
+            Option("full", {"handling": 0.7, "power": 0.3}, 0.5, 0.6, -0.5,
+                   Effect.TURNOVER, ((Effect.LOST, 1.0),)),
+            Option("bounce", {"pace": 0.5, "handling": 0.5}, 0.45, 0.5, -0.4,
+                   Effect.BREAK, ((Effect.LOST, 1.0),)),
+            Option("mark", {"handling": 1.0}, 0.85, 0.15, -0.25,
+                   Effect.NONE, ((Effect.LOST, 1.0),)),
+        ),
+    ),
+    Situation(
+        "interception",
+        Opposition.ATTACK,
+        frozenset({Position.CENTRE, Position.WING}),
+        (
+            Option("shoot", {"pace": 0.6, "handling": 0.4}, 0.3, 0.7, -0.6,
+                   Effect.TURNOVER, ((Effect.TRY_CONCEDED, 0.4), (Effect.MISSED, 1.0)),
+                   "counter_attack"),
+            Option("hold_line", {"tackling": 0.7, "stamina": 0.3}, 0.85, 0.1, -0.2,
+                   Effect.NONE, ((Effect.MISSED, 1.0),)),
+            Option("drift", {"pace": 0.5, "tackling": 0.5}, 0.55, 0.4, -0.3,
+                   Effect.NONE, ((Effect.TRY_CONCEDED, 0.2), (Effect.MISSED, 1.0))),
+        ),
+    ),
+    Situation(
+        "long_penalty",
+        Opposition.DEFENSE,
+        EVERYONE,
+        (
+            Option("posts", {"kicking": 1.0}, 0.4, 0.4, -0.4,
+                   Effect.GOAL, ((Effect.GOAL_MISSED, 1.0),)),
+            Option("touch_kick", {"kicking": 1.0}, 0.8, 0.2, -0.2,
+                   Effect.NONE, ((Effect.LOST, 0.5),)),
+            Option("quick_tap", {"pace": 0.5, "handling": 0.5}, 0.4, 0.5, -0.4,
+                   Effect.BREAK, ((Effect.LOST, 1.0),), "two_on_one"),
+        ),
+        kicker_only=True,
+    ),
+    Situation(
+        "last_ditch",
+        Opposition.ATTACK,
+        EVERYONE,
+        (
+            Option("ankle", {"tackling": 0.6, "pace": 0.4}, 0.5, 0.6, -0.5,
+                   Effect.NONE, ((Effect.TRY_CONCEDED, 0.6), (Effect.MISSED, 1.0))),
+            Option("push_touch", {"power": 0.6, "pace": 0.4}, 0.6, 0.4, -0.4,
+                   Effect.NONE, ((Effect.TRY_CONCEDED, 0.4), (Effect.MISSED, 1.0))),
+            Option("hold_up", {"power": 0.5, "tackling": 0.5}, 0.35, 0.7, -0.5,
+                   Effect.TURNOVER, ((Effect.TRY_CONCEDED, 0.7), (Effect.MISSED, 1.0))),
+        ),
+    ),
+    Situation(
+        "goal_scrum",
+        Opposition.SET_PIECE,
+        frozenset({Position.PROP, Position.HOOKER, Position.LOCK}),
+        (
+            Option("shove", {"scrum": 0.7, "power": 0.3}, 0.45, 0.7, -0.5,
+                   Effect.TURNOVER, ((Effect.PENALTY_CONCEDED, 0.6),)),
+            Option("hold_scrum", {"scrum": 0.6, "stamina": 0.4}, 0.8, 0.2, -0.3,
+                   Effect.NONE, ((Effect.TRY_CONCEDED, 0.35),)),
+            Option("collapse", {"power": 1.0}, 0.5, 0.3, -0.8,
+                   Effect.NONE, ((Effect.YELLOW, 0.6), (Effect.PENALTY_CONCEDED, 1.0))),
+        ),
+    ),
+    Situation(
+        "defend_maul",
+        Opposition.PACK,
+        FORWARDS,
+        (
+            Option("stop", {"power": 0.7, "stamina": 0.3}, 0.5, 0.6, -0.4,
+                   Effect.TURNOVER, ((Effect.TRY_CONCEDED, 0.3),)),
+            Option("sack", {"power": 0.6, "tackling": 0.4}, 0.55, 0.3, -0.8,
+                   Effect.NONE, ((Effect.YELLOW, 0.6), (Effect.PENALTY_CONCEDED, 1.0))),
+            Option("wait", {"tackling": 0.6, "stamina": 0.4}, 0.8, 0.15, -0.3,
+                   Effect.NONE, ((Effect.TRY_CONCEDED, 0.25),)),
+        ),
+    ),
+    Situation(
+        "steal_lineout",
+        Opposition.SET_PIECE,
+        frozenset({Position.LOCK, Position.BACK_ROW}),
+        (
+            Option("jump_front", {"lineout": 0.8, "power": 0.2}, 0.4, 0.6, -0.3,
+                   Effect.TURNOVER, ((Effect.PENALTY_CONCEDED, 0.2),)),
+            Option("jump_back", {"lineout": 0.6, "pace": 0.4}, 0.3, 0.7, -0.3, Effect.TURNOVER),
+            Option("stay_down", {"tackling": 0.6, "power": 0.4}, 0.8, 0.15, -0.2),
+        ),
+    ),
+    Situation(
+        "carry",
+        Opposition.DEFENSE,
+        FORWARDS,
+        (
+            Option("charge", {"power": 1.0}, 0.6, 0.35, -0.3, Effect.NONE, ((Effect.LOST, 0.5),)),
+            Option("hit_offload", {"handling": 0.6, "power": 0.4}, 0.35, 0.7, -0.4,
+                   Effect.BREAK, ((Effect.LOST, 1.0),), "two_on_one"),
+            Option("tip_on", {"passing": 0.7, "handling": 0.3}, 0.8, 0.2, -0.25,
+                   Effect.NONE, ((Effect.LOST, 1.0),)),
+        ),
+    ),
+    Situation(
+        "charge_down",
+        Opposition.ATTACK,
+        frozenset({Position.BACK_ROW, Position.SCRUM_HALF}),
+        (
+            Option("block", {"pace": 0.6, "power": 0.4}, 0.3, 0.8, -0.3,
+                   Effect.TURNOVER, ((Effect.PENALTY_CONCEDED, 0.15),), "counter_attack"),
+            Option("cut", {"pace": 0.5, "tackling": 0.5}, 0.5, 0.4, -0.3,
+                   Effect.NONE, ((Effect.MISSED, 0.5),)),
+            Option("cover", {"tackling": 0.5, "stamina": 0.5}, 0.85, 0.1, -0.15),
+        ),
+    ),
+    Situation(
+        "fifty_22",
+        Opposition.DEFENSE,
+        frozenset({Position.FLY_HALF, Position.SCRUM_HALF, Position.FULLBACK}),
+        (
+            Option("fifty", {"kicking": 1.0}, 0.3, 0.8, -0.3, Effect.NONE, ((Effect.LOST, 1.0),)),
+            Option("long_kick", {"kicking": 1.0}, 0.8, 0.15, -0.2,
+                   Effect.NONE, ((Effect.LOST, 0.3),)),
+            Option("play_on", {"passing": 0.6, "handling": 0.4}, 0.5, 0.4, -0.3,
+                   Effect.BREAK, ((Effect.LOST, 1.0),)),
+        ),
+    ),
+    Situation(
+        "in_goal",
+        Opposition.ATTACK,
+        frozenset({Position.WING, Position.FULLBACK}),
+        (
+            Option("pounce", {"pace": 0.6, "handling": 0.4}, 0.5, 0.6, -0.6,
+                   Effect.TURNOVER, ((Effect.TRY_CONCEDED, 0.7),)),
+            Option("dead", {"pace": 0.5, "handling": 0.5}, 0.8, 0.2, -0.3,
+                   Effect.NONE, ((Effect.TRY_CONCEDED, 0.3),)),
+            Option("clear", {"kicking": 0.7, "pace": 0.3}, 0.55, 0.4, -0.4,
+                   Effect.NONE, ((Effect.TRY_CONCEDED, 0.5), (Effect.LOST, 1.0))),
+        ),
+    ),
+    Situation(
+        "pressure_clear",
+        Opposition.DEFENSE,
+        frozenset({Position.SCRUM_HALF, Position.FLY_HALF, Position.FULLBACK}),
+        (
+            Option("boot", {"kicking": 1.0}, 0.8, 0.15, -0.3,
+                   Effect.NONE, ((Effect.TRY_CONCEDED, 0.2), (Effect.LOST, 1.0))),
+            Option("fake_kick", {"kicking": 0.5, "pace": 0.3, "handling": 0.2}, 0.45, 0.5, -0.4,
+                   Effect.NONE, ((Effect.LOST, 1.0),)),
+            Option("run_out", {"pace": 0.5, "handling": 0.5}, 0.35, 0.7, -0.5,
+                   Effect.BREAK, ((Effect.TRY_CONCEDED, 0.2), (Effect.LOST, 1.0)), "two_on_one"),
+        ),
+    ),
+    Situation(
+        "last_play",
+        Opposition.DEFENSE,
+        EVERYONE,
+        (
+            Option("boot_out", {"kicking": 0.5, "handling": 0.5}, 0.85, 0.1, -0.2,
+                   Effect.NONE, ((Effect.LOST, 0.5),)),
+            Option("go_long", {"pace": 0.6, "handling": 0.4}, 0.3, 0.8, -0.5,
+                   Effect.BREAK, ((Effect.LOST, 1.0),), "two_on_one"),
+            Option("hunt_penalty", {"power": 0.7, "handling": 0.3}, 0.45, 0.5, -0.4,
+                   Effect.PENALTY_WON, ((Effect.LOST, 1.0),)),
+        ),
+        closing=True,
+    ),
+    Situation(
+        "counter_attack",
+        Opposition.DEFENSE,
+        EVERYONE,
+        (
+            Option("solo", {"pace": 0.7, "power": 0.3}, 0.4, 0.3, -0.4,
+                   Effect.TRY, ((Effect.LOST, 1.0),)),
+            Option("spread", {"passing": 0.7, "handling": 0.3}, 0.6, 0.4, -0.2,
+                   Effect.ASSIST, ((Effect.LOST, 1.0),)),
+            Option("kick_on", {"kicking": 0.6, "pace": 0.4}, 0.3, 0.3, -0.3,
+                   Effect.TRY, ((Effect.LOST, 1.0),)),
+        ),
+        drawable=False,
+    ),
 )  # fmt: skip
 SITUATIONS_BY_KEY = {situation.key: situation for situation in SITUATIONS}
 
@@ -310,9 +503,33 @@ def safest(situation: Situation) -> Option:
     return max(situation.options, key=lambda o: o.base)
 
 
-def draw(position: Position, last: str | None, rng: random.Random) -> Situation:
-    """Une situation qui se présente au joueur à son poste, pas deux fois la même de suite."""
-    pool = [s for s in SITUATIONS if s.drawable and position in s.positions]
+def closing(minute: int, last_minute: int, margin: int) -> bool:
+    """Les toutes dernières minutes d'un match serré : l'heure de la dernière action."""
+    return minute >= last_minute - CLOSING_MINUTES and abs(margin) <= PRESSURE_MARGIN
+
+
+def draw(
+    position: Position,
+    last: str | None,
+    rng: random.Random,
+    *,
+    kicker: bool = False,
+    at_close: bool = False,
+) -> Situation:
+    """Une situation qui se présente au joueur à son poste, pas deux fois la même de suite.
+    `kicker` : il est le buteur du moment ; `at_close` : voir `closing`."""
+    if at_close:
+        final = [s for s in SITUATIONS if s.closing and position in s.positions and s.key != last]
+        if final:
+            return rng.choice(final)
+    pool = [
+        s
+        for s in SITUATIONS
+        if s.drawable
+        and not s.closing
+        and position in s.positions
+        and (kicker or not s.kicker_only)
+    ]
     fresh = [s for s in pool if s.key != last] or pool
     return rng.choice(fresh)
 

@@ -521,7 +521,7 @@ def test_a_coach_decides_dilemmas_for_his_players(even_clubs):
             assert round(live.home.ratings[dilemma.player_id] - before, 2) == outcome.delta
             if live.dilemma is not None:
                 assert live.dilemma.chained and live.dilemma.player_id == dilemma.player_id
-        drawn = [o for o in live.outcomes if o.situation != "two_on_one"]
+        drawn = [o for o in live.outcomes if dilemmas.SITUATIONS_BY_KEY[o.situation].drawable]
         gaps = [b.minute - a.minute for a, b in zip(drawn, drawn[1:], strict=False)]
         assert all(gap >= dilemmas.COACH_DILEMMA_GAP for gap in gaps)
         assert len(drawn) <= dilemmas.COACH_DILEMMA_MAX

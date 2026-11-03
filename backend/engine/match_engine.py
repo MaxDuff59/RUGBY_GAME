@@ -1846,7 +1846,7 @@ class LiveMatch:
         if self.rng.random() >= dilemmas.DILEMMA_CHANCE:
             return
         side, slot = found
-        situation = dilemmas.draw(slot.position, last.situation if last else None, self.rng)
+        situation = self._draw_situation(side, slot, minute, last)
         self.dilemma = dilemmas.Dilemma(
             minute,
             situation.key,
@@ -1872,7 +1872,7 @@ class LiveMatch:
         if not present:
             return
         slot = self.rng.choice(present)
-        situation = dilemmas.draw(slot.position, last.situation if last else None, self.rng)
+        situation = self._draw_situation(side, slot, minute, last)
         self.dilemma = dilemmas.Dilemma(
             minute,
             situation.key,
@@ -1880,6 +1880,20 @@ class LiveMatch:
             self._minute_chance,
             pressure=self._pressure(side, minute),
             player_id=slot.player.id,
+        )
+
+    def _draw_situation(
+        self, side: Side, slot: Slot, minute: int, last: dilemmas.Outcome | None
+    ) -> dilemmas.Situation:
+        """La situation qui attend ce joueur : son poste, son rôle de buteur, le moment."""
+        kicker = side.kicker(minute)
+        margin = self.score(side.club.id) - self.score(self.opponent(side).club.id)
+        return dilemmas.draw(
+            slot.position,
+            last.situation if last else None,
+            self.rng,
+            kicker=kicker is not None and kicker.id == slot.player.id,
+            at_close=dilemmas.closing(minute, self.last_minute, margin),
         )
 
     def _actor(self, dilemma: dilemmas.Dilemma) -> tuple[Side, Player]:
@@ -1912,6 +1926,7 @@ class LiveMatch:
             dilemmas.Effect.TRY: RATING_EVENT[EventType.TRY] + RATING_TEAM_SCORED,
             dilemmas.Effect.ASSIST: RATING_TEAM_SCORED,
             dilemmas.Effect.DROP: RATING_EVENT[EventType.DROP_GOAL],
+            dilemmas.Effect.GOAL: RATING_EVENT[EventType.PENALTY_GOAL],
         }
         pressure = self.dilemma.pressure if self.dilemma else 1.0
         return round(choice.reward * pressure + bonus.get(choice.on_success, 0.0), 2)
@@ -2017,6 +2032,11 @@ class LiveMatch:
         elif effect == Effect.DROP:
             self.events.append(MatchEvent(minute, EventType.DROP_GOAL, side.club.id, hero.id))
             side.rate(hero.id, RATING_EVENT[EventType.DROP_GOAL])
+        elif effect == Effect.GOAL:
+            self.events.append(MatchEvent(minute, EventType.PENALTY_GOAL, side.club.id, hero.id))
+            side.rate(hero.id, RATING_EVENT[EventType.PENALTY_GOAL])
+        elif effect == Effect.GOAL_MISSED:
+            self.events.append(MatchEvent(minute, EventType.PENALTY_MISSED, side.club.id, hero.id))
         elif effect == Effect.PENALTY_WON:
             self._penalty_kick(side, minute)
         elif effect == Effect.PENALTY_CONCEDED:

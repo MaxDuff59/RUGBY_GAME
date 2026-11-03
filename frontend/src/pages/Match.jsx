@@ -31,11 +31,13 @@ import {
 } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
+import { matchMoments, wantsMoment } from "../scene/moments.js";
 import { wantsScene } from "../scene/prefs.js";
 import "../scene/scene.css";
 
 // Les scènes 3D des décisions en match : three.js n'est chargé qu'à la première.
 const MatchScene = lazy(() => import("../scene/MatchScene.jsx"));
+const MomentScene = lazy(() => import("../scene/MomentScene.jsx"));
 
 // Vitesse du chrono : durée réelle d'une minute de jeu.
 const SPEEDS = [
@@ -196,6 +198,18 @@ export function LiveScreen({
     setPanel("dilemma");
     if (!dilemmaChained) setStaged(wantsScene(`${matchId}:${dilemmaMinute}:dilemma`, dilemmaSituation));
   }, [dilemmaMinute, dilemmaSituation, dilemmaChained, matchId]);
+
+  // Les moments à regarder : l'entrée des équipes au coup d'envoi, les grands moments une
+  // fois le match fini ; ils attendent la fin de la décision en cours.
+  const [moments, setMoments] = useState([]);
+  const momentTime = !live ? null : live.finished ? "end" : live.minute === 0 ? "start" : null;
+  useEffect(() => {
+    if (momentTime === null) return;
+    const due = matchMoments(live).filter((moment) => wantsMoment(moment.key));
+    if (due.length) setMoments((queue) => [...queue, ...due]);
+    // Une fois par temps du match, avec le match de ce moment-là.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [momentTime, matchId]);
 
   // La barre d'espace met en pause et relance, comme le bouton du tableau d'affichage ;
   // pas pendant une saisie, ni quand une fenêtre est ouverte (plan, discours, confirmation),
@@ -431,6 +445,18 @@ export function LiveScreen({
             onResume={resume}
           />
         ))}
+      {moments[0] && panel === null && (
+        <Suspense fallback={<SceneLoading />}>
+          <MomentScene
+            key={moments[0].key}
+            moment={moments[0]}
+            live={live}
+            side={mySide}
+            onDone={() => setMoments((queue) => queue.slice(1))}
+            onFail={() => setMoments([])}
+          />
+        </Suspense>
+      )}
       {panel === "talk" && (
         <TalkDialog
           live={live}

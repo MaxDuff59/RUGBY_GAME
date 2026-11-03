@@ -1,19 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "../api.js";
-import { clubInfo, clubTheme, inkOn } from "../clubs.js";
 import { crunchResult, crunchSituation, crunchStake, dilemmaActor, dilemmaOutcomes, dilemmaText, signed } from "../decisions.js";
 import { CRUNCH_OPTIONS, DILEMMAS, formatNote } from "../format.js";
 import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
-import { defaultJersey, distance } from "../jersey.js";
 import { loadLogos } from "../sponsors.js";
+import { sceneContext } from "./context.js";
 import { useScenePrefs } from "./prefs.js";
+import { buildCarry } from "./scripts/carry.js";
+import { buildChargeDown } from "./scripts/chargeDown.js";
+import { buildCounterAttack } from "./scripts/counterAttack.js";
 import { buildCrunch } from "./scripts/crunch.js";
+import { buildDefendMaul } from "./scripts/defendMaul.js";
+import { buildFifty22 } from "./scripts/fifty22.js";
+import { buildGoalScrum } from "./scripts/goalScrum.js";
+import { buildHighBall } from "./scripts/highBall.js";
+import { buildInGoal } from "./scripts/inGoal.js";
+import { buildInterception } from "./scripts/interception.js";
 import { buildKick } from "./scripts/kick.js";
 import { buildBoxKick, buildCounter, buildCrossKick } from "./scripts/kicks.js";
+import { buildLastDitch } from "./scripts/lastDitch.js";
+import { buildLastPlay } from "./scripts/lastPlay.js";
+import { buildLongPenalty } from "./scripts/longPenalty.js";
 import { buildOneOnOne } from "./scripts/oneOnOne.js";
+import { buildPressureClear } from "./scripts/pressureClear.js";
 import { buildRuck } from "./scripts/ruck.js";
 import { buildLineoutJump, buildScrum, buildThrow } from "./scripts/setPlays.js";
+import { buildStealLineout } from "./scripts/stealLineout.js";
 import { buildTackle } from "./scripts/tackle.js";
 import { buildProvocation, buildTouchline } from "./scripts/touchline.js";
 import { buildTryLine } from "./scripts/tryLine.js";
@@ -49,43 +62,21 @@ const DILEMMA_SCENES = {
   throw: buildThrow,
   provocation: buildProvocation,
   two_on_one: buildTwoOnOne,
+  high_ball: buildHighBall,
+  interception: buildInterception,
+  long_penalty: buildLongPenalty,
+  last_ditch: buildLastDitch,
+  goal_scrum: buildGoalScrum,
+  defend_maul: buildDefendMaul,
+  steal_lineout: buildStealLineout,
+  carry: buildCarry,
+  charge_down: buildChargeDown,
+  fifty_22: buildFifty22,
+  in_goal: buildInGoal,
+  pressure_clear: buildPressureClear,
+  last_play: buildLastPlay,
+  counter_attack: buildCounterAttack,
 };
-
-// Les maillots des deux clubs : chacun le sien à domicile ; l'équipe qui se déplace
-// passe à sa tenue extérieure (puis au third) si les deux se ressemblent trop.
-function kits(homeName, awayName) {
-  const home = defaultJersey(homeName, "home");
-  let away = defaultJersey(awayName, "home");
-  if (distance(away.base, home.base) < 120) away = defaultJersey(awayName, "away");
-  if (distance(away.base, home.base) < 90) away = defaultJersey(awayName, "third");
-  return { home, away };
-}
-
-// L'heure du match n'est pas connue : les phases finales et un match sur trois se jouent
-// le soir, toujours les mêmes.
-const evening = (live) => live.knockout || (live.match_id * 2654435761) % 3 === 0;
-
-function sceneContext(live, side, phone, prefs) {
-  const homeName = live.home.club.name;
-  const awayName = live.away.club.name;
-  const jerseys = kits(homeName, awayName);
-  const homeColors = clubInfo(homeName).colors;
-  const awayColors = clubInfo(awayName).colors;
-  const pressure =
-    live.dilemma?.pressure ?? (live.crunch ? 1.5 * (live.knockout ? 1.25 : 1) * (live.stage === "final" ? 1.5 : 1) : 1);
-  return {
-    home: { name: homeName, jersey: jerseys.home, colors: homeColors, ink: inkOn(homeColors[0]) },
-    away: { name: awayName, jersey: jerseys.away, colors: awayColors, ink: inkOn(awayColors[0]) },
-    us: side === live.home ? "home" : "away",
-    accent: clubTheme(side.club.name).accent,
-    weather: live.weather,
-    evening: evening(live),
-    pressure,
-    seed: live.match_id * 131 + (live.dilemma?.minute ?? live.crunch?.minute ?? live.minute),
-    muted: !prefs.sound,
-    phone,
-  };
-}
 
 export default function MatchScene({ kind, live, side, busy, error, boards, onChoose, onResume, onClose, onFail, onHandOff }) {
   const host = useRef(null);

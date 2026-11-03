@@ -16,7 +16,7 @@ from data.leagues import league
 from engine import dilemmas, hero_market, social
 from engine import hero as rules
 from engine.match_engine import HALF_TIME, LiveMatch, simulate_match
-from models import ATTRIBUTE_NAMES, Position
+from models import ATTRIBUTE_NAMES, EventType, Position
 from models.orm import Base, ClubRow, HeroRow, InjuryRow, PlayerRow
 from tests import conftest
 from tests.conftest import make_club
@@ -82,7 +82,7 @@ def test_dilemmas_stop_the_clock_until_the_hero_chooses():
             # Une réussite peut en appeler une autre, à la même minute.
             assert live.dilemma is None or (live.dilemma.chained and outcome.success)
             assert round(live.hero_side().ratings[hero] - before, 2) == outcome.delta
-        drawn = [o for o in live.outcomes if o.situation != "two_on_one"]
+        drawn = [o for o in live.outcomes if dilemmas.SITUATIONS_BY_KEY[o.situation].drawable]
         gaps = [b.minute - a.minute for a, b in zip(drawn, drawn[1:], strict=False)]
         assert all(gap >= dilemmas.DILEMMA_GAP for gap in gaps)
         assert len(drawn) <= dilemmas.DILEMMA_MAX
@@ -285,10 +285,54 @@ def test_a_break_leads_to_a_two_on_one():
             follows = [o for o in situation.options if o.follow]
             outcome = live.choose((follows or situation.options)[0].key)
             if follows and outcome.success:
-                assert live.dilemma.situation == "two_on_one" and live.dilemma.chained
+                assert live.dilemma.situation == follows[0].follow and live.dilemma.chained
                 assert live.dilemma.minute == outcome.minute
                 return
     raise AssertionError("aucun franchissement en 40 matchs")
+
+
+def test_a_ball_won_leads_to_a_counter_attack():
+    follows = {
+        option.key: option.follow
+        for situation in dilemmas.SITUATIONS
+        for option in situation.options
+        if option.follow == "counter_attack"
+    }
+    assert set(follows) == {"ball", "jackal", "shoot", "block"}
+    assert not dilemmas.SITUATIONS_BY_KEY["counter_attack"].drawable
+
+
+def test_the_long_penalty_is_only_for_the_kicker():
+    rng = random.Random(1)
+    assert "long_penalty" not in {dilemmas.draw(Position.CENTRE, None, rng).key for _ in range(200)}
+    assert "long_penalty" in {
+        dilemmas.draw(Position.CENTRE, None, rng, kicker=True).key for _ in range(200)
+    }
+
+
+def test_the_last_play_comes_only_at_the_close_of_a_tight_match():
+    rng = random.Random(1)
+    assert "last_play" not in {dilemmas.draw(Position.PROP, None, rng).key for _ in range(200)}
+    assert dilemmas.draw(Position.PROP, None, rng, at_close=True).key == "last_play"
+    assert dilemmas.draw(Position.PROP, "last_play", rng, at_close=True).key != "last_play"
+    assert dilemmas.closing(78, 80, 3) and not dilemmas.closing(77, 80, 3)
+    assert not dilemmas.closing(79, 80, 12)
+
+
+def test_a_long_penalty_is_scored_or_missed_by_the_kicker():
+    live, hero = _hero_match(3)
+    while live.dilemma is None:
+        live.step()
+    side = live.hero_side()
+    before = live.score(side.club.id)
+    live._apply(dilemmas.Effect.GOAL, side, live.opponent(side), side.players()[hero], live.minute)
+    assert live.score(side.club.id) == before + 3
+    assert live.events[-1].type == EventType.PENALTY_GOAL and live.events[-1].player_id == hero
+    live._apply(
+        dilemmas.Effect.GOAL_MISSED, side, live.opponent(side), side.players()[hero], live.minute
+    )
+    assert live.score(side.club.id) == before + 3
+    assert live.events[-1].type == EventType.PENALTY_MISSED
 
 
 def test_pressure_weighs_late_close_and_final_moments():

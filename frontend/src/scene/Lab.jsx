@@ -1,5 +1,7 @@
 // Page d'essai des scènes (non livrée par le build) : un faux match en direct, des
 // réponses du serveur simulées. ?kind=crunch|dilemma&situation=kick&weather=rain...
+// ?kind=moment&moment=shootout|winning_try|tunnel|trophy pour les moments à regarder,
+// `hero=7` : le numéro du joueur de l'action.
 // Comme dans le jeu, chaque voie réussit selon ses chances affichées, et un échec tire
 // son effet (engine/dilemmas.py) ; `ok=1` ou `ok=0` (`ok2` pour le deux contre un
 // enchaîné) force l'issue, `fx=yellow`... force l'effet de l'échec.
@@ -8,6 +10,7 @@ import { createRoot } from "react-dom/client";
 import "../styles.css";
 import "./scene.css";
 import MatchScene from "./MatchScene.jsx";
+import MomentScene from "./MomentScene.jsx";
 
 const q = new URLSearchParams(location.search);
 const kind = q.get("kind") ?? "crunch";
@@ -34,10 +37,24 @@ const OPTIONS = {
   counter: ["run", "up_and_under", "touch"],
   touchline: ["outside", "inside", "chip"],
   provocation: ["hit_back", "referee", "walk_away"],
+  high_ball: ["full", "bounce", "mark"],
+  interception: ["shoot", "hold_line", "drift"],
+  long_penalty: ["posts", "touch_kick", "quick_tap"],
+  last_ditch: ["ankle", "push_touch", "hold_up"],
+  goal_scrum: ["shove", "hold_scrum", "collapse"],
+  defend_maul: ["stop", "sack", "wait"],
+  steal_lineout: ["jump_front", "jump_back", "stay_down"],
+  carry: ["charge", "hit_offload", "tip_on"],
+  charge_down: ["block", "cut", "cover"],
+  fifty_22: ["fifty", "long_kick", "play_on"],
+  in_goal: ["pounce", "dead", "clear"],
+  pressure_clear: ["boot", "fake_kick", "run_out"],
+  last_play: ["boot_out", "go_long", "hunt_penalty"],
+  counter_attack: ["solo", "spread", "kick_on"],
 };
 // Effet d'une réussite (engine/dilemmas.py).
-const WON = { drop: "drop", grubber: "break", step: "break", fend: "break", dive: "try", offload: "assist", recycle: "penalty_won", smash: "turnover", ball: "turnover", finish: "try", dummy: "try", give: "assist", jackal: "turnover", counter: "turnover", drive: "penalty_won", maul: "try", back: "break", cross: "assist", flat: "break", box: "turnover", snipe: "break", run: "break", up_and_under: "turnover", outside: "break", inside: "break", chip: "try", referee: "penalty_won" };
-const FOLLOW = { grubber: "two_on_one", step: "two_on_one", fend: "two_on_one", flat: "two_on_one", snipe: "two_on_one", run: "two_on_one", outside: "two_on_one" };
+const WON = { drop: "drop", grubber: "break", step: "break", fend: "break", dive: "try", offload: "assist", recycle: "penalty_won", smash: "turnover", ball: "turnover", finish: "try", dummy: "try", give: "assist", jackal: "turnover", counter: "turnover", drive: "penalty_won", maul: "try", back: "break", cross: "assist", flat: "break", box: "turnover", snipe: "break", run: "break", up_and_under: "turnover", outside: "break", inside: "break", chip: "try", referee: "penalty_won", full: "turnover", bounce: "break", shoot: "turnover", posts: "goal", quick_tap: "break", hold_up: "turnover", shove: "turnover", stop: "turnover", jump_front: "turnover", jump_back: "turnover", hit_offload: "break", block: "turnover", play_on: "break", pounce: "turnover", run_out: "break", go_long: "break", hunt_penalty: "penalty_won", solo: "try", spread: "assist", kick_on: "try" };
+const FOLLOW = { grubber: "two_on_one", step: "two_on_one", fend: "two_on_one", flat: "two_on_one", snipe: "two_on_one", run: "two_on_one", outside: "two_on_one", quick_tap: "two_on_one", hit_offload: "two_on_one", run_out: "two_on_one", go_long: "two_on_one", ball: "counter_attack", jackal: "counter_attack", shoot: "counter_attack", block: "counter_attack" };
 // Effets possibles d'un échec, tirés dans l'ordre comme Option.on_failure.
 const FAIL = {
   step: [["lost", 1]], fend: [["lost", 1]], pass: [["lost", 1]],
@@ -49,16 +66,31 @@ const FAIL = {
   box: [["lost", 1]], snipe: [["lost", 1]], serve: [["lost", 1]], run: [["penalty_conceded", 0.3], ["lost", 1]], up_and_under: [["lost", 1]],
   outside: [["lost", 1]], inside: [["lost", 1]], chip: [["lost", 1]], hit_back: [["yellow", 0.7], ["penalty_conceded", 1]],
   finish: [["lost", 1]], dummy: [["lost", 1]], give: [["lost", 1]],
+  full: [["lost", 1]], bounce: [["lost", 1]], mark: [["lost", 1]],
+  shoot: [["try_conceded", 0.4], ["missed", 1]], hold_line: [["missed", 1]], drift: [["try_conceded", 0.2], ["missed", 1]],
+  posts: [["goal_missed", 1]], touch_kick: [["lost", 0.5]], quick_tap: [["lost", 1]],
+  ankle: [["try_conceded", 0.6], ["missed", 1]], push_touch: [["try_conceded", 0.4], ["missed", 1]], hold_up: [["try_conceded", 0.7], ["missed", 1]],
+  shove: [["penalty_conceded", 0.6]], hold_scrum: [["try_conceded", 0.35]], collapse: [["yellow", 0.6], ["penalty_conceded", 1]],
+  stop: [["try_conceded", 0.3]], sack: [["yellow", 0.6], ["penalty_conceded", 1]], wait: [["try_conceded", 0.25]],
+  jump_front: [["penalty_conceded", 0.2]],
+  charge: [["lost", 0.5]], hit_offload: [["lost", 1]], tip_on: [["lost", 1]],
+  block: [["penalty_conceded", 0.15]], cut: [["missed", 0.5]],
+  fifty: [["lost", 1]], long_kick: [["lost", 0.3]], play_on: [["lost", 1]],
+  pounce: [["try_conceded", 0.7]], dead: [["try_conceded", 0.3]], clear: [["try_conceded", 0.5], ["lost", 1]],
+  boot: [["try_conceded", 0.2], ["lost", 1]], fake_kick: [["lost", 1]], run_out: [["try_conceded", 0.2], ["lost", 1]],
+  boot_out: [["lost", 0.5]], go_long: [["lost", 1]], hunt_penalty: [["lost", 1]],
+  solo: [["lost", 1]], spread: [["lost", 1]], kick_on: [["lost", 1]],
 }; // prettier-ignore
 const failure = (key) => q.get("fx") ?? (FAIL[key] ?? []).find(([, chance]) => Math.random() < chance)?.[0] ?? "none";
 // L'issue : forcée par l'adresse, sinon tirée selon les chances affichées.
 const draw = (forced, chance) => (forced === null ? Math.random() < chance : forced !== "0");
+const heroNumber = Number(q.get("hero") ?? (coach ? 12 : 10));
 const dilemmaOf = (key, chained) => ({
   minute: 76,
   situation: key,
   pressure: Number(q.get("pressure") ?? 1.5),
   chained,
-  player_id: coach ? 112 : null,
+  player_id: coach ? 100 + heroNumber : null,
   options: OPTIONS[key].map((option, i) => ({ key: option, success: [0.4, 0.45, 0.75][i], reward: [0.6, 0.6, 0.2][i], cost: [-0.4, -0.3, -0.2][i] })),
 });
 const base = {
@@ -79,10 +111,32 @@ const base = {
     kind === "crunch"
       ? { minute: 76, conversion: 0.7, options: ["kick", "touch", "scrum", "play"].map((key, i) => ({ key, success: [0.72, 0.38, 0.33, 0.27][i] })) }
       : null,
-  hero: kind === "dilemma" && !coach ? { player_id: 110, outcomes: [] } : null,
+  hero: kind === "dilemma" && !coach ? { player_id: 100 + heroNumber, outcomes: [] } : null,
   outcomes: [],
   dilemma: kind === "dilemma" ? dilemmaOf(situation, false) : null,
 };
+
+// Les moments, avec de quoi les jouer. `kicks=8` : le nombre de tirs de la séance.
+const KICKS = Number(q.get("kicks") ?? 8);
+const MOMENTS = {
+  shootout: { kicks: Array.from({ length: KICKS }, (_, i) => ({ us: i % 2 === 0, number: 10 + (i >> 1), name: `Joueur ${i % 2 ? "B" : "A"}${10 + (i >> 1)}`, scored: i % 3 !== 2 })) },
+  winning_try: { minute: 78, name: "Joueur A11", number: heroNumber },
+  tunnel: { final: q.get("final") !== "0", derby: q.get("final") === "0" ? "Le derby" : null },
+  trophy: { competition: "Top 14" },
+};
+
+function Moment() {
+  const key = q.get("moment") ?? "shootout";
+  return (
+    <MomentScene
+      moment={{ key, kind: key, data: MOMENTS[key] }}
+      live={base}
+      side={base[q.get("us") === "away" ? "away" : "home"]}
+      onDone={() => (document.title = "done")}
+      onFail={() => (document.title = "fail")}
+    />
+  );
+}
 
 function Lab() {
   const [live, setLive] = useState(base);
@@ -112,9 +166,9 @@ function Lab() {
           return { ...current, crunch: null, events, [mine]: { ...side, score: side.score + points } };
         }
         const now = current.dilemma.situation;
-        const scoring = { drop: ["drop_goal", 3], try: ["try", 5], assist: ["try", 5] }[effect];
+        const scoring = { drop: ["drop_goal", 3], goal: ["penalty_goal", 3], try: ["try", 5], assist: ["try", 5] }[effect];
         const events = scoring ? [{ minute: 76, type: scoring[0], club_id: side.club.id, player_name: "Joueur A11", points: scoring[1] }] : [];
-        const outcomes = [...current.outcomes, { minute: 76, situation: now, option: key, success: good, chance, delta: good ? 0.9 : -0.4, effect, pressure: 1.5, player_id: coach ? 112 : null }];
+        const outcomes = [...current.outcomes, { minute: 76, situation: now, option: key, success: good, chance, delta: good ? 0.9 : -0.4, effect, pressure: 1.5, player_id: coach ? 100 + heroNumber : null }];
         return {
           ...current,
           dilemma: good && FOLLOW[key] ? dilemmaOf(FOLLOW[key], true) : null,
@@ -142,4 +196,4 @@ function Lab() {
   );
 }
 
-createRoot(document.getElementById("root")).render(<Lab />);
+createRoot(document.getElementById("root")).render(kind === "moment" ? <Moment /> : <Lab />);

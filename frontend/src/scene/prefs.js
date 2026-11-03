@@ -27,6 +27,20 @@ export const SCENE_SITUATIONS = new Set([
   "throw",
   "provocation",
   "two_on_one",
+  "high_ball",
+  "interception",
+  "long_penalty",
+  "last_ditch",
+  "goal_scrum",
+  "defend_maul",
+  "steal_lineout",
+  "carry",
+  "charge_down",
+  "fifty_22",
+  "in_goal",
+  "pressure_clear",
+  "last_play",
+  "counter_attack",
 ]);
 
 const KEY = "rugby.scenes";
@@ -83,6 +97,11 @@ function hasWebGL() {
 }
 
 const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
+// Une scène peut-elle se jouer : les réglages, le système, le navigateur.
+export function canStage() {
+  return readPrefs().scenes && !reducedMotion() && hasWebGL();
+}
 
 // Le tirage de chaque décision (par match, minute et sorte), gardé tant que la page vit.
 const draws = new Map();

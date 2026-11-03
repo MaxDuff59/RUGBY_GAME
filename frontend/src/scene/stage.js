@@ -131,6 +131,11 @@ export function createStage(host, context, events) {
       cast.push(player);
       return player;
     },
+    // Un décor propre à la scène (tunnel, podium, coupe) : il part avec le plateau.
+    add(object) {
+      scene.add(object);
+      return object;
+    },
     // Le ballon à un point, couché selon `axis` (la direction de la pointe), tourné de
     // `spin` autour de son axe de rotation (culbute).
     ballAt(position, axis = null, spin = 0, spinAxis = null) {
