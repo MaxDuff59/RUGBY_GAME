@@ -5,9 +5,10 @@ s'ouvre par la Coupe du monde : quatre poules de quatre sur terrain neutre, puis
 quarts, demies et finale, créés tour après tour (`next_round`). Deux semaines
 avant le premier match d'une fenêtre, chaque sélection annonce une liste de 42
 joueurs : son staff la compose (`pick_squad`, selon la note au poste, la forme,
-le temps de jeu et la continuité : `selection_score`), ou le sélectionneur quand
-c'est le joueur. Un match international se joue avec le moteur des clubs : la
-sélection y est un `Club` éphémère dont l'effectif est la liste (`national_team`).
+le temps de jeu et la continuité : `selection_score`, après ceux de la compo saisie
+au backoffice s'il y en a une), ou le sélectionneur quand c'est le joueur. Un match
+international se joue avec le moteur des clubs : la sélection y est un `Club` éphémère
+dont l'effectif est la liste (`national_team`).
 
 Doublon : le jour où sa sélection joue, un joueur de la liste manque à son club
 (`absentees`, puis `release` : le club l'écarte et fait monter ses meilleurs
@@ -400,24 +401,39 @@ def pick_squad(
     day: datetime.date | None,
     size: int = SQUAD_SIZE,
     records: Mapping[int, Record] | None = None,
+    preferred: Iterable[int] = (),
 ) -> list[Player]:
-    """La liste que compose le staff : les meilleurs à chaque poste (`SQUAD_QUOTA`)
-    selon `selection_score` (avec la saison de chacun, `records`, quand on la
-    connaît), sans les joueurs blessés au jour `day` (le premier match de la
-    fenêtre) ; s'il manque du monde à un poste, les meilleurs restants complètent."""
+    """La liste que compose le staff : d'abord ceux de `preferred` (la compo du
+    backoffice), puis les meilleurs à chaque poste (`SQUAD_QUOTA`) selon `selection_score`
+    (avec la saison de chacun, `records`, quand on la connaît), sans les joueurs blessés
+    au jour `day` (le premier match de la fenêtre) ; s'il manque du monde à un poste, les
+    meilleurs restants complètent."""
     records = records or {}
-    fit = [p for p in candidates if not p.is_injured(day)]
+    fit = {p.id: p for p in candidates if not p.is_injured(day)}
+    kept = [fit[player_id] for player_id in preferred if player_id in fit][:size]
+    counts = Counter(p.position for p in kept)
+    # Les places qui restent vont au minimum de chaque poste, puis à son quota.
+    room = size - len(kept)
+    wanted: Counter[Position] = Counter()
+    for target in (SQUAD_MINIMUM, SQUAD_QUOTA):
+        for position in SQUAD_QUOTA:
+            more = min(room, max(0, target[position] - counts[position] - wanted[position]))
+            wanted[position] += more
+            room -= more
+    taken = {p.id for p in kept}
     squad: list[Player] = []
-    for position, quota in SQUAD_QUOTA.items():
+    for position in SQUAD_QUOTA:
         at = sorted(
-            (p for p in fit if p.position == position),
+            (p for p in fit.values() if p.position == position and p.id not in taken),
             key=lambda p: selection_score(p, records.get(p.id)),
             reverse=True,
         )
-        squad += at[:quota]
-    taken = {p.id for p in squad}
-    rest = sorted((p for p in fit if p.id not in taken), key=lambda p: p.overall, reverse=True)
-    return (squad + rest)[:size]
+        squad += at[: wanted[position]]
+    taken |= {p.id for p in squad}
+    rest = sorted(
+        (p for p in fit.values() if p.id not in taken), key=lambda p: p.overall, reverse=True
+    )
+    return (kept + squad + rest)[:size]
 
 
 def check_squad(players: list[Player], size: int = SQUAD_SIZE) -> str | None:

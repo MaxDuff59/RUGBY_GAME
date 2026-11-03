@@ -225,10 +225,11 @@ def ratings(session: Session) -> dict[int, Rating]:
     teams = list(load_clubs(session, session.scalars(select(ClubRow.id))).values())
     if internationals.has_nations(session):
         pools = internationals.eligible_players(session)
-        teams += [
-            rules.national_team(nation, rules.pick_squad(pools.get(nation.code, []), day))
-            for nation in NATIONS
-        ]
+        for nation in NATIONS:
+            pool = pools.get(nation.code, [])
+            chosen = internationals.compo(session, nation.code, pool)
+            squad = rules.pick_squad(pool, day, preferred=chosen.squad)
+            teams.append(rules.national_team(nation, squad, chosen.lineup))
     teams += [
         Club(id=t.id, name=t.name, players=legends.players(t), lineup_choice=_legend_xv(t))
         for t in legends.LEGENDS
@@ -265,7 +266,7 @@ def _squad(session: Session, nation_id: int, opponent: int, day: datetime.date) 
     nation = NATIONS_BY_ID[nation_id]
     pool = internationals.eligible_players(session, {nation.code})[nation.code]
     pool = [p for p in pool if p.club_id != opponent]
-    return [p.id for p in rules.pick_squad(pool, day)]
+    return [p.id for p in internationals.staff_squad(session, nation.code, pool, day)]
 
 
 def _legend_xv(team: legends.LegendTeam) -> list[int | None]:
@@ -290,7 +291,9 @@ def _teams(session: Session, row: FriendlyRow) -> tuple[Club, Club]:
     for team in ids:
         if team in NATIONS_BY_ID:
             squad = [players[i] for i in row.squads[str(team)] if i in players]
-            teams.append(rules.national_team(NATIONS_BY_ID[team], squad))
+            nation = NATIONS_BY_ID[team]
+            lineup = internationals.compo(session, nation.code, squad).lineup
+            teams.append(rules.national_team(nation, squad, lineup))
         elif team in legends.LEGENDS_BY_ID:
             legend = legends.LEGENDS_BY_ID[team]
             teams.append(

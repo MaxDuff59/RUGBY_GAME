@@ -575,6 +575,12 @@ le compte est débloqué aussitôt, même avant le webhook.
   parties (l'interface les lit par `GET /catalog/clubs`). « Nouveau club » en crée
   un, avec son pays (la nationalité de ses joueurs inventés) ; un club créé se
   supprime, les parties déjà commencées le gardent.
+- **Sélections** : la compo de chaque nation, son groupe (42 joueurs au plus) et son
+  XV, choisis parmi les pros des effectifs qui peuvent porter le maillot. Une compo
+  peut rester partielle : le staff complète la liste, les places vides du XV et le
+  banc. Les parties s'en servent à la **prochaine liste annoncée**, parties en cours
+  comprises, jusqu'à leur première Coupe du monde (2027) ; ensuite le staff décide
+  seul. Dans un monde neuf, un joueur d'une compo compte comme international.
 - **Championnats** : ceux du jeu (formule et calendrier fixes, seuls leurs clubs
   changent) et ceux créés ici : nom, pays, formule des phases finales, calendrier
   repris d'un championnat du jeu, primes. Un championnat créé ne monte ni ne descend
@@ -587,7 +593,7 @@ d'Europe (Top 14, Premiership, URC). En dessous, il est signalé « incomplet »
 reste en dehors des nouvelles parties, avec ses clubs.
 
 Seules les retouches sont gardées, dans la base des comptes (tables
-`catalog_clubs`, `catalog_logos` et `catalog_leagues`, `backend/catalog.py`) : un club
+`catalog_clubs`, `catalog_logos`, `catalog_leagues` et `catalog_nations`, `backend/catalog.py`) : un club
 non touché suit `data/leagues.py`, `data/rosters.json` et
 `frontend/src/clubLogos.json`. Les championnats créés sont inscrits dans
 `data/leagues.py` (`catalog.sync`) avant qu'une partie s'ouvre.

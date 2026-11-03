@@ -56,6 +56,10 @@
   grid-template-columns: minmax(340px, 460px) minmax(0, 1fr);
 }
 
+.admin__split--nations {
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+}
+
 .admin__panel {
   min-height: 0;
   display: flex;
@@ -815,6 +819,90 @@ select.admin__cell {
   font-size: 13px;
 }
 
+/* Sélections */
+.admin__nation {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+}
+
+.admin__nation-compo {
+  padding: 0 24px;
+  border-right: 1px solid var(--line-soft);
+}
+
+.admin__nation-note {
+  margin: 0;
+  padding-top: 16px;
+  font-size: 13px;
+}
+
+.admin__nation-pool {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin__nation-gone {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.admin__xv {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+}
+
+.admin__xv-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.admin__xv-number {
+  flex: 0 0 22px;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin__xv-slot .admin__cell {
+  min-width: 0;
+}
+
+.admin__nation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.admin__nation-player {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.admin__nation-compo .admin__nation-player {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.admin__nation-player .admin__person {
+  flex: 1 1 auto;
+}
+
+.admin__nation-player .admin__person-name,
+.admin__nation-player .admin__person-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* --- Téléphone : une colonne, la fiche remplace la liste ------------------------ */
 
 @media (max-width: 960px) {
@@ -835,6 +923,7 @@ select.admin__cell {
   .admin__split--even,
   .admin__split--clubs,
   .admin__split--players,
+  .admin__split--nations,
   .admin__split--mail {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -889,5 +978,25 @@ select.admin__cell {
   .admin__footer {
     padding-left: 16px;
     padding-right: 16px;
+  }
+
+  /* Sur téléphone, la compo puis les joueurs à la suite, dans un seul défilement. */
+  .admin__nation {
+    display: block;
+    overflow: auto;
+  }
+
+  .admin__nation .admin__scroll {
+    overflow: visible;
+  }
+
+  .admin__nation-compo {
+    padding: 0 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .admin__xv {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import accounts
+import catalog
 import database
 from api.auth import current_user
 from api.deps import get_session
@@ -42,6 +43,14 @@ def wipe_postgres(engine: Engine) -> None:
             connection.execute(text(f'DROP SCHEMA "{name}" CASCADE'))
         connection.execute(text("DROP SCHEMA public CASCADE"))
         connection.execute(text("CREATE SCHEMA public"))
+
+
+@pytest.fixture(autouse=True)
+def no_compos(request, monkeypatch) -> None:
+    """Hors des tests aux vrais comptes (`world`), le catalogue n'a pas de base à lui :
+    les compos des sélections ne doivent pas venir de celle du développeur."""
+    if "world" not in request.fixturenames:
+        monkeypatch.setattr(catalog, "nation_compos", dict)
 
 
 def test_engine() -> Engine:

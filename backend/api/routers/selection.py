@@ -324,10 +324,12 @@ def _pool_out(session: Session, season: SeasonRow, where: Situation) -> PoolOut:
         selected=selected,
         suggested=[
             p.id
-            for p in rules.pick_squad(
+            for p in internationals.staff_squad(
+                session,
+                nation.code,
                 eligible,
                 _first_match(where) or day,
-                records=internationals.records(session, season, eligible, nation.code),
+                internationals.records(session, season, eligible, nation.code),
             )
         ],
         players=[squad_player_out(player, day, names, starts) for player in everyone],
@@ -426,8 +428,9 @@ def _team(session: Session, human: SelectorRow, where: Situation) -> tuple[Club,
     else:
         eligible = internationals.eligible_players(session, {nation.code})[nation.code]
         found = internationals.records(session, current_season(session), eligible, nation.code)
-        players = rules.pick_squad(eligible, day, records=found)
-    return rules.national_team(nation, players, human.lineup_choice or []), day
+        players = internationals.staff_squad(session, nation.code, eligible, day, found)
+    lineup = human.lineup_choice or internationals.compo(session, nation.code, players).lineup
+    return rules.national_team(nation, players, lineup), day
 
 
 def _team_out(session: Session, human: SelectorRow, where: Situation) -> ClubDetail:
@@ -441,7 +444,7 @@ def _team_out(session: Session, human: SelectorRow, where: Situation) -> ClubDet
         facilities=FacilitiesOut.model_validate(Facilities()),
         strength=StrengthOut.from_team(team_strength(team, day, form)),
         players=[PlayerOut.from_player(player, day, names) for player in team.players],
-        lineup_custom=any(player_id is not None for player_id in team.lineup_choice),
+        lineup_custom=any(player_id is not None for player_id in human.lineup_choice or []),
     )
 
 

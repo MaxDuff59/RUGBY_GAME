@@ -25,6 +25,10 @@ mondes, avec ses clubs, tant qu'il n'est pas complet.
 Les joueurs vivent dans les effectifs des clubs. Une photo envoyée depuis le
 backoffice est rangée à part, sous son empreinte (`photo_id` du joueur), et n'est
 jamais effacée : les parties commencées avec ce joueur continuent de la montrer.
+
+La compo d'une sélection (`NationEditRow`) nomme ses joueurs : chaque partie les retrouve
+par leur nom quand elle en a besoin (api/internationals.py). Elle n'existe que si le
+backoffice en a saisi une : sans elle, le staff de la sélection compose seul.
 """
 
 import dataclasses
@@ -33,6 +37,7 @@ import hashlib
 import os
 import re
 import unicodedata
+from collections.abc import Callable, Iterable
 
 from sqlalchemy import (
     JSON,
@@ -152,6 +157,21 @@ class PlayerPhotoRow(CatalogBase):
     content_type: Mapped[str] = mapped_column(String(20))
     data: Mapped[bytes] = mapped_column(LargeBinary)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime)
+
+
+class NationEditRow(CatalogBase):
+    """La compo d'une sélection saisie depuis le backoffice."""
+
+    __tablename__ = "catalog_nations"
+
+    code: Mapped[str] = mapped_column(String(3), primary_key=True)
+    # Le groupe : [{"club": ..., "name": ...}, ...]. À réassigner en entier.
+    squad: Mapped[list] = mapped_column(JSON, default=list)
+    # Le XV, place par place : l'indice du joueur dans `squad`, ou None pour laisser la
+    # place au staff. Vide : tout le XV au staff.
+    lineup: Mapped[list] = mapped_column(JSON, default=list)
+    updated_at: Mapped[datetime.datetime] = mapped_column(DateTime)
+    updated_by: Mapped[str] = mapped_column(String(254))
 
 
 _ready: Engine | None = None
@@ -464,6 +484,73 @@ def save_league(code: str | None, **values) -> str:
         session.commit()
     sync()
     return code
+
+
+# --- Compos des sélections -------------------------------------------------------------------
+
+def nation_compos() -> dict[str, NationEditRow]:
+    with _session() as session:
+        return {row.code: row for row in session.scalars(select(NationEditRow))}
+
+
+def match_compo[T](
+    squad: list[dict], players: Iterable[T], identity: Callable[[T], tuple[str | None, str]]
+) -> list[T | None]:
+    """Pour chaque joueur de `squad`, celui de `players` qui porte son nom (de préférence
+    dans le même club, il a pu en changer), None s'il n'y est pas. `identity` : (club, nom)."""
+    by_name: dict[str, list[T]] = {}
+    for player in players:
+        by_name.setdefault(identity(player)[1], []).append(player)
+    found = []
+    for entry in squad:
+        namesakes = by_name.get(entry["name"], [])
+        same_club = [p for p in namesakes if identity(p)[0] == entry["club"]]
+        match = (same_club or namesakes or [None])[0]
+        if match is not None:
+            namesakes.remove(match)
+        found.append(match)
+    return found
+
+
+def world_rosters() -> dict:
+    """Les effectifs d'un nouveau monde : un joueur d'une compo y compte comme international,
+    avec le niveau qui va avec, et garde sa place de pro quand son club a trop de monde."""
+    known = rosters()
+    called = {
+        (entry["club"], entry["name"]) for row in nation_compos().values() for entry in row.squad
+    }
+    for club, roster in known.items():
+        for entry in roster.get("pros", []):
+            if (club, entry["name"]) in called:
+                entry["international"] = True
+    return known
+
+
+def save_nation(code: str, by: str, squad: list[dict], lineup: list[int | None]) -> None:
+    with _session() as session:
+        session.merge(
+            NationEditRow(code=code, squad=squad, lineup=lineup, updated_at=_now(), updated_by=by)
+        )
+        session.commit()
+
+
+def reset_nation(code: str) -> None:
+    """La sélection repasse aux mains de son staff."""
+    with _session() as session:
+        row = session.get(NationEditRow, code)
+        if row is not None:
+            session.delete(row)
+            session.commit()
+
+
+def rename_in_compos(club: str, name: str, new_club: str, new_name: str) -> None:
+    """Un joueur a changé de nom ou de club : les compos qui le citent le suivent."""
+    old, new = {"club": club, "name": name}, {"club": new_club, "name": new_name}
+    with _session() as session:
+        for row in session.scalars(select(NationEditRow)):
+            if old in row.squad:
+                row.squad = [new if entry == old else entry for entry in row.squad]
+        session.commit()
 
 
 def reset_club(name: str) -> None:

@@ -67,6 +67,12 @@ export const adminApi = {
   uploadPlayerPhoto: (clubName, name, data) => put(`${player(clubName, name)}/photo`, { data }),
   deletePlayerPhoto: (clubName, name) => del(`${player(clubName, name)}/photo`),
 
+  // Compos des sélections : `form` = { squad: [{ club, name }], lineup: [rang dans squad ou null] }.
+  nations: () => request("/backoffice/nations"),
+  nation: (code) => request(`/backoffice/nations/${code}`),
+  saveNation: (code, form) => put(`/backoffice/nations/${code}`, form),
+  resetNation: (code) => del(`/backoffice/nations/${code}`),
+
   // Championnats : chaque appel renvoie la liste à jour.
   leagues: () => request("/backoffice/leagues"),
   createLeague: (form) => request("/backoffice/leagues", { method: "POST", body: form }),

@@ -251,7 +251,9 @@ def _fill_slot(user_id: int, slot: int, seed: int | None) -> None:
     with session_for(user_id, slot) as session:
         import catalog  # import tardif : la base des comptes sert aussi au catalogue
 
-        seed_if_empty(session, seed=seed, leagues=catalog.leagues(), rosters=catalog.rosters())
+        seed_if_empty(
+            session, seed=seed, leagues=catalog.leagues(), rosters=catalog.world_rosters()
+        )
     if uses_postgres():
         _resync_sequences(engine)
 

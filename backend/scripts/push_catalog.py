@@ -1,5 +1,5 @@
 """Recopie les retouches du backoffice d'une base à une autre : clubs, championnats,
-blasons et photos (les tables du catalogue, catalog.py).
+blasons, photos et compos des sélections (les tables du catalogue, catalog.py).
 
 Par défaut, du catalogue local (`users.db` du dossier des parties) vers la base de
 `RUGBY_CATALOG_DB_URL` : celle de la prod. Une ligne présente des deux côtés prend la
@@ -20,7 +20,13 @@ from sqlalchemy.orm import Session
 import catalog
 import database
 
-MODELS = (catalog.ClubEditRow, catalog.LeagueRow, catalog.ClubLogoRow, catalog.PlayerPhotoRow)
+MODELS = (
+    catalog.ClubEditRow,
+    catalog.LeagueRow,
+    catalog.ClubLogoRow,
+    catalog.PlayerPhotoRow,
+    catalog.NationEditRow,
+)
 
 
 def _engine(url: str):

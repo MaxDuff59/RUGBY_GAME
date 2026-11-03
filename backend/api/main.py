@@ -23,6 +23,7 @@ from api import auth, billing
 from api.routers import (
     academy,
     admin,
+    admin_nations,
     admin_players,
     affairs,
     career,
@@ -121,6 +122,7 @@ app.include_router(photos.router)
 app.include_router(catalog.router)
 app.include_router(admin.router)
 app.include_router(admin_players.router)
+app.include_router(admin_nations.router)
 app.include_router(mailing.router)
 app.include_router(mailing.public)
 

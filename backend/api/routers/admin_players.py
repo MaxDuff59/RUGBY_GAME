@@ -196,6 +196,8 @@ def save_player(club: ClubName, name: PlayerName, body: PlayerIn, user: AdminDep
         target[body.squad].append(entry)
         _save(body.club, target, user.email)
         _save(club, roster, user.email)
+    if (body.club, entry["name"]) != (club, name):
+        catalog.rename_in_compos(club, name, body.club, entry["name"])
     return _detail(body.club, entry["name"])
 
 

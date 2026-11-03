@@ -14,11 +14,13 @@ import datetime
 import itertools
 import random
 from collections import Counter
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+import catalog
 from api.deps import load_club
 from api.ledger import current_season, game_date
 from api.moves import delete_player
@@ -32,6 +34,7 @@ from data.nations import (
     home_nation,
 )
 from engine import internationals as rules
+from engine.calendar import WORLD_CUP_FIRST_YEAR
 from engine.form import Form
 from engine.internationals import SquadKey
 from engine.match_engine import MATCH_MINUTES, team_strength
@@ -71,9 +74,12 @@ def nation_levels(session: Session) -> dict[str, tuple[int, float]]:
     day = game_date(session)
     pool = eligible_players(session)
     levels = {}
+    names = club_names(session)
     for nation in rules.selectable():
         players = pool[nation.code]
-        team = team_strength(rules.national_team(nation, rules.pick_squad(players, day)), day)
+        chosen = compo(session, nation.code, players, names)
+        squad = rules.pick_squad(players, day, preferred=chosen.squad)
+        team = team_strength(rules.national_team(nation, squad, chosen.lineup), day)
         levels[nation.code] = (
             len(players),
             (team.set_piece + team.pack + team.attack + team.defense) / 4,
@@ -218,6 +224,58 @@ def records(
     return out
 
 
+# --- La compo du backoffice -----------------------------------------------------------------
+
+# Une compo décrit le rugby d'aujourd'hui : elle guide le staff jusqu'à la première Coupe
+# du monde d'une partie. Ensuite il décide seul, pour que des jeunes percent.
+COMPO_LAST_YEAR = WORLD_CUP_FIRST_YEAR
+
+
+@dataclass(frozen=True)
+class Compo:
+    """La compo d'une sélection dans cette partie : ceux de ses joueurs qu'on y trouve."""
+
+    squad: list[int] = field(default_factory=list)
+    # Le XV, place par place (None : la place revient au staff).
+    lineup: list[int | None] = field(default_factory=list)
+
+
+def compo(
+    session: Session,
+    nation_code: str,
+    players: list[Player],
+    names: Mapping[int, str] | None = None,
+) -> Compo:
+    """La compo saisie au backoffice, parmi `players` (vide s'il n'y en a pas ou plus)."""
+    season = current_season(session)
+    if season is not None and season.year > COMPO_LAST_YEAR:
+        return Compo()
+    row = catalog.nation_compos().get(nation_code)
+    if row is None:
+        return Compo()
+    names = club_names(session) if names is None else names
+    found = catalog.match_compo(
+        row.squad, players, lambda p: (names.get(p.club_id), p.name.strip())
+    )
+    ids = [p.id if p is not None else None for p in found]
+    return Compo(
+        squad=[player_id for player_id in ids if player_id is not None],
+        lineup=[None if index is None else ids[index] for index in row.lineup],
+    )
+
+
+def staff_squad(
+    session: Session,
+    nation_code: str,
+    players: list[Player],
+    day: datetime.date | None,
+    records_found: Mapping[int, rules.Record] | None = None,
+) -> list[Player]:
+    """La liste du staff d'une sélection parmi `players` : sa compo, complétée."""
+    chosen = compo(session, nation_code, players)
+    return rules.pick_squad(players, day, records=records_found, preferred=chosen.squad)
+
+
 # --- Calendrier et listes -------------------------------------------------------------------
 
 
@@ -292,7 +350,7 @@ def announce_due(
         nation = NATIONS_BY_ID[team]
         first = min(m.date for m in matches if m.league == code)
         found = records(session, season, pool[nation.code], nation.code)
-        squad = rules.pick_squad(pool[nation.code], first, records=found)
+        squad = staff_squad(session, nation.code, pool[nation.code], first, found)
         new.append(
             CallUpRow(
                 season_id=season.id,
@@ -387,7 +445,8 @@ def national_teams(
     appearances: dict[int, list[datetime.date]],
 ) -> tuple[dict[int, Club], dict[int, Form]]:
     """Les sélections des matchs `rows`, chacune avec sa liste pour effectif, et leur
-    forme. Le XV du sélectionneur, s'il en a choisi un, est posé sur la sienne."""
+    forme. Le XV du sélectionneur, s'il en a choisi un, est posé sur la sienne ; sinon
+    celui de la compo du backoffice, s'il y en a une."""
     lists = squads(session, season)
     wanted = {
         player_id
@@ -407,7 +466,8 @@ def national_teams(
             nation = NATIONS_BY_ID[team]
             squad = [players[i] for i in lists.get((row.competition, team), []) if i in players]
             choice = human.lineup_choice if human and human.nation == nation.code else []
-            teams[team] = rules.national_team(nation, squad, choice or [])
+            lineup = choice or compo(session, nation.code, squad).lineup
+            teams[team] = rules.national_team(nation, squad, lineup)
             forms[team] = rules.national_form(teams[team], appearances, row.date)
     return teams, forms
 
