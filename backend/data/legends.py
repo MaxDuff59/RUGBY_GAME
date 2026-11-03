@@ -138,7 +138,7 @@ NATION_LEGENDS = [
         _l("Serge Betsen", B, 18.7, "tackling"),
         _l("Abdelatif Benazzi", B, 18.6, "power"),
         _l("Walter Spanghero", B, 18.6, "power"),
-        _l("Antoine Dupont", SH, 19.9, "pace", "handling", "passing"),
+        _l("Antoine Dupont", SH, 19.3, "pace", "handling", "passing"),
         _l("Fabien Galthié", SH, 18.5, "kicking"),
         _l("Pierre Berbizier", SH, 18.2),
         _l("Frédéric Michalak", FH, 18.7, "handling", "kicking"),
