@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api import cup
+from api import hero as heroes
 from api.deps import SessionDep
 from api.notes import history_matches, light_match
 from api.routers.seasons import _league_domain
@@ -329,7 +330,9 @@ def _records(
 
 @router.get("", response_model=HonoursOut)
 def get_honours(session: SessionDep) -> HonoursOut:
-    """Le palmarès de tous les championnats, l'histoire du club dirigé, les records."""
+    """Le palmarès de tous les championnats, l'histoire du club dirigé, les records. En
+    carrière de joueur, le championnat ouvert d'abord est celui de son club (son palmarès à
+    lui se lit sur `GET /hero/career`)."""
     seasons = list(session.scalars(select(SeasonRow).order_by(SeasonRow.year)))
     clubs = {row.id: row.name for row in session.scalars(select(ClubRow))}
     names = _Names(session)
@@ -341,6 +344,9 @@ def get_honours(session: SessionDep) -> HonoursOut:
         club = ClubRef(id=career.club_id, name=clubs[career.club_id])
         league = session.get(ClubRow, career.club_id).league
         history = _club_history(seasons, matches, career.club_id)
+    elif (hero_club := heroes.hero_club_id(session)) is not None:
+        club = ClubRef(id=hero_club, name=clubs[hero_club])
+        league = session.get(ClubRow, hero_club).league
     return HonoursOut(
         club=club,
         league=league,

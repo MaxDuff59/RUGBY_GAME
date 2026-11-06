@@ -5,6 +5,7 @@ import { api } from "../api.js";
 import ClubCrest from "../components/ClubCrest.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import DilemmaDialog from "../components/DilemmaDialog.jsx";
+import HeroRecap from "../components/HeroRecap.jsx";
 import LivePitch from "../components/LivePitch.jsx";
 import Modal from "../components/Modal.jsx";
 import Momentum from "../components/Momentum.jsx";
@@ -135,6 +136,7 @@ export function LiveScreen({
   const [phoneView, setPhoneView] = useState("match"); // téléphone : l'onglet ouvert sous le tableau de score
   const [panel, setPanel] = useState(null); // fenêtre ouverte : "plan", "talk", "crunch" ou "dilemma"
   const [staged, setStaged] = useState(false); // la décision ouverte se joue en scène 3D
+  const [recapClosed, setRecapClosed] = useState(false); // carrière de joueur : le bilan du match refermé
   const confirm = useConfirm();
   const live = current.data;
   const { setData } = current;
@@ -470,6 +472,17 @@ export function LiveScreen({
             onFail={() => setMoments([])}
           />
         </Suspense>
+      )}
+      {/* Carrière de joueur : au coup de sifflet final, après les grands moments, son match. */}
+      {player && live.finished && live.hero && mySide && !recapClosed && !moments[0] && panel === null && (
+        <HeroRecap
+          live={live}
+          side={mySide}
+          finishing={finishing}
+          doneLabel={doneLabel}
+          onContinue={finish}
+          onClose={() => setRecapClosed(true)}
+        />
       )}
       {panel === "talk" && (
         <TalkDialog

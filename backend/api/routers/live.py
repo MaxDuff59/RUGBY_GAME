@@ -317,8 +317,9 @@ def _finish_hero_test(session) -> HeroDayOut:
     while (day := _prepare_day(session, season)) is not None and day <= test_day:
         _play_day(session, season, day)
     reward = heroes.reward(session, season)
+    titles = heroes.new_titles(session, season)
     session.commit()
-    return HeroDayOut(season=_season_out(session, season), hero=reward)
+    return HeroDayOut(season=_season_out(session, season), hero=reward, titles=titles)
 
 
 def _start_test(session, human: SelectorRow) -> LiveOut:

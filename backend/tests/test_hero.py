@@ -8,11 +8,13 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
+from api import internationals as api_internationals
 from api.auth import current_user
 from api.deps import get_session
 from api.main import app
 from data.generator import generate_real_clubs
 from data.leagues import league
+from data.nations import NATIONS_BY_ID
 from engine import dilemmas, hero_market, social
 from engine import hero as rules
 from engine.match_engine import HALF_TIME, LiveMatch, leadership, simulate_match
@@ -542,6 +544,7 @@ def test_simulated_days_follow_one_another_with_the_hero(client):
     session = _db(client)
     session.scalars(select(HeroRow)).first().trust = 90  # titulaire
     session.commit()
+    before = client.get("/hero").json()
     days = []
     for _ in range(3):
         response = client.post("/hero/simulate")
@@ -551,7 +554,30 @@ def test_simulated_days_follow_one_another_with_the_hero(client):
         # Son match joué par le moteur du direct, d'une traite : il y est, rien ne reste en cours.
         assert result["hero"]["match"]["minutes"] > 0
         assert client.get("/live").status_code == 404
+        # Simulé, le match ne le fait pas progresser : seul le direct rapporte.
+        assert result["hero"]["xp"] == 0 and result["hero"]["points"] == 0
     assert days == sorted(set(days))
+    after = client.get("/hero").json()
+    assert (after["xp"], after["points"]) == (before["xp"], before["points"])
+
+
+def test_handing_over_at_half_time_earns_half_the_experience(client):
+    _start(client)
+    session = _db(client)
+    session.scalars(select(HeroRow)).first().trust = 90  # titulaire
+    session.commit()
+    live = client.post("/live").json()
+    while live["minute"] < 40:
+        if live["dilemma"]:
+            option = live["dilemma"]["options"][0]["key"]
+            live = client.post("/live/choose", json={"option": option}).json()
+        else:
+            live = client.post("/live/advance", json={"minutes": 40 - live["minute"]}).json()
+    share = live["minute"] / 80
+    reward = client.post("/live/finish").json()["hero"]
+    line = reward["match"]
+    full = rules.TRAINING_XP + rules.match_xp(line["minutes"], line["rating"])
+    assert reward["xp"] == round(full * share) and 0 < reward["xp"] < full
 
 
 def test_an_injured_hero_watches_the_simulated_day(client):
@@ -755,6 +781,31 @@ def test_a_simulated_test_counts_in_his_season(top14):
     assert len(tests) == hero["caps"]
     assert all(m["rating"] is not None and m["competition"] for m in tests)
     assert all(m["opponent"]["name"] != hero["nation"] for m in tests)
+
+
+def test_an_international_title_is_celebrated_once_and_kept(top14, monkeypatch):
+    client, TestSession = top14
+    toulouse = next(c["id"] for c in client.get("/clubs").json() if c["name"] == "Stade Toulousain")
+    _start(client, club_id=toulouse)
+    with TestSession() as session:
+        player = session.get(PlayerRow, session.scalars(select(HeroRow)).first().player_id)
+        for name in ATTRIBUTE_NAMES:
+            setattr(player, name, 20)
+        session.commit()
+    while client.get("/hero").json()["caps"] == 0:
+        assert client.post("/seasons/current/play").status_code == 200
+    nation = client.get("/hero").json()["nation"]
+    # Sa sélection gagne sa fenêtre : sitôt joué un match de plus, le titre est à fêter.
+    nation_id = next(n.id for n in NATIONS_BY_ID.values() if n.name == nation)
+    monkeypatch.setattr(api_internationals.rules, "champion", lambda window, matches: nation_id)
+    titles = client.post("/seasons/current/play").json()["titles"]
+    mine = [t for t in titles if t["international"]]
+    assert mine and all(t["club"]["name"] == nation for t in mine)
+    # Une seule fois : la journée suivante ne le refête pas, la carrière le garde.
+    again = client.post("/seasons/current/play").json()["titles"]
+    assert not [t for t in again if t["international"]]
+    career = client.get("/hero/career").json()["titles"]
+    assert {t["competition"] for t in mine} <= {t["competition"] for t in career}
 
 
 def test_ai_clubs_never_move_the_hero(client):

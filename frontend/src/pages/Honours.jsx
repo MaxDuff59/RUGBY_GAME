@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
 import ClubCrest from "../components/ClubCrest.jsx";
+import HeroCabinet from "../components/HeroCabinet.jsx";
 import MatchList from "../components/MatchList.jsx";
 import Pitch from "../components/Pitch.jsx";
 import { AWARDS, STAGES, formatContractEnd, formatNote, formatRank } from "../format.js";
@@ -25,8 +26,12 @@ const PLAYOFFS = { ...STAGES, none: "Pas de phases finales", champion: "Champion
 
 // Le palmarès : à gauche les saisons d'un championnat (champion, finale), ses clubs
 // titrés et l'histoire de notre club ; au centre les trophées de la saison choisie et
-// les records depuis la première saison ; à droite l'équipe type de la saison.
+// les records depuis la première saison ; à droite l'équipe type de la saison. En
+// carrière de joueur, sa vitrine (ses titres et trophées) passe en tête de la page, sur
+// le championnat de son club.
 export default function Honours() {
+  const { career } = useOutletContext();
+  const player = career?.kind === "player";
   const { data, error, loading } = useApi(useCallback(api.getHonours, []));
   const [code, setCode] = useState(null);
   const [year, setYear] = useState(null);
@@ -61,8 +66,9 @@ export default function Honours() {
       {league && (
         <div className="honours fill">
           <div className="honours__column">
+            {player && <HeroCabinet />}
             <Seasons league={league} season={season} myId={data.club?.id} onPick={setYear} />
-            {data.club && <ClubHistory club={data.club} history={data.club_history} />}
+            {data.club && !player && <ClubHistory club={data.club} history={data.club_history} />}
           </div>
           <div className="honours__column">
             <Awards season={season} myId={data.club?.id} cup={CUP_CODES.has(league.code)} />

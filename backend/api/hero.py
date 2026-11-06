@@ -110,6 +110,24 @@ def record_moments(session: Session, match_id: int, outcomes: list) -> None:
     row.moments = {**(row.moments or {}), str(match_id): [o.to_dict() for o in outcomes]}
 
 
+def live_share(match) -> float:
+    """La part d'un match en direct déjà jouée (de 0 à 1) : tout s'il est allé au bout,
+    rien si on l'a simulé dès le coup d'envoi (« Simuler » : le staff le joue d'une
+    traite), les trois quarts si on a passé la main à la 60e minute (« Terminer »)."""
+    if match.finished:
+        return 1.0
+    return min(1.0, match.minute / MATCH_MINUTES)
+
+
+def record_live_share(session: Session, match_id: int, match) -> None:
+    """Garde la part du match de son club jouée en direct, avant que le staff ne finisse
+    le reste : seule celle-là rapporte de l'expérience (`reward`)."""
+    row = hero(session)
+    if row is None:
+        return
+    row.live = {**(row.live or {}), str(match_id): round(live_share(match), 3)}
+
+
 def _club_matches(season: SeasonRow, club_id: int) -> list[MatchRow]:
     return [
         m
@@ -147,7 +165,8 @@ def _match_out(row: MatchRow, player_id: int, club_id: int, names: dict[int, str
 
 def reward(session: Session, season: SeasonRow) -> HeroRewardOut | None:
     """L'expérience des journées de son club pas encore comptées : l'entraînement de la
-    semaine, et le match s'il l'a joué. Les points gagnés s'ajoutent à placer."""
+    semaine, et le match s'il l'a joué, au prorata de la part jouée en direct (une
+    journée simulée ne rapporte rien). Les points gagnés s'ajoutent à placer."""
     row = hero(session)
     club_id = hero_club_id(session)
     if row is None or club_id is None:
@@ -159,9 +178,11 @@ def reward(session: Session, season: SeasonRow) -> HeroRewardOut | None:
         return None
     names = dict(session.execute(select(ClubRow.id, ClubRow.name)).all())
     last = None
+    shares = dict(row.live or {})
     for match_row in sorted(fresh, key=lambda m: (m.date, m.id)):
         line = (match_row.stats or {}).get(str(row.player_id), {})
-        xp += rules.TRAINING_XP + rules.match_xp(line.get("minutes", 0), line.get("rating"))
+        earned = rules.TRAINING_XP + rules.match_xp(line.get("minutes", 0), line.get("rating"))
+        xp += round(earned * shares.pop(str(match_row.id), 0.0))
         if line.get("minutes", 0) > 0:
             last = _match_out(match_row, row.player_id, club_id, names)
         _after_match(session, row, match_row, line)
@@ -170,6 +191,7 @@ def reward(session: Session, season: SeasonRow) -> HeroRewardOut | None:
     row.xp = total % rules.XP_PER_POINT
     row.points += points
     row.rewarded = sorted(done | {m.id for m in fresh})
+    row.live = shares
     out = HeroRewardOut(match=last, xp=xp, points=points)
     row.last_reward = out.model_dump(mode="json")
     return out
@@ -643,6 +665,7 @@ def career_out(session: Session) -> HeroCareerOut:
             for m in [*season.matches, *season.cup_matches]
             if m.is_played and (m.stats or {}).get(str(player.id), {}).get("minutes", 0) > 0
         ]
+        titles += season_titles(session, season, player.id, names)
         if not played:
             continue
         sides = {m.id: _side_of(m, player.id) for m in played}
@@ -660,20 +683,6 @@ def career_out(session: Session) -> HeroCareerOut:
                 best=max(ratings),
             )
         )
-        for code, club_id in {(m.league, sides[m.id]) for m in played}:
-            if code in cup.CUPS:
-                winner, label = cup.champion(session, season, code), cup.CUPS[code].short_name
-            else:
-                winner = champion(m.to_domain() for m in season.matches if m.league == code)
-                label = league_config(code).name
-            if winner == club_id:
-                titles.append(
-                    HeroTitleOut(
-                        year=season.year,
-                        competition=label,
-                        club=ClubRef(id=club_id, name=names[club_id]),
-                    )
-                )
     awards = [
         HeroAwardOut(
             year=award.year,
@@ -698,6 +707,71 @@ def career_out(session: Session) -> HeroCareerOut:
         caps=caps(session, player.id),
         retired=False,
     )
+
+
+def season_titles(
+    session: Session, season: SeasonRow, player_id: int, names: dict[int, str]
+) -> list[HeroTitleOut]:
+    """Ses titres de la saison : chaque compétition gagnée par l'équipe avec laquelle il
+    en a joué au moins un match, en club (championnat, coupe d'Europe) comme en sélection
+    (Tournoi des Six Nations, Rugby Championship, Coupe du monde)."""
+    titles = []
+    played = [
+        m
+        for m in [*season.matches, *season.cup_matches]
+        if m.is_played and (m.stats or {}).get(str(player_id), {}).get("minutes", 0) > 0
+    ]
+    for code, club_id in dict.fromkeys((m.league, _side_of(m, player_id)) for m in played):
+        if code in cup.CUPS:
+            winner, label = cup.champion(session, season, code), cup.CUPS[code].short_name
+        else:
+            winner = champion(m.to_domain() for m in season.matches if m.league == code)
+            label = league_config(code).name
+        if winner == club_id:
+            titles.append(
+                HeroTitleOut(
+                    year=season.year,
+                    competition=label,
+                    club=ClubRef(id=club_id, name=names[club_id]),
+                )
+            )
+    tests = internationals.test_rows(session, season)
+    for code in dict.fromkeys(row.competition for row in tests):
+        window_rows = [row for row in tests if row.competition == code]
+        mine = [row for row in window_rows if row.is_played and _took_part(row, player_id)]
+        if not mine:
+            continue
+        window = WINDOWS_BY_CODE.get(code, WORLD_CUP)
+        winner = internationals.rules.champion(window, [row.to_domain() for row in window_rows])
+        nation_id = _side_of(mine[-1], player_id)
+        if winner is not None and winner == nation_id:
+            titles.append(
+                HeroTitleOut(
+                    year=season.year,
+                    competition=window.name,
+                    club=ClubRef(id=nation_id, name=NATIONS_BY_ID[nation_id].name),
+                    international=True,
+                )
+            )
+    return titles
+
+
+def new_titles(session: Session, season: SeasonRow | None) -> list[HeroTitleOut]:
+    """Les titres de la saison qu'il n'a pas encore fêtés (la fenêtre de célébration) :
+    renvoyés une fois, puis retenus comme fêtés."""
+    row = hero(session)
+    if row is None or season is None:
+        return []
+    names = dict(session.execute(select(ClubRow.id, ClubRow.name)).all())
+    done = set(row.celebrated or [])
+    fresh = [
+        title
+        for title in season_titles(session, season, row.player_id, names)
+        if f"{title.year}:{title.competition}" not in done
+    ]
+    if fresh:
+        row.celebrated = sorted(done | {f"{t.year}:{t.competition}" for t in fresh})
+    return fresh
 
 
 def caps(session: Session, player_id: int) -> int:
@@ -811,8 +885,9 @@ def called_up(session: Session, season: SeasonRow | None) -> HeroTestOut | None:
     return _test_out(test, player_id, nation_id, {})
 
 
-def record_test(session: Session, live) -> None:
-    """Un match international qu'il a joué en direct : minutes, note, essais, actions."""
+def record_test(session: Session, live, share: float = 1.0) -> None:
+    """Un match international qu'il a joué en direct : minutes, note, essais, actions, et
+    la part jouée en direct avant que le staff ne finisse (`live_share`)."""
     row = hero(session)
     match = live.match
     side = match.hero_side()
@@ -830,6 +905,7 @@ def record_test(session: Session, live) -> None:
                 1 for e in match.events if e.type == EventType.TRY and e.player_id == player_id
             ),
             "moments": [o.to_dict() for o in match.outcomes],
+            "share": round(share, 3),
             "rewarded": False,
         },
     }
@@ -924,7 +1000,8 @@ def _reward_tests(row: HeroRow) -> int:
     for key, line in tests.items():
         if line.get("rewarded"):
             continue
-        xp += rules.match_xp(line["minutes"], line["rating"])
+        earned = rules.match_xp(line["minutes"], line["rating"])
+        xp += round(earned * line.get("share", 1.0))
         row.confidence = rules.next_confidence(row.confidence, line["rating"])
         tests[key] = {**line, "rewarded": True}
     row.tests = tests

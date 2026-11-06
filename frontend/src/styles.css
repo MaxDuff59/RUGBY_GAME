@@ -4874,6 +4874,210 @@ button.market-item__main:focus-visible {
   transition: width 0.3s ease-out;
 }
 
+/* --- Carrière de joueur : le bilan de son match au coup de sifflet final ------------- */
+
+.hero-recap {
+  max-width: 600px;
+  margin-top: 6vh;
+}
+
+.hero-recap__score {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hero-recap__head {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.hero-recap__note {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.hero-recap__note .num {
+  font-family: var(--font-display);
+  font-size: 52px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.hero-recap__facts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hero-recap__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+}
+
+.hero-recap__stat {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 6px;
+}
+
+.hero-recap__stat dt {
+  font-size: 13px;
+}
+
+.hero-recap__stat dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.hero-recap__actions h3 {
+  margin: 0 0 6px;
+}
+
+.hero-recap__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(30vh, 300px);
+  overflow-y: auto;
+}
+
+.hero-recap__action {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) max-content;
+  align-items: start;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.hero-recap__action + .hero-recap__action {
+  border-top: 1px solid var(--line-soft);
+}
+
+.hero-recap__text {
+  display: block;
+  font-size: 14px;
+}
+
+.hero-recap__mark {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.hero-recap__mark--won {
+  color: var(--ink);
+}
+
+.hero-recap__mark--lost {
+  color: var(--accent);
+}
+
+@media (max-width: 960px) {
+  .hero-recap__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* --- Un titre gagné : la fenêtre de célébration, sous une pluie de confettis ------- */
+
+.celebration {
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+}
+
+.celebration__confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.celebration__confetti span {
+  position: absolute;
+  top: -16px;
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  opacity: 0;
+  animation-name: confetti-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(var(--turn));
+  }
+  100% {
+    opacity: 0.2;
+    transform: translateY(560px) rotate(calc(var(--turn) + 540deg));
+  }
+}
+
+.celebration__body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.celebration__cup {
+  font-size: 72px;
+  line-height: 1;
+  animation: cup-lift 0.7s ease-out both;
+}
+
+@keyframes cup-lift {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.celebration__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 40px;
+  line-height: 1.05;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.celebration__club {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 0;
+  font-size: 18px;
+}
+
+.celebration .confirm__actions {
+  position: relative;
+  justify-content: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .celebration__confetti {
+    display: none;
+  }
+
+  .celebration__cup {
+    animation: none;
+  }
+}
+
 /* --- Intersaison : la fenêtre d'attente ------------------------------------------- */
 
 .modal--dialog.offseason {
@@ -7970,6 +8174,69 @@ td > .tag:first-child,
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   gap: 20px;
   min-height: 0;
+}
+
+/* Carrière de joueur : sa vitrine en tête du palmarès */
+.hero-cabinet {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.hero-cabinet__counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.hero-cabinet__counts dt {
+  font-size: 12px;
+}
+
+.hero-cabinet__counts dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.hero-cabinet__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 18px;
+}
+
+.hero-cabinet__item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding: 9px 0;
+}
+
+.hero-cabinet__item + .hero-cabinet__item {
+  border-top: 1px solid var(--line-soft);
+}
+
+.hero-cabinet__icon {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.hero-cabinet__item--title strong {
+  color: var(--accent);
+}
+
+.hero-cabinet__with {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 14px;
 }
 
 .honours__team {

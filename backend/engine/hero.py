@@ -4,7 +4,9 @@ Il démarre à 18 ans, bien en dessous du niveau d'un pro (`START_LEVEL`), avec 
 profil de son poste. Il ne progresse pas tout seul comme les autres joueurs
 (engine/development.py) : il gagne de l'expérience à chaque journée de son club, en
 s'entraînant (`TRAINING_XP`) et surtout en jouant, d'autant plus qu'il joue longtemps
-et bien (`match_xp`). Chaque tranche de `XP_PER_POINT` lui donne un point à placer
+et bien (`match_xp`). Seul le direct le fait progresser : une journée simulée ne lui
+rapporte rien, un match dont il a passé la main au staff, la part jouée (api/hero.py,
+`live_share`). Chaque tranche de `XP_PER_POINT` lui donne un point à placer
 dans l'attribut de son choix ; un attribut coûte d'autant plus cher qu'il est haut
 (`cost`).
 

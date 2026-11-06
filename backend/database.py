@@ -437,6 +437,8 @@ ADDED_COLUMNS = {
         "choice": "JSON",
         "history": "JSON NOT NULL DEFAULT '[]'",
         "tests": "JSON NOT NULL DEFAULT '{}'",
+        "live": "JSON NOT NULL DEFAULT '{}'",
+        "celebrated": "JSON NOT NULL DEFAULT '[]'",
     },
     "cup_pools": {"competition": "VARCHAR(16) NOT NULL DEFAULT 'champions_cup'"},
     "competition": {"legend": "VARCHAR(3)"},

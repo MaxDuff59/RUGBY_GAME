@@ -1034,7 +1034,8 @@ class HeroSeasonOut(BaseModel):
 class HeroTitleOut(BaseModel):
     year: int
     competition: str
-    club: ClubRef
+    club: ClubRef  # son club, ou sa sélection (`international`)
+    international: bool = False
 
 
 class HeroAwardOut(BaseModel):
@@ -1078,6 +1079,7 @@ class HeroDayOut(BaseModel):
 
     season: "SeasonOut"
     hero: HeroRewardOut | None
+    titles: list["HeroTitleOut"] = []  # titres tout juste gagnés, à fêter
     played: None = None
 
 
@@ -1395,6 +1397,8 @@ class PlayOut(BaseModel):
     call_ups: list["CallUpNotice"] = []
     # Carrière de joueur : ce que la journée lui a rapporté.
     hero: HeroRewardOut | None = None
+    # Carrière de joueur : les titres que la journée vient de lui donner, à fêter.
+    titles: list[HeroTitleOut] = []
 
 
 # --- Affaires entre deux matchs (engine/affairs.py) -----------------------------------

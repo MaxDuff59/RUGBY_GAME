@@ -314,6 +314,7 @@ export const AWARDS = {
   tries: { label: "Meilleur marqueur", format: (v) => `${v} essai${v > 1 ? "s" : ""}` },
   points: { label: "Meilleur réalisateur", format: (v) => `${v} pts` },
   tackles: { label: "Plaqueur de la saison", format: (v) => `${v} plaquages` },
+  team: { label: "Équipe type", format: (v) => `${formatNote(v)} de moyenne` },
 };
 
 // La semaine d'entraînement (engine/training.py) : son rythme et son thème.

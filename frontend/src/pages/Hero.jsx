@@ -6,6 +6,7 @@ import ClubCrest from "../components/ClubCrest.jsx";
 import { ActionError } from "../components/FullGame.jsx";
 import HeroSeasonEnd, { CareerSummary } from "../components/HeroSeasonEnd.jsx";
 import Simulation, { simulationTargets } from "../components/Simulation.jsx";
+import TitleCelebration from "../components/TitleCelebration.jsx";
 import SplitButton from "../components/SplitButton.jsx";
 import WindowBoard from "../components/WindowBoard.jsx";
 import {
@@ -66,6 +67,7 @@ export default function Hero() {
   const [period, setPeriod] = useState("season"); // ses matchs, toute sa carrière ou les classements
   const [seasonEnd, setSeasonEnd] = useState(false); // la fenêtre du bilan et du mercato
   const [simulation, setSimulation] = useState(null); // « Simuler jusqu'à… » : { until }
+  const [titles, setTitles] = useState([]); // titres tout juste gagnés, à fêter
 
   const { setData: setSeason } = season;
   const { reload: reloadHero } = hero;
@@ -83,6 +85,7 @@ export default function Hero() {
     if (!played || applied.current === played) return;
     applied.current = played;
     setLastDay(played);
+    if (played.titles?.length) setTitles((queue) => [...queue, ...played.titles]);
     setSeason(played.season);
     liveMatch.setData(null);
     reloadHero();
@@ -115,6 +118,11 @@ export default function Hero() {
       navigate("/match");
     });
 
+  // Les titres que la journée vient de donner : la fenêtre de célébration.
+  const celebrate = (fresh) => {
+    if (fresh?.length) setTitles((queue) => [...queue, ...fresh]);
+  };
+
   // Simuler : son match se joue quand même avec lui (le moteur du direct, joué d'une
   // traite : la voie sûre à chaque action) ; sans lui (blessé, club au repos), la journée.
   const simulate = (withHero) =>
@@ -122,6 +130,7 @@ export default function Hero() {
       if (withHero && !liveMatch.data) await api.startLive();
       const result = withHero ? await api.finishLive() : await api.playMatchday();
       setLastDay(result);
+      celebrate(result.titles);
       setSeason(result.season);
       liveMatch.setData(null);
       reloadHero();
@@ -130,6 +139,7 @@ export default function Hero() {
   // Plusieurs journées d'un coup : chacune comme « Simuler », la page suit derrière.
   const dayPlayed = (result) => {
     setLastDay(result);
+    celebrate(result.titles);
     setSeason(result.season);
     liveMatch.setData(null);
     reloadHero();
@@ -284,7 +294,7 @@ export default function Hero() {
               !available,
             )}
             {available && (
-              <span className="muted">En direct, le match s'arrête sur tes actions : à toi de choisir.</span>
+              <span className="muted">En direct, le match s'arrête sur tes actions : à toi de choisir. Simulé, il ne te fait pas progresser.</span>
             )}
             {me.status === "injured" && (
               <span className="muted">Diminué, tes actions réussissent moins, et ta blessure peut s'aggraver.</span>
@@ -362,7 +372,7 @@ export default function Hero() {
         <dt>Dernière journée</dt>
         <dd>
           {reward
-            ? `+${reward.xp} XP${reward.points ? `, ${plural(reward.points, "point")}` : ""}${
+            ? `${reward.xp > 0 ? `+${reward.xp} XP` : "Simulé, pas d'XP"}${reward.points ? `, ${plural(reward.points, "point")}` : ""}${
                 reward.match ? ` · note ${formatNote(reward.match.rating ?? 6)}` : " · pas joué"
               }`
             : "—"}
@@ -523,7 +533,9 @@ export default function Hero() {
 
   const endWindow = (
     <>
-      {seasonEnd && finished && (
+      {/* Un titre se fête d'abord, après la fenêtre de simulation, avant le bilan. */}
+      {titles.length > 0 && !simulation && <TitleCelebration titles={titles} onDone={() => setTitles([])} />}
+      {seasonEnd && finished && titles.length === 0 && (
         <HeroSeasonEnd
           name={`${me.first_name} ${me.last_name}`}
           onClose={() => setSeasonEnd(false)}

@@ -786,6 +786,11 @@ class HeroRow(Base):
     # table n'a pas de statistiques par joueur ; minutes, note, essais, actions, et s'ils
     # ont déjà rapporté leur expérience.
     tests: Mapped[dict] = mapped_column(JSON, default=dict)
+    # La part de chaque match de son club jouée en direct (de 0 à 1, par identifiant de
+    # `MatchRow`), en attendant d'être comptée : seule elle rapporte de l'expérience.
+    live: Mapped[dict] = mapped_column(JSON, default=dict)
+    # Ses titres déjà fêtés (« année:compétition ») : la célébration ne vient qu'une fois.
+    celebrated: Mapped[list] = mapped_column(JSON, default=list)
 
 
 class CareerRow(Base):

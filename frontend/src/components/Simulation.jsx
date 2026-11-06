@@ -245,7 +245,13 @@ export default function Simulation({ season, clubId, initialUntil, onPlayed, onC
 
       <ul className="simulation__days">
         {results.map((result) => (
-          <Day key={dayKey(result.played)} day={result.played} clubId={clubId} state="played" />
+          <Day
+            key={dayKey(result.played)}
+            day={result.played}
+            clubId={clubId}
+            state="played"
+            reward={hero ? result.hero : null}
+          />
         ))}
         {(step === "setup" ? plan : inRange).map((day, index) => {
           const running = step === "running" && index === 0;
@@ -326,7 +332,8 @@ const VENUES = { home: "dom.", away: "ext.", neutral: "neutre" };
 // Une journée de la liste : son nom, sa date, notre adversaire, puis notre résultat une
 // fois jouée. `state` : played, current (en train de se jouer), todo, out (après la date
 // choisie). Avec `onPick`, la ligne est un bouton qui arrête la simulation à cette journée.
-function Day({ day, clubId, state, rowRef, onPick }) {
+// Carrière de joueur : `reward`, l'expérience que la journée lui a rapportée.
+function Day({ day, clubId, state, rowRef, onPick, reward }) {
   const match = day.matches.find((m) => m.home.id === clubId || m.away.id === clubId);
   const home = match?.home.id === clubId;
   const opponent = match && (home ? match.away : match.home);
@@ -350,6 +357,7 @@ function Day({ day, clubId, state, rowRef, onPick }) {
           <span className="muted simulation__opponent">Ton club ne joue pas</span>
         )}
         <span className="simulation__result">
+          {reward?.xp > 0 && <span className="muted num simulation__xp">+{reward.xp} XP</span>}
           {result && (
             <>
               <span className={`pill pill--${result}`}>{result}</span>
@@ -397,12 +405,14 @@ function Summary({ results, clubId, startRank, hero }) {
     );
   }
   if (hero) {
-    // Ses matchs à lui : ceux où il est entré, ses essais, sa note, les points gagnés.
+    // Ses matchs à lui : ceux où il est entré, ses essais, sa note ; l'expérience gagnée
+    // et les points d'attributs qu'elle a donnés.
     const rewards = results.map((result) => result.hero).filter(Boolean);
     const mine = rewards.map((reward) => reward.match).filter((match) => match?.minutes > 0);
     const rated = mine.filter((match) => match.rating !== null);
     const tries = mine.reduce((sum, match) => sum + match.tries, 0);
     const points = rewards.reduce((sum, reward) => sum + reward.points, 0);
+    const xp = rewards.reduce((sum, reward) => sum + reward.xp, 0);
     rows.push({
       label: "Tes matchs",
       value: mine.length,
@@ -413,7 +423,17 @@ function Summary({ results, clubId, startRank, hero }) {
         .filter(Boolean)
         .join(" · "),
     });
-    if (points > 0) rows.push({ label: "Points à placer", value: `+${points}` });
+    rows.push({
+      label: "Expérience",
+      value: `+${xp} XP`,
+      // Seul le direct fait progresser : simulés, ses matchs ne rapportent rien.
+      hint:
+        points > 0
+          ? `${plural(points, "point")} d'attribut à placer`
+          : xp > 0
+            ? "Pas encore de point d'attribut"
+            : "Simulés, tes matchs ne te font pas progresser : joue-les en direct",
+    });
   }
   if (injuries.length > 0) {
     rows.push({ label: "Blessés", value: injuries.length, hint: names(injuries.map((item) => item.player.name)) });

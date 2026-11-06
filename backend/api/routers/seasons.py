@@ -538,6 +538,10 @@ def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayRes
     # Match en direct du club dirigé : le staff finit ce qu'il reste à jouer. Un jour
     # où seul un autre championnat joue, il attend le sien (ses clubs ne sont pas chargés).
     live = load_live(session, clubs) if live_match_row(session) in todays else None
+    # Carrière de joueur : la part du match jouée en direct, avant que le staff ne la
+    # finisse ; seule celle-là lui rapporte de l'expérience (api/hero.py).
+    if live is not None:
+        heroes.record_live_share(session, live.match_row.id, live.match)
 
     def finish_live(match: Match) -> Match | None:
         if live is None or match.id != live.match_row.id:
@@ -623,6 +627,7 @@ def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayRes
     # la même journée qu'il y en ait ou non. Le joueur incarné peut jouer le sien en
     # direct (api/routers/live.py) : ses minutes et sa note restent (api/hero.py).
     hero_test = load_live_test(session) if human is None and heroes.hero(session) else None
+    test_share = heroes.live_share(hero_test.match) if hero_test is not None else 0.0
     test_day = internationals.play_tests(
         session,
         season,
@@ -634,7 +639,7 @@ def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayRes
         live=load_live_test(session) if human is not None else hero_test,
     )
     if hero_test is not None:
-        heroes.record_test(session, hero_test)
+        heroes.record_test(session, hero_test, test_share)
     heroes.record_tests(session, test_day.matches)
     for injury_row, injury in test_day.injuries:
         in_my_club = injury.player_id in players and (
@@ -919,6 +924,7 @@ def play_next_matchday(session: SessionDep) -> PlayOut:
     known_lists = {row.id for row in internationals.call_up_rows(session, season)}
     played, injuries = _play_matchday(session, season)
     hero = heroes.reward(session, season)
+    titles = heroes.new_titles(session, season)
     session.commit()
     dismissal = _board_verdict(session, played)
     affairs, signings, call_ups = [], [], []
@@ -944,6 +950,7 @@ def play_next_matchday(session: SessionDep) -> PlayOut:
         signings=signings,
         call_ups=call_ups,
         hero=hero,
+        titles=titles,
     )
 
 
