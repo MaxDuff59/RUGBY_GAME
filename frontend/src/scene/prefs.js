@@ -44,7 +44,8 @@ export const SCENE_SITUATIONS = new Set([
 ]);
 
 const KEY = "rugby.scenes";
-const DEFAULTS = { scenes: true, sound: true };
+// `pitch` : le terrain 2D du match en direct (components/LivePitch.jsx).
+const DEFAULTS = { scenes: true, sound: true, pitch: true };
 const CHANGE = "rugby-scenes-change";
 
 export function readPrefs() {

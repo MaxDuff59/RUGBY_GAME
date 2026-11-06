@@ -29,6 +29,7 @@ from api.schemas import (
     LiveOut,
     LivePlayerOut,
     LiveSideOut,
+    MinutePlayOut,
     OutcomeOut,
     PlayerMatchStatsOut,
     TacticsOut,
@@ -339,6 +340,7 @@ def live_out(live: Live, names: dict[int, str], my_club_id: int) -> LiveOut:
             for e in match.events
         ],
         momentum=match.momentum,
+        play=MinutePlayOut(**match.play) if match.play else None,
         talk=_talk_out(match, my_club_id),
         crunch=_crunch_out(match, my_club_id),
         hero=_hero_out(match),

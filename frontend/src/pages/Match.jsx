@@ -5,8 +5,10 @@ import { api } from "../api.js";
 import ClubCrest from "../components/ClubCrest.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import DilemmaDialog from "../components/DilemmaDialog.jsx";
+import LivePitch from "../components/LivePitch.jsx";
 import Modal from "../components/Modal.jsx";
 import Momentum from "../components/Momentum.jsx";
+import SubIcon from "../components/SubIcon.jsx";
 import WeatherIcon from "../components/WeatherIcon.jsx";
 import { crunchResult, crunchSituation, crunchStake } from "../decisions.js";
 import {
@@ -32,7 +34,7 @@ import {
 import { useApi } from "../hooks/useApi.js";
 import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
 import { matchMoments, wantsMoment } from "../scene/moments.js";
-import { wantsScene } from "../scene/prefs.js";
+import { useScenePrefs, wantsScene } from "../scene/prefs.js";
 import "../scene/scene.css";
 
 // Les scènes 3D des décisions en match : three.js n'est chargé qu'à la première.
@@ -50,8 +52,9 @@ const SPEEDS = [
 // Téléphone : les onglets sous le tableau de score.
 const PHONE_VIEWS = [
   { key: "match", label: "Le match" },
+  { key: "pitch", label: "Terrain" },
   { key: "events", label: "Événements" },
-  { key: "lineups", label: "Compositions" },
+  { key: "lineups", label: "Les XV" },
 ];
 
 // Événements qui mettent le match en pause quand ils touchent notre équipe.
@@ -134,6 +137,13 @@ export function LiveScreen({
   const live = current.data;
   const { setData } = current;
   const lastRequest = useRef(0); // durée de la dernière minute demandée au serveur, en ms
+  // Le terrain 2D (réglage « Terrain 2D ») ; il retient le chrono le temps d'un essai ou
+  // d'une pénalité qu'il montre : la minute suivante attend jusqu'à `holdUntil`.
+  const [prefs, setPrefs] = useScenePrefs();
+  const holdUntil = useRef(0);
+  const hold = useCallback((ms) => {
+    holdUntil.current = performance.now() + ms;
+  }, []);
 
   // Avance d'une minute, puis s'arrête sur ce qui mérite une décision.
   const tick = useCallback(async () => {
@@ -174,7 +184,8 @@ export function LiveScreen({
   // de réponse du serveur compte dans l'intervalle : ×8 va vraiment huit fois plus vite.
   useEffect(() => {
     if (!playing || !live || live.finished) return undefined;
-    const timer = setTimeout(tick, Math.max(0, SPEEDS[speed].ms - lastRequest.current));
+    const held = holdUntil.current - performance.now();
+    const timer = setTimeout(tick, Math.max(0, SPEEDS[speed].ms - lastRequest.current, held));
     return () => clearTimeout(timer);
   }, [playing, live, speed, tick]);
 
@@ -469,8 +480,14 @@ export function LiveScreen({
           onResume={resume}
         />
       )}
-      <div className={`live__grid fill${phone && phoneView === "match" ? " live__grid--hidden" : ""}`}>
-        {phone && phoneView === "events" ? (
+      <div
+        className={`live__grid fill${phone && phoneView === "match" ? " live__grid--hidden" : ""}${
+          !phone && prefs.pitch ? " live__grid--pitch" : ""
+        }`}
+      >
+        {phone && phoneView === "pitch" ? (
+          <LivePitch live={live} interval={SPEEDS[speed].ms} playing={playing} vertical onHold={hold} />
+        ) : phone && phoneView === "events" ? (
           // Téléphone, onglet des événements : un seul fil des faits de jeu.
           <Feed sides={sides} events={live.events} />
         ) : phone ? (
@@ -502,10 +519,36 @@ export function LiveScreen({
           </>
         ) : (
           <>
-            {sides.map((side) => (
-              <Events key={side.club.id} side={side} events={live.events} mine={side.club.id === myId} />
-            ))}
-            {sides.map((side) => (
+            {/* Ordinateur : le terrain 2D entre les faits de jeu des deux équipes. */}
+            {sides.map((side, index) => [
+              <Events
+                key={side.club.id}
+                side={side}
+                events={live.events}
+                mine={side.club.id === myId}
+                action={
+                  index === 0 && !prefs.pitch ? (
+                    <button type="button" className="link-button" onClick={() => setPrefs({ pitch: true })}>
+                      Terrain 2D
+                    </button>
+                  ) : null
+                }
+              />,
+              index === 0 && prefs.pitch ? (
+                <LivePitch
+                  key="pitch"
+                  live={live}
+                  interval={SPEEDS[speed].ms}
+                  playing={playing}
+                  onHold={hold}
+                  onHide={() => setPrefs({ pitch: false })}
+                  onLineups={() => openPanel("lineups")}
+                />
+              ) : null,
+            ])}
+            {/* Avec le terrain, les compositions s'ouvrent par leur bouton (fenêtre). */}
+            {!prefs.pitch &&
+              sides.map((side) => (
               <Lineup
                 key={side.club.id}
                 side={side}
@@ -519,6 +562,21 @@ export function LiveScreen({
           </>
         )}
       </div>
+      {panel === "lineups" && (
+        <LineupsDialog
+          live={live}
+          sides={sides}
+          myId={myId}
+          heroId={live.hero?.player_id}
+          editable={!player && !live.finished}
+          busy={busy}
+          error={error}
+          resumeLabel={live.finished ? null : live.minute === 0 ? "Coup d'envoi" : "Reprendre le match"}
+          onSubstitute={(out, into) => act(() => calls.substitute(out, into))}
+          onClose={() => setPanel(null)}
+          onResume={resume}
+        />
+      )}
     </div>
   );
 }
@@ -798,7 +856,7 @@ function Clock({ minute, running, interval }) {
 
 // --- Événements d'une équipe --------------------------------------------------------------
 
-function Events({ side, events, mine }) {
+function Events({ side, events, mine, action = null }) {
   const ours = events.filter((e) => e.club_id === side.club.id).reverse();
   return (
     <section className={`card live-events${mine ? " live-events--mine" : ""}`}>
@@ -807,7 +865,10 @@ function Events({ side, events, mine }) {
           <ClubCrest name={side.club.name} size={18} />
           {side.club.name}
         </span>
-        <span className="muted">{ours.length ? `${ours.length} fait${ours.length > 1 ? "s" : ""} de jeu` : "Rien à signaler"}</span>
+        <span className="muted">
+          {ours.length ? `${ours.length} fait${ours.length > 1 ? "s" : ""} de jeu` : "Rien à signaler"}
+          {action && <> · {action}</>}
+        </span>
       </div>
       <ul className="live-events__list">
         {ours.map((e, index) => (
@@ -884,9 +945,11 @@ function EventRow({ event: e, away = false }) {
       <span className="live-event__text">
         <span className="live-event__label">{EVENTS[e.type]}</span>
         {e.type === "substitution" ? (
-          <span className="muted">
+          <span className="muted live-event__sub">
             {" "}
-            {e.other_player_name} entre, {e.player_name} sort
+            <SubIcon kind="in" title="Entre" />
+            {e.other_player_name} <SubIcon kind="out" title="Sort" />
+            {e.player_name}
           </span>
         ) : (
           e.player_name && <span className="muted"> · {e.player_name}</span>
@@ -905,7 +968,13 @@ function Mark({ type }) {
     return <span className="live-mark live-mark--kick" aria-hidden="true" />;
   }
   if (type === "injury") return <span className="live-mark live-mark--injury" aria-hidden="true">+</span>;
-  if (type === "substitution") return <span className="live-mark live-mark--sub" aria-hidden="true">⇄</span>;
+  if (type === "substitution") {
+    return (
+      <span className="live-mark live-mark--sub" aria-hidden="true">
+        <SubIcon />
+      </span>
+    );
+  }
   return <span className="live-mark live-mark--miss" aria-hidden="true" />;
 }
 
@@ -1086,7 +1155,7 @@ function PlayerRow({
           )}
           {player.id === kickerId && <span className="muted live-row__kicker" title="Buteur">B</span>}
         </span>
-        <Status player={player} incoming={incoming} />
+        <Status player={player} incoming={incoming} outgoing={selected} />
       </td>
       <td className="left muted">{POSITION_SHORT[player.slot ?? player.position]}</td>
       {stats ? (
@@ -1108,8 +1177,23 @@ function PlayerRow({
 }
 
 // Sous le nom : ce qui compte pour la décision (sorti, blessé, exclu, fatigué, entré à…).
-function Status({ player, incoming }) {
-  if (incoming) return <span className="live-row__status live-row__status--accent">Faire entrer</span>;
+function Status({ player, incoming, outgoing }) {
+  if (incoming) {
+    return (
+      <span className="live-row__status live-row__status--accent">
+        <SubIcon kind="in" />
+        Faire entrer
+      </span>
+    );
+  }
+  if (outgoing && player.status === "field") {
+    return (
+      <span className="live-row__status">
+        <SubIcon kind="out" />
+        Va sortir
+      </span>
+    );
+  }
   switch (player.status) {
     case "sin_bin":
       return <span className="live-row__status">Banc des pénalités · retour {player.back_at}'</span>;
@@ -1118,13 +1202,23 @@ function Status({ player, incoming }) {
     case "injured":
       return <span className="live-row__status">Blessé · sorti {player.until}'</span>;
     case "replaced":
-      return <span className="live-row__status">Remplacé {player.until}'</span>;
+      return (
+        <span className="live-row__status">
+          <SubIcon kind="out" />
+          Remplacé {player.until}'
+        </span>
+      );
     case "bench":
       return <span className="live-row__status">{POSITIONS[player.position].label}</span>;
     default: {
       const parts = [];
       if (player.since > 0) parts.push(`entré ${player.since}'`);
-      return parts.length ? <span className="live-row__status">{parts.join(" · ")}</span> : null;
+      return parts.length ? (
+        <span className="live-row__status">
+          <SubIcon kind="in" />
+          {parts.join(" · ")}
+        </span>
+      ) : null;
     }
   }
 }
@@ -1321,6 +1415,43 @@ function PlanDialog({ tactics, busy, error, resumeLabel, onChange, onClose, onRe
         <button type="button" className="button button--primary" disabled={busy} autoFocus onClick={onResume}>
           {resumeLabel}
         </button>
+      </div>
+    </Modal>
+  );
+}
+
+// Les deux compositions, banc compris, quand le terrain 2D occupe leur place : le match
+// est en pause, les remplacements se font ici comme dans la carte.
+function LineupsDialog({ sides, myId, heroId, editable, busy, error, resumeLabel, onSubstitute, onClose, onResume }) {
+  return (
+    <Modal className="live-lineups-dialog" onClose={onClose}>
+      <div>
+        <p className="eyebrow">Match en pause</p>
+        <h2 className="confirm__title">Compositions et bancs</h2>
+      </div>
+      <div className="live-lineups-dialog__grid">
+        {sides.map((side) => (
+          <Lineup
+            key={side.club.id}
+            side={side}
+            mine={side.club.id === myId}
+            heroId={heroId}
+            paused={editable}
+            busy={busy}
+            onSubstitute={onSubstitute}
+          />
+        ))}
+      </div>
+      {error && <p className="status--error" style={{ margin: 0 }}>{error.message}</p>}
+      <div className="confirm__actions">
+        <button type="button" className="button" onClick={onClose}>
+          Fermer
+        </button>
+        {resumeLabel && (
+          <button type="button" className="button button--primary" disabled={busy} onClick={onResume}>
+            {resumeLabel}
+          </button>
+        )}
       </div>
     </Modal>
   );

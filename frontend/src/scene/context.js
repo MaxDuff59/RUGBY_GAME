@@ -5,7 +5,7 @@ import { defaultJersey, distance } from "../jersey.js";
 
 // Les maillots des deux clubs : chacun le sien à domicile ; l'équipe qui se déplace
 // passe à sa tenue extérieure (puis au third) si les deux se ressemblent trop.
-function kits(homeName, awayName) {
+export function kits(homeName, awayName) {
   const home = defaultJersey(homeName, "home");
   let away = defaultJersey(awayName, "home");
   if (distance(away.base, home.base) < 120) away = defaultJersey(awayName, "away");

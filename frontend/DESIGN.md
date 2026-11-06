@@ -230,6 +230,30 @@ des joueurs, des personnages low-poly en pixels. Nulle part ailleurs.
   à côté) et sa note sur 10 (gras à partir de 7,5), puis le banc (sortis en gris avec la minute). Notre carte accepte les remplacements en pause : on
   clique un joueur du terrain, puis « Faire entrer » sur un remplaçant. Les deux rangées
   défilent dans leur carte ; la page tient dans l'écran.
+- Terrain 2D du match en direct (`LivePitch`, `src/pitch/`, réglage « Terrain 2D », activé
+  par défaut, aussi dans le pied du menu) : le terrain vu de dessus (vert terrain, bandes de
+  tonte, en-buts plus sombres, lignes blanches, 10 m et 5 m en tirets, perches), un rond par
+  joueur aux couleurs de son maillot avec le numéro de sa place, liseré de la couleur
+  secondaire ; l'équipe qui se déplace passe en tenue extérieure si les deux se ressemblent
+  sur la pelouse. Le ballon (et son ombre quand il vole), l'arbitre en noir, les joueurs au
+  sol aplatis, le sauteur porté cerclé de blanc, le joueur de l'action cerclé. Notre équipe
+  attaque toujours vers la droite (vers le haut sur téléphone). Chaque minute rejoue ce que
+  le moteur a noté (`new_play`) : temps de jeu au ras des rucks (demi de mêlée au pied, pods
+  d'avants, trois-quarts en escalier et en profondeur, défense à plat sur la ligne de
+  hors-jeu, arrière en couverture), franchissements, ballons grattés, touches, jeu au pied,
+  coups d'envoi, essais, mauls et mêlées sur pénalité, transformations, pénalités, drops,
+  cartons ; un dilemme ou un choix crucial attend sur la mise en place de sa situation, puis
+  son issue se joue. Légende de l'action en tête de carte, blasons et sens de l'attaque en
+  pied. Ordinateur : la carte entre les faits de jeu des deux équipes, sur toute la hauteur
+  qui reste ; « Compositions » ouvre les deux XV et les bancs dans une fenêtre (le match se
+  met en pause, les remplacements s'y font), « Masquer » rend la mise en page sans terrain.
+  Téléphone : un onglet « Terrain », terrain dans la hauteur. Un essai ou une pénalité se
+  montre en entier : le chrono attend la fin de l'action.
+- Remplacements (`SubIcon`) : une flèche verte vers le haut (celui qui entre) au-dessus d'une
+  flèche rouge vers le bas (celui qui sort) en repère dans les faits de jeu, la flèche verte
+  devant le nom de l'entrant et la rouge devant celui du sortant ; dans les compositions, la
+  verte devant « entré 52' » et « Faire entrer », la rouge devant « Remplacé 64' » et « Va
+  sortir ».
 - Météo (`WeatherIcon`) : pictogramme au trait dans la couleur du texte (soleil, nuage et
   pluie, rafales, thermomètre), libellé et effet en info-bulle. Sous le score de chaque
   affiche (`MatchList`, la prévision pour un match à venir), dans la colonne « Météo » de

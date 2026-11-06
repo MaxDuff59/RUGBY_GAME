@@ -5395,6 +5395,144 @@ button.simulation__row:focus-visible {
   overflow: hidden;
 }
 
+/* Terrain 2D : entre les faits de jeu des deux équipes, sur deux colonnes et toute la
+   hauteur qui reste ; les compositions s'ouvrent par leur bouton. */
+.live__grid--pitch {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.live__grid--pitch > .live-pitch {
+  grid-column: span 2;
+}
+
+.live-pitch__lineups {
+  flex: 0 0 auto;
+}
+
+/* Les compositions en fenêtre : les deux XV côte à côte, chacun défile dans sa carte. */
+.modal.live-lineups-dialog {
+  max-width: 1240px;
+  height: calc(100vh - 48px);
+  overflow: hidden;
+  gap: 16px;
+  padding: 24px 28px;
+}
+
+.live-lineups-dialog__grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.live-pitch {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.live-pitch__head {
+  align-items: center;
+}
+
+.live-pitch__caption {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.live-pitch__minute {
+  margin-right: 8px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+
+.live-pitch__hide {
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+
+.live-pitch__field {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  padding: 6px 10px 2px;
+}
+
+.live-pitch__field svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+}
+
+.live-pitch__number {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.9px;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.live-pitch__focus {
+  fill: none;
+  stroke: #f7f7f4;
+  stroke-width: 0.32;
+}
+
+.live-pitch__ref {
+  fill: #16181b;
+  stroke: #f7f7f4;
+  stroke-width: 0.22;
+}
+
+.live-pitch__shadow {
+  fill: rgba(0, 0, 0, 0.35);
+}
+
+.live-pitch__leather {
+  fill: #efe6d2;
+  stroke: #4a3524;
+  stroke-width: 0.2;
+}
+
+.live-pitch__legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 16px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.live-pitch__side {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.live-pitch__side--mine {
+  color: var(--accent);
+}
+
+.live-pitch__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid;
+  flex: 0 0 auto;
+}
+
 .live-card__head {
   display: flex;
   justify-content: space-between;
@@ -5473,7 +5611,40 @@ button.simulation__row:focus-visible {
   width: auto;
   height: auto;
   border-radius: 0;
-  font-weight: 700;
+  background: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Remplacements : flèche verte pour celui qui entre, rouge pour celui qui sort. */
+.sub-icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 9px;
+  height: 8px;
+  vertical-align: -0.05em;
+}
+
+.sub-icon--both {
+  width: 10px;
+  height: 18px;
+}
+
+.sub-icon__in {
+  fill: var(--win);
+}
+
+.sub-icon__out {
+  fill: var(--loss);
+}
+
+.live-event__sub .sub-icon {
+  margin: 0 3px 0 2px;
+}
+
+.live-row__status .sub-icon {
+  margin-right: 4px;
 }
 
 /* Cartons : la convention du rugby, jaune et rouge */
@@ -9590,6 +9761,16 @@ td > .tag:first-child,
 
 .live--phone-events .live__grid {
   grid-template-rows: minmax(0, 1fr);
+}
+
+.live--phone-pitch .live__grid {
+  flex: 1 1 0;
+  min-height: 260px;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.live--phone-pitch .live-pitch__field {
+  padding: 6px 8px 2px;
 }
 
 .live--phone-lineups .live__grid {

@@ -722,6 +722,46 @@ class CrunchOut(BaseModel):
     conversion: float  # chance de transformer l'essai, s'il est marqué
 
 
+class MinutePhaseOut(BaseModel):
+    """Un temps de jeu de la minute (engine/match_engine.py, `new_play`)."""
+
+    club_id: int  # l'équipe qui a le ballon
+    carrier_id: int
+    tackler_id: int
+    # tackled : plaqué ; turnover : plaqué, ballon gratté ; missed : plaquage manqué ;
+    # break : franchissement.
+    result: Literal["tackled", "turnover", "missed", "break"]
+    other_id: int | None = None  # le second plaqueur, ou celui qui gratte
+
+
+class MinuteLineoutOut(BaseModel):
+    club_id: int  # l'équipe qui lance
+    won_by: int
+    jumper_id: int
+
+
+class MinuteChanceOut(BaseModel):
+    club_id: int
+    threat: float  # ses chances de finir en points
+    # try, penalty, drop ; held : la défense a tenu ; crunch : le manager décide.
+    result: Literal["try", "penalty", "drop", "held", "crunch"]
+
+
+class MinutePenaltyOut(BaseModel):
+    club_id: int
+    option: Literal["kick", "touch", "scrum", "play"]
+
+
+class MinutePlayOut(BaseModel):
+    """Ce qu'a joué la dernière minute, pour la montrer sur le terrain 2D."""
+
+    minute: int
+    phases: list[MinutePhaseOut]
+    lineout: MinuteLineoutOut | None = None
+    chance: MinuteChanceOut | None = None
+    penalty: MinutePenaltyOut | None = None
+
+
 class LiveOut(BaseModel):
     """Le match en direct du club dirigé, tel qu'il en est."""
 
@@ -749,6 +789,7 @@ class LiveOut(BaseModel):
     # Une barre par minute jouée, de -100 à 100 : positive quand l'équipe qui reçoit
     # menace, négative quand c'est l'autre (engine/momentum.py).
     momentum: list[int]
+    play: MinutePlayOut | None = None  # la dernière minute jouée, pour le terrain 2D
     talk: TalkOut  # discours possibles du club dirigé
     crunch: CrunchOut | None = None  # choix crucial en attente (le chrono est arrêté)
     # Carrière de joueur : le joueur incarné, ses dilemmes, et celui qui l'attend.

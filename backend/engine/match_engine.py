@@ -1161,6 +1161,24 @@ class Side:
 # --- Le match, minute par minute ---------------------------------------------------------
 
 
+def new_play(minute: int) -> dict:
+    """Ce que joue une minute, tel que le terrain du match en direct le montre (rien ici
+    ne tire au hasard : le match se joue pareil, montré ou non).
+
+    - `phases` : les temps de jeu (`_phases`), dans l'ordre : l'équipe qui a le ballon,
+      le porteur, le plaqueur, l'issue (`tackled` ; `turnover`, ballon gratté par
+      `other_id` ; `missed`, plaquage manqué ; `break`, franchissement) et, sur un
+      plaquage à deux, le second plaqueur (`other_id`) ;
+    - `lineout` : la touche de la minute, l'équipe qui lance, celle qui la gagne et le
+      sauteur ;
+    - `chance` : l'action dangereuse, son équipe, ses chances de finir en points et son
+      issue (`try`, `penalty`, `drop`, `held` : la défense a tenu ; `crunch` : la
+      pénalité attend la décision du manager) ;
+    - `penalty` : la pénalité en position, et comment elle a été jouée (`PenaltyOption`).
+    Les points marqués, eux, sont dans les événements du match."""
+    return {"minute": minute, "phases": [], "lineout": None, "chance": None, "penalty": None}
+
+
 class LiveMatch:
     """Un match qu'on joue minute par minute, avec la main sur les bancs.
 
@@ -1229,6 +1247,8 @@ class LiveMatch:
         self.coach = coach  # le club dont le manager tranche des dilemmes pour ses joueurs
         self.dilemma: dilemmas.Dilemma | None = None
         self.outcomes: list[dilemmas.Outcome] = []
+        # Ce qu'a joué la dernière minute, pour la montrer sur le terrain (`new_play`).
+        self.play: dict | None = None
         if hero is not None:
             self._call_up(hero)
 
@@ -1444,6 +1464,7 @@ class LiveMatch:
         before = len(self.events)
         self._minute_chance = None
         self._minute_play = {}  # points de jeu de la minute, par club (engine/momentum.py)
+        self.play = new_play(minute)
         self._play_minute(minute)
         self._crowd_reacts(self.events[before:])
         self.momentum.append(
@@ -1502,6 +1523,7 @@ class LiveMatch:
         for side in self.sides:
             if self._crunch_due(side, minute):
                 self._minute_chance = (side.club.id, momentum.threat(0.0, 1.0))
+                self._note_chance(side, 0.0, 1.0, "crunch")
                 self._offer(side, minute)
                 return
 
@@ -1695,6 +1717,7 @@ class LiveMatch:
 
         # 1) Essai, suivi d'une tentative de transformation.
         if roll < try_probability:
+            self._note_chance(attacking, try_probability, penalty_probability, "try")
             self._try(attacking, defending, minute)
             return
 
@@ -1702,13 +1725,16 @@ class LiveMatch:
         # de match serrée, le manager décide.
         if roll < try_probability + penalty_probability:
             if self._crunch(attacking, minute):
+                self._note_chance(attacking, try_probability, penalty_probability, "crunch")
                 self._offer(attacking, minute)
                 return
+            self._note_chance(attacking, try_probability, penalty_probability, "penalty")
             option = PenaltyOption(attacking.tactics.penalties.value)
             self._penalty(attacking, defending, att, dfn, minute, option)
             return
 
         # 3) Drop de l'ouvreur (on ne garde que les drops réussis, les ratés sont anecdotiques).
+        self._note_chance(attacking, try_probability, penalty_probability, "held")
         if roll < try_probability + penalty_probability + DROP_RATE * weather.drops:
             fly_half = next(
                 (s.player for s in attacking.on_field(minute) if s.position == Position.FLY_HALF),
@@ -1716,6 +1742,7 @@ class LiveMatch:
             )
             drop_kicker = fly_half or attacking.kicker(minute)
             if drop_kicker is not None:
+                self._note_chance(attacking, try_probability, penalty_probability, "drop")
                 self.events.append(
                     MatchEvent(minute, EventType.DROP_GOAL, attacking.club.id, drop_kicker.id)
                 )
@@ -1733,6 +1760,8 @@ class LiveMatch:
         option: PenaltyOption,
     ) -> None:
         """Une pénalité en position, jouée selon `option`."""
+        if self.play is not None:
+            self.play["penalty"] = {"club_id": attacking.club.id, "option": option.value}
         if option == PenaltyOption.KICK:
             self._penalty_kick(attacking, minute)
             return
@@ -1778,6 +1807,17 @@ class LiveMatch:
         if self.crunch_at is not None and self.crunch_at > self.last_minute - CRUNCH_MINUTES:
             return False
         return self.rng.random() < 1 / (self.last_minute - minute + 1)
+
+    def _note_chance(
+        self, side: Side, try_probability: float, penalty_probability: float, result: str
+    ) -> None:
+        """L'action dangereuse de la minute, pour le terrain (`new_play`)."""
+        if self.play is not None:
+            self.play["chance"] = {
+                "club_id": side.club.id,
+                "threat": round(momentum.threat(try_probability, penalty_probability), 2),
+                "result": result,
+            }
 
     def _offer(self, side: Side, minute: int) -> None:
         """La pénalité attend la décision du manager : le match s'arrête là."""
@@ -2085,6 +2125,14 @@ class LiveMatch:
             tackler = rng.choices(tacklers, cum_weights=tackle_weights)[0]
             attacking.count(carrier.id, "carries")
             play[attacking.club.id] += momentum.PLAY_POINTS["carries"]
+            phase = {
+                "club_id": attacking.club.id,
+                "carrier_id": carrier.id,
+                "tackler_id": tackler.id,
+                "result": "tackled",
+                "other_id": None,
+            }
+            self.play["phases"].append(phase)
             duel = _win_probability(
                 defending_rating(tackler) * efficiency(defending.energy(tackler)),
                 carrying_rating(carrier) * efficiency(attacking.energy(carrier)),
@@ -2095,16 +2143,20 @@ class LiveMatch:
                     helper = rng.choices(tacklers, cum_weights=tackle_weights)[0]
                     if helper is not tackler:
                         defending.count(helper.id, "tackles")
+                        phase["other_id"] = helper.id
                 if rng.random() < TURNOVER_PER_PHASE:
                     poacher = rng.choices(tacklers, cum_weights=turnover_weights)[0]
                     defending.count(poacher.id, "turnovers")
                     play[defending.club.id] += momentum.PLAY_POINTS["turnovers"]
+                    phase.update(result="turnover", other_id=poacher.id)
                 continue
             defending.count(tackler.id, "missed_tackles")
+            phase["result"] = "missed"
             att, dfn = ratings[attacking.club.id], ratings[defending.club.id]
             if rng.random() < 2 * LINE_BREAK_ON_MISS * _win_probability(att.attack, dfn.defense):
                 attacking.count(carrier.id, "line_breaks")
                 play[attacking.club.id] += momentum.PLAY_POINTS["line_breaks"]
+                phase["result"] = "break"
 
     def _lineout(self, minute: int) -> None:
         """Une touche, parfois : le lanceur la garde le plus souvent, sinon l'adversaire la vole."""
@@ -2126,7 +2178,13 @@ class LiveMatch:
             else (other, theirs, "lineout_steals")
         )
         weights = [JUMPER_WEIGHT[s.position] * s.player.lineout for s in jumpers]
-        side.count(rng.choices([s.player for s in jumpers], weights=weights)[0].id, stat)
+        jumper = rng.choices([s.player for s in jumpers], weights=weights)[0]
+        side.count(jumper.id, stat)
+        self.play["lineout"] = {
+            "club_id": throwing.club.id,
+            "won_by": side.club.id,
+            "jumper_id": jumper.id,
+        }
 
     def _drift_ratings(self, minute: int, home: Collective, away: Collective) -> None:
         """Chaque minute, la ligne qui domine son duel gagne un peu, l'autre perd,
@@ -2206,6 +2264,7 @@ class LiveMatch:
             "crowd": self.crowd.to_dict() if self.crowd else None,
             "roar": self.roar,
             "momentum": self.momentum,
+            "play": self.play,
             "rng": [version, list(internal), gauss],
             "events": [
                 {
@@ -2265,6 +2324,7 @@ class LiveMatch:
         # Un match commencé avant le graphique : les minutes déjà jouées restent vides.
         bars = state.get("momentum", [])
         live.momentum = [0] * (live.minute - len(bars)) + list(bars)
+        live.play = state.get("play")
         live.home.weather = live.away.weather = live.weather
         return live
 
