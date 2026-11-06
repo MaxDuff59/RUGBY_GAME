@@ -256,6 +256,19 @@ des joueurs, des personnages low-poly en pixels. Nulle part ailleurs.
   terrain de l'effectif. Liste déroulante « Capitaine » à droite du titre de l'effectif :
   « Choix du staff · nom », puis les pros du plus grand au plus petit meneur (sur 20). Le
   meneur a aussi sa barre dans les notes du moteur de la fiche joueur.
+- Transferts (ordinateur) : deux colonnes. À gauche, sur toute la hauteur, les onglets
+  « Recruter · n » / « Vendre · n » et la recherche par nom ; dessous, une ligne de filtres
+  (type de contrat — « Tous les contrats » —, poste, championnat, pastille « Dans mes
+  moyens » : il discute encore, salaire sous le plafond, indemnité dans la trésorerie) ;
+  puis le tableau, qui défile sous son en-tête collant. Une ligne cliquée ouvre l'approche
+  (pas de bouton par ligne). Colonne « Chez toi » : titulaire (vert), doublure (encre) ou
+  réserviste (gris) dans notre effectif à son poste, et l'écart avec le moins bon de nos
+  titulaires. L'onglet Vendre montre le rôle de chacun sur la feuille du prochain match.
+  À droite (280 px, 260 sous 1400 px), qui défile seul : négociations, joker médical
+  (« Chercher » filtre les agents libres au poste du blessé), puis « Ton effectif par
+  poste » : nombre de pros sur le double des places du XV (en rouge s'il en manque), un
+  point par joueur (noir : titulaires, pointillé : manquants), note moyenne des
+  titulaires ; un clic filtre le marché sur le poste (accent quand il est actif).
 - Composition (page Effectif, sélection et match libre ; `LineupBoard.jsx`) : à gauche le
   XV sur le terrain, chaque joueur en rond numéroté avec son nom et, dessous, sa note au
   poste (`position_ratings`, le critère du staff). Hors poste : anneau rouge (`--loss`)

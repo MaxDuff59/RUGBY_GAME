@@ -3562,6 +3562,273 @@ select.tactics__select {
 
 /* --- Recrutement ----------------------------------------------------------------- */
 
+/* Page Transferts (ordinateur) : le marché à gauche sur toute la hauteur, le volet à
+   droite (négociations, joker, effectif par poste), chacun défile pour lui-même. */
+.transfers {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 24px;
+}
+
+.transfers__main {
+  min-width: 0;
+  min-height: 0;
+}
+
+.transfers__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.transfers__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.transfers__filters .input,
+.transfers__filters .chip,
+.transfers__search {
+  min-height: 38px;
+}
+
+.transfers__search {
+  width: 240px;
+}
+
+.transfers__table td {
+  white-space: nowrap;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.transfers__table th {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.transfers__table td:first-child,
+.transfers__table th:first-child {
+  padding-left: 14px;
+}
+
+.transfers__table .table {
+  min-width: 760px;
+}
+
+/* Les voies (pastilles) passent à la ligne ; un nom de club trop long se coupe. */
+.transfers__table td.transfers__ways {
+  white-space: normal;
+  min-width: 140px;
+}
+
+.transfers__person > div {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.transfers__club span,
+.transfers__club + .muted {
+  max-width: 138px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.transfers__approx {
+  margin-right: 3px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.transfers__table {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.transfers__table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+
+.transfers__empty {
+  padding: 24px 16px;
+}
+
+.transfers__aside {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Négociations et joker : une ligne par affaire, nom et détail empilés. */
+.deal-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 16px;
+}
+
+.deal-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.deal-list li:last-child {
+  border-bottom: 0;
+}
+
+.deal-list__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+
+.deal-list__name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* Sa place chez nous : titulaire (vert), doublure (encre), réserviste (gris). */
+.fit {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.fit--starter {
+  color: var(--win);
+}
+
+.fit--backup {
+  color: var(--ink);
+}
+
+.fit--reserve {
+  color: var(--neutral);
+  font-weight: 500;
+}
+
+.fit__delta {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Notre effectif poste par poste : un bouton par poste, qui filtre le marché. */
+.depth {
+  list-style: none;
+  margin: 0;
+  padding: 6px 8px 0;
+}
+
+.depth__row {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 30px 30px;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.depth__row:hover,
+.depth__row:focus-visible {
+  background: var(--line-soft);
+}
+
+.depth__row[aria-pressed="true"] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.depth__label {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.depth__dots {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.depth__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--neutral-soft);
+}
+
+.depth__dot--starter {
+  background: var(--ink);
+}
+
+.depth__dot--missing {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--neutral);
+  border: 0;
+}
+
+.depth__row[aria-pressed="true"] .depth__dot--starter {
+  background: #fff;
+}
+
+.depth__count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+
+.depth__count--short {
+  color: var(--loss);
+  font-weight: 700;
+}
+
+.depth__note {
+  text-align: right;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.depth__row[aria-pressed="true"] .depth__count {
+  color: #fff;
+}
+
+@media (max-width: 1400px) {
+  .transfers {
+    grid-template-columns: minmax(0, 1fr) 260px;
+  }
+  .transfers__intro {
+    display: none;
+  }
+}
+
+
 .deal-options {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
