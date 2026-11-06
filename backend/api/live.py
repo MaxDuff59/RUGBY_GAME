@@ -45,9 +45,10 @@ from engine.match_engine import (
     SLOT_NUMBERS,
     LiveMatch,
     Side,
+    leadership,
 )
 from engine.matchday import training_week
-from engine.team_talk import TALKS
+from engine.team_talk import PLAYER_TALKS, TALKS
 from models import MATCH_STAT_NAMES, Club, EventType, Injury, Stage
 from models.orm import (
     InjuryRow,
@@ -222,19 +223,24 @@ def _side_out(live: LiveMatch, side: Side, name: str) -> LiveSideOut:
 
 
 def _talk_out(live: LiveMatch, club_id: int) -> TalkOut:
-    """Les discours que le manager peut tenir maintenant, avec leurs chances."""
-    moment = live.talk_moment(club_id)
+    """Les discours que le manager peut tenir maintenant, avec leurs chances ; en
+    carrière de joueur, ceux du joueur incarné s'il est un meneur."""
+    by_hero = live.hero is not None
+    moment = live.hero_talk_moment() if by_hero else live.talk_moment(club_id)
     options = []
     if moment is not None:
         for talk in TALKS.values():
-            if moment in talk.moments:
+            if moment in talk.moments and (not by_hero or talk.key in PLAYER_TALKS):
                 success, backfire = live.talk_odds(club_id, talk)
                 options.append(
                     TalkOptionOut(
                         key=talk.key, success=round(success, 2), backfire=round(backfire, 2)
                     )
                 )
-    return TalkOut(moment=moment, options=options, next_at=live.next_talk(club_id))
+    # Le joueur incarné ne reparle pendant le jeu que s'il est sur le terrain.
+    on_field = not by_hero or (live.hero_speaks() and live.hero_on_field())
+    next_at = live.next_talk(club_id) if on_field else None
+    return TalkOut(moment=moment, options=options, next_at=next_at)
 
 
 def _crunch_out(live: LiveMatch, club_id: int) -> CrunchOut | None:
@@ -264,6 +270,8 @@ def _hero_out(live: LiveMatch) -> LiveHeroOut | None:
         entry=live.hero_entry,
         confidence=round(live.hero_confidence, 2),
         hurt=live.hero_hurt,
+        leadership=round(20 * leadership(side.players()[live.hero]), 1),
+        speaks=live.hero_speaks(),
     )
 
 

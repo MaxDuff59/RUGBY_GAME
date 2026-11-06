@@ -42,7 +42,13 @@ from engine import dilemmas, social
 from engine import hero as rules
 from engine.freshness import daily_recovery, player_freshness
 from engine.journal import MoveKind
-from engine.match_engine import FORMATION, MATCH_MINUTES, RATING_FOR_POSITION, select_lineup
+from engine.match_engine import (
+    FORMATION,
+    MATCH_MINUTES,
+    RATING_FOR_POSITION,
+    leadership,
+    select_lineup,
+)
 from engine.season import champion
 from models import (
     ATTRIBUTE_NAMES,
@@ -417,6 +423,7 @@ def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
         league_name=league_name,
         overall=round(player.overall, 1),
         level=round(player.level, 1),
+        leadership=round(20 * leadership(player), 1),
         rank=rank,
         at_position=at_position,
         status=status,

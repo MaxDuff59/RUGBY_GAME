@@ -1194,6 +1194,27 @@ export const TALKS = {
   },
 };
 
+// Carrière de joueur : un meneur (17 de meneur et plus) prend la parole au vestiaire,
+// et pendant le jeu sur le terrain, pas depuis la touche. Les discours dont les mots
+// sont ceux d'un manager changent de ton (engine/team_talk.py).
+export const HERO_TALK_MOMENTS = { ...TALK_MOMENTS, touchline: "Sur le terrain" };
+const HERO_TALKS = {
+  tactical: {
+    label: "Recadrer",
+    scope: "Calmement, deux ou trois ajustements précis.",
+    flat: "Tes consignes n'ont pas passionné grand monde.",
+  },
+  rant: { backfired: "Le vestiaire se braque : on n'aime pas se faire secouer par un coéquipier." },
+  cheer: {
+    scope: "Taper dans les mains, pousser les copains.",
+    lifted: "Les copains t'entendent et accélèrent.",
+  },
+  shout: { scope: "Hausser le ton dans le regroupement. Plus de rage, plus de fautes." },
+};
+
+// Un discours, avec les mots du joueur incarné quand c'est lui qui parle (`hero`).
+export const talkOf = (key, hero = false) => ({ ...TALKS[key], ...(hero ? HERO_TALKS[key] : {}) });
+
 // L'issue d'un discours, en un mot.
 export const TALK_OUTCOMES = {
   lifted: "Ça porte",

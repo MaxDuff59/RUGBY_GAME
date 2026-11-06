@@ -19,9 +19,11 @@ import {
   POSITION_SHORT,
   POSITIONS,
   TACTICS,
+  HERO_TALK_MOMENTS,
   TALK_MOMENTS,
   TALK_OUTCOMES,
   TALKS,
+  talkOf,
   WEATHER,
   CROWD_MOODS,
   crowdEffect,
@@ -365,6 +367,7 @@ export function LiveScreen({
           live={live}
           side={mySide}
           busy={busy || playing}
+          onTalk={() => openPanel("talk")}
           onToEntry={() =>
             act(async () => {
               const next = await calls.toEntry();
@@ -1292,7 +1295,7 @@ const SPIRIT_SCALE = 0.15;
 
 // Carrière de joueur : à la place du plan de jeu et des discours, le joueur incarné,
 // sa note du moment et ses actions déjà jouées.
-function HeroBar({ live, side, busy, onToEntry }) {
+function HeroBar({ live, side, busy, onTalk, onToEntry }) {
   const me = side.players.find((p) => p.id === live.hero?.player_id);
   if (!me) return null;
   const outcomes = live.hero.outcomes;
@@ -1310,7 +1313,7 @@ function HeroBar({ live, side, busy, onToEntry }) {
               ? "Exclu"
               : "Remplacé";
   return (
-    <section className="card live-hero">
+    <section className={`card live-hero${live.hero.speaks ? " live-hero--leader" : ""}`}>
       <div>
         <span className="eyebrow">Toi · n° {me.number}</span>
         <div className="live-hero__name">{me.name}</div>
@@ -1330,6 +1333,7 @@ function HeroBar({ live, side, busy, onToEntry }) {
         <span className="num">{me.rating !== null ? formatNote(me.rating) : "–"}</span>
         <span className="muted">note / 10</span>
       </div>
+      {live.hero.speaks && <HeroTalk live={live} onTalk={onTalk} />}
       <div className="live-hero__actions">
         <span className="muted">
           {outcomes.length === 0
@@ -1347,6 +1351,32 @@ function HeroBar({ live, side, busy, onToEntry }) {
         </span>
       </div>
     </section>
+  );
+}
+
+// Un meneur parle à son équipe : au vestiaire, et sur le terrain toutes les 10 minutes.
+function HeroTalk({ live, onTalk }) {
+  const { moment, next_at: nextAt } = live.talk;
+  const locker = moment === "kickoff" || moment === "break";
+  return (
+    <button
+      type="button"
+      className={`live-action live-hero__talk${locker ? " live-action--due" : ""}`}
+      disabled={live.finished || !moment}
+      title={`Meneur ${formatNote(live.hero.leadership)} : tu as la parole dans le groupe`}
+      onClick={onTalk}
+    >
+      <span className="live-action__label">Prendre la parole</span>
+      <span className="live-action__value">
+        {moment
+          ? HERO_TALK_MOMENTS[moment]
+          : live.finished
+            ? "Match terminé"
+            : nextAt
+              ? `Possible à la ${nextAt}'`
+              : "Pas sur le terrain"}
+      </span>
+    </button>
   );
 }
 
@@ -1467,6 +1497,9 @@ function TalkDialog({ live, side, busy, error, resumeLabel, onTalk, onClose, onR
   const [spokenAt, setSpokenAt] = useState(null); // nombre de discours avant le nôtre
   const heard = spokenAt !== null ? side.talks[spokenAt] : null;
   const { moment, options } = live.talk;
+  const hero = Boolean(live.hero);
+  const said = (key) => talkOf(key, hero);
+  const moments = hero ? HERO_TALK_MOMENTS : TALK_MOMENTS;
   const talk = (key) => {
     setSpokenAt(side.talks.length);
     onTalk(key);
@@ -1474,14 +1507,14 @@ function TalkDialog({ live, side, busy, error, resumeLabel, onTalk, onClose, onR
   return (
     <Modal compact className="modal--dialog live-dialog" onClose={busy ? () => {} : onClose}>
       <div>
-        <p className="eyebrow">{heard ? `Discours · ${heard.minute}'` : TALK_MOMENTS[moment] ?? "Discours"}</p>
-        <h2 className="confirm__title">{heard ? TALKS[heard.key].label : "Parler à l'équipe"}</h2>
+        <p className="eyebrow">{heard ? `Discours · ${heard.minute}'` : moments[moment] ?? "Discours"}</p>
+        <h2 className="confirm__title">{heard ? said(heard.key).label : hero ? "Parler au groupe" : "Parler à l'équipe"}</h2>
       </div>
 
       {heard ? (
         <div className={`talk__outcome talk__outcome--${heard.outcome}`}>
           <span className="talk__verdict">{TALK_OUTCOMES[heard.outcome]}</span>
-          <p className="confirm__text">{TALKS[heard.key][heard.outcome]}</p>
+          <p className="confirm__text">{said(heard.key)[heard.outcome]}</p>
           <span className="muted talk__effect">
             {Math.abs(heard.spirit) >= 0.005 ? `Élan ${percent(heard.spirit)}` : "Élan inchangé"}
             {heard.heat >= 0.1 && " · les nerfs s'échauffent"}
@@ -1495,8 +1528,8 @@ function TalkDialog({ live, side, busy, error, resumeLabel, onTalk, onClose, onR
           {options.map((option) => (
             <li key={option.key}>
               <button type="button" className="talk__option" disabled={busy || !moment} onClick={() => talk(option.key)}>
-                <span className="talk__name">{TALKS[option.key].label}</span>
-                <span className="muted talk__scope">{TALKS[option.key].scope}</span>
+                <span className="talk__name">{said(option.key).label}</span>
+                <span className="muted talk__scope">{said(option.key).scope}</span>
                 <span className={`talk__odds${option.backfire >= 0.3 ? " talk__odds--risky" : ""}`}>
                   {chance(option.success)} · {risk(option.backfire)}
                 </span>

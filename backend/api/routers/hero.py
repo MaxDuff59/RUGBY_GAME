@@ -16,7 +16,16 @@ from api import hero_market, plans
 from api.auth import UserDep
 from api.deps import SessionDep, load_club
 from api.ledger import current_season, game_date
-from api.routers.seasons import FIRST_SEASON_YEAR, create_season
+from api.live import live_match_row
+from api.routers import live
+from api.routers.seasons import (
+    FIRST_SEASON_YEAR,
+    _current_or_404,
+    _prepare_day,
+    create_season,
+    next_fixture,
+    play_next_matchday,
+)
 from api.schemas import (
     CareerOut,
     HeroAgentIn,
@@ -27,6 +36,7 @@ from api.schemas import (
     HeroOffersOut,
     HeroOut,
     HeroTrainIn,
+    PlayOut,
     SocialOut,
 )
 from data.leagues import league_config
@@ -147,6 +157,41 @@ def get_social(session: SessionDep) -> SocialOut:
     out = heroes.social_out(session, wanted)
     session.commit()
     return out
+
+
+def _plays_next(session, season, row: HeroRow) -> bool:
+    """Son club joue la prochaine journée, avant tout match en sélection, et il est apte
+    (ou a choisi de jouer blessé) : son match se joue avec lui."""
+    _prepare_day(session, season)
+    fixture = next_fixture(session, season)
+    if fixture is None:
+        return False
+    test = heroes.next_test(session, season)
+    if test is not None and test.date <= fixture.date:
+        return False
+    club = load_club(session, heroes.hero_club_id(session))
+    me = next((p for p in club.players if p.id == row.player_id), None)
+    if me is None:
+        return False
+    if me.is_injured(game_date(session)):
+        return row.play_hurt
+    return not me.is_suspended
+
+
+@router.post("/simulate", response_model=PlayOut)
+def simulate(session: SessionDep) -> PlayOut:
+    """Simule la prochaine journée, comme « Simuler » sur sa fiche : apte, il joue le match
+    de son club (le moteur du direct joué d'une traite, la voie sûre à chacune de ses
+    actions), titulaire ou sur le banc selon l'entraîneur ; blessé, suspendu ou appelé en
+    sélection avant, la journée se joue sans le direct. Un match en direct commencé est
+    fini par le staff. « Simuler jusqu'à… » l'appelle journée après journée."""
+    row = _hero_or_404(session)
+    season = _current_or_404(session)
+    if live_match_row(session) is None and _plays_next(session, season, row):
+        live.start_live(session)
+    if live_match_row(session) is not None:
+        return live.finish(session)
+    return play_next_matchday(session)
 
 
 @router.post("/play-hurt", response_model=HeroOut)

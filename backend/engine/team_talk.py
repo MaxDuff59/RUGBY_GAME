@@ -163,6 +163,14 @@ TALKS: dict[str, Talk] = {
 }
 
 
+# Carrière de joueur : un joueur incarné qui est un meneur (17 sur 20 et plus, voir
+# `match_engine.leadership`) prend la parole comme un manager. Au vestiaire, qu'il soit
+# titulaire ou remplaçant ; pendant le jeu, sur le terrain, s'il y est. Le meneur, c'est
+# lui : il ne laisse pas parler les cadres.
+PLAYER_LEADERSHIP = 17 / 20
+PLAYER_TALKS = frozenset(key for key in TALKS if key != "leaders")
+
+
 def score_situation(margin: int) -> Score:
     """`margin` : nos points moins ceux de l'adversaire."""
     if margin > CLOSE_MARGIN:

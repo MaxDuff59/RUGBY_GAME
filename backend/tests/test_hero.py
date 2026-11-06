@@ -15,7 +15,8 @@ from data.generator import generate_real_clubs
 from data.leagues import league
 from engine import dilemmas, hero_market, social
 from engine import hero as rules
-from engine.match_engine import HALF_TIME, LiveMatch, simulate_match
+from engine.match_engine import HALF_TIME, LiveMatch, leadership, simulate_match
+from engine.team_talk import TOUCHLINE_COOLDOWN, Moment
 from models import ATTRIBUTE_NAMES, EventType, Position
 from models.orm import Base, ClubRow, HeroRow, InjuryRow, PlayerRow
 from tests import conftest
@@ -50,6 +51,46 @@ def _hero_match(seed: int, position: Position = Position.WING) -> tuple[LiveMatc
     weakest = min((p for p in home.players if p.position == position), key=lambda p: p.overall)
     live = LiveMatch(home, away, rng=random.Random(seed), hero=weakest.id)
     return live, weakest.id
+
+
+def test_only_a_leader_hero_talks_to_his_team():
+    live, hero = _hero_match(1)
+    assert not live.hero_speaks() and live.hero_talk_moment() is None
+    with pytest.raises(ValueError):
+        live.talk(live.hero_side().club.id, "focus")
+
+    # Un vieux briscard au sommet : 17 de meneur et plus.
+    home, away = make_club(1, 12, 1), make_club(2, 12, 2)
+    me = min((p for p in home.players if p.position == Position.WING), key=lambda p: p.overall)
+    me.age = 32
+    for name in ATTRIBUTE_NAMES:
+        setattr(me, name, 18)
+    assert 20 * leadership(me) >= 17
+    live = LiveMatch(home, away, rng=random.Random(1), hero=me.id, hero_entry=50)
+    club_id = live.hero_side().club.id
+    assert live.hero_speaks() and live.hero_talk_moment() == Moment.KICKOFF
+    with pytest.raises(ValueError):
+        live.talk(club_id, "leaders")  # le meneur, c'est lui
+    assert live.talk(club_id, "focus").key == "focus"
+    assert live.hero_talk_moment() is None  # un discours par passage au vestiaire
+
+    def play_to(minute: int) -> None:
+        while live.minute < minute and not live.finished:
+            if live.dilemma is not None:
+                live.choose(next(iter(live.dilemma_odds())))
+            else:
+                live.advance(minute - live.minute)
+
+    # Pendant le jeu, il ne parle que sur le terrain.
+    play_to(TOUCHLINE_COOLDOWN)
+    assert live.hero_on_field() == (live.hero_talk_moment() == Moment.TOUCHLINE)
+    play_to(HALF_TIME)
+    assert live.hero_talk_moment() == Moment.BREAK  # au vestiaire, même remplaçant
+    live.talk(club_id, "rant")
+    play_to(55)
+    assert live.hero_on_field() and live.hero_talk_moment() == Moment.TOUCHLINE
+    live.talk(club_id, "calm")
+    assert [t.key for t in live.hero_side().talks] == ["focus", "rant", "calm"]
 
 
 def test_the_hero_is_always_called_up_and_comes_on_from_the_bench():
@@ -162,8 +203,11 @@ def test_a_live_match_with_dilemmas_earns_experience(client):
     session.commit()
     live = client.post("/live").json()
     assert live["hero"] is not None and live["my_club_id"] == 3
-    # Le joueur ne gère pas l'équipe.
+    # Le joueur ne gère pas l'équipe ; débutant, il n'a pas voix au chapitre.
     assert client.post("/live/tactics", json={"game_plan": "hands"}).status_code == 400
+    assert not live["hero"]["speaks"] and live["hero"]["leadership"] < 17
+    assert live["talk"]["moment"] is None and live["talk"]["options"] == []
+    assert client.post("/live/talk", json={"key": "focus"}).status_code == 400
     chosen = 0
     while not live["finished"]:
         if live["dilemma"]:
@@ -493,6 +537,45 @@ def test_an_injured_hero_can_play_hurt(client):
     assert after["coach_notes"][0]["kind"] in ("aggravated", "brave")
 
 
+def test_simulated_days_follow_one_another_with_the_hero(client):
+    _start(client)
+    session = _db(client)
+    session.scalars(select(HeroRow)).first().trust = 90  # titulaire
+    session.commit()
+    days = []
+    for _ in range(3):
+        response = client.post("/hero/simulate")
+        assert response.status_code == 200, response.text
+        result = response.json()
+        days.append(result["played"]["date"])
+        # Son match joué par le moteur du direct, d'une traite : il y est, rien ne reste en cours.
+        assert result["hero"]["match"]["minutes"] > 0
+        assert client.get("/live").status_code == 404
+    assert days == sorted(set(days))
+
+
+def test_an_injured_hero_watches_the_simulated_day(client):
+    _start(client)
+    hero = client.get("/hero").json()
+    session = _db(client)
+    day = datetime.date.fromisoformat(client.get("/seasons/current").json()["next_match"]["date"])
+    session.add(
+        InjuryRow(
+            player_id=hero["player_id"],
+            severity="moderate",
+            kind="entorse",
+            source="training",
+            occurred_on=day - datetime.timedelta(days=3),
+            base_weeks=3,
+            return_date=day + datetime.timedelta(weeks=3),
+        )
+    )
+    session.commit()
+    result = client.post("/hero/simulate").json()
+    assert result["played"]["date"] == day.isoformat()
+    assert result["hero"]["match"] is None  # l'entraînement compte, pas de match
+
+
 # --- Mercato ------------------------------------------------------------------------------
 
 
@@ -599,6 +682,10 @@ def top14():
     app.dependency_overrides.clear()
 
 
+def side_of(live: dict) -> str:
+    return "home" if live["home"]["club"]["id"] == live["my_club_id"] else "away"
+
+
 def test_a_great_player_is_called_up_and_plays_his_test_live(top14):
     client, TestSession = top14
     toulouse = next(c["id"] for c in client.get("/clubs").json() if c["name"] == "Stade Toulousain")
@@ -622,8 +709,16 @@ def test_a_great_player_is_called_up_and_plays_his_test_live(top14):
         "date"
     ]:
         assert client.post("/seasons/current/play").status_code == 200
+    with TestSession() as session:
+        session.get(PlayerRow, session.scalars(select(HeroRow)).first().player_id).age = 32
+        session.commit()
     live = client.post("/live").json()
     assert live["match_id"] == test["match_id"] and live["hero"] is not None
+    # Un meneur (32 ans, au sommet) parle à la France avant le coup d'envoi.
+    assert live["hero"]["speaks"] and live["talk"]["moment"] == "kickoff"
+    assert "leaders" not in {o["key"] for o in live["talk"]["options"]}
+    live = client.post("/live/talk", json={"key": "fire_up"}).json()
+    assert [t["key"] for t in live[side_of(live)]["talks"]] == ["fire_up"]
     while not live["finished"]:
         if live["dilemma"]:
             option = live["dilemma"]["options"][0]["key"]

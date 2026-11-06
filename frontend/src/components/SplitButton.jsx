@@ -6,7 +6,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 // `options` : `{ key, label, hint, onSelect }`, `hint` en discret à droite du libellé.
 // Le menu se ferme par un clic ailleurs, la touche Échap ou un choix. Il s'ouvre sous le
 // bouton, ou au-dessus quand la place manque en bas (bord de l'écran, barre d'onglets).
-export default function SplitButton({ children, onClick, disabled = false, options = [], menuLabel, menuTitle }) {
+// `primary` : l'action principale de la page, à la couleur d'accent.
+export default function SplitButton({ children, onClick, disabled = false, primary = false, options = [], menuLabel, menuTitle }) {
+  const button = primary ? "button button--primary" : "button";
   const [open, setOpen] = useState(false);
   // Le bouton lâche le focus une fois cliqué : sinon la touche Entrée le relancerait
   // (une journée simulée de plus à chaque Entrée sur le tableau de bord).
@@ -40,20 +42,20 @@ export default function SplitButton({ children, onClick, disabled = false, optio
 
   if (options.length === 0) {
     return (
-      <button type="button" className="button" disabled={disabled} onClick={act}>
+      <button type="button" className={button} disabled={disabled} onClick={act}>
         {children}
       </button>
     );
   }
 
   return (
-    <div className="split" ref={root}>
-      <button type="button" className="button split__main" disabled={disabled} onClick={act}>
+    <div className={`split${primary ? " split--primary" : ""}`} ref={root}>
+      <button type="button" className={`${button} split__main`} disabled={disabled} onClick={act}>
         {children}
       </button>
       <button
         type="button"
-        className="button split__toggle"
+        className={`${button} split__toggle`}
         disabled={disabled}
         aria-label={menuLabel}
         aria-haspopup="menu"

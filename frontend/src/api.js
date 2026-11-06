@@ -135,6 +135,8 @@ export const api = {
   trainHero: (attribute) => post("/hero/train", { attribute }),
   getHeroSocial: () => request("/hero/social"),
   setPlayHurt: (play) => post("/hero/play-hurt", { play }),
+  // Une journée comme « Simuler » sur sa fiche (son match avec lui) : « Simuler jusqu'à… ».
+  simulateHero: () => post("/hero/simulate"),
   getHeroCareer: () => request("/hero/career"),
   getHeroOffers: () => request("/hero/offers"),
   chooseHeroOffer: (index) => post("/hero/offers/choose", { index }),

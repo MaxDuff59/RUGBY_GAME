@@ -1346,6 +1346,27 @@ class LiveMatch:
             return None
         return team_talk.Moment.TOUCHLINE
 
+    def hero_speaks(self) -> bool:
+        """Le joueur incarné est-il assez meneur pour parler à son équipe ?"""
+        side = self.hero_side()
+        if side is None:
+            return False
+        return leadership(side.players()[self.hero]) >= team_talk.PLAYER_LEADERSHIP
+
+    def hero_on_field(self) -> bool:
+        return self._hero_slot(self.minute) is not None
+
+    def hero_talk_moment(self) -> team_talk.Moment | None:
+        """Où le joueur incarné peut prendre la parole maintenant : au vestiaire comme
+        le manager, et pendant le jeu seulement s'il est sur le terrain."""
+        if not self.hero_speaks():
+            return None
+        side = self.hero_side()
+        moment = self.talk_moment(side.club.id)
+        if moment == team_talk.Moment.TOUCHLINE and not self.hero_on_field():
+            return None
+        return moment
+
     def next_talk(self, club_id: int) -> int | None:
         """Minute à partir de laquelle le manager pourra reparler du bord du terrain,
         s'il ne le peut pas maintenant (None sinon, ou si le match est fini)."""
@@ -1362,13 +1383,19 @@ class LiveMatch:
         return team_talk.odds(talk, margin, side.form.morale, present)
 
     def talk(self, club_id: int, key: str) -> team_talk.Heard:
-        """Le manager parle à son équipe ; lève ValueError si ce n'est pas le moment."""
-        moment = self.talk_moment(club_id)
+        """Le manager parle à son équipe (en carrière de joueur, le joueur incarné, s'il
+        est un meneur) ; lève ValueError si ce n'est pas le moment."""
+        by_hero = self.hero is not None
+        if by_hero and not self.hero_speaks():
+            raise ValueError("Il faut être un meneur (17 sur 20) pour parler à l'équipe")
+        moment = self.hero_talk_moment() if by_hero else self.talk_moment(club_id)
         if moment is None:
             raise ValueError("Ce n'est pas le moment de parler à l'équipe")
         talk = team_talk.TALKS.get(key)
         if talk is None or moment not in talk.moments:
             raise ValueError("Ce discours n'est pas de circonstance")
+        if by_hero and key not in team_talk.PLAYER_TALKS:
+            raise ValueError("Le meneur, c'est toi")
         success, backfire = self.talk_odds(club_id, talk)
         outcome = team_talk.outcome(self.rng.random(), success, backfire)
         return self.side(club_id).hear(talk, outcome, self.minute)

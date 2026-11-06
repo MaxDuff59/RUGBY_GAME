@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { api } from "../api.js";
-import { formatRank, matchResult, matchdayLabel, parseDate, scoreNote } from "../format.js";
+import { formatNote, formatRank, matchResult, matchdayLabel, parseDate, scoreNote } from "../format.js";
 import ClubCrest from "./ClubCrest.jsx";
 import { SummaryRows } from "./ConfirmDialog.jsx";
 import Modal from "./Modal.jsx";
@@ -106,7 +106,10 @@ const OUTCOMES = {
 // match par match ; derrière elle, la page se met à jour à chaque journée (`onPlayed`
 // reçoit la réponse de l'API et le cumul depuis le début). `onClose(played)` : `played`
 // dit si au moins une journée a été jouée.
-export default function Simulation({ season, clubId, initialUntil, onPlayed, onClose }) {
+//
+// Carrière de joueur (`hero`) : chaque journée se joue par `play` (son match avec lui),
+// sans affaires à trancher, et le bilan parle de ses matchs à lui.
+export default function Simulation({ season, clubId, initialUntil, onPlayed, onClose, play = api.playMatchday, hero = false }) {
   // Sans date proposée : les deux prochaines journées, à ajuster.
   const [until, setUntil] = useState(() => initialUntil ?? upcoming(season, clubId).slice(0, 2).at(-1)?.date ?? "");
   const [stopOnAffair, setStopOnAffair] = useState(false);
@@ -143,7 +146,7 @@ export default function Simulation({ season, clubId, initialUntil, onPlayed, onC
     let reason = "date";
     try {
       for (;;) {
-        const [result] = await Promise.all([api.playMatchday(), wait(PACE_MS)]);
+        const [result] = await Promise.all([play(), wait(PACE_MS)]);
         if (!alive.current) return;
         played.push(result);
         setResults([...played]);
@@ -259,7 +262,7 @@ export default function Simulation({ season, clubId, initialUntil, onPlayed, onC
         })}
       </ul>
 
-      {step === "setup" && (
+      {step === "setup" && !hero && (
         <div className="simulation__option">
           <div>
             <strong>Affaires entre deux matchs</strong>
@@ -281,7 +284,7 @@ export default function Simulation({ season, clubId, initialUntil, onPlayed, onC
       )}
 
       {step === "done" && results.length > 0 && (
-        <Summary results={results} clubId={clubId} startRank={startRank.current} />
+        <Summary results={results} clubId={clubId} startRank={startRank.current} hero={hero} />
       )}
 
       <div className="confirm__actions">
@@ -365,7 +368,7 @@ function Day({ day, clubId, state, rowRef, onPick }) {
 
 // Ce que la simulation a donné : notre bilan, le classement avant et après, et ce qui
 // attend le manager (blessés, départs annoncés, sélections, affaires tranchées sans lui).
-function Summary({ results, clubId, startRank }) {
+function Summary({ results, clubId, startRank, hero }) {
   const outcomes = results
     .map((result) => result.played.matches.find((m) => m.home.id === clubId || m.away.id === clubId))
     .filter(Boolean)
@@ -392,6 +395,25 @@ function Summary({ results, clubId, startRank }) {
         ? { label: "Classement", value: formatRank(endRank) }
         : { label: "Classement", from: formatRank(startRank), to: formatRank(endRank) },
     );
+  }
+  if (hero) {
+    // Ses matchs à lui : ceux où il est entré, ses essais, sa note, les points gagnés.
+    const rewards = results.map((result) => result.hero).filter(Boolean);
+    const mine = rewards.map((reward) => reward.match).filter((match) => match?.minutes > 0);
+    const rated = mine.filter((match) => match.rating !== null);
+    const tries = mine.reduce((sum, match) => sum + match.tries, 0);
+    const points = rewards.reduce((sum, reward) => sum + reward.points, 0);
+    rows.push({
+      label: "Tes matchs",
+      value: mine.length,
+      hint: [
+        mine.length > 0 && plural(tries, "essai"),
+        rated.length > 0 && `${formatNote(rated.reduce((sum, match) => sum + match.rating, 0) / rated.length)} de moyenne`,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    });
+    if (points > 0) rows.push({ label: "Points à placer", value: `+${points}` });
   }
   if (injuries.length > 0) {
     rows.push({ label: "Blessés", value: injuries.length, hint: names(injuries.map((item) => item.player.name)) });

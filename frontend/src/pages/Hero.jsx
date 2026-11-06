@@ -5,6 +5,8 @@ import { api } from "../api.js";
 import ClubCrest from "../components/ClubCrest.jsx";
 import { ActionError } from "../components/FullGame.jsx";
 import HeroSeasonEnd, { CareerSummary } from "../components/HeroSeasonEnd.jsx";
+import Simulation, { simulationTargets } from "../components/Simulation.jsx";
+import SplitButton from "../components/SplitButton.jsx";
 import WindowBoard from "../components/WindowBoard.jsx";
 import {
   ATTRIBUTES,
@@ -22,6 +24,9 @@ import {
 } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
+
+// Note de meneur à partir de laquelle il parle à son équipe en match (engine/team_talk.py).
+const LEADER = 17;
 
 const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
 
@@ -60,6 +65,7 @@ export default function Hero() {
   const [view, setView] = useState("match"); // téléphone : le sous-onglet ouvert
   const [period, setPeriod] = useState("season"); // ses matchs, toute sa carrière ou les classements
   const [seasonEnd, setSeasonEnd] = useState(false); // la fenêtre du bilan et du mercato
+  const [simulation, setSimulation] = useState(null); // « Simuler jusqu'à… » : { until }
 
   const { setData: setSeason } = season;
   const { reload: reloadHero } = hero;
@@ -121,6 +127,19 @@ export default function Hero() {
       reloadHero();
     });
 
+  // Plusieurs journées d'un coup : chacune comme « Simuler », la page suit derrière.
+  const dayPlayed = (result) => {
+    setLastDay(result);
+    setSeason(result.season);
+    liveMatch.setData(null);
+    reloadHero();
+  };
+
+  const closeSimulation = (played) => {
+    setSimulation(null);
+    if (played && season.data?.phase === "finished") setSeasonEnd(true);
+  };
+
   const nextSeason = () =>
     run(async () => {
       setSeason(await api.startNextSeason());
@@ -157,6 +176,33 @@ export default function Hero() {
   const capped = me.caps > 0 || me.called_up !== null || me.matches.some((m) => m.international);
   const periods = PERIODS.filter((p) => p.key !== "internationals" || capped);
 
+  // « Simuler », et sa flèche : jusqu'à une date, la fin de la phase aller, de la saison.
+  // Pas pendant un match en direct commencé : on le reprend, ou on le simule seul.
+  const simulateOptions =
+    (state.next_match ?? state.next_matchday) && !liveMatch.data
+      ? [
+          { key: "date", label: "Une date à choisir…", onSelect: () => setSimulation({ until: null }) },
+          ...simulationTargets(state).map((target) => ({
+            key: target.key,
+            label: target.label,
+            hint: target.hint,
+            onSelect: () => setSimulation({ until: target.date }),
+          })),
+        ]
+      : [];
+  const simulateButton = (label, onClick, primary = false) => (
+    <SplitButton
+      primary={primary}
+      disabled={busy}
+      onClick={onClick}
+      menuLabel="Autres simulations"
+      menuTitle="Simuler jusqu'à…"
+      options={simulateOptions}
+    >
+      {busy ? "Journée en cours…" : label}
+    </SplitButton>
+  );
+
   const matchCard = (
     <section className="hero">
       {finished ? (
@@ -191,9 +237,7 @@ export default function Hero() {
             <button type="button" className="button button--primary" disabled={busy} onClick={playLive}>
               {liveMatch.data ? "Reprendre le match" : "Jouer le match international"}
             </button>
-            <button type="button" className="button" disabled={busy} onClick={() => simulate(false)}>
-              {busy ? "Journée en cours…" : "Simuler"}
-            </button>
+            {simulateButton("Simuler", () => simulate(false))}
           </div>
         </>
       ) : myMatch ? (
@@ -234,20 +278,11 @@ export default function Hero() {
                 {liveMatch.data ? "Reprendre le match" : "Jouer le match"}
               </button>
             )}
-            <button
-              type="button"
-              className={available ? "button" : "button button--primary"}
-              disabled={busy}
-              onClick={() => simulate(available)}
-            >
-              {busy
-                ? "Journée en cours…"
-                : available
-                  ? "Simuler"
-                  : me.status === "injured"
-                    ? "Se soigner"
-                    : "Jouer la journée"}
-            </button>
+            {simulateButton(
+              available ? "Simuler" : me.status === "injured" ? "Se soigner" : "Jouer la journée",
+              () => simulate(available),
+              !available,
+            )}
             {available && (
               <span className="muted">En direct, le match s'arrête sur tes actions : à toi de choisir.</span>
             )}
@@ -262,9 +297,7 @@ export default function Hero() {
           <h1 className="hero__title">Ton club ne joue pas</h1>
           <p className="hero__sub">Les autres finissent leur saison.</p>
           <div className="hero__actions">
-            <button type="button" className="button button--primary" disabled={busy} onClick={() => simulate(false)}>
-              {busy ? "Journée en cours…" : "Jouer la journée"}
-            </button>
+            {simulateButton("Jouer la journée", () => simulate(false), true)}
           </div>
         </>
       )}
@@ -291,6 +324,13 @@ export default function Hero() {
           note générale
           <br />
           {POSITIONS[me.position].label.toLowerCase()} · {me.age} ans
+          <br />
+          <span
+            className={me.leadership >= LEADER ? "hero-card__leader" : undefined}
+            title={me.leadership >= LEADER ? "Tu prends la parole en match" : `À ${LEADER}, tu prendras la parole en match`}
+          >
+            meneur {formatNote(me.leadership)}
+          </span>
         </span>
       </div>
       <dl className="facts__list">
@@ -481,14 +521,29 @@ export default function Hero() {
     </section>
   );
 
-  const endWindow = seasonEnd && finished && (
-    <HeroSeasonEnd
-      name={`${me.first_name} ${me.last_name}`}
-      onClose={() => setSeasonEnd(false)}
-      onNextSeason={nextSeason}
-      busy={busy}
-      error={error}
-    />
+  const endWindow = (
+    <>
+      {seasonEnd && finished && (
+        <HeroSeasonEnd
+          name={`${me.first_name} ${me.last_name}`}
+          onClose={() => setSeasonEnd(false)}
+          onNextSeason={nextSeason}
+          busy={busy}
+          error={error}
+        />
+      )}
+      {simulation && (
+        <Simulation
+          season={state}
+          clubId={clubId}
+          initialUntil={simulation.until}
+          play={api.simulateHero}
+          hero
+          onPlayed={dayPlayed}
+          onClose={closeSimulation}
+        />
+      )}
+    </>
   );
 
   // Téléphone : un sous-onglet à la fois, comme la page Club.

@@ -603,6 +603,14 @@ body,
   background: var(--line-soft);
 }
 
+.split--primary .split__toggle {
+  border-left: 1px solid rgb(255 255 255 / 35%);
+}
+
+.split--primary .split__toggle[aria-expanded="true"] {
+  background: #651923;
+}
+
 .split__menu {
   position: absolute;
   top: calc(100% + 6px);
@@ -9193,6 +9201,20 @@ td > .tag:first-child,
   background: var(--loss);
 }
 
+.hero-card__leader {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* Un meneur : sa prise de parole entre sa note et ses actions. */
+.live-hero--leader {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 300px) minmax(0, 1fr);
+}
+
+.live-hero__talk {
+  padding: 8px 14px;
+}
+
 /* Le joueur incarné, dans la composition de son équipe. */
 .live-row--hero td {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
@@ -9314,6 +9336,17 @@ td > .tag:first-child,
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
+  }
+
+  /* Un meneur : sa prise de parole, puis ses actions, sur la même ligne. */
+  .live-hero--leader {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .live-hero--leader .live-hero__actions {
+    grid-column: auto;
+    flex-direction: column;
+    align-items: flex-end;
   }
 
   .hero-grid {

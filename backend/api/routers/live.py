@@ -13,7 +13,8 @@ Un sélectionneur joue de la même façon le match de sa sélection, le jour où
 tombe : mêmes routes, la sauvegarde est à part (`LiveInternationalRow`).
 
 En carrière de joueur (api/hero.py), le match est celui du club du joueur incarné,
-mené de bout en bout par les deux staffs : ni tactique, ni discours, ni changement.
+mené de bout en bout par les deux staffs : ni tactique, ni changement ; des discours
+seulement s'il est un meneur (17 sur 20), au vestiaire ou sur le terrain.
 Le chrono s'arrête sur ses dilemmes (`dilemma`), qu'il tranche (`/live/choose`).
 Un manager ou un sélectionneur a aussi les siens, plus rares, pour un joueur de son
 XV (`dilemma.player_id`), par la même route.
@@ -117,7 +118,7 @@ def _hero_test(session) -> LiveInternationalRow | None:
 
 
 def _manager_only(live: Live) -> None:
-    """Tactique, discours et changements sont l'affaire du manager, pas du joueur incarné."""
+    """Tactique et changements sont l'affaire du manager, pas du joueur incarné."""
     if live.match.hero is not None:
         raise HTTPException(status_code=400, detail="C'est le staff qui gère l'équipe")
 
@@ -404,9 +405,10 @@ def set_tactics(payload: TacticsIn, session: SessionDep) -> LiveOut:
 @router.post("/talk", response_model=LiveOut)
 def talk(payload: TalkIn, session: SessionDep) -> LiveOut:
     """Le manager parle à son équipe : au vestiaire (avant le coup d'envoi, à la
-    pause) ou du bord du terrain. L'issue est dans `talks` de son équipe."""
+    pause) ou du bord du terrain. L'issue est dans `talks` de son équipe. En carrière
+    de joueur, le joueur incarné le peut aussi s'il est un meneur (engine/team_talk.py) :
+    le moteur refuse sinon."""
     live, names, my_club_id = _load(session)
-    _manager_only(live)
     try:
         live.match.talk(my_club_id, payload.key)
     except ValueError as error:

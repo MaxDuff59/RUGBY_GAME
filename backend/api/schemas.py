@@ -835,6 +835,8 @@ class LiveHeroOut(BaseModel):
     entry: int  # minute où il entre s'il commence sur le banc
     confidence: float  # de -1 à 1
     hurt: bool  # joue blessé
+    leadership: float = 0.0  # sa note de meneur, sur 20
+    speaks: bool = False  # assez meneur pour parler à l'équipe (`talk`)
 
 
 class ChooseIn(BaseModel):
@@ -1089,6 +1091,8 @@ class HeroOut(BaseModel):
     league_name: str | None
     overall: float
     level: float
+    # Sa note de meneur, sur 20 : à 17, il prend la parole en match (engine/team_talk.py).
+    leadership: float = 0.0
     rank: int  # rang à son poste dans l'effectif (1 : le meilleur)
     at_position: int  # joueurs de l'effectif à son poste
     status: Literal["starter", "bench", "injured", "suspended", "retired"]
