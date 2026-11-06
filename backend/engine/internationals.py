@@ -533,6 +533,7 @@ def play_tests(
         match.home_score, match.away_score = result.home_score, result.away_score
         match.events = list(result.events)
         match.home_lineup, match.away_lineup = list(result.home_lineup), list(result.away_lineup)
+        match.stats = dict(result.stats)
 
         players = {p.id: p for team in (home, away) for p in team.players}
         for event in match.events:

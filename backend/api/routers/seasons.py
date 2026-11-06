@@ -635,6 +635,7 @@ def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayRes
     )
     if hero_test is not None:
         heroes.record_test(session, hero_test)
+    heroes.record_tests(session, test_day.matches)
     for injury_row, injury in test_day.injuries:
         in_my_club = injury.player_id in players and (
             players[injury.player_id].club_id == my_club_id

@@ -633,9 +633,33 @@ def test_a_great_player_is_called_up_and_plays_his_test_live(top14):
     day = client.post("/live/finish").json()
     assert day["hero"]["xp"] > 0 and day["season"]
     after = client.get("/hero").json()
-    assert after["caps"] == 1
+    assert after["caps"] == 1 and after["nation_id"] is not None
+    # Son match en sélection est dans ceux de sa saison, vu de la France.
+    shown = next(m for m in after["matches"] if m["international"])
+    assert shown["match_id"] == test["match_id"] and shown["opponent"]["name"] == test["opponent"]
+    assert shown["minutes"] > 0 and shown["rating"] is not None and shown["competition"]
     texts = [p["text"] for p in client.get("/hero/social").json()["posts"]]
     assert any("France" in t for t in texts)
+
+
+def test_a_simulated_test_counts_in_his_season(top14):
+    client, TestSession = top14
+    toulouse = next(c["id"] for c in client.get("/clubs").json() if c["name"] == "Stade Toulousain")
+    _start(client, club_id=toulouse)
+    with TestSession() as session:
+        player = session.get(PlayerRow, session.scalars(select(HeroRow)).first().player_id)
+        for name in ATTRIBUTE_NAMES:
+            setattr(player, name, 20)
+        session.commit()
+    while (hero := client.get("/hero").json())["called_up"] is None:
+        assert client.post("/seasons/current/play").status_code == 200
+    # Simulé : la journée se joue, son match en sélection avec (s'il est sur la feuille).
+    while (hero := client.get("/hero").json())["caps"] == 0:
+        assert client.post("/seasons/current/play").status_code == 200
+    tests = [m for m in hero["matches"] if m["international"]]
+    assert len(tests) == hero["caps"]
+    assert all(m["rating"] is not None and m["competition"] for m in tests)
+    assert all(m["opponent"]["name"] != hero["nation"] for m in tests)
 
 
 def test_ai_clubs_never_move_the_hero(client):

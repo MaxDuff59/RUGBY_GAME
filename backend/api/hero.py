@@ -42,7 +42,7 @@ from engine import dilemmas, social
 from engine import hero as rules
 from engine.freshness import daily_recovery, player_freshness
 from engine.journal import MoveKind
-from engine.match_engine import FORMATION, RATING_FOR_POSITION, select_lineup
+from engine.match_engine import FORMATION, MATCH_MINUTES, RATING_FOR_POSITION, select_lineup
 from engine.season import champion
 from models import (
     ATTRIBUTE_NAMES,
@@ -392,10 +392,15 @@ def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
                 for m in season.matches + season.cup_matches
                 if m.is_played and str(player.id) in (m.stats or {})
             ]
-            matches = [
-                _match_out(m, player.id, club.id, names)
-                for m in sorted(played, key=lambda m: (m.date, m.id), reverse=True)
-            ]
+            # Ses matchs en sélection s'y glissent à leur date.
+            matches = sorted(
+                [
+                    *(_match_out(m, player.id, club.id, names) for m in played),
+                    *season_tests(session, season, row),
+                ],
+                key=lambda m: (m.date, m.international, m.match_id),
+                reverse=True,
+            )
     test = called_up(session, season) if player.club_id is not None else None
     nation, eligible, call_up_chance = (
         _national_chance(session, season, player, club_ref.name, test is not None)
@@ -435,6 +440,7 @@ def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
         choice=row.choice,
         called_up=test,
         nation=nation,
+        nation_id=getattr(NATIONS_BY_CODE.get(player.nationality), "id", None) if nation else None,
         eligible=eligible,
         call_up_chance=call_up_chance,
         caps=caps(session, player.id),
@@ -820,6 +826,88 @@ def record_test(session: Session, live) -> None:
             "rewarded": False,
         },
     }
+
+
+def record_tests(session: Session, matches: list) -> None:
+    """Ses matchs internationaux simulés du jour : minutes, note, essais, comme en direct
+    (sans ses actions). Celui joué en direct est déjà gardé (`record_test`). Ils ne
+    rapportent pas d'expérience : seul le direct en donne."""
+    row = hero(session)
+    if row is None or not matches:
+        return
+    tests = dict(row.tests or {})
+    for match in matches:
+        line = match.stats.get(row.player_id)
+        if line is None or str(match.id) in tests:
+            continue
+        tests[str(match.id)] = {
+            "nation": _nation_of(match, row.player_id),
+            "minutes": line.minutes,
+            "rating": line.rating,
+            "tries": sum(
+                1 for e in match.events if e.type == EventType.TRY and e.player_id == row.player_id
+            ),
+            "moments": [],
+            "rewarded": True,
+        }
+    row.tests = tests
+
+
+def _nation_of(match, player_id: int) -> int:
+    """La sélection pour laquelle il a joué ce match du moteur (`_side_of` pour une ligne
+    de la base)."""
+    if player_id in match.home_lineup:
+        return match.home_club_id
+    if player_id in match.away_lineup:
+        return match.away_club_id
+    return next(
+        (
+            e.club_id
+            for e in match.events
+            if e.type == EventType.SUBSTITUTION and e.other_player_id == player_id
+        ),
+        match.home_club_id,
+    )
+
+
+def _test_minutes(test: InternationalRow, player_id: int) -> int:
+    """Ses minutes dans un match international d'avant `record_tests` : du coup d'envoi
+    ou de son entrée jusqu'à sa sortie, ou au coup de sifflet."""
+    subs = [e for e in test.events or [] if e.get("type") == EventType.SUBSTITUTION.value]
+    end = max([MATCH_MINUTES, *(e.get("minute", 0) for e in test.events or [])])
+    entered = 0 if player_id in [*(test.home_lineup or []), *(test.away_lineup or [])] else None
+    if entered is None:
+        entered = next((e["minute"] for e in subs if e.get("other_player_id") == player_id), end)
+    left = next((e["minute"] for e in subs if e.get("player_id") == player_id), end)
+    return max(0, left - entered)
+
+
+def season_tests(session: Session, season: SeasonRow, row: HeroRow) -> list[HeroMatchOut]:
+    """Ses matchs internationaux de la saison, joués, vus de sa sélection."""
+    out = []
+    for test in internationals.test_rows(session, season):
+        if not test.is_played or not _took_part(test, row.player_id):
+            continue
+        line = (row.tests or {}).get(str(test.id))
+        nation_id = line["nation"] if line else _side_of(test, row.player_id)
+        home = nation_id == test.home_id
+        opponent = NATIONS_BY_ID[test.away_id if home else test.home_id]
+        out.append(
+            HeroMatchOut(
+                match_id=test.id,
+                date=test.date,
+                opponent=ClubRef(id=opponent.id, name=opponent.name),
+                home=home,
+                score_for=test.home_score if home else test.away_score,
+                score_against=test.away_score if home else test.home_score,
+                minutes=line["minutes"] if line else _test_minutes(test, row.player_id),
+                rating=line["rating"] if line else None,
+                tries=line["tries"] if line else _tries(test, row.player_id),
+                international=True,
+                competition=WINDOWS_BY_CODE.get(test.competition, WORLD_CUP).short_name,
+            )
+        )
+    return out
 
 
 def _reward_tests(row: HeroRow) -> int:

@@ -961,6 +961,10 @@ class HeroMatchOut(BaseModel):
     minutes: int
     rating: float | None
     tries: int
+    # Un match en sélection : l'adversaire est une sélection (`id` : celui de data/nations.py,
+    # pas d'un club), et `competition` le nom court de la fenêtre.
+    international: bool = False
+    competition: str | None = None
 
 
 class HeroRewardOut(BaseModel):
@@ -1114,6 +1118,7 @@ class HeroOut(BaseModel):
     # prennent que les joueurs de leurs clubs), et ses chances d'être sur sa prochaine
     # liste, de 0 à 1 (1 : il y est déjà).
     nation: str | None
+    nation_id: int | None = None  # sa sélection (data/nations.py), pour la mettre en avant
     eligible: bool
     call_up_chance: float | None
     caps: int

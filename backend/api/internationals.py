@@ -478,6 +478,8 @@ class TestDay:
 
     rows: list[InternationalRow]
     injuries: list[tuple[InjuryRow, Injury]]
+    # Les mêmes matchs, du moteur : avec les minutes et la note de chaque joueur.
+    matches: list[Match] = field(default_factory=list)
 
 
 def play_tests(
@@ -530,7 +532,7 @@ def play_tests(
         injury_row = InjuryRow.from_domain(injury)
         session.add(injury_row)
         recorded.append((injury_row, injury))
-    return TestDay(rows, recorded)
+    return TestDay(rows, recorded, matches)
 
 
 def played_tests(session: Session) -> list[Match]:

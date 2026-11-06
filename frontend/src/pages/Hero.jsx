@@ -5,6 +5,7 @@ import { api } from "../api.js";
 import ClubCrest from "../components/ClubCrest.jsx";
 import { ActionError } from "../components/FullGame.jsx";
 import HeroSeasonEnd, { CareerSummary } from "../components/HeroSeasonEnd.jsx";
+import WindowBoard from "../components/WindowBoard.jsx";
 import {
   ATTRIBUTES,
   COACH_NOTES,
@@ -24,11 +25,13 @@ import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
 
 const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
 
-// Sous ses attributs : ses matchs de la saison, toute sa carrière, ou les classements.
+// Sous ses attributs : ses matchs de la saison (club et sélection), toute sa carrière,
+// les classements, et dès qu'il a été appelé, le calendrier international.
 const PERIODS = [
   { key: "season", label: "Cette saison" },
   { key: "career", label: "Ta carrière" },
   { key: "standings", label: "Classement" },
+  { key: "internationals", label: "Sélections" },
 ];
 
 // Téléphone : les sous-onglets de la page.
@@ -150,6 +153,9 @@ export default function Hero() {
   const played = me.matches.filter((m) => m.minutes > 0);
   const average = played.length ? played.reduce((sum, m) => sum + (m.rating ?? 6), 0) / played.length : null;
   const tries = me.matches.reduce((sum, m) => sum + m.tries, 0);
+  // L'onglet des sélections arrive avec sa première convocation.
+  const capped = me.caps > 0 || me.called_up !== null || me.matches.some((m) => m.international);
+  const periods = PERIODS.filter((p) => p.key !== "internationals" || capped);
 
   const matchCard = (
     <section className="hero">
@@ -385,13 +391,13 @@ export default function Hero() {
     <section className="section">
       <div className="section__head hero-matches__head">
         <div className="chips" role="group" aria-label="Période">
-          {PERIODS.map((p) => (
-            <button key={p.key} type="button" className={phone ? "chip chip--small" : "chip"} aria-pressed={period === p.key} onClick={() => setPeriod(p.key)}>
+          {periods.map((p) => (
+            <button key={p.key} type="button" className={phone || periods.length > 3 ? "chip chip--small" : "chip"} aria-pressed={period === p.key} onClick={() => setPeriod(p.key)}>
               {p.label}
             </button>
           ))}
         </div>
-        {period !== "standings" && (
+        {(period === "season" || period === "career") && (
           <span className="muted">
             {plural(played.length, "match")}, {plural(tries, "essai")}
             {average !== null && ` · ${formatNote(average)} de moyenne`}
@@ -400,6 +406,8 @@ export default function Hero() {
       </div>
       {period === "standings" ? (
         <HeroStandings season={state} clubId={clubId} />
+      ) : period === "internationals" && capped ? (
+        <HeroInternationals nationId={me.nation_id} />
       ) : period === "career" ? (
         <div className="card card--padded hero-career">
           <HeroCareer />
@@ -425,7 +433,7 @@ export default function Hero() {
             </thead>
             <tbody>
               {me.matches.map((match) => (
-                <tr key={match.match_id}>
+                <tr key={`${match.international ? "test" : "club"}-${match.match_id}`}>
                   {!phone && <td className="left muted">{formatShortDate(match.date)}</td>}
                   <td className="left">
                     {/* Téléphone : la date passe sous l'adversaire, pour que tout tienne en largeur. */}
@@ -435,7 +443,7 @@ export default function Hero() {
                         <span className="hero-matches__who">
                           <span className="standings__name">{match.opponent.name}</span>
                           <span className="muted">
-                            {formatShortDate(match.date)} · {match.home ? "dom." : "ext."}
+                            {formatShortDate(match.date)} · {venue(match)}
                           </span>
                         </span>
                       </span>
@@ -443,7 +451,7 @@ export default function Hero() {
                       <span className="with-crest">
                         <ClubCrest name={match.opponent.name} size={20} />
                         {match.opponent.name}
-                        <span className="muted">{match.home ? "dom." : "ext."}</span>
+                        <span className="muted">{venue(match)}</span>
                       </span>
                     )}
                   </td>
@@ -530,6 +538,26 @@ export default function Hero() {
         {matches}
       </div>
     </>
+  );
+}
+
+// Domicile ou extérieur ; en sélection, la compétition d'abord.
+const venue = (match) =>
+  `${match.international ? `${match.competition} · ` : ""}${match.home ? "dom." : "ext."}`;
+
+// Le calendrier international de la saison : matchs et classement de chaque fenêtre,
+// sa sélection en accent (chargé quand on l'ouvre).
+function HeroInternationals({ nationId }) {
+  const calendar = useApi(useCallback(api.getInternationals, []));
+  if (calendar.loading) return <p className="status">Chargement…</p>;
+  if (calendar.error) return <p className="status status--error">{calendar.error.message}</p>;
+  const { windows } = calendar.data;
+  // D'abord la fenêtre où joue sa sélection, si elle n'est pas finie.
+  const mine = windows.find((w) => !w.finished && w.nations.some((n) => n.id === nationId));
+  return (
+    <div className="hero-internationals">
+      <WindowBoard windows={windows} initial={mine?.code} myId={nationId} />
+    </div>
   );
 }
 
