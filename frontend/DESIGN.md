@@ -169,7 +169,11 @@ des joueurs, des personnages low-poly en pixels. Nulle part ailleurs.
   « Installer ». Dans la scène : panneaux en accent au bord du terrain, buvettes et
   boutique derrière la tribune, loges en bandeau sombre, écran noir au sommet. Les centres
   (`CampusView`) : les installations apparaissent niveau par niveau, et le panneau les
-  liste avec « Améliorer ».
+  liste avec « Améliorer ». Les deux sites ne se ressemblent pas. Centre d'entraînement :
+  complexe de pros, terrain d'honneur et sa tribune, bloc vestiaires-muscu aux toits noirs,
+  kiné et bassin, parking et route d'accès. Centre de formation : campus aux façades crème
+  et toits brun-rouge, internat en hauteur, cours, restaurant, deux petits terrains des
+  jeunes, allées et arbres. Le décor (route, parking, arbres) est là dès le premier niveau.
 - Maillots (carte sous les infrastructures) : les trois tenues côte à côte, domicile,
   extérieur et third, chacune de face et de dos à plat (`JerseyFlat`) avec son motif et
   « Personnaliser ». Par défaut, domicile uni dans la première couleur du club, extérieur
