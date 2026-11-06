@@ -5,13 +5,13 @@ import { api } from "../api.js";
 import { useClubTheme } from "../clubs.js";
 import ClubCrest from "../components/ClubCrest.jsx";
 import { ActionError } from "../components/FullGame.jsx";
+import { LineupLegend, LineupPitch, StrengthStrip, useLineupEditor } from "../components/LineupBoard.jsx";
 import LineupPicker from "../components/LineupPicker.jsx";
-import Pitch from "../components/Pitch.jsx";
-import { POSITION_SHORT, POSITIONS, formatNote } from "../format.js";
+import { POSITION_SHORT, formatNote } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
 import { usePitchWidth } from "../hooks/usePitchWidth.js";
-import { buildLineup, lineupChoice } from "../lineup.js";
+import { matchSheet } from "../lineup.js";
 import { LiveScreen } from "./Match.jsx";
 
 // Match libre : deux équipes au choix, clubs ou sélections (Toulouse contre les All
@@ -407,32 +407,25 @@ function Level({ value }) {
 // --- La composition ---------------------------------------------------------------------
 
 // Le XV du joueur sur le terrain, comme l'écran Effectif : toucher un titulaire ouvre le
-// choix de son remplaçant. Le staff compose ce qui n'est pas choisi, et le banc.
+// choix de son remplaçant, le faire glisser l'échange avec un autre. Le staff compose ce
+// qui n'est pas choisi, et le banc.
 function Composition({ setup, onChange, onBack, onStarted }) {
   const { team } = setup;
   const pitchRef = useRef(null);
   const pitchWidth = usePitchWidth(pitchRef);
-  const [picking, setPicking] = useState(null); // la place touchée
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const editor = useLineupEditor({
+    team,
+    save: api.setFriendlyLineup,
+    reset: api.resetFriendlyLineup,
+    onSaved: onChange,
+  });
 
-  const lineup = buildLineup(team.players, team.strength.lineup_ids);
-  const jerseys = new Map(lineup.map(({ slot, player }) => [player.id, slot.number]));
+  const sheet = matchSheet(team);
   const byId = new Map(team.players.map((player) => [player.id, player]));
   const bench = team.strength.bench_ids.map((id) => byId.get(id)).filter(Boolean);
   const opponent = setup.home.id === team.id ? setup.away : setup.home;
-
-  // Le joueur choisi prend la place ; s'il était titulaire, il échange avec l'ancien.
-  async function replace({ slot, player }, candidate) {
-    const place = lineup.findIndex((entry) => entry.slot.number === slot.number);
-    const from = lineup.findIndex((entry) => entry.player.id === candidate.id);
-    const next = lineup.map((entry, index) => {
-      if (index === place) return { ...entry, player: candidate };
-      if (index === from) return { ...entry, player };
-      return entry;
-    });
-    onChange(await api.setFriendlyLineup(lineupChoice(next)));
-  }
 
   async function run(call, done) {
     setBusy(true);
@@ -453,24 +446,13 @@ function Composition({ setup, onChange, onBack, onStarted }) {
           <h1 className="title">Ta composition</h1>
           <p className="muted with-crest" style={{ margin: "8px 0 0" }}>
             <ClubCrest name={team.name} size={20} />
-            {team.name} contre {opponent.name} ·{" "}
-            {team.lineup_custom ? "ton XV" : "XV du staff"} · touche un joueur pour le remplacer
+            {team.name} contre {opponent.name}
           </p>
         </div>
         <div className="friendly__actions">
           <button type="button" className="button" disabled={busy} onClick={onBack}>
             Changer d'affiche
           </button>
-          {team.lineup_custom && (
-            <button
-              type="button"
-              className="button"
-              disabled={busy}
-              onClick={() => run(api.resetFriendlyLineup, onChange)}
-            >
-              Rendre la main au staff
-            </button>
-          )}
           <button
             type="button"
             className="button button--primary"
@@ -491,41 +473,35 @@ function Composition({ setup, onChange, onBack, onStarted }) {
           style={pitchWidth ? { width: pitchWidth, flexBasis: pitchWidth } : undefined}
           aria-label="XV de départ sur le terrain"
         >
-          <Pitch
-            markers={lineup.map(({ slot, player }) => ({
-              key: slot.number,
-              x: slot.x,
-              y: slot.y,
-              number: slot.number,
-              label: player.last_name,
-              title: `${player.name} · ${POSITIONS[player.position].label} · ${formatNote(player.overall)}`,
-              entry: { slot, player },
-            }))}
-            onPick={(marker) => setPicking(marker.entry)}
-          />
+          <LineupPitch editor={editor} captainId={team.strength.captain_id} />
+          <LineupLegend />
         </figure>
-        <section className="card friendly__bench">
-          <p className="eyebrow">Le banc · choisi par le staff</p>
-          <ul>
-            {bench.map((player, index) => (
-              <li key={player.id}>
-                <span className="num muted">{16 + index}</span>
-                <span>{player.name}</span>
-                <span className="muted">{POSITION_SHORT[player.position]}</span>
-                <span className="note">{formatNote(player.overall)}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <div className="friendly__side">
+          <StrengthStrip editor={editor} />
+          <section className="card friendly__bench">
+            <p className="eyebrow">Le banc · choisi par le staff</p>
+            <ul>
+              {bench.map((player, index) => (
+                <li key={player.id}>
+                  <span className="num muted">{16 + index}</span>
+                  <span>{player.name}</span>
+                  <span className="muted">{POSITION_SHORT[player.position]}</span>
+                  <span className="note">{formatNote(player.overall)}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
       </div>
 
-      {picking && (
+      {editor.picking && (
         <LineupPicker
-          entry={picking}
+          entry={editor.picking}
+          team={team}
           players={team.players}
-          jerseys={jerseys}
-          onPick={(candidate) => replace(picking, candidate)}
-          onClose={() => setPicking(null)}
+          sheet={sheet}
+          onPick={(candidate) => editor.place(editor.picking.slot.number, candidate)}
+          onClose={editor.closePicker}
         />
       )}
     </>

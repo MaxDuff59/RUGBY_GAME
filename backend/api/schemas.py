@@ -7,7 +7,7 @@ sans contraindre le moteur.
 import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from engine.awards import AwardKind
 from engine.crowd import Crowd
@@ -17,6 +17,7 @@ from engine.economy import FacilityKind, TransactionCategory, market_value
 from engine.journal import Kind as ArticleKind
 from engine.journal import MoveKind
 from engine.match_engine import (
+    RATING_FOR_POSITION,
     Defence,
     GamePlan,
     PenaltyChoice,
@@ -354,6 +355,16 @@ class ClubDetail(BaseModel):
     lineup_custom: bool = False
     # Capitaine choisi par le manager (None : le staff désigne le meneur du XV).
     captain_choice: int | None = None
+
+    @computed_field
+    @property
+    def position_ratings(self) -> dict[int, dict[Position, float]]:
+        """La note de chaque joueur à chaque poste, selon le critère du staff pour
+        composer (RATING_FOR_POSITION) : de quoi juger un remplaçant ou un hors-poste."""
+        return {
+            p.id: {pos: round(rating(p), 1) for pos, rating in RATING_FOR_POSITION.items()}
+            for p in self.players
+        }
 
 
 class LineupIn(BaseModel):

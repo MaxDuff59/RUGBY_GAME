@@ -1,11 +1,11 @@
-import { useCallback, useRef, useState } from "react";
+import { Fragment, useCallback, useRef, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
 import ClubCrest from "../components/ClubCrest.jsx";
 import InjuryIcon from "../components/InjuryIcon.jsx";
+import { LineupLegend, LineupPitch, StrengthStrip, canDrag, useLineupEditor } from "../components/LineupBoard.jsx";
 import LineupPicker from "../components/LineupPicker.jsx";
-import Pitch from "../components/Pitch.jsx";
 import PlayerAvatar from "../components/PlayerAvatar.jsx";
 import SortHeader from "../components/SortHeader.jsx";
 import {
@@ -22,7 +22,7 @@ import {
 import { useApi } from "../hooks/useApi.js";
 import { usePitchWidth } from "../hooks/usePitchWidth.js";
 import { useSort } from "../hooks/useSort.js";
-import { buildLineup, lineupChoice } from "../lineup.js";
+import { matchSheet } from "../lineup.js";
 
 // L'effectif du club et son XV de départ. Pour un sélectionneur, la même page montre son
 // groupe (sa liste de 42, ou celle que propose le staff tant qu'elle n'est pas annoncée).
@@ -39,40 +39,41 @@ export default function Squad() {
   const { data: club, error, loading, setData } = useApi(load);
   // Sans tri choisi (null), l'ordre reste celui du staff : titulaires du 1 au 15, puis les autres.
   const squadSort = useSort(club ? squadRows(club) : [], null);
-  const pitchRef = useRef(null);
-  const pitchWidth = usePitchWidth(pitchRef, Boolean(club));
-  // Place du terrain touchée : on choisit qui la prend.
-  const [picking, setPicking] = useState(null);
-  const [resetting, setResetting] = useState(false);
-  const [captainError, setCaptainError] = useState(null);
 
   if (loading) return <p className="status">Chargement de l'effectif…</p>;
   if (error) return <p className="status status--error">{error.message}</p>;
 
-  const lineup = buildLineup(club.players, club.strength.lineup_ids);
+  return <SquadView club={club} national={national} setData={setData} squadSort={squadSort} navigate={navigate} />;
+}
+
+// La page une fois l'effectif chargé (l'édition de la composition a ses propres hooks).
+function SquadView({ club, national, setData, squadSort, navigate }) {
+  const pitchRef = useRef(null);
+  const pitchWidth = usePitchWidth(pitchRef);
+  const [captainError, setCaptainError] = useState(null);
+  const editor = useLineupEditor({
+    team: club,
+    save: (choice) => (national ? api.setSelectionLineup(choice) : api.setLineup(club.id, choice)),
+    reset: () => (national ? api.resetSelectionLineup() : api.resetLineup(club.id)),
+    onSaved: setData,
+  });
+  const { lineup } = editor;
   const starters = lineup.map(({ player }) => player);
+  const sheet = matchSheet(club);
   const average = (values) => values.reduce((sum, v) => sum + v, 0) / values.length;
   const rows = squadSort.sort ? squadSort.rows : sortSquad(squadRows(club));
   const header = (key, label, first = "desc", left = false, title) => (
     <SortHeader sortKey={key} label={label} sort={squadSort.sort} onToggle={squadSort.toggle} first={first} left={left} title={title} />
   );
-  const open = (player) => navigate(`/joueurs/${player.id}`);
-  const jerseys = new Map(lineup.map(({ slot, player }) => [player.id, slot.number]));
+  const open = (player) => {
+    if (!editor.drag.swallowed()) navigate(`/joueurs/${player.id}`);
+  };
   // Doublon : nos joueurs retenus par une sélection qui joue le jour de notre prochain match.
   const away = club.players.filter((player) => player.duty?.away);
-
-  // Le joueur choisi prend la place ; s'il était titulaire, il échange avec l'ancien.
-  async function replace({ slot, player }, candidate) {
-    const place = lineup.findIndex((entry) => entry.slot.number === slot.number);
-    const from = lineup.findIndex((entry) => entry.player.id === candidate.id);
-    const next = lineup.map((entry, index) => {
-      if (index === place) return { ...entry, player: candidate };
-      if (index === from) return { ...entry, player };
-      return entry;
-    });
-    const choice = lineupChoice(next);
-    setData(await (national ? api.setSelectionLineup(choice) : api.setLineup(club.id, choice)));
-  }
+  const { jiff, jiff_min: jiffMin } = club.strength;
+  // Sans tri choisi : titulaires, remplaçants, puis le reste, chacun sous son intertitre.
+  const grouped = !squadSort.sort;
+  const columns = 7 + (national ? 1 : 3) + ATTRIBUTES.length;
 
   // Capitaine : un pro de l'effectif, ou "" pour laisser le staff désigner le meneur du XV.
   async function chooseCaptain(value) {
@@ -81,15 +82,6 @@ export default function Squad() {
       setData(await api.setCaptain(club.id, value === "" ? null : Number(value)));
     } catch (err) {
       setCaptainError(err);
-    }
-  }
-
-  async function resetLineup() {
-    setResetting(true);
-    try {
-      setData(await (national ? api.resetSelectionLineup() : api.resetLineup(club.id)));
-    } finally {
-      setResetting(false);
     }
   }
 
@@ -102,25 +94,12 @@ export default function Squad() {
           <Stat value={formatNote(average(starters.map((p) => p.overall)))} label="note moyenne du XV" />
           <Stat value={formatNote(average(starters.map((p) => p.age)))} label="âge moyen du XV" />
         </div>
-        <div className="squad__compo">
-          <p className="muted">
-            {club.lineup_custom ? "Ta composition" : "Composition choisie par le staff"} · touche un joueur du
-            terrain pour le remplacer, une ligne du tableau pour sa fiche
-            {away.length > 0 && ` · doublon : ${away.length} joueur${away.length > 1 ? "s" : ""} en sélection au prochain match`}
-            {club.strength.jiff_min > 0 && (
-              <span className={club.strength.jiff < club.strength.jiff_min ? "status--error" : undefined}>
-                {` · JIFF sur la feuille de match : ${club.strength.jiff} / 23 (minimum ${club.strength.jiff_min})`}
-              </span>
-            )}
-          </p>
-          {club.lineup_custom && (
-            <button type="button" className="button button--small" disabled={resetting} onClick={resetLineup}>
-              Rendre la main au staff
-            </button>
-          )}
-          {!national && <CaptainPicker club={club} starters={starters} onChoose={chooseCaptain} />}
-          {captainError && <span className="status--error">{captainError.message}</span>}
-        </div>
+        {!national && (
+          <div className="squad__compo">
+            <CaptainPicker club={club} starters={starters} onChoose={chooseCaptain} />
+            {captainError && <span className="status--error">{captainError.message}</span>}
+          </div>
+        )}
       </header>
 
       <div className="squad__body fill">
@@ -130,164 +109,201 @@ export default function Squad() {
           style={pitchWidth ? { width: pitchWidth, flexBasis: pitchWidth } : undefined}
           aria-label="XV de départ sur le terrain"
         >
-          <Pitch
-            markers={lineup.map(({ slot, player }) => ({
-              key: slot.number,
-              x: slot.x,
-              y: slot.y,
-              number: slot.number,
-              label: player.id === club.strength.captain_id ? `${player.last_name} (C)` : player.last_name,
-              title: `${player.name} · ${POSITIONS[player.position].label}${player.id === club.strength.captain_id ? " · capitaine" : ""}`,
-              entry: { slot, player },
-            }))}
-            onPick={(marker) => setPicking(marker.entry)}
-          />
-          <figcaption className="muted">Sens de l'attaque vers le haut. Avants en haut, arrières en bas.</figcaption>
+          <LineupPitch editor={editor} captainId={club.strength.captain_id} />
+          <LineupLegend />
         </figure>
 
-        <div className="card table-wrap squad__table">
-          <table className="table">
-            <thead>
-              <tr>
-                {header("jersey", "N°", "asc", true)}
-                {header("name", "Joueur", "asc", true)}
-                {header("positionRank", "Poste", "asc", true)}
-                {header("age", "Âge", "asc")}
-                {header("overall", "Note")}
-                {header("potential_high", "Pot.", "desc", false, "Potentiel estimé")}
-                {header("season_gain", "Prog.", "desc", false, "Points d'attributs gagnés cette saison")}
-                {national && header("club_name", "Club", "asc", true)}
-                {!national && header("value", "Valeur")}
-                {!national && header("wage", "Salaire")}
-                {!national && header("contract_until", "Contrat", "asc", false, "Fin du contrat")}
-                {ATTRIBUTES.map((attr) => (
-                  <SortHeader
-                    key={attr.key}
-                    sortKey={attr.key}
-                    label={attr.short}
-                    title={attr.label}
-                    sort={squadSort.sort}
-                    onToggle={squadSort.toggle}
-                    first="desc"
-                  />
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((player) => (
-                <tr
-                  key={player.id}
-                  className={`table__row--clickable${player.jersey === null ? " table__row--bench" : ""}`}
-                  tabIndex={0}
-                  onClick={() => open(player)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      open(player);
-                    }
-                  }}
-                >
-                  <td className="left jersey">{player.jersey ?? ""}</td>
-                  <td className="left">
-                    <div className="squad__name">
-                      <PlayerAvatar src={player.photo} size={26} />
-                      <InjuryIcon injury={player.injury} />
-                      {player.name}
-                      {club.strength.jiff_min > 0 && !player.jiff && (
-                        <span className="tag tag--light" title="Pas issu des filières de formation françaises : il ne compte pas parmi les JIFF de la feuille de match">
-                          Non JIFF
-                        </span>
-                      )}
-                      {player.id === club.strength.captain_id && (
-                        <span className="captain-badge" title="Capitaine">
-                          C
-                        </span>
-                      )}
-                      <DutyTag player={player} />
-                      {player.suspended_matches > 0 && (
-                        <span className="tag tag--injured" title="Suspendu par la commission de discipline : il ne peut pas jouer">
-                          {formatSuspension(player.suspended_matches)}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="left">{POSITIONS[player.position].label}</td>
-                  <td className="muted">{player.age}</td>
-                  <td className="note">{formatNote(player.overall)}</td>
-                  <td>{formatPotential(player)}</td>
-                  <td className="muted">{formatGain(player.season_gain)}</td>
-                  {national ? (
-                    <td className="left">
-                      {player.club_name ? (
-                        <span className="with-crest">
-                          <ClubCrest name={player.club_name} size={18} />
-                          {player.club_name}
-                        </span>
-                      ) : (
-                        <span className="muted">Hors championnats</span>
-                      )}
-                    </td>
-                  ) : (
-                    <>
-                      <td>{formatMoney(player.value)}</td>
-                      <td className="muted">{formatMoney(player.wage)}</td>
-                      <td className="muted">
-                        {player.loaned_from ? `Prêt · ${player.loaned_from_name}` : formatContractEnd(player.contract_until)}
-                      </td>
-                    </>
-                  )}
-                  {ATTRIBUTES.map((attr) => {
-                    const value = player[attr.key];
-                    const tone = value >= 15 ? "cell--strong" : value <= 8 ? "cell--weak" : "";
-                    return (
-                      <td key={attr.key} className={tone}>
-                        {value}
-                      </td>
-                    );
-                  })}
+        <div className="squad__side">
+          <StrengthStrip editor={editor}>
+            {jiffMin > 0 && (
+              <span
+                className={`compo-fact${jiff < jiffMin ? " compo-fact--alert" : ""}`}
+                title="Joueurs issus des filières de formation françaises sur les 23 de la feuille de match"
+              >
+                <strong>{jiff}/23</strong> JIFF · min. {jiffMin}
+              </span>
+            )}
+            {away.length > 0 && (
+              <span className="compo-fact" title="Retenus par leur sélection, qui joue le jour de notre prochain match">
+                <strong>{away.length}</strong> en sélection
+              </span>
+            )}
+          </StrengthStrip>
+          <div className="card table-wrap squad__table">
+            <table className="table">
+              <thead>
+                <tr>
+                  {header("jersey", "N°", "asc", true)}
+                  {header("name", "Joueur", "asc", true)}
+                  {header("positionRank", "Poste", "asc", true)}
+                  {header("age", "Âge", "asc")}
+                  {header("overall", "Note")}
+                  {header("potential_high", "Pot.", "desc", false, "Potentiel estimé")}
+                  {header("season_gain", "Prog.", "desc", false, "Points d'attributs gagnés cette saison")}
+                  {national && header("club_name", "Club", "asc", true)}
+                  {!national && header("value", "Valeur")}
+                  {!national && header("wage", "Salaire")}
+                  {!national && header("contract_until", "Contrat", "asc", false, "Fin du contrat")}
+                  {ATTRIBUTES.map((attr) => (
+                    <SortHeader
+                      key={attr.key}
+                      sortKey={attr.key}
+                      label={attr.short}
+                      title={attr.label}
+                      sort={squadSort.sort}
+                      onToggle={squadSort.toggle}
+                      first="desc"
+                    />
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="table__note">
-            {ATTRIBUTES.map((attr) => `${attr.short} ${attr.label.toLowerCase()}`).join(" · ")}.
-            Attributs sur 20 ; en gras à partir de 15. Le numéro indique les titulaires. Pot. :
-            potentiel estimé par le staff (la note qu'il peut atteindre) ; Prog. : points
-            d'attributs gagnés cette saison, match après match.{" "}
-            {national
-              ? "Le groupe est ta liste ; tant qu'elle n'est pas annoncée, celle que propose le staff. Les blessés ne sont pas alignés."
-              : "Salaire par saison, contrat jusqu'en juin de l'année indiquée. Les blessés et les suspendus ne sont pas alignés : voir la page Médical. « En sélection » : retenu par sa sélection, qui joue le jour de notre prochain match (doublon) ; des espoirs complètent alors la feuille de match. C : le capitaine, qui calme les esprits tant qu'il est sur le terrain."}
-          </p>
+              </thead>
+              <tbody>
+                {rows.map((player, index) => (
+                  <Fragment key={player.id}>
+                    {grouped && player.group !== rows[index - 1]?.group && (
+                      <tr className="table__group">
+                        <td colSpan={columns}>{GROUP_LABELS[player.group]}</td>
+                      </tr>
+                    )}
+                    <tr
+                      className={[
+                        "table__row--clickable",
+                        !player.starter && "table__row--bench",
+                        canDrag(player) && "table__row--draggable",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      tabIndex={0}
+                      title={canDrag(player) ? "Clic : sa fiche · glisser sur le terrain : l'aligner" : undefined}
+                      onPointerDown={(event) => {
+                        // À la souris seulement : au doigt, la liste doit pouvoir défiler.
+                        if (event.pointerType !== "mouse" || !canDrag(player)) return;
+                        event.preventDefault();
+                        editor.drag.begin(event, { player, from: player.starter ? player.jersey : null });
+                      }}
+                      onClick={() => open(player)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          open(player);
+                        }
+                      }}
+                    >
+                      <td className={`left jersey${player.starter ? "" : " jersey--bench"}`}>{player.jersey ?? ""}</td>
+                      <td className="left">
+                        <div className="squad__name">
+                          <PlayerAvatar src={player.photo} size={26} />
+                          <InjuryIcon injury={player.injury} />
+                          {player.name}
+                          {club.strength.jiff_min > 0 && !player.jiff && (
+                            <span className="tag tag--light" title="Pas issu des filières de formation françaises : il ne compte pas parmi les JIFF de la feuille de match">
+                              Non JIFF
+                            </span>
+                          )}
+                          {player.id === club.strength.captain_id && (
+                            <span className="captain-badge" title="Capitaine">
+                              C
+                            </span>
+                          )}
+                          <DutyTag player={player} />
+                          {player.suspended_matches > 0 && (
+                            <span className="tag tag--injured" title="Suspendu par la commission de discipline : il ne peut pas jouer">
+                              {formatSuspension(player.suspended_matches)}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="left">{POSITIONS[player.position].label}</td>
+                      <td className="muted">{player.age}</td>
+                      <td className="note">{formatNote(player.overall)}</td>
+                      <td>{formatPotential(player)}</td>
+                      <td className="muted">{formatGain(player.season_gain)}</td>
+                      {national ? (
+                        <td className="left">
+                          {player.club_name ? (
+                            <span className="with-crest">
+                              <ClubCrest name={player.club_name} size={18} />
+                              {player.club_name}
+                            </span>
+                          ) : (
+                            <span className="muted">Hors championnats</span>
+                          )}
+                        </td>
+                      ) : (
+                        <>
+                          <td>{formatMoney(player.value)}</td>
+                          <td className="muted">{formatMoney(player.wage)}</td>
+                          <td className="muted">
+                            {player.loaned_from ? `Prêt · ${player.loaned_from_name}` : formatContractEnd(player.contract_until)}
+                          </td>
+                        </>
+                      )}
+                      {ATTRIBUTES.map((attr) => {
+                        const value = player[attr.key];
+                        const tone = value >= 15 ? "cell--strong" : value <= 8 ? "cell--weak" : "";
+                        return (
+                          <td key={attr.key} className={tone}>
+                            {value}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+            <p className="table__note">
+              {ATTRIBUTES.map((attr) => `${attr.short} ${attr.label.toLowerCase()}`).join(" · ")}.
+              Attributs sur 20 ; en gras à partir de 15. N° : 1 à 15 le XV, 16 à 23 les remplaçants (choisis par le staff). Pot. :
+              potentiel estimé par le staff (la note qu'il peut atteindre) ; Prog. : points
+              d'attributs gagnés cette saison, match après match.{" "}
+              {national
+                ? "Le groupe est ta liste ; tant qu'elle n'est pas annoncée, celle que propose le staff. Les blessés ne sont pas alignés."
+                : "Salaire par saison, contrat jusqu'en juin de l'année indiquée. Les blessés et les suspendus ne sont pas alignés : voir la page Médical. « En sélection » : retenu par sa sélection, qui joue le jour de notre prochain match (doublon) ; des espoirs complètent alors la feuille de match. C : le capitaine, qui calme les esprits tant qu'il est sur le terrain."}
+            </p>
+          </div>
         </div>
       </div>
 
-      {picking && (
+      {editor.picking && (
         <LineupPicker
-          entry={picking}
-          players={club.players.filter((player) => !player.duty?.away && !player.suspended_matches)}
-          jerseys={jerseys}
-          onPick={(candidate) => replace(picking, candidate)}
+          entry={editor.picking}
+          team={club}
+          players={club.players}
+          sheet={sheet}
+          onPick={(candidate) => editor.place(editor.picking.slot.number, candidate)}
           onOpen={open}
-          onClose={() => setPicking(null)}
+          onClose={editor.closePicker}
         />
       )}
     </>
   );
 }
 
-// Lignes du tableau : le joueur, son numéro de titulaire (null sinon) et le rang de son poste.
+// Lignes du tableau : le joueur, son numéro sur la feuille de match (1-15 titulaires,
+// 16-23 remplaçants, null sinon), son groupe et le rang de son poste.
 function squadRows(club) {
-  const jerseys = new Map(
-    buildLineup(club.players, club.strength.lineup_ids).map(({ slot, player }) => [player.id, slot.number]),
-  );
-  return club.players.map((player) => ({
-    ...player,
-    jersey: jerseys.get(player.id) ?? null,
-    positionRank: POSITION_ORDER.indexOf(player.position),
-  }));
+  const sheet = matchSheet(club);
+  return club.players.map((player) => {
+    const jersey = sheet.get(player.id) ?? null;
+    const starter = jersey !== null && jersey <= 15;
+    return {
+      ...player,
+      jersey,
+      starter,
+      group: starter ? "starters" : jersey !== null ? "bench" : "others",
+      positionRank: POSITION_ORDER.indexOf(player.position),
+    };
+  });
 }
 
-// Titulaires du 1 au 15, puis les remplaçants par poste et note décroissante.
+const GROUP_LABELS = {
+  starters: "Le XV de départ",
+  bench: "Les remplaçants · choisis par le staff",
+  others: "Hors de la feuille de match",
+};
+
+// Titulaires du 1 au 15, remplaçants du 16 au 23, puis les autres par poste et note décroissante.
 function sortSquad(rows) {
   return [...rows].sort((a, b) => {
     if (a.jersey !== null || b.jersey !== null) {

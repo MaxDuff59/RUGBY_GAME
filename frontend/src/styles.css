@@ -843,6 +843,7 @@ select.tactics__select {
   background: var(--pitch);
   border-radius: var(--radius);
   overflow: hidden;
+  user-select: none;
 }
 
 .pitch__line {
@@ -861,16 +862,19 @@ select.tactics__select {
   border-top-style: dashed;
 }
 
+/* Le rond est centré sur sa place (17 px : la moitié de sa hauteur), nom et note dessous. */
 .pitch__player {
   position: absolute;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -17px);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 3px;
+  max-width: 96px;
 }
 
 .pitch__number {
+  position: relative;
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -882,30 +886,153 @@ select.tactics__select {
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 17px;
+  transition:
+    transform 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .pitch__name {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
   font-size: 11px;
   font-weight: 600;
+  line-height: 1.15;
   color: var(--surface);
   white-space: nowrap;
+}
+
+.pitch__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pitch__name .medical-icon {
+  width: 11px;
+  height: 11px;
+}
+
+/* La note au poste, sous le nom. */
+.pitch__note {
+  margin-top: -2px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1;
+  color: rgba(247, 247, 244, 0.72);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hors poste : un anneau rouge autour du rond, la note en rose. */
+.pitch__number--off {
+  box-shadow: 0 0 0 2.5px var(--loss);
+}
+
+.pitch__note--off {
+  color: #f2a7a1;
+}
+
+/* Capitaine (en haut à gauche) et buteur (en haut à droite), collés au rond. */
+.pitch__badge {
+  position: absolute;
+  top: -5px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-body);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  background: var(--ink);
+  color: var(--surface);
+  border: 1.5px solid var(--surface);
+}
+
+.pitch__badge--captain {
+  left: -6px;
+}
+
+.pitch__badge--kicker {
+  right: -6px;
 }
 
 .pitch__player--clickable {
   all: unset;
   position: absolute;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -17px);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  cursor: pointer;
+  max-width: 96px;
+  cursor: grab;
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+
+.pitch__player--clickable:disabled {
+  cursor: progress;
 }
 
 .pitch__player--clickable:hover .pitch__number,
 .pitch__player--clickable:focus-visible .pitch__number {
   outline: 2px solid var(--surface);
   outline-offset: 2px;
+}
+
+/* Composition en cours d'édition : la place ouverte, le joueur qu'on déplace, les
+   places où le lâcher (celle survolée grossit), et celles qui viennent de changer. */
+.pitch__player--selected .pitch__number,
+.pitch__player--over .pitch__number {
+  background: var(--accent);
+  color: #fff;
+  outline: 2px solid var(--surface);
+  outline-offset: 2px;
+}
+
+.pitch__player--over .pitch__number {
+  transform: scale(1.18);
+}
+
+.pitch__player--source {
+  opacity: 0.35;
+}
+
+.pitch__player--target .pitch__number {
+  outline: 1.5px dashed rgba(247, 247, 244, 0.7);
+  outline-offset: 3px;
+}
+
+.pitch__player--flash .pitch__number {
+  animation: pitch-flash 1.6s ease-out;
+}
+
+@keyframes pitch-flash {
+  0%,
+  35% {
+    background: var(--accent);
+    color: #fff;
+    transform: scale(1.15);
+  }
+  100% {
+    background: var(--surface);
+    color: var(--ink);
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pitch__number {
+    transition: none;
+  }
+  .pitch__player--flash .pitch__number {
+    animation: none;
+  }
 }
 
 /* Fiche joueur : son poste naturel en accent, les autres places en retrait. */
@@ -931,6 +1058,84 @@ select.tactics__select {
 
 .pitch--compact .pitch__player {
   gap: 2px;
+  transform: translate(-50%, -14px);
+}
+
+/* Ce qui suit le pointeur pendant un glissement. */
+.drag-ghost {
+  position: fixed;
+  z-index: 1000;
+  transform: translate(-17px, -17px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 4px;
+  border-radius: 22px;
+  background: var(--ink);
+  color: var(--surface);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.drag-ghost__disc {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.drag-ghost__text {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.drag-ghost__detail {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: rgba(247, 247, 244, 0.75);
+}
+
+.drag-ghost__swap {
+  color: rgba(247, 247, 244, 0.55);
+}
+
+.drag-ghost .delta--up {
+  color: #7fd3a0;
+}
+
+.drag-ghost .delta--down {
+  color: #f2a7a1;
+}
+
+/* Écart de note : en vert quand il aide, en rouge quand il coûte. */
+.delta {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.delta--up {
+  color: var(--win);
+}
+
+.delta--down {
+  color: var(--loss);
+}
+
+.delta--flat {
+  color: var(--neutral);
 }
 
 .table__row--bench td {
@@ -950,7 +1155,7 @@ select.tactics__select {
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 20px;
+  gap: 12px 20px;
 }
 
 .squad__stats {
@@ -968,7 +1173,7 @@ select.tactics__select {
 
 .squad__body {
   display: flex;
-  gap: 32px;
+  gap: 24px;
   align-items: stretch;
 }
 
@@ -986,11 +1191,173 @@ select.tactics__select {
   flex: 0 0 auto;
 }
 
-.squad__table {
+/* À droite du terrain : les notes de l'équipe, puis l'effectif qui défile. */
+.squad__side {
   flex: 1 1 560px;
   min-width: 0;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.squad__table {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
   overflow: auto;
+}
+
+/* Légende sous le terrain. */
+.compo-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.compo-legend__off {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1.5px var(--loss);
+}
+
+/* Qui a fait la composition : le staff (gris) ou toi (accent). */
+.compo-owner {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 14px;
+  background: var(--line-soft);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.compo-owner--mine {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Bandeau des notes de l'équipe pour ce XV. */
+.compo-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 20px;
+}
+
+.compo-strip__notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+}
+
+.compo-note {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  column-gap: 6px;
+}
+
+.compo-note__label {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.compo-note__value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 24px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.compo-note__who {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* Sous les notes, séparé d'un filet : qui a composé, les faits, puis les actions. */
+.compo-strip__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  min-height: 36px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.compo-owner-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.compo-strip .compo-strip__reset {
+  font-size: 12px;
+  color: var(--ink-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.compo-strip__actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.compo-fact {
+  font-size: 13px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.compo-fact strong {
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--ink);
+}
+
+.compo-fact--alert,
+.compo-fact--alert strong {
+  color: var(--loss);
+}
+
+.compo-strip__error {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* Intertitres du tableau : le XV, les remplaçants, les autres. */
+.table__group td {
+  padding: 14px 12px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.jersey--bench {
+  color: var(--neutral);
+}
+
+.table__row--draggable {
+  cursor: grab;
 }
 
 @media (max-width: 960px) {
@@ -1001,18 +1368,32 @@ select.tactics__select {
     flex: 1 1 100%;
     max-width: 100%;
   }
-  .squad__table {
-    overflow: visible;
+  /* Téléphone : les notes de l'équipe passent au-dessus du terrain. */
+  .squad__side {
+    display: contents;
   }
-  /* En-tête resserré : la liste (ou l'effectif) commence plus haut. */
-  .squad__head {
-    gap: 12px;
+  .squad__side > .compo-strip {
+    order: -1;
+    flex: 1 1 100%;
+  }
+  .squad__table {
+    flex: 1 1 100%;
+    overflow: visible;
   }
   .squad__stats {
     gap: 20px;
   }
   .squad__compo {
     gap: 8px;
+  }
+  .compo-strip {
+    padding: 12px 14px;
+  }
+  .compo-strip__notes {
+    gap: 8px 18px;
+  }
+  .compo-note__value {
+    font-size: 20px;
   }
 }
 
@@ -1037,7 +1418,7 @@ select.tactics__select {
 
 /* Choix du joueur qui prend une place du XV (fenêtre ouverte depuis le terrain) */
 .modal.lineup-picker {
-  max-width: 600px;
+  max-width: 620px;
   max-height: 84vh;
   overflow: hidden;
   gap: 14px;
@@ -1045,17 +1426,55 @@ select.tactics__select {
 
 .lineup-picker__head {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 16px;
 }
 
+.lineup-picker__slot {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--pitch);
+  color: var(--surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 26px;
+}
+
+.lineup-picker__who {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.lineup-picker__who .eyebrow,
+.lineup-picker__who .confirm__title {
+  margin: 0;
+}
+
 .lineup-picker__meta {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
+}
+
+.tag--off {
+  box-shadow: inset 0 0 0 1.5px var(--loss);
+  color: var(--loss);
+}
+
+.lineup-picker__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
 }
 
 .lineup-picker__hint {
   margin: 0;
+  font-size: 12px;
 }
 
 .lineup-picker__list {
@@ -1064,58 +1483,138 @@ select.tactics__select {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 14px;
   margin: 0 -8px;
 }
 
-.lineup-picker__group {
-  display: flex;
-  flex-direction: column;
+.lineup-picker__columns,
+.lineup-picker__option {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 44px 32px 92px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px;
 }
 
-.lineup-picker__group .eyebrow {
-  margin: 0 8px 4px;
+.lineup-picker__columns {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  min-height: 30px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.lineup-picker__right {
+  text-align: right;
+}
+
+.lineup-picker__group {
+  margin: 14px 8px 4px;
+}
+
+.lineup-picker__empty {
+  margin: 12px 8px;
 }
 
 .lineup-picker__option {
   all: unset;
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 130px 52px 40px;
+  grid-template-columns: 28px minmax(0, 1fr) 44px 32px 92px;
   align-items: center;
   gap: 12px;
-  min-height: 40px;
+  min-height: 42px;
   padding: 0 8px;
-  border-radius: 6px;
+  border-bottom: 1px solid var(--line-soft);
   font-size: 14px;
   cursor: pointer;
 }
 
-.lineup-picker__option:hover,
+.lineup-picker__option:hover:not(:disabled),
 .lineup-picker__option:focus-visible {
   background: var(--line-soft);
 }
 
 .lineup-picker__option:disabled {
-  opacity: 0.5;
   cursor: default;
 }
 
-.lineup-picker__option .note {
+.lineup-picker__option--out {
+  color: var(--ink-muted);
+}
+
+.lineup-picker__option--out .note {
+  color: var(--neutral);
+}
+
+.lineup-picker__name {
+  min-width: 0;
+}
+
+.lineup-picker__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lineup-picker__pos {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.lineup-picker__pos--off {
+  color: var(--loss);
+}
+
+.lineup-picker__age {
+  font-variant-numeric: tabular-nums;
+}
+
+.lineup-picker__rating {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.lineup-picker__rating .delta {
+  min-width: 30px;
   text-align: right;
 }
 
+/* N° sur la feuille de match : titulaire en accent, remplaçant en gris. */
 .lineup-picker__jersey {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+.lineup-picker__jersey--starter {
   color: var(--accent);
 }
 
+.lineup-picker__jersey--bench {
+  color: var(--neutral);
+}
+
 @media (max-width: 520px) {
-  .lineup-picker__option {
-    grid-template-columns: 24px minmax(0, 1fr) 40px;
+  .lineup-picker__slot {
+    display: none;
   }
-  .lineup-picker__option > .muted {
+  .lineup-picker__head .button {
+    white-space: nowrap;
+  }
+  .lineup-picker__columns,
+  .lineup-picker__option {
+    grid-template-columns: 24px minmax(0, 1fr) 36px 84px;
+    gap: 8px;
+  }
+  .lineup-picker__age,
+  .lineup-picker__columns > :nth-child(4) {
     display: none;
   }
 }
@@ -7709,10 +8208,19 @@ td > .tag:first-child,
   gap: 32px;
 }
 
+/* À droite du terrain : les notes de l'équipe, puis le banc. */
+.friendly__side {
+  flex: 0 1 460px;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .friendly__bench {
-  flex: 0 1 340px;
-  align-self: flex-start;
-  max-height: 100%;
+  flex: 0 1 auto;
+  min-height: 0;
   overflow: auto;
   padding: 16px 20px;
 }
@@ -7960,9 +8468,12 @@ td > .tag:first-child,
     flex-direction: column;
   }
 
+  .friendly__side {
+    flex: none;
+  }
+
   .friendly__bench {
     flex: none;
-    align-self: stretch;
     max-height: none;
   }
 

@@ -248,12 +248,36 @@ des joueurs, des personnages low-poly en pixels. Nulle part ailleurs.
   pastille par équipe, puis le tableau triable (numéro, minutes, note, sept statistiques ;
   « R » pour un remplaçant). Les deux zones défilent dans la fenêtre.
 - Capitaine : un « C » cerclé après le nom (effectif, compositions du match en direct, en
-  accent dans notre XV) et « (C) » sur le terrain de l'effectif. Liste déroulante
-  « Capitaine » sous la phrase de composition : « Choix du staff · nom », puis les pros du
-  plus grand au plus petit meneur (sur 20). Le meneur a aussi sa barre dans les notes du
-  moteur de la fiche joueur.
+  accent dans notre XV) et une pastille « C » noire collée en haut à gauche du rond sur le
+  terrain de l'effectif. Liste déroulante « Capitaine » à droite du titre de l'effectif :
+  « Choix du staff · nom », puis les pros du plus grand au plus petit meneur (sur 20). Le
+  meneur a aussi sa barre dans les notes du moteur de la fiche joueur.
+- Composition (page Effectif, sélection et match libre ; `LineupBoard.jsx`) : à gauche le
+  XV sur le terrain, chaque joueur en rond numéroté avec son nom et, dessous, sa note au
+  poste (`position_ratings`, le critère du staff). Hors poste : anneau rouge (`--loss`)
+  autour du rond, note en rose. Pastilles noires collées au rond : « C » capitaine (en
+  haut à gauche), « B » buteur (en haut à droite) ; croix médicale devant le nom d'un
+  fragile. On touche un joueur pour ouvrir le choix de sa place, ou on le fait glisser
+  (souris ou doigt) sur une autre place pour les échanger ; à la souris, une ligne du
+  tableau de l'effectif se glisse aussi sur le terrain. Pendant le glissement, une bulle
+  noire suit le pointeur (« n° 6 · au poste 16,7 +2,6 · échange avec … »), les places
+  libres de dépôt en tirets, celle survolée grossit en accent. Les places qui viennent
+  de changer clignotent en accent. À droite, au-dessus du tableau, le bandeau des notes
+  de l'équipe pour ce XV (conquête, paquet, attaque, défense, buteur), avec l'écart en
+  vert / rouge après un changement ; sous un filet, « Ta composition » (accent) ou
+  « Composition du staff » (gris), « Rendre la main au staff » en lien, JIFF et joueurs
+  en sélection, et « Annuler » (le dernier changement). Sur téléphone, ce bandeau passe
+  au-dessus du terrain. Le tableau, sans tri choisi, se lit en trois intertitres : le XV
+  (1 à 15), les remplaçants du staff (16 à 23), hors de la feuille de match.
+- Choix d'une place (`LineupPicker`, `Modal compact`) : le numéro dans un rond vert
+  terrain, le titulaire et sa note au poste ; pastilles « <poste> · n » (par défaut) et
+  « Tous les postes · n » ; puis un joueur par ligne trié par note au poste : n° sur la
+  feuille (accent : titulaire, gris : remplaçant), nom, poste abrégé (rouge s'il serait
+  hors poste), âge, note au poste et écart avec le titulaire. Les blessés, suspendus et
+  joueurs en sélection viennent à la fin sous « Indisponibles », grisés, avec la raison.
 - Suspension : étiquette rouge « Suspendu 2 matchs » après le nom (effectif, fiche
-  joueur) ; un suspendu ne s'aligne pas et n'apparaît pas dans le choix d'une place.
+  joueur) ; un suspendu ne s'aligne pas : il est grisé parmi les indisponibles du choix
+  d'une place.
   Le journal la publie sous la rubrique « Discipline », filtre « Absences » (avec les
   blessures).
 - Match en direct : la pastille « Statistiques » de chaque composition remplace la
