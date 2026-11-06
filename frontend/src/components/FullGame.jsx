@@ -15,7 +15,7 @@ const untilDay = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long
 export const formatUntil = (iso) => untilDay.format(parseDate(iso)).replace(/^1 /, "1er ");
 
 // Part vers une page de Stripe (`open` renvoie son adresse) ; le retour se fait sur /parties.
-function StripeButton({ open, label, primary = true }) {
+function StripeButton({ open, label, primary = true, disabled = false }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -33,7 +33,7 @@ function StripeButton({ open, label, primary = true }) {
 
   return (
     <>
-      <button type="button" className={primary ? "button button--primary" : "button"} disabled={busy} onClick={go}>
+      <button type="button" className={primary ? "button button--primary" : "button"} disabled={busy || disabled} onClick={go}>
         {busy ? "Ouverture de Stripe…" : label}
       </button>
       {error && <p className="status--error full-game__error">{error.message}</p>}
@@ -41,8 +41,26 @@ function StripeButton({ open, label, primary = true }) {
   );
 }
 
+// La case à cocher avant de payer : CGV acceptées, accès immédiat demandé, donc pas de
+// droit de rétractation (contenu numérique, art. L221-28 13° du code de la
+// consommation). L'API refuse le paiement sans elle et garde l'accord chez Stripe.
 export function UnlockButton({ label = `S'abonner au jeu complet · ${PRICE_LABEL}` }) {
-  return <StripeButton open={api.checkout} label={label} />;
+  const [accepted, setAccepted] = useState(false);
+  return (
+    <>
+      <label className="full-game__terms">
+        <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
+        <span>
+          J'accepte les{" "}
+          <a href="/cgv" target="_blank" rel="noreferrer">
+            CGV
+          </a>{" "}
+          et je veux accéder au jeu complet tout de suite : je renonce donc à mon droit de rétractation de 14 jours.
+        </span>
+      </label>
+      <StripeButton open={() => api.checkout(true)} label={label} disabled={!accepted} />
+    </>
+  );
 }
 
 // Le refus d'une action : son message, et l'offre du jeu complet quand c'est la

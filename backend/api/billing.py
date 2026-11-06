@@ -97,6 +97,13 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/billing", tags=["paiement"])
 
 
+class CheckoutIn(BaseModel):
+    # La case cochée avant de partir chez Stripe : le joueur accepte les CGV, demande
+    # l'accès immédiat au jeu complet et renonce ainsi à son droit de rétractation
+    # (art. L221-28 13° du code de la consommation). Sans elle, pas de paiement.
+    accept_terms: bool = False
+
+
 class CheckoutOut(BaseModel):
     url: str
 
@@ -165,9 +172,13 @@ def _timestamp(at: datetime.datetime) -> str:
 
 def checkout_fields(user: accounts.User, site: str) -> dict[str, str]:
     """La page de paiement d'un compte, rattachée à lui par `client_reference_id` : 2 €
-    tout de suite pour la saison en cours, la carte gardée pour l'abonnement."""
+    tout de suite pour la saison en cours, la carte gardée pour l'abonnement.
+
+    L'accord du joueur (CGV, accès immédiat, renonciation à la rétractation) est gardé
+    chez Stripe, daté, sur la session et sur le paiement : c'est la preuve."""
     until = long_day(accounts.paris_day(accounts.sold_season_end()))
     season = "line_items[0][price_data]"
+    accepted = accounts._now().replace(microsecond=0).isoformat() + "Z"
     fields = {
         "mode": "payment",
         "client_reference_id": str(user.id),
@@ -175,6 +186,8 @@ def checkout_fields(user: accounts.User, site: str) -> dict[str, str]:
         "metadata[app]": APP,
         "payment_intent_data[metadata][user_id]": str(user.id),
         "payment_intent_data[metadata][app]": APP,
+        "metadata[terms_accepted_at]": accepted,
+        "payment_intent_data[metadata][terms_accepted_at]": accepted,
         # La carte reste au client chez Stripe : l'abonnement la prélèvera (subscribe).
         "payment_intent_data[setup_future_usage]": "off_session",
         "success_url": f"{site}/parties?paiement=ok&session_id={{CHECKOUT_SESSION_ID}}",
@@ -189,7 +202,8 @@ def checkout_fields(user: accounts.User, site: str) -> dict[str, str]:
         "custom_text[submit][message]": (
             f"2 € aujourd'hui pour la saison, jusqu'au {until}. L'abonnement se renouvelle "
             "ensuite à 2 € chaque 1er juillet, avec la nouvelle version du jeu ; résiliable "
-            "à tout moment depuis le jeu."
+            "à tout moment depuis le jeu. Accès immédiat demandé : pas de droit de "
+            f"rétractation (CGV : {site}/cgv)."
         ),
     }
     # Stripe va chercher l'image lui-même : seulement depuis une adresse publique.
@@ -315,12 +329,18 @@ def _site(request: Request) -> str:
 
 
 @router.post("/checkout", response_model=CheckoutOut)
-def checkout(user: UserDep, request: Request) -> CheckoutOut:
-    """Ouvre une page de paiement Stripe pour le compte connecté."""
+def checkout(user: UserDep, request: Request, payload: CheckoutIn = CheckoutIn()) -> CheckoutOut:
+    """Ouvre une page de paiement Stripe pour le compte connecté, une fois les CGV
+    acceptées (case cochée dans le jeu)."""
     if user.premium:
         raise HTTPException(status_code=409, detail="Ton compte a déjà le jeu complet")
     if user.guest:
         raise HTTPException(status_code=403, detail="Crée un compte avant de payer")
+    if not payload.accept_terms:
+        raise HTTPException(
+            status_code=400,
+            detail="Coche la case : CGV acceptées et accès immédiat au jeu complet",
+        )
     session = stripe_call("POST", "/checkout/sessions", checkout_fields(user, _site(request)))
     return CheckoutOut(url=session["url"])
 

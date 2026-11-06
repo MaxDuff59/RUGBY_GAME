@@ -359,9 +359,21 @@ def test_checkout_then_confirm_on_the_way_back(player, monkeypatch):
     stripe = FakeStripe()
     monkeypatch.setattr(billing, "stripe_call", stripe)
     at(monkeypatch, 2026, 11, 1)
-    created = player.post("/billing/checkout", headers={"Origin": "https://rugby.example"})
+    # Sans la case cochée (CGV, accès immédiat sans rétractation), pas de paiement.
+    refused = player.post("/billing/checkout", headers={"Origin": "https://rugby.example"})
+    assert refused.status_code == 400 and not stripe.sent
+    created = player.post(
+        "/billing/checkout",
+        headers={"Origin": "https://rugby.example"},
+        json={"accept_terms": True},
+    )
     assert created.json()["url"].startswith("https://checkout.stripe.com/")
     fields = stripe.sent[0][2]
+    # L'accord est gardé chez Stripe, daté, comme preuve.
+    accepted = fields["metadata[terms_accepted_at]"]
+    assert accepted == fields["payment_intent_data[metadata][terms_accepted_at]"]
+    assert accepted.startswith("2026-11-01T")
+    assert "https://rugby.example/cgv" in fields["custom_text[submit][message]"]
     # Un paiement simple, 2 € pour la saison : ni essai ni abonnement sur la page.
     assert fields["client_reference_id"] == "1" and fields["mode"] == "payment"
     assert fields["metadata[app]"] == fields["payment_intent_data[metadata][app]"] == billing.APP
@@ -382,7 +394,7 @@ def test_checkout_then_confirm_on_the_way_back(player, monkeypatch):
     confirmed = player.post("/billing/confirm", json={"session_id": "cs_test_1"})
     assert confirmed.status_code == 200 and confirmed.json()["premium"]
     assert confirmed.json()["premium_until"] == "2027-07-01" and confirmed.json()["subscribed"]
-    assert player.post("/billing/checkout").status_code == 409
+    assert player.post("/billing/checkout", json={"accept_terms": True}).status_code == 409
 
     # L'abonnement : 2 € par an sur la carte du paiement, prélevés le 1er juillet.
     (subscription,) = stripe.subscriptions
@@ -463,5 +475,5 @@ def test_someone_elses_payment_unlocks_nothing(player, monkeypatch):
 def test_without_stripe_keys_the_payment_is_closed(player, monkeypatch):
     monkeypatch.delenv("STRIPE_SECRET_KEY", raising=False)
     monkeypatch.delenv("STRIPE_WEBHOOK_SECRET", raising=False)
-    assert player.post("/billing/checkout").status_code == 503
+    assert player.post("/billing/checkout", json={"accept_terms": True}).status_code == 503
     assert TestClient(app).post("/billing/webhook", content=b"{}").status_code == 503

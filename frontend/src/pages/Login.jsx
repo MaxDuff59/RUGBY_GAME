@@ -1,10 +1,11 @@
 import { Suspense, lazy, useCallback, useRef, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 
 import { api } from "../api.js";
 import RugbyBall from "../components/RugbyBall.jsx";
 import { useApi } from "../hooks/useApi.js";
 import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
+import { LegalLinks } from "./Legal.jsx";
 
 const KickScene = lazy(() => import("../components/KickScene.jsx"));
 
@@ -133,7 +134,8 @@ export default function Login() {
 
             {registering && (
               <p className="muted login__legal">
-                Nous pourrons t'écrire au sujet du jeu ; chaque mail porte un lien pour ne plus en recevoir.
+                Nous pourrons t'écrire au sujet du jeu ; chaque mail porte un lien pour ne plus en recevoir. Tes
+                données : <Link to="/confidentialite">confidentialité</Link>.
               </p>
             )}
             {error && <p className="status--error login__error">{error.message}</p>}
@@ -173,6 +175,7 @@ export default function Login() {
               </span>
             </div>
           )}
+          <LegalLinks className="login__legal-links" />
         </main>
       </div>
     </div>

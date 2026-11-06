@@ -10,6 +10,7 @@ import { ActionError, PlanCard, formatUntil, newSaveBlocked } from "../component
 import { formatLongDate, formatSavedAt } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { chooseSlot, leaveSlot } from "../save.js";
+import { LegalLinks } from "./Legal.jsx";
 
 // Écran d'accueil : reprendre une des trois parties, ou en commencer une nouvelle
 // dans un emplacement libre. Une partie se sauvegarde toute seule pendant le jeu.
@@ -287,6 +288,7 @@ export default function Saves() {
           </li>
         ))}
       </ul>
+      <LegalLinks />
     </div>
   );
 }

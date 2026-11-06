@@ -13,6 +13,7 @@ import FreeMatch from "./pages/FreeMatch.jsx";
 import Hero from "./pages/Hero.jsx";
 import Internationals from "./pages/Internationals.jsx";
 import Journal from "./pages/Journal.jsx";
+import Legal from "./pages/Legal.jsx";
 import Login from "./pages/Login.jsx";
 import Match from "./pages/Match.jsx";
 import Medical from "./pages/Medical.jsx";
@@ -50,6 +51,10 @@ export default function App() {
       <Route path="/match-libre" element={<FreeMatch />} />
       <Route path="/competition" element={<StartCompetition />} />
       <Route path="/backoffice" element={<Admin />} />
+      {/* Pages légales, ouvertes à tous, sans compte ni partie. */}
+      <Route path="/mentions-legales" element={<Legal />} />
+      <Route path="/cgv" element={<Legal />} />
+      <Route path="/confidentialite" element={<Legal />} />
       <Route element={<Layout />}>
         <Route index element={<Home />} />
         <Route path="/journal" element={<Journal />} />
