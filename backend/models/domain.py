@@ -532,6 +532,7 @@ class Stage(StrEnum):
     """Étape de la saison à laquelle appartient un match."""
 
     REGULAR = "regular"  # saison régulière
+    LAST_16 = "last16"  # huitièmes de finale (Coupe du monde)
     QUARTER = "quarter"  # quarts de finale (URC), matchs de qualification (Super Rugby)
     BARRAGE = "barrage"  # barrages (3e-6e, 4e-5e)
     SEMI = "semi"  # demi-finales

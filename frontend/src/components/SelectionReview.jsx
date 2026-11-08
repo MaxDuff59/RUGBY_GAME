@@ -1,10 +1,12 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
 import { api } from "../api.js";
 import { formatDiff, formatRank } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { ActionError } from "./FullGame.jsx";
+import { ReviewTabs } from "./HeroSeasonEnd.jsx";
 import Modal from "./Modal.jsx";
+import WorldAwards from "./WorldAwards.jsx";
 import { Stat } from "./SeasonReview.jsx";
 
 // Coupe du monde : le tour atteint ; un tournoi gagné (backend/api/routers/selection.py).
@@ -12,30 +14,36 @@ const RESULTS = {
   champion: "Vainqueur",
   final: "Finaliste",
   semi: "Demi-finaliste",
+  last16: "Huitième de finaliste",
   quarter: "Quart de finaliste",
   pools: "Éliminé en poules",
 };
 
 // Bilan de la saison du sélectionneur : son bilan, chaque compétition jouée (classement
-// ou tour atteint), ses meilleurs marqueurs et ses joueurs les plus titularisés. Puis la
-// saison suivante.
+// ou tour atteint), ses meilleurs marqueurs et ses joueurs les plus titularisés ; puis les
+// trophées mondiaux de la saison (nos joueurs en avant). Puis la saison suivante.
 export default function SelectionReview({ onClose, onNextSeason, busy, error }) {
   const review = useApi(useCallback(api.getSelectionReview, []));
   const data = review.data;
+  const [view, setView] = useState("season"); // notre saison, ou les trophées du monde
 
   return (
     <Modal onClose={onClose}>
       <div className="review__head">
         <div>
           <p className="eyebrow">Bilan de la saison {data ? `${data.year}-${String(data.year + 1).slice(2)}` : ""}</p>
-          <h2 className="affair__title">{data ? data.nation.name : "Résultats"}</h2>
+          <h2 className="affair__title">
+            {view === "world" ? "Trophées du monde" : data ? data.nation.name : "Résultats"}
+          </h2>
         </div>
+        <ReviewTabs view={view} onChange={setView} first="Notre saison" />
       </div>
 
       <div className="review__body">
         {review.loading && <p className="status">Chargement…</p>}
         {review.error && <p className="status status--error">{review.error.message}</p>}
-        {data && <Results review={data} />}
+        {data && view === "season" && <Results review={data} />}
+        {data && view === "world" && <WorldAwards isOurs={(award) => award.nation?.code === data.nation.code} />}
       </div>
 
       <ActionError error={error} />

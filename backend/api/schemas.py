@@ -33,6 +33,7 @@ from engine.team_talk import Moment, Outcome
 from engine.training import Intensity, Theme
 from engine.transfers import DealKind
 from engine.weather import Weather, forecast_at
+from engine.world_awards import WorldAwardKind
 from models import (
     AmenityKind,
     EventType,
@@ -1915,6 +1916,41 @@ class AwardOut(BaseModel):
     active: bool  # le joueur a encore une fiche (il n'a pas raccroché)
 
 
+class WorldAwardOut(BaseModel):
+    """Un trophée mondial de la saison (engine/world_awards.py)."""
+
+    kind: WorldAwardKind
+    slot: Position | None = None  # XV mondial : la place
+    player_id: int
+    name: str
+    position: Position
+    age: int
+    photo: str | None = None
+    club: ClubRef | None  # None : il évolue hors des championnats du jeu
+    nation: NationOut | None  # sa sélection, si elle joue dans ce monde
+    value: float  # note moyenne, essais, points ou plaquages
+    matches: int  # matchs de la saison, club et sélection
+    tests: int  # dont en sélection
+
+
+class WorldNationAwardOut(BaseModel):
+    """Une sélection distinguée : la première du classement mondial, ou celle qui a
+    gagné le plus de points dans la saison."""
+
+    nation: NationOut
+    rank: int  # au classement mondial en fin de saison
+    points: float
+    change: float  # points gagnés dans la saison
+
+
+class WorldAwardsOut(BaseModel):
+    year: int
+    finished: bool  # tous les championnats ont rendu leur verdict
+    awards: list[WorldAwardOut]  # dans l'ordre de `WorldAwardKind`, puis le XV mondial
+    best_nation: WorldNationAwardOut | None
+    climber: WorldNationAwardOut | None
+
+
 class SeasonHonoursOut(BaseModel):
     year: int
     champion: ClubRef | None  # None : saison pas finie
@@ -1997,6 +2033,37 @@ class NationSummary(NationOut):
     player_count: int  # joueurs sélectionnables
     level: float  # moyenne des 4 notes collectives du XV que composerait le staff
     competitions: list[str]  # ses rendez-vous de la saison
+    rank: int  # au classement mondial
+    points: float
+
+
+class RankingEntryOut(BaseModel):
+    """Une nation au classement mondial (engine/ranking.py)."""
+
+    nation: NationOut
+    rank: int
+    points: float
+    # Avant la dernière journée de tests.
+    previous_rank: int
+    previous_points: float
+
+
+class RankingMoveOut(BaseModel):
+    """Un test joué, et les points qu'il a fait passer d'une nation à l'autre."""
+
+    date: datetime.date
+    competition: str  # nom de la fenêtre
+    home: NationOut
+    away: NationOut
+    home_score: int
+    away_score: int
+    change: float  # gagné par l'équipe qui reçoit, perdu par l'autre
+
+
+class RankingOut(BaseModel):
+    updated: datetime.date | None  # dernière journée de tests (None : classement de départ)
+    nations: list[RankingEntryOut]
+    recent: list[RankingMoveOut]  # les derniers tests, du plus récent au plus ancien
 
 
 class CalledPlayer(BaseModel):
@@ -2101,9 +2168,9 @@ class TestRunOut(BaseModel):
     # Tournoi (Six Nations...) : le rang final ; Coupe du monde : celui de sa poule.
     rank: int | None
     teams: int  # équipes du classement (ou de la poule)
-    # Coupe du monde : champion ; final, semi, quarter, pools : éliminé à ce tour.
+    # Coupe du monde : champion ; final, semi, quarter, last16, pools : éliminé à ce tour.
     # Tournoi : champion ou None. Tournée de tests : None.
-    result: Literal["champion", "final", "semi", "quarter", "pools"] | None
+    result: Literal["champion", "final", "semi", "quarter", "last16", "pools"] | None
     won: int
     drawn: int
     lost: int

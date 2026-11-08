@@ -25,6 +25,9 @@ from api.schemas import (
     PlayerOut,
     PlayerRef,
     PoolTableOut,
+    RankingEntryOut,
+    RankingMoveOut,
+    RankingOut,
     SquadPlayerOut,
     StandingOut,
     WindowOut,
@@ -97,7 +100,7 @@ def window_out(
             PoolTableOut(
                 name=f"Poule {letter}", standings=_standings(rules.pool_matches(matches, pool))
             )
-            for letter, pool in zip("ABCD", rules.world_cup_pools(year), strict=True)
+            for letter, pool in zip("ABCDEF", rules.pools_of(matches), strict=False)
         ]
     winner = rules.champion(window, matches)
     return WindowOut(
@@ -186,9 +189,51 @@ def get_internationals(session: SessionDep) -> InternationalsOut:
     )
 
 
+# Les derniers tests montrés avec le classement.
+RECENT_MOVES = 30
+
+
+@router.get("/ranking", response_model=RankingOut)
+def get_ranking(session: SessionDep) -> RankingOut:
+    """Le classement mondial des sélections, et les derniers tests qui l'ont fait bouger.
+    Sans test joué, celui du début de partie ; vide dans un monde de clubs inventés."""
+    if not internationals.has_nations(session):
+        return RankingOut(updated=None, nations=[], recent=[])
+    found = internationals.world_ranking(session)
+    return RankingOut(
+        updated=found.updated,
+        nations=[
+            RankingEntryOut(
+                nation=nation_out(NATIONS_BY_CODE[s.code]),
+                rank=s.rank,
+                points=s.points,
+                previous_rank=s.previous_rank,
+                previous_points=s.previous_points,
+            )
+            for s in found.standings
+        ],
+        recent=[
+            RankingMoveOut(
+                date=move.test.date,
+                competition=WINDOWS_BY_CODE[move.test.competition].name
+                if move.test.competition in WINDOWS_BY_CODE
+                else "",
+                home=nation_out(NATIONS_BY_CODE[move.test.home]),
+                away=nation_out(NATIONS_BY_CODE[move.test.away]),
+                home_score=move.test.home_score,
+                away_score=move.test.away_score,
+                change=round(move.change, 2),
+            )
+            for move in reversed(found.moves[-RECENT_MOVES:])
+        ],
+    )
+
+
 @router.get("/nations", response_model=list[NationSummary])
 def list_nations(session: SessionDep) -> list[NationSummary]:
-    """Les sélections que l'on peut diriger, avec leur vivier et le niveau de leur XV."""
+    """Les sélections que l'on peut diriger, avec leur vivier, le niveau de leur XV et
+    leur place au classement mondial, de la première à la dernière."""
+    standings = {s.code: s for s in internationals.world_ranking(session).standings}
     summaries = []
     for code, (player_count, level) in internationals.nation_levels(session).items():
         nation = NATIONS_BY_CODE[code]
@@ -203,9 +248,11 @@ def list_nations(session: SessionDep) -> list[NationSummary]:
                 competitions=[
                     w.name for w in WINDOWS if w is not rules.WORLD_CUP and nation.code in w.teams
                 ],
+                rank=standings[code].rank,
+                points=standings[code].points,
             )
         )
-    return summaries
+    return sorted(summaries, key=lambda summary: summary.rank)
 
 
 @router.get("/{competition}/{code}", response_model=NationSquadOut)

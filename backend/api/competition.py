@@ -5,7 +5,7 @@ C'est une partie comme une autre, dans un emplacement, avec son monde complet : 
 championnats se jouent, le joueur gère son effectif entre deux matchs. Ce qui change :
 
 - l'équipe se choisit parmi les vrais participants : les qualifiés de la Coupe
-  d'Europe tirés avec la saison, ou les seize nations de la Coupe du monde ;
+  d'Europe tirés avec la saison, ou les vingt-quatre nations de la Coupe du monde ;
 - la saison d'une Coupe du monde n'a qu'elle pour calendrier international, dès la
   première saison (api/internationals.py, `ensure_calendar`) ;
 - la direction ne limoge pas le manager (routers/seasons.py) ;
@@ -43,6 +43,7 @@ REACHED = {
     Stage.FINAL: "Finaliste",
     Stage.SEMI: "Demi-finaliste",
     Stage.QUARTER: "Quart de finaliste",
+    Stage.LAST_16: "Huitième de finaliste",
     Stage.REGULAR: "Éliminé en poules",
 }
 WINNER = "Vainqueur"

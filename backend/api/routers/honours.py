@@ -9,15 +9,16 @@ saison en cours se calculent dès que son championnat a joué sa finale.
 
 from collections import defaultdict
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from api import cup
+from api import cup, internationals
 from api import hero as heroes
 from api.deps import SessionDep
+from api.ledger import current_season
 from api.notes import history_matches, light_match
-from api.routers.seasons import _league_domain
+from api.routers.seasons import _league_domain, _phase
 from api.schemas import (
     AwardOut,
     ClubRef,
@@ -25,15 +26,22 @@ from api.schemas import (
     HonoursOut,
     LeagueHonoursOut,
     MatchSummary,
+    NationOut,
     RecordLineOut,
     RecordMatchOut,
     RecordsOut,
     SeasonHonoursOut,
     TitlesOut,
+    WorldAwardOut,
+    WorldAwardsOut,
+    WorldNationAwardOut,
 )
 from data.leagues import league_config, sort_codes
+from data.nations import NATIONS, NATIONS_BY_CODE
+from engine import ranking
 from engine.awards import AwardKind, season_awards
 from engine.season import champion, league_table, phase
+from engine.world_awards import world_awards
 from models import EventType, Match, Player, Position, Stage
 from models.orm import AwardRow, CareerRow, ClubRow, MoveRow, PlayerRow, SeasonRow
 
@@ -353,4 +361,75 @@ def get_honours(session: SessionDep) -> HonoursOut:
         leagues=_leagues(session, seasons, matches, clubs, names),
         club_history=history,
         records=_records(seasons, matches, clubs, names),
+    )
+
+
+# --- Les trophées mondiaux de la saison ------------------------------------------------------
+
+
+@router.get("/world", response_model=WorldAwardsOut)
+def get_world_awards(session: SessionDep) -> WorldAwardsOut:
+    """Les trophées mondiaux de la saison en cours (engine/world_awards.py) : tous les
+    championnats, les coupes d'Europe et les tests réunis ; puis la première sélection du
+    classement mondial et celle qui y a gagné le plus de points. Ce que les bilans de fin
+    de saison montrent, avant l'intersaison."""
+    season = current_season(session)
+    if season is None:
+        raise HTTPException(status_code=404, detail="Aucune saison : commence une carrière")
+    club_matches = [m.to_domain(True) for m in (*season.matches, *season.cup_matches)]
+    tests = [row.to_domain() for row in internationals.test_rows(session, season)]
+    rows = {row.id: row for row in session.scalars(select(PlayerRow))}
+    players = {pid: row.to_domain() for pid, row in rows.items()}
+    clubs = dict(session.execute(select(ClubRow.id, ClubRow.name)).all())
+    with_nations = internationals.has_nations(session)
+
+    def out(award) -> WorldAwardOut:
+        player = players[award.player_id]
+        nation = NATIONS_BY_CODE.get(player.nationality or "") if with_nations else None
+        club = rows[award.player_id].club_id
+        return WorldAwardOut(
+            kind=award.kind,
+            slot=award.position,
+            player_id=player.id,
+            name=player.name,
+            position=player.position,
+            age=player.age,
+            photo=player.photo,
+            club=ClubRef(id=club, name=clubs[club]) if club in clubs else None,
+            nation=NationOut(id=nation.id, code=nation.code, name=nation.name) if nation else None,
+            value=award.value,
+            matches=award.matches,
+            tests=award.tests,
+        )
+
+    best_nation = climber = None
+    if with_nations:
+        found = internationals.world_ranking(session)
+        start = min((m.date for m in season.matches), default=None)
+        before = [move.test for move in found.moves if start is None or move.test.date < start]
+        initial = {n.code: n.points for n in NATIONS}
+        points_before, _ = ranking.replay(initial, before)
+
+        def nation_award(standing) -> WorldNationAwardOut:
+            nation = NATIONS_BY_CODE[standing.code]
+            return WorldNationAwardOut(
+                nation=NationOut(id=nation.id, code=nation.code, name=nation.name),
+                rank=standing.rank,
+                points=standing.points,
+                change=round(standing.points - points_before[standing.code], 2),
+            )
+
+        if found.standings:
+            best_nation = nation_award(found.standings[0])
+            if found.moves:
+                climber = nation_award(
+                    max(found.standings, key=lambda s: s.points - points_before[s.code])
+                )
+    leagues = {m.league for m in season.matches}
+    return WorldAwardsOut(
+        year=season.year,
+        finished=all(_phase(season, league) == "finished" for league in leagues),
+        awards=[out(award) for award in world_awards(club_matches, tests, players)],
+        best_nation=best_nation,
+        climber=climber,
     )

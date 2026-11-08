@@ -55,7 +55,7 @@ def test_only_the_admin_reaches_the_compos(world):
 
 def test_a_compo_stays_with_the_nation_and_goes_back_to_the_staff(admin):
     nations = admin.get(URL).json()
-    assert len(nations) == 16
+    assert len(nations) == 36
     france = next(n for n in nations if n["code"] == "FRA")
     assert not france["edited"] and france["listed"] == 0 and france["pool"] > 100
 

@@ -127,7 +127,7 @@ def _pool(session, season, found: competition.Status) -> CupPoolOut | None:
         for row in internationals.test_rows(session, season)
         if row.competition == competition.WORLD_CUP
     ]
-    for letter, members in zip("ABCD", rules.world_cup_pools(season.year), strict=True):
+    for letter, members in zip("ABCDEF", rules.pools_of(matches), strict=False):
         if found.team_id in members:
             table = _standings(rules.pool_matches(matches, members))
             return CupPoolOut(
@@ -216,7 +216,7 @@ def choose_competition(
 @router.post("/team", response_model=CareerOut, status_code=201)
 def choose_team(payload: CompetitionTeamIn, session: SessionDep, user: UserDep) -> CareerOut:
     """Prend une équipe de la compétition : un club qualifié pour la Coupe d'Europe,
-    une des seize nations de la Coupe du monde (invitées comprises), ou une équipe de
+    une des vingt-quatre nations de la Coupe du monde, ou une équipe de
     légende, qui joue alors la Coupe du monde à la place de son pays."""
     found = _out(session)
     if found.team is not None:

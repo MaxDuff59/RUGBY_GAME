@@ -9,6 +9,7 @@ import Simulation, { simulationTargets } from "../components/Simulation.jsx";
 import TitleCelebration from "../components/TitleCelebration.jsx";
 import SplitButton from "../components/SplitButton.jsx";
 import WindowBoard from "../components/WindowBoard.jsx";
+import { RankingTable } from "../components/WorldRanking.jsx";
 import {
   ATTRIBUTES,
   COACH_NOTES,
@@ -455,7 +456,7 @@ export default function Hero() {
         )}
       </div>
       {period === "standings" ? (
-        <HeroStandings season={state} clubId={clubId} />
+        <HeroStandings season={state} clubId={clubId} nationId={me.nation_id} />
       ) : period === "internationals" && capped ? (
         <HeroInternationals nationId={me.nation_id} />
       ) : period === "career" ? (
@@ -538,6 +539,7 @@ export default function Hero() {
       {seasonEnd && finished && titles.length === 0 && (
         <HeroSeasonEnd
           name={`${me.first_name} ${me.last_name}`}
+          playerId={me.player_id}
           onClose={() => setSeasonEnd(false)}
           onNextSeason={nextSeason}
           busy={busy}
@@ -637,8 +639,9 @@ function HeroCareer() {
 }
 
 // Les classements des compétitions de son club : son championnat, et sa poule de chaque
-// coupe d'Europe qu'il dispute. Son club en accent.
-function HeroStandings({ season, clubId }) {
+// coupe d'Europe qu'il dispute. Son club en accent. Puis, s'il a un pays qui joue dans ce
+// monde, le classement mondial des sélections, la sienne en accent.
+function HeroStandings({ season, clubId, nationId }) {
   const competitions = [
     { key: season.league.code, label: season.league.short_name, league: true, rows: season.standings },
     ...season.cups.flatMap((cup) =>
@@ -646,6 +649,7 @@ function HeroStandings({ season, clubId }) {
         .filter((pool) => pool.table.some((row) => row.club.id === clubId))
         .map((pool) => ({ key: cup.code, label: `${cup.name} · poule ${pool.pool}`, rows: pool.table })),
     ),
+    ...(nationId ? [{ key: "world", label: "Classement mondial", world: true }] : []),
   ];
   const [code, setCode] = useState(competitions[0].key);
   const shown = competitions.find((c) => c.key === code) ?? competitions[0];
@@ -660,6 +664,9 @@ function HeroStandings({ season, clubId }) {
           ))}
         </div>
       )}
+      {shown.world ? (
+        <HeroWorldRanking nationId={nationId} />
+      ) : (
       <table className="table">
         <thead>
           <tr>
@@ -703,8 +710,17 @@ function HeroStandings({ season, clubId }) {
           })}
         </tbody>
       </table>
+      )}
     </div>
   );
+}
+
+// Le classement mondial des sélections, son pays en accent (chargé quand on l'ouvre).
+function HeroWorldRanking({ nationId }) {
+  const ranking = useApi(useCallback(api.getRanking, []));
+  if (ranking.loading) return <p className="table__note">Chargement…</p>;
+  if (ranking.error) return <p className="table__note">{ranking.error.message}</p>;
+  return <RankingTable nations={ranking.data.nations} highlight={[nationId]} />;
 }
 
 // Ce que disent les deux jauges de la fiche (engine/hero.py).

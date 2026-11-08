@@ -1,35 +1,82 @@
 import { useCallback, useState } from "react";
-import { useNavigate, useOutletContext } from "react-router-dom";
+import { useLocation, useNavigate, useOutletContext } from "react-router-dom";
 
 import { api } from "../api.js";
 import ClubCrest from "../components/ClubCrest.jsx";
 import InjuryIcon from "../components/InjuryIcon.jsx";
 import PlayerAvatar from "../components/PlayerAvatar.jsx";
 import WindowBoard from "../components/WindowBoard.jsx";
+import { RankingMoves, RankingTable } from "../components/WorldRanking.jsx";
 import { POSITION_ORDER, POSITIONS, formatLongDate, formatNote, formatShortDate } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 
 // Le calendrier international de la saison : une fenêtre à la fois (ses matchs, son
 // classement s'il y en a un), et la liste de 42 de chacune de ses sélections. Dans une
 // carrière de club, nos joueurs retenus sont mis en avant ; dans celle d'un sélectionneur,
-// sa sélection.
+// sa sélection. Un dernier onglet donne le classement mondial des sélections.
+const RANKING = "ranking";
+
 export default function Internationals() {
   const { career } = useOutletContext();
   const selector = career.kind === "nation";
   const calendar = useApi(useCallback(api.getInternationals, []));
-  const [code, setCode] = useState(null);
+  const ranking = useApi(useCallback(api.getRanking, []));
+  // Un lien peut ouvrir directement le classement mondial.
+  const location = useLocation();
+  const [code, setCode] = useState(location.state?.view === RANKING ? RANKING : null);
 
   if (calendar.loading) return <p className="status">Chargement…</p>;
   if (calendar.error) return <p className="status status--error">{calendar.error.message}</p>;
 
   const { windows, my_players: mine, year } = calendar.data;
   const shown = windows.find((w) => w.code === code) ?? windows.find((w) => !w.finished) ?? windows.at(-1);
+  // Les sélections à mettre en avant : la sienne, ou celles de ses joueurs retenus.
+  const highlight = selector ? [career.club_id] : [...new Set(mine.map((called) => called.nation.id))];
+  const chips = (
+    <div className="chips" role="group" aria-label="Fenêtre internationale">
+      {windows.map((w) => (
+        <button
+          key={w.code}
+          type="button"
+          className="chip"
+          aria-pressed={code !== RANKING && w.code === shown?.code}
+          onClick={() => setCode(w.code)}
+        >
+          {w.short_name}
+        </button>
+      ))}
+      <button type="button" className="chip" aria-pressed={code === RANKING} onClick={() => setCode(RANKING)}>
+        Classement mondial
+      </button>
+    </div>
+  );
+
+  if (code === RANKING) {
+    return (
+      <>
+        <header className="page-head">
+          <div>
+            <h1 className="title">Classement mondial</h1>
+            <p className="muted" style={{ margin: "8px 0 0" }}>
+              {ranking.data?.updated
+                ? `Après les tests du ${formatLongDate(ranking.data.updated)}`
+                : "Classement de départ"}{" "}
+              · chaque test fait passer des points du perdant au gagnant, d'autant plus que l'exploit est grand
+            </p>
+          </div>
+          {chips}
+        </header>
+        <WorldRankingBoard ranking={ranking} highlight={highlight} />
+      </>
+    );
+  }
 
   if (!shown) {
     return (
       <>
         <header className="page-head">
           <h1 className="title">Sélections</h1>
+          {ranking.data?.nations.length > 0 && chips}
         </header>
         <div className="card card--padded">
           <p className="eyebrow">Aucune fenêtre internationale</p>
@@ -55,13 +102,7 @@ export default function Internationals() {
             {!selector && mine.length > 0 && ` · ${mine.length} de tes joueurs retenus`}
           </p>
         </div>
-        <div className="chips" role="group" aria-label="Fenêtre internationale">
-          {windows.map((w) => (
-            <button key={w.code} type="button" className="chip" aria-pressed={w.code === shown.code} onClick={() => setCode(w.code)}>
-              {w.short_name}
-            </button>
-          ))}
-        </div>
+        {chips}
       </header>
 
       <div className="two-col fill">
@@ -74,6 +115,35 @@ export default function Internationals() {
         />
       </div>
     </>
+  );
+}
+
+// Le classement mondial en entier, et les derniers tests qui l'ont fait bouger.
+function WorldRankingBoard({ ranking, highlight }) {
+  if (ranking.loading) return <p className="status">Chargement…</p>;
+  if (ranking.error) return <p className="status status--error">{ranking.error.message}</p>;
+  const { nations, recent } = ranking.data;
+  return (
+    <div className="two-col fill">
+      <section className="section">
+        <div className="section__head">
+          <h2 className="eyebrow">Les {nations.length} sélections</h2>
+          <span className="muted">Points World Rugby</span>
+        </div>
+        <div className="card table-wrap">
+          <RankingTable nations={nations} highlight={highlight} />
+        </div>
+      </section>
+      <section className="section">
+        <div className="section__head">
+          <h2 className="eyebrow">Derniers tests</h2>
+          <span className="muted">Points échangés</span>
+        </div>
+        <div className="card">
+          <RankingMoves moves={recent} highlight={highlight} />
+        </div>
+      </section>
+    </div>
   );
 }
 

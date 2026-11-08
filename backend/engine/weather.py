@@ -75,7 +75,20 @@ DRY_RAIN, DRY_HEAT = 0.5, 1.5
 
 SOUTHERN_LEAGUES = {"super_rugby"}
 # Les sélections reçoivent chez elles : celles de l'hémisphère Sud suivent ses saisons.
-SOUTHERN_NATIONS = {"Nouvelle-Zélande", "Australie", "Argentine", "Fidji", "Samoa", "Tonga"}
+SOUTHERN_NATIONS = {
+    "Nouvelle-Zélande",
+    "Australie",
+    "Argentine",
+    "Fidji",
+    "Samoa",
+    "Tonga",
+    "Uruguay",
+    "Chili",
+    "Brésil",
+    "Paraguay",
+    "Namibie",
+    "Zimbabwe",
+}
 # Hauts plateaux et Cap : plus secs.
 SOUTH_AFRICAN_CLUBS = {"Bulls", "Stormers", "Sharks", "Lions", "Afrique du Sud"}
 

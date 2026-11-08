@@ -125,6 +125,7 @@ export const FACILITIES = {
 // Étapes de la saison.
 export const STAGES = {
   regular: "Saison régulière",
+  last16: "Huitièmes de finale",
   quarter: "Quarts de finale",
   barrage: "Barrages",
   semi: "Demi-finales",
@@ -151,12 +152,12 @@ export const testLabel = (window, match) =>
   match.stage !== "regular" ? STAGES[match.stage] : `${window.has_table ? "Journée" : "Test"} ${match.matchday}`;
 
 // Un samedi d'une fenêtre : le libellé de ses matchs, ou, pour un tour de Coupe du monde
-// dont les affiches ne sont pas encore connues, celui du tour (les trois derniers samedis).
+// dont les affiches ne sont pas encore connues, celui du tour (les quatre derniers samedis).
 export function windowDayLabel(window, date) {
   const match = window.matches.find((m) => m.date === date);
   if (match) return testLabel(window, match);
   const left = window.dates.length - window.dates.indexOf(date);
-  return { 3: STAGES.quarter, 2: STAGES.semi, 1: STAGES.final }[left] ?? window.name;
+  return { 4: STAGES.last16, 3: STAGES.quarter, 2: STAGES.semi, 1: STAGES.final }[left] ?? window.name;
 }
 
 // --- Recrutement --------------------------------------------------------------------
@@ -1298,6 +1299,14 @@ export const formatDiff = (value) => (value > 0 ? `+${value}` : String(value));
 
 // 1 -> "1er", 2 -> "2e"
 export const formatRank = (rank) => (rank === 1 ? "1er" : `${rank}e`);
+
+// Points du classement mondial : deux décimales, comme World Rugby (« 87,20 »).
+const twoDecimals = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export const formatRankingPoints = (points) => twoDecimals.format(points);
+export const formatRankingChange = (change) =>
+  `${change > 0 ? "+" : change < 0 ? "−" : ""}${twoDecimals.format(Math.abs(change))}`;
+// « n° 3 mondial ».
+export const formatWorldRank = (rank) => `n° ${rank} mondial`;
 
 // --- Dates --------------------------------------------------------------------------
 // L'API envoie des dates "AAAA-MM-JJ" ; on les lit en heure locale pour éviter

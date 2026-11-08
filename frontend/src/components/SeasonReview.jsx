@@ -16,10 +16,11 @@ import { useApi } from "../hooks/useApi.js";
 import ClubCrest from "./ClubCrest.jsx";
 import { useConfirm } from "./ConfirmDialog.jsx";
 import ManagerContract from "./ManagerContract.jsx";
+import WorldAwards from "./WorldAwards.jsx";
 import Modal from "./Modal.jsx";
 import { NOTE_LINES, NoteLine, formatChange, levelOf, startValue } from "./NoteLine.jsx";
 
-const STEPS = ["Résultats", "Vie du club", "Carrière", "Contrats"];
+const STEPS = ["Résultats", "Trophées", "Vie du club", "Carrière", "Contrats"];
 const CONTRACTS = STEPS.length - 1;
 
 // La fraîcheur se mesure avant chaque match : sans objet pour un bilan.
@@ -49,7 +50,8 @@ const MOVEMENTS = {
   relegated: "Dernier du Top 14 : le club descend en Pro D2 la saison prochaine.",
 };
 
-// Bilan de fin de saison, en quatre étapes : résultats, notes de vie du club, carrière
+// Bilan de fin de saison, en cinq étapes : résultats, trophées mondiaux de la saison (les
+// lauréats du club en avant), notes de vie du club, carrière
 // du manager (son contrat, sa réputation, et les clubs ou sélections qui le veulent),
 // puis joueurs en fin de contrat (à prolonger, sinon ils partent libres). La dernière
 // étape lance la saison suivante, sauf si le contrat du manager s'achève sans suite ;
@@ -95,8 +97,9 @@ export default function SeasonReview({ clubId, onClose, onNextSeason, onContract
         {loading && <p className="status">Chargement…</p>}
         {failure && <p className="status status--error">{failure.message}</p>}
         {!loading && !failure && step === 0 && <Results review={review.data} />}
-        {!loading && !failure && step === 1 && <Notes notes={notes.data} />}
-        {!loading && !failure && step === 2 && (
+        {!loading && !failure && step === 1 && <WorldAwards isOurs={(award) => award.club?.id === clubId} />}
+        {!loading && !failure && step === 2 && <Notes notes={notes.data} />}
+        {!loading && !failure && step === 3 && (
           <Career
             data={career.data}
             clubName={review.data.club.name}

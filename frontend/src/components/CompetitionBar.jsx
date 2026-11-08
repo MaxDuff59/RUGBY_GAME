@@ -136,7 +136,7 @@ function SkipDialog({ name, progress }) {
 }
 
 const RESULTS = { won: "V", drawn: "N", lost: "D" };
-const ROUNDS = { quarter: "Quart de finale", semi: "Demi-finale", final: "Finale" };
+const ROUNDS = { last16: "Huitième de finale", quarter: "Quart de finale", semi: "Demi-finale", final: "Finale" };
 
 // Le récap d'une compétition finie : l'issue, le bilan, chaque match du parcours. Puis
 // quitter, ou recommencer : même compétition, même équipe, dans un monde neuf (la partie

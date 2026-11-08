@@ -7,6 +7,7 @@ import { useApi } from "../hooks/useApi.js";
 import ClubCrest from "./ClubCrest.jsx";
 import { ActionError } from "./FullGame.jsx";
 import Modal from "./Modal.jsx";
+import WorldAwards from "./WorldAwards.jsx";
 import { Stat } from "./SeasonReview.jsx";
 
 const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
@@ -16,7 +17,8 @@ const seasonLabel = (year) => `${year}-${String(year + 1).slice(2)}`;
 // avenir (prolonger, partir, être prêté ; l'agent qui négocie pour lui), la saison
 // suivante, ou la retraite. Après la retraite, le bilan de toute la carrière, et de quoi
 // enchaîner sur une carrière d'entraîneur dans le même monde.
-export default function HeroSeasonEnd({ name, onClose, onNextSeason, busy, error }) {
+export default function HeroSeasonEnd({ name, playerId, onClose, onNextSeason, busy, error }) {
+  const [view, setView] = useState("season"); // sa saison, ou les trophées du monde
   const navigate = useNavigate();
   const career = useApi(useCallback(api.getHeroCareer, []));
   const offers = useApi(useCallback(api.getHeroOffers, []));
@@ -81,11 +83,16 @@ export default function HeroSeasonEnd({ name, onClose, onNextSeason, busy, error
       <div className="review__head">
         <div>
           <p className="eyebrow">Bilan de la saison {season ? seasonLabel(season.year) : ""}</p>
-          <h2 className="affair__title">{name}</h2>
+          <h2 className="affair__title">{view === "world" ? "Trophées du monde" : name}</h2>
         </div>
+        <ReviewTabs view={view} onChange={setView} first="Ta saison" />
       </div>
 
       <div className="review__body">
+        {view === "world" ? (
+          <WorldAwards isOurs={(award) => award.player_id === playerId} />
+        ) : (
+          <>
         {(career.loading || offers.loading) && <p className="status">Chargement…</p>}
         {data &&
           (season ? (
@@ -173,6 +180,8 @@ export default function HeroSeasonEnd({ name, onClose, onNextSeason, busy, error
             </span>
           </section>
         )}
+          </>
+        )}
       </div>
 
       <ActionError error={actionError ?? error} />
@@ -257,5 +266,29 @@ export function CareerSummary({ career }) {
         </tbody>
       </table>
     </>
+  );
+}
+
+// Les deux pages d'un bilan : sa saison, puis les trophées mondiaux de la saison.
+export function ReviewTabs({ view, onChange, first }) {
+  return (
+    <ol className="review__steps">
+      {[
+        ["season", first],
+        ["world", "Trophées du monde"],
+      ].map(([key, label], index) => (
+        <li key={key}>
+          <button
+            type="button"
+            className="chip"
+            aria-pressed={view === key}
+            aria-current={view === key ? "step" : undefined}
+            onClick={() => onChange(key)}
+          >
+            {index + 1}. {label}
+          </button>
+        </li>
+      ))}
+    </ol>
   );
 }

@@ -6,7 +6,7 @@ Noël, et le Tournoi des Six Nations en février-mars. Chaque championnat a sa
 date de départ et ses trêves (data/leagues.py) ; un départ avant août (Super
 Rugby) tombe dans l'année civile qui suit le début de la saison.
 
-Une saison sur quatre s'ouvre par la Coupe du monde (six samedis à partir de la
+Une saison sur quatre s'ouvre par la Coupe du monde (sept samedis à partir de la
 mi-septembre). Les clubs décalent alors leur saison : aucun match avant le
 dernier samedi des poules, et plus de trêve en novembre, puisqu'il n'y a pas de
 tournées d'automne cette année-là. Le Top 14 démarre ainsi trois samedis plus
@@ -36,9 +36,9 @@ PLAYOFF_ROUNDS = 3
 WORLD_CUP_FIRST_YEAR = 2027
 WORLD_CUP_EVERY = 4
 WORLD_CUP_START = (9, 8)  # premier samedi possible (mois, jour)
-# Trois samedis de poules, puis quarts, demies et finale.
+# Trois samedis de poules, puis huitièmes, quarts, demies et finale.
 WORLD_CUP_POOL_ROUNDS = 3
-WORLD_CUP_ROUNDS = 6
+WORLD_CUP_ROUNDS = 7
 # Mois de la trêve des tournées d'automne, sans objet une année de Coupe du monde.
 AUTUMN_BREAK_MONTH = 11
 
@@ -59,7 +59,7 @@ def is_world_cup_year(year: int) -> bool:
 
 
 def world_cup_saturdays(year: int) -> list[date]:
-    """Les six samedis de la Coupe du monde de la saison `year`."""
+    """Les sept samedis de la Coupe du monde de la saison `year`."""
     first = first_saturday(year, *WORLD_CUP_START)
     return [first + timedelta(weeks=week) for week in range(WORLD_CUP_ROUNDS)]
 

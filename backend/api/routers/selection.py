@@ -178,7 +178,12 @@ def get_selection(session: SessionDep) -> SelectionOut:
 # --- Le bilan de la saison ------------------------------------------------------------------
 
 # Coupe du monde : éliminé au tour de son dernier match.
-REACHED = {Stage.FINAL: "final", Stage.SEMI: "semi", Stage.QUARTER: "quarter"}
+REACHED = {
+    Stage.FINAL: "final",
+    Stage.SEMI: "semi",
+    Stage.QUARTER: "quarter",
+    Stage.LAST_16: "last16",
+}
 
 
 @router.get("/review", response_model=SelectionReviewOut)
@@ -267,7 +272,7 @@ def _run(window: Window, matches: list[Match], team: int, year: int) -> TestRunO
     rank = teams = None
     result = None
     if window.format == "world_cup":
-        pool = next(p for p in rules.world_cup_pools(year) if team in p)
+        pool = next(p for p in rules.pools_of(matches) if team in p)
         table = _standings(rules.pool_matches(matches, pool))
         if winner == team:
             result = "champion"

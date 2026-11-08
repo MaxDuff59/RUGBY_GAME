@@ -7,11 +7,15 @@ import { ActionError } from "../components/FullGame.jsx";
 import MatchList from "../components/MatchList.jsx";
 import SelectionReview from "../components/SelectionReview.jsx";
 import WindowBoard from "../components/WindowBoard.jsx";
+import { rankOf } from "../components/WorldRanking.jsx";
 import {
   INJURY_SOURCES,
   SEVERITIES,
   formatLongDate,
+  formatRank,
+  formatRankingPoints,
   formatShortDate,
+  formatWorldRank,
   matchResult,
   scoreNote,
   testLabel,
@@ -30,6 +34,7 @@ export default function Selection() {
   const myId = career.club_id;
   const selection = useApi(useCallback(api.getSelection, []));
   const calendar = useApi(useCallback(api.getInternationals, []));
+  const ranking = useApi(useCallback(api.getRanking, []));
   // Match en direct en cours (404 sinon) : « Jouer le match » le reprend.
   const liveMatch = useApi(useCallback(api.getLive, []));
   const [lastDay, setLastDay] = useState(null); // le dernier jour joué depuis cette page
@@ -41,7 +46,13 @@ export default function Selection() {
   const stopped = useRef(false);
 
   const { setData: setSelection } = selection;
-  const { reload: reloadCalendar } = calendar;
+  const { reload: reloadInternationals } = calendar;
+  const { reload: reloadRanking } = ranking;
+  // Un jour joué change le calendrier et le classement mondial.
+  const reloadCalendar = useCallback(() => {
+    reloadInternationals();
+    reloadRanking();
+  }, [reloadInternationals, reloadRanking]);
 
   // Un jour vient d'être joué (ici, ou fini depuis la page Match).
   const applyDay = useCallback(
@@ -128,6 +139,7 @@ export default function Selection() {
   const state = selection.data;
   const { window: current, next_match: nextMatch, record } = state;
   const windows = calendar.data?.windows ?? [];
+  const mine = rankOf(ranking.data, myId);
   const ours = windows.flatMap((w) =>
     w.matches.filter((m) => m.home.id === myId || m.away.id === myId).map((m) => ({ ...m, window: w })),
   );
@@ -185,7 +197,7 @@ export default function Selection() {
               <p className="eyebrow">
                 {current.name} · {testLabel(current, nextMatch)} · {formatLongDate(nextMatch.date)}
               </p>
-              <Opponent match={nextMatch} myId={myId} />
+              <Opponent match={nextMatch} myId={myId} ranking={ranking.data} />
               <div className="hero__actions">
                 <button type="button" className="button" disabled={busy} onClick={() => advance(false)}>
                   {busy ? "Simulation…" : "Simuler le match"}
@@ -212,7 +224,12 @@ export default function Selection() {
                 {running && lastDay ? `Simulation · ${formatLongDate(lastDay.date)}` : `Nous sommes le ${formatLongDate(state.today)}`}
               </p>
               {nextMatch && state.list_announced ? (
-                <Opponent match={nextMatch} myId={myId} label={`${current.name} · ${formatLongDate(nextMatch.date)}`} />
+                <Opponent
+                  match={nextMatch}
+                  myId={myId}
+                  ranking={ranking.data}
+                  label={`${current.name} · ${formatLongDate(nextMatch.date)}`}
+                />
               ) : current ? (
                 <>
                   <h1 className="hero__title">{current.name}</h1>
@@ -259,6 +276,16 @@ export default function Selection() {
                 ? `${plural(record.won, "victoire")}, ${plural(record.drawn, "nul")}, ${plural(record.lost, "défaite")}`
                 : "Aucun match joué"}
             </dd>
+            {mine && (
+              <>
+                <dt>Classement</dt>
+                <dd>
+                  {formatWorldRank(mine.rank)} · {formatRankingPoints(mine.points)} pts
+                  {mine.previous_rank !== mine.rank &&
+                    ` (${mine.previous_rank > mine.rank ? "+" : "−"}${Math.abs(mine.previous_rank - mine.rank)})`}
+                </dd>
+              </>
+            )}
             <dt>Rendez-vous</dt>
             <dd>
               {current ? `${current.name}, du ${formatShortDate(current.dates[0])} au ${formatShortDate(current.dates.at(-1))}` : "Aucun d'ici la fin de saison"}
@@ -275,6 +302,9 @@ export default function Selection() {
           <div className="facts__links">
             <Link to="/liste">Voir la liste</Link>
             <Link to="/effectif">Composer le XV</Link>
+            <Link to="/international" state={{ view: "ranking" }}>
+              Classement mondial
+            </Link>
           </div>
         </aside>
       </div>
@@ -367,9 +397,11 @@ const recordLabel = ({ won, drawn, lost }) => `${won} V · ${drawn} N · ${lost}
 // « 1 victoire », « 2 nuls », « 0 défaite ».
 const plural = (count, word) => `${count} ${word}${count > 1 ? "s" : ""}`;
 
-function Opponent({ match, myId, label }) {
+function Opponent({ match, myId, label, ranking }) {
   const home = match.home.id === myId;
   const opponent = home ? match.away : match.home;
+  const theirs = rankOf(ranking, opponent.id);
+  const ours = rankOf(ranking, myId);
   return (
     <>
       <div className="hero__club">
@@ -379,6 +411,7 @@ function Opponent({ match, myId, label }) {
       <p className="hero__sub">
         {match.neutral ? "Terrain neutre" : home ? "À domicile" : "À l'extérieur"}
         {label ? ` · ${label}` : ""}
+        {theirs && ours && ` · ${formatRank(theirs.rank)} mondial (nous : ${formatRank(ours.rank)})`}
       </p>
     </>
   );

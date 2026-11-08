@@ -46,6 +46,7 @@ class FriendlyTeamRef(ClubRef):
     forwards: float | None = None
     defense: float | None = None
     level: float | None = None
+    world_rank: int | None = None  # une sélection : sa place au classement mondial
 
 
 class FriendlyGroupOut(BaseModel):
@@ -83,11 +84,12 @@ def teams(user: UserDep) -> list[FriendlyGroupOut]:
     secondes)."""
     with friendly.reference() as session:
         notes = friendly.ratings(session)
+        ranks = friendly.world_ranks(session)
 
         def ref(team_id: int, name: str) -> FriendlyTeamRef:
             rating = notes.get(team_id)
             extra = vars(rating) if rating else {}
-            return FriendlyTeamRef(id=team_id, name=name, **extra)
+            return FriendlyTeamRef(id=team_id, name=name, world_rank=ranks.get(team_id), **extra)
 
         return [
             FriendlyGroupOut(

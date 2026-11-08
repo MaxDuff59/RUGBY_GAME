@@ -112,7 +112,7 @@ def test_champions_cup_from_the_draw_to_the_end(client):
 
 def test_world_cup_only_with_an_invited_nation(client):
     cup = client.post("/competition", json={"code": "world_cup"}).json()
-    assert len(cup["teams"]) == 16
+    assert len(cup["teams"]) == 24
     japan = next(t for t in cup["teams"] if t["name"] == "Japon")
     taken = client.post("/competition/team", json={"manager_name": "Max", "team_id": japan["id"]})
     assert taken.status_code == 201 and taken.json()["kind"] == "nation"

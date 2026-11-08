@@ -61,6 +61,7 @@ POSITION_NOUNS = {
 }
 
 STAGE_TITLES = {
+    Stage.LAST_16: "Huitièmes de finale",
     Stage.QUARTER: "Quarts de finale",
     Stage.BARRAGE: "Barrages",
     Stage.SEMI: "Demi-finales",
@@ -68,12 +69,14 @@ STAGE_TITLES = {
 }
 # Une affiche de ce tour (au singulier), et où mène une victoire.
 _STAGE_FIXTURE = {
+    Stage.LAST_16: "Huitième de finale",
     Stage.QUARTER: "Quart de finale",
     Stage.BARRAGE: "Barrage",
     Stage.SEMI: "Demi-finale",
     Stage.FINAL: "Finale",
 }
 _NEXT_ROUND = {
+    Stage.LAST_16: "en quarts de finale",
     Stage.QUARTER: "en demi-finales",
     Stage.BARRAGE: "en demi-finales",
     Stage.SEMI: "en finale",
@@ -97,8 +100,28 @@ _NATION_ARTICLES = {
     "SAM": "les ",
     "TON": "les ",
     "POR": "le ",
+    "ESP": "l'",
+    "ROU": "la ",
+    "NED": "les ",
+    "BEL": "la ",
+    "GER": "l'",
+    "SUI": "la ",
+    "USA": "les ",
+    "CAN": "le ",
+    "URU": "l'",
+    "CHI": "le ",
+    "BRA": "le ",
+    "PAR": "le ",
+    "NAM": "la ",
+    "ZIM": "le ",
+    "KEN": "le ",
+    "ALG": "l'",
+    "HKG": "",
+    "KOR": "la ",
+    "UAE": "les ",
+    "SRI": "le ",
 }
-_PLURAL_NATIONS = frozenset({"FIJ", "SAM", "TON"})
+_PLURAL_NATIONS = frozenset({"FIJ", "SAM", "TON", "NED", "USA", "UAE"})
 # Franchises dont le dernier mot du nom est un pluriel (« les Crusaders dominent... »).
 _PLURAL_NAMES = frozenset(
     {

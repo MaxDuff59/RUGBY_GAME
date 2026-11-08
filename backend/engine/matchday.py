@@ -37,6 +37,7 @@ from engine.weather import forecast
 from models import Club, EventType, Injury, InjurySource, Match, Stage
 
 STAGE_LABELS = {
+    Stage.LAST_16: "huitièmes de finale",
     Stage.QUARTER: "quarts de finale",
     Stage.BARRAGE: "barrages",
     Stage.SEMI: "demi-finales",

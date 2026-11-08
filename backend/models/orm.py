@@ -634,6 +634,8 @@ class InternationalRow(Base):
     events: Mapped[list[dict]] = mapped_column(JSON, default=list)
     home_lineup: Mapped[list[int]] = mapped_column(JSON, default=list)
     away_lineup: Mapped[list[int]] = mapped_column(JSON, default=list)
+    # Statistiques de chaque joueur (note, plaquages...) : les trophées mondiaux.
+    stats: Mapped[dict] = mapped_column(JSON, default=dict)
 
     @property
     def is_played(self) -> bool:
@@ -663,6 +665,7 @@ class InternationalRow(Base):
             home_lineup=list(self.home_lineup or []),
             away_lineup=list(self.away_lineup or []),
             league=self.competition,
+            stats=_stats_from_json(self.stats),
         )
 
     @classmethod
@@ -688,6 +691,7 @@ class InternationalRow(Base):
         self.home_score, self.away_score = match.home_score, match.away_score
         self.events = _events_to_json(match.events)
         self.home_lineup, self.away_lineup = list(match.home_lineup), list(match.away_lineup)
+        self.stats = _stats_to_json(match.stats)
 
 
 class CallUpRow(Base):

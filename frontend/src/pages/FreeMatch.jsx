@@ -7,7 +7,7 @@ import ClubCrest from "../components/ClubCrest.jsx";
 import { ActionError } from "../components/FullGame.jsx";
 import { LineupLegend, LineupPitch, StrengthStrip, useLineupEditor } from "../components/LineupBoard.jsx";
 import LineupPicker from "../components/LineupPicker.jsx";
-import { POSITION_SHORT, formatNote } from "../format.js";
+import { POSITION_SHORT, formatNote, formatWorldRank } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
 import { usePitchWidth } from "../hooks/usePitchWidth.js";
@@ -338,6 +338,7 @@ function TeamCard({ label, groups, chosen, other, onPick, mine, onMine }) {
       ) : (
         <div className="team-card__team">
           <h2 className="team-card__name">{team.name}</h2>
+          {team.world_rank != null && <p className="muted team-card__rank">{formatWorldRank(team.world_rank)}</p>}
           <Stepper
             label={`${label} : équipe`}
             disabled={free(group.teams).length < 2}

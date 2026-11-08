@@ -80,6 +80,8 @@ export const api = {
   // Sélections nationales : calendrier international, sélections à diriger, liste d'une nation
   getInternationals: () => request("/internationals"),
   listNations: () => request("/internationals/nations"),
+  getRanking: () => request("/internationals/ranking"),
+  getWorldAwards: () => request("/honours/world"),
   getNationSquad: (competition, code) => request(`/internationals/${competition}/${code}`),
 
   // Journal : articles, matchs de chaque compétition, mouvements de joueurs (toute carrière)

@@ -24,6 +24,12 @@
     "colors": ["#0B5A3C", "#F2C230"],
     "light": false
   },
+  "Algérie": {
+    "colors": ["#006233", "#FFFFFF"]
+  },
+  "Allemagne": {
+    "colors": ["#111111", "#FFFFFF"]
+  },
   "Angleterre": {
     "logo": "/clubs/angleterre.png",
     "colors": ["#C8102E", "#FFFFFF"],
@@ -59,6 +65,9 @@
     "colors": ["#FFFFFF", "#000000"],
     "light": false
   },
+  "Belgique": {
+    "colors": ["#C8102E", "#111111"]
+  },
   "Benetton Rugby": {
     "logo": "/clubs/benetton-rugby.png",
     "colors": ["#006241", "#FFFFFF"],
@@ -89,6 +98,9 @@
     "colors": ["#002B5C", "#FFC72C"],
     "light": false
   },
+  "Brésil": {
+    "colors": ["#FEDD00", "#009C3B"]
+  },
   "Bulls": {
     "logo": "/clubs/bulls.png",
     "colors": ["#009FDB", "#002B5C"],
@@ -98,6 +110,9 @@
     "logo": "/clubs/ca-brive.png",
     "colors": ["#000000", "#FFFFFF"],
     "light": false
+  },
+  "Canada": {
+    "colors": ["#D80621", "#FFFFFF"]
   },
   "Castres Olympique": {
     "logo": "/clubs/castres-olympique.png",
@@ -109,6 +124,9 @@
     "colors": ["#FFC72C", "#000000"],
     "light": false
   },
+  "Chili": {
+    "colors": ["#D52B1E", "#0039A6"]
+  },
   "Colomiers Rugby": {
     "colors": ["#0050A0", "#FFFFFF"]
   },
@@ -116,6 +134,9 @@
     "logo": "/clubs/connacht-rugby.png",
     "colors": ["#00843D", "#FFFFFF"],
     "light": false
+  },
+  "Corée du Sud": {
+    "colors": ["#CD2E3A", "#0047A0"]
   },
   "Crusaders": {
     "colors": ["#D00F16", "#000000"]
@@ -129,6 +150,9 @@
     "logo": "/clubs/edinburgh-rugby.png",
     "colors": ["#000000", "#B5121B"],
     "light": false
+  },
+  "Espagne": {
+    "colors": ["#C60B1E", "#FFC400"]
   },
   "Exeter Chiefs": {
     "logo": "/clubs/exeter-chiefs.png",
@@ -185,6 +209,9 @@
     "colors": ["#1B2A6B", "#8A1538"],
     "light": false
   },
+  "Hong Kong": {
+    "colors": ["#DE2910", "#FFFFFF"]
+  },
   "Hurricanes": {
     "logo": "/clubs/hurricanes.png",
     "colors": ["#FFD100", "#000000"],
@@ -209,6 +236,9 @@
     "logo": "/clubs/japon.png",
     "colors": ["#BC002D", "#FFFFFF"],
     "light": false
+  },
+  "Kenya": {
+    "colors": ["#BB0000", "#006600"]
   },
   "LOU Rugby": {
     "logo": "/clubs/lou-rugby.png",
@@ -265,6 +295,9 @@
     "colors": ["#3EA6E8", "#002B5C"],
     "light": false
   },
+  "Namibie": {
+    "colors": ["#003580", "#009543"]
+  },
   "Newcastle Red Bulls": {
     "logo": "/clubs/newcastle-red-bulls.png",
     "colors": ["#DB0A40", "#001E62"],
@@ -290,6 +323,9 @@
     "colors": ["#D50032", "#000000"],
     "light": false
   },
+  "Paraguay": {
+    "colors": ["#D52B1E", "#0038A8"]
+  },
   "Pays de Galles": {
     "logo": "/clubs/pays-de-galles.png",
     "colors": ["#B5121B", "#FFFFFF"],
@@ -299,6 +335,9 @@
     "logo": "/clubs/legendes/pays-de-galles.svg",
     "colors": ["#B5121B", "#D9A93A"],
     "light": false
+  },
+  "Pays-Bas": {
+    "colors": ["#F36C21", "#FFFFFF"]
   },
   "Portugal": {
     "logo": "/clubs/portugal.png",
@@ -337,6 +376,9 @@
     "logo": "/clubs/legendes/racing-92.svg",
     "colors": ["#0A1F44", "#8FD0F2"],
     "light": false
+  },
+  "Roumanie": {
+    "colors": ["#002B7F", "#FCD116"]
   },
   "SU Agen": {
     "logo": "/clubs/su-agen.png",
@@ -378,6 +420,9 @@
     "colors": ["#003A70", "#FFFFFF"],
     "light": false
   },
+  "Sri Lanka": {
+    "colors": ["#8D153A", "#FFBE29"]
+  },
   "Stade Aurillacois": {
     "logo": "/clubs/stade-aurillacois.png",
     "colors": ["#E30613", "#003A70"],
@@ -415,6 +460,9 @@
     "logo": "/clubs/stormers.png",
     "colors": ["#002B5C", "#FFFFFF"],
     "light": true
+  },
+  "Suisse": {
+    "colors": ["#D52B1E", "#FFFFFF"]
   },
   "Tonga": {
     "logo": "/clubs/tonga.png",
@@ -456,6 +504,9 @@
     "colors": ["#5C1530", "#FFFFFF"],
     "light": false
   },
+  "Uruguay": {
+    "colors": ["#3A75C4", "#FFFFFF"]
+  },
   "Valence Romans Drôme Rugby": {
     "logo": "/clubs/valence-romans-drome-rugby.png",
     "colors": ["#00447C", "#FFFFFF"],
@@ -471,9 +522,18 @@
     "colors": ["#000000", "#FFFFFF"],
     "light": true
   },
+  "Zimbabwe": {
+    "colors": ["#319208", "#FFD200"]
+  },
   "Écosse": {
     "logo": "/clubs/ecosse.png",
     "colors": ["#0B1F44", "#FFFFFF"],
     "light": false
+  },
+  "Émirats arabes unis": {
+    "colors": ["#00732F", "#111111"]
+  },
+  "États-Unis": {
+    "colors": ["#0A3161", "#B31942"]
   }
 }

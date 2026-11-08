@@ -26,6 +26,7 @@ from api.ledger import current_season, game_date
 from api.moves import delete_player
 from data.legends import LEGENDS_BY_NATION, LegendTeam
 from data.nations import (
+    NATIONS,
     NATIONS_BY_CODE,
     NATIONS_BY_ID,
     WINDOWS_BY_CODE,
@@ -34,6 +35,7 @@ from data.nations import (
     home_nation,
 )
 from engine import internationals as rules
+from engine import ranking
 from engine.calendar import WORLD_CUP_FIRST_YEAR
 from engine.form import Form
 from engine.internationals import SquadKey
@@ -77,6 +79,8 @@ def nation_levels(session: Session) -> dict[str, tuple[int, float]]:
     names = club_names(session)
     for nation in rules.selectable():
         players = pool[nation.code]
+        if not players:  # pas encore de joueurs (`top_up`) : pas encore dirigeable
+            continue
         chosen = compo(session, nation.code, players, names)
         squad = rules.pick_squad(players, day, preferred=chosen.squad)
         team = team_strength(rules.national_team(nation, squad, chosen.lineup), day)
@@ -292,12 +296,19 @@ def ensure_calendar(session: Session, season: SeasonRow) -> None:
         .select_from(InternationalRow)
         .where(InternationalRow.season_id == season.id)
     )
-    if exists or not has_nations(session):
+    if exists:
+        top_up(session, season)
+        return
+    if not has_nations(session):
         return
     world_cup_only = session.scalar(
         select(CompetitionRow.id).where(CompetitionRow.code == rules.WORLD_CUP.code)
     )
-    matches = rules.schedule(season.year, [rules.WORLD_CUP] if world_cup_only else None)
+    # Le tirage de la Coupe du monde suit le classement mondial du moment.
+    order = [standing.code for standing in world_ranking(session).standings]
+    matches = rules.schedule(
+        season.year, [rules.WORLD_CUP] if world_cup_only else None, ranking=order
+    )
     played = [m.date for m in season.matches if m.is_played]
     if played:
         started = {m.league for m in matches if m.date <= max(played)}
@@ -310,6 +321,29 @@ def ensure_calendar(session: Session, season: SeasonRow) -> None:
     player_ids = itertools.count((session.scalar(select(func.max(PlayerRow.id))) or 0) + 1)
     pool = eligible_players(session)
     for nation in rules.participants():
+        for player in rules.reinforcements(nation, pool[nation.code], player_ids, rng, season.year):
+            session.add(PlayerRow.from_domain(player))
+    session.commit()
+
+
+def top_up(session: Session, season: SeasonRow) -> None:
+    """Une partie commencée avant l'arrivée de nouvelles sélections : celles qui n'ont pas
+    de quoi faire une liste appellent tout de suite leurs joueurs hors des championnats du
+    jeu, sans attendre le calendrier de la saison suivante. Un simple décompte sinon."""
+    counts = dict(
+        session.execute(
+            select(PlayerRow.nationality, func.count())
+            .where(PlayerRow.squad.in_((PRO, AWAY)))
+            .group_by(PlayerRow.nationality)
+        ).all()
+    )
+    thin = [n for n in rules.participants() if counts.get(n.code, 0) < rules.SQUAD_SIZE]
+    if not thin or not has_nations(session):
+        return
+    rng = rng_for(season.seed, "internationals", "top-up")
+    player_ids = itertools.count((session.scalar(select(func.max(PlayerRow.id))) or 0) + 1)
+    pool = eligible_players(session, {nation.code for nation in thin})
+    for nation in thin:
         for player in rules.reinforcements(nation, pool[nation.code], player_ids, rng, season.year):
             session.add(PlayerRow.from_domain(player))
     session.commit()
@@ -557,6 +591,44 @@ def played_tests(session: Session) -> list[Match]:
         )
         for row in rows
     ]
+
+
+# --- Le classement mondial -----------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class WorldRanking:
+    standings: list[ranking.Standing]
+    moves: list[ranking.Move]  # chaque test joué, dans l'ordre, et ce qu'il a échangé
+    updated: datetime.date | None  # la dernière journée de tests (None : aucune)
+
+
+def world_ranking(session: Session) -> WorldRanking:
+    """Le classement mondial de la partie (engine/ranking.py) : les points de départ de
+    chaque nation, puis tous les tests joués, toutes saisons confondues. Une équipe de
+    légende compte pour son pays. Sans partie ni test : le classement de départ."""
+    rows = session.scalars(
+        select(InternationalRow)
+        .where(InternationalRow.home_score.is_not(None))
+        .order_by(InternationalRow.date, InternationalRow.id)
+    )
+    tests = [
+        ranking.Test(
+            date=row.date,
+            home=NATIONS_BY_ID[row.home_id].code,
+            away=NATIONS_BY_ID[row.away_id].code,
+            home_score=row.home_score,
+            away_score=row.away_score,
+            neutral=row.neutral,
+            world_cup=row.competition == rules.WORLD_CUP.code,
+            competition=row.competition,
+        )
+        for row in rows
+        if row.home_id in NATIONS_BY_ID and row.away_id in NATIONS_BY_ID
+    ]
+    initial = {nation.code: nation.points for nation in NATIONS}
+    standings, moves = ranking.standings(initial, tests)
+    return WorldRanking(standings, moves, tests[-1].date if tests else None)
 
 
 # --- Intersaison ----------------------------------------------------------------------------

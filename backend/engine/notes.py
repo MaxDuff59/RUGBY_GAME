@@ -19,6 +19,7 @@ MIN_NOTE, MAX_NOTE = 0.0, 20.0
 # Les matchs à élimination directe pèsent plus.
 STAGE_WEIGHT = {
     Stage.REGULAR: 1.0,
+    Stage.LAST_16: 1.3,
     Stage.QUARTER: 1.5,
     Stage.BARRAGE: 1.5,
     Stage.SEMI: 1.8,

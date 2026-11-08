@@ -10,6 +10,8 @@ import {
   DIFFICULTIES,
   formatLongDate,
   formatNote,
+  formatRankingPoints,
+  formatWorldRank,
 } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { chosenSlot } from "../save.js";
@@ -209,8 +211,12 @@ export default function StartCareer() {
                       <ClubCrest name={nation.name} size={32} />
                       {nation.name}
                     </span>
-                    <span className="num">Niveau {formatNote(nation.level)} / 20</span>
-                    <span className="club-option__detail">{nation.competitions.join(" · ")}</span>
+                    <span className="num" title={`${formatRankingPoints(nation.points)} points au classement mondial`}>
+                      {formatWorldRank(nation.rank)}
+                    </span>
+                    <span className="club-option__detail">
+                      Niveau {formatNote(nation.level)} / 20 · {nation.competitions.join(" · ")}
+                    </span>
                   </button>
                 </li>
               ))}

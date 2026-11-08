@@ -70,7 +70,9 @@ uv run python -m scripts.fetch_club_logos --force  # retélécharge tous les bla
 
 Les blasons vont dans `frontend/public/clubs/`, la table nom → blason et couleurs dans
 `frontend/src/clubLogos.json`. Les couleurs se corrigent dans `COLORS`, en tête du script.
-Les seize sélections nationales y sont aussi, sous leur nom français.
+Les trente-six sélections nationales y sont aussi, sous leur nom français (TheSportsDB
+refuse pour l'instant les requêtes : les nouvelles nations ont l'écusson à initiales, à
+leurs couleurs).
 
 ### Lancer l'API
 
@@ -223,34 +225,62 @@ parties ailleurs (ex. pour une instance de test).
 
 ## Sélections nationales
 
-Seize sélections (`backend/data/nations.py`) et trois fenêtres par saison, un match
-par samedi comme les championnats :
+Trente-six sélections (`backend/data/nations.py`) et leurs fenêtres, un match par samedi
+comme les championnats. Une nation ne joue jamais deux fenêtres à la fois :
 
 | Fenêtre | Quand | Qui |
 |---|---|---|
 | Rugby Championship | 15 août – début octobre, 6 samedis | Nouvelle-Zélande, Afrique du Sud, Australie, Argentine, aller-retour |
-| Tournées d'automne | mi-novembre, 3 samedis | les six nations du Tournoi reçoivent celles du Sud, les Fidji et la Géorgie (les adversaires tournent d'une saison à l'autre) |
+| Pacific Nations Cup | fin août – septembre, 5 samedis | Fidji, Samoa, Tonga, Japon, États-Unis, Canada |
+| Tournées d'automne | mi-novembre, 3 samedis | les six nations du Tournoi reçoivent celles du Sud, les Fidji, la Géorgie et le Japon (les adversaires tournent d'une saison à l'autre) |
+| Tests de novembre | mi-novembre, 3 samedis | Espagne, Portugal, Roumanie, Uruguay reçoivent États-Unis, Canada, Samoa, Tonga, Chili, Namibie |
 | Tournoi des Six Nations | février-mars, 5 samedis | France, Angleterre, Irlande, Écosse, Galles, Italie ; qui reçoit s'inverse chaque saison |
+| Rugby Europe Championship | février-mars, 7 samedis | Géorgie, Portugal, Espagne, Roumanie, Belgique, Pays-Bas, Allemagne, Suisse |
+| Sudamericano, Africa Cup, Asia Championship | fin avril – début mai, 3 samedis | Uruguay, Chili, Brésil, Paraguay ; Namibie, Zimbabwe, Kenya, Algérie ; Hong Kong, Corée du Sud, Émirats, Sri Lanka |
 
-**Coupe du monde.** Une saison sur quatre (2027, 2031...), elle remplace le Rugby
-Championship et les tournées d'automne : seize nations, quatre poules de quatre (une
-nation de chacun des quatre chapeaux, le tirage tourne d'une édition à l'autre), puis
-quarts, demies et finale, sur terrain neutre, en six samedis à partir de la
+**Coupe du monde.** Une saison sur quatre (2027, 2031...), elle remplace tout ce qui se
+joue d'août à novembre : vingt-quatre nations, six poules de quatre tirées par chapeaux
+d'après le classement mondial du moment, puis huitièmes (les premiers, les deuxièmes et
+les quatre meilleurs troisièmes, sans revoir tout de suite une nation de sa poule),
+quarts, demies et finale, sur terrain neutre, en sept samedis à partir de la
 mi-septembre. Un match à élimination directe ne finit pas sur un nul (prolongation,
-tirs au but). Quatre nations n'ont pas d'autre rendez-vous (Japon, Samoa, Tonga,
-Portugal) : on ne les dirige pas. Cette saison-là les clubs décalent leur calendrier
+tirs au but). Une partie dont la Coupe du monde a été tirée à seize nations la finit
+en quarts. Cette saison-là les clubs décalent leur calendrier
 (`backend/engine/calendar.py`) : aucun match avant le dernier samedi des poules, et plus
 de trêve en novembre. Le Top 14 démarre trois samedis plus tard et finit à la même
-date ; ses quatre premières journées sont des doublons, de moins en moins lourds : fin
-des poules (les seize listes), puis quarts, demies et finale (les sélections encore en
-course seulement).
+date ; ses premières journées sont des doublons, de moins en moins lourds : fin des
+poules (toutes les listes), puis huitièmes, quarts, demies et finale (les sélections
+encore en course seulement).
+
+**Classement mondial.** Façon World Rugby (`backend/engine/ranking.py`) : chaque nation a
+des points (de 50 à 95 au départ), qu'un test fait passer du perdant au gagnant, comme un
+classement Elo. L'échange dépend de l'écart avant le match (trois points de plus pour
+qui reçoit, l'écart borné à dix) : 1 point entre égaux, jusqu'à 2 pour un exploit, rien
+pour une victoire attendue de très loin ; un nul coûte au favori. Un écart de plus de
+quinze points au score le multiplie par 1,5, un match de Coupe du monde par 2. Le
+classement d'une partie se refait à partir de tous ses tests joués (`GET
+/internationals/ranking`). Il se lit dans l'onglet « Classement mondial » des
+Sélections, sur le tableau de bord du sélectionneur, dans les classements du joueur
+incarné, au choix d'une sélection, en mode Coupe du monde et en match libre.
+
+**Trophées du monde.** Au bilan de chaque fin de saison (club, sélectionneur, joueur
+incarné), une page réunit tous les championnats, les coupes d'Europe et les tests
+(`backend/engine/world_awards.py`, `GET /honours/world`) : meilleur joueur du monde (la
+meilleure note moyenne, un test comptant double, au moins 12 matchs notés), meilleur
+espoir du monde (21 ans ou moins, 8 matchs), meilleur joueur en sélection (3 tests),
+meilleurs marqueur, réalisateur et plaqueur, la sélection de l'année (n° 1 mondial), la
+plus forte progression au classement et le XV mondial de l'année. Les tests gardent pour
+cela les statistiques de leurs joueurs (colonne `stats` des `internationals`, ajoutée aux
+parties existantes par `ADDED_COLUMNS`).
 
 Un joueur garde la nationalité de sa fiche (`rosters.json`) ; un joueur inventé prend
 celle du pays de son club, les jeunes du centre de formation aussi. Un monde de clubs
 inventés n'a ni pays ni sélections. L'Angleterre, l'Irlande et la Nouvelle-Zélande ne
 retiennent que les joueurs de leurs clubs. Une sélection à court de monde à un poste
-(aucun club gallois dans le jeu, peu de piliers fidjiens...) appelle des joueurs
-« hors championnats » : inventés, sans club dans le jeu et hors du marché.
+(aucun club gallois dans le jeu, peu de piliers fidjiens, presque personne pour Hong
+Kong...) appelle des joueurs « hors championnats » : inventés, avec un nom de leur pays
+(`backend/data/names.py`), sans club dans le jeu et hors du marché. Une partie commencée
+avant l'arrivée d'une nation la complète à la première ouverture du calendrier.
 
 **Listes.** Deux semaines avant le premier match d'une fenêtre, chaque sélection annonce
 42 joueurs (6 piliers, 4 talonneurs, 5 deuxièmes lignes, 8 troisièmes lignes, 4 demis

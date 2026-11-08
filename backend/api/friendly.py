@@ -30,7 +30,7 @@ from api.live import Live
 from data import legends
 from data.derbies import derby
 from data.leagues import LEAGUES, league_config
-from data.nations import NATIONS, NATIONS_BY_ID
+from data.nations import NATIONS, NATIONS_BY_CODE, NATIONS_BY_ID
 from engine import internationals as rules
 from engine.match_engine import (
     SLOT_NUMBERS,
@@ -119,7 +119,7 @@ accounts.ON_PURGE.append(_forget)
 def reference() -> Session:
     """Une session sur le monde de référence, créé au premier appel (quelques secondes).
     Un monde resté à moitié fait (création interrompue) est refait de zéro."""
-    global _ratings
+    global _ratings, _topped_up
     with _reference_lock:
         if not _complete():
             _ratings = None
@@ -130,7 +130,18 @@ def reference() -> Session:
             except Exception:
                 database.delete_slot(*REFERENCE)
                 raise
+        elif not _topped_up:
+            # Un monde créé avant l'arrivée de nouvelles sélections : elles appellent
+            # leurs joueurs (les autres, déjà au complet, n'en appellent aucun).
+            _ratings = None
+            with database.open_slot(*REFERENCE) as session:
+                _add_reinforcements(session)
+        _topped_up = True
     return database.open_slot(*REFERENCE)
+
+
+# Les renforts du monde de référence ont été complétés depuis le lancement du serveur.
+_topped_up = False
 
 
 def _complete() -> bool:
@@ -165,6 +176,13 @@ class Group:
     teams: list[tuple[int, str]]
 
 
+def world_ranks(session: Session) -> dict[int, int]:
+    """La place de chaque sélection au classement mondial (celui du début d'une partie :
+    le monde de référence ne joue pas de tests), par identifiant d'équipe."""
+    standings = internationals.world_ranking(session).standings
+    return {NATIONS_BY_CODE[s.code].id: s.rank for s in standings}
+
+
 def groups(session: Session) -> list[Group]:
     """Les équipes que l'on peut choisir : les clubs par championnat (dans l'ordre de
     data/leagues.py, Top 14 en tête), puis les sélections, les nations et les clubs de
@@ -180,7 +198,8 @@ def groups(session: Session) -> list[Group]:
         for code in sorted(clubs, key=lambda code: order.get(code, len(order)))
     ]
     if internationals.has_nations(session):
-        nations = sorted(((n.id, n.name) for n in NATIONS), key=lambda team: team[1])
+        ranks = world_ranks(session)
+        nations = sorted(((n.id, n.name) for n in NATIONS), key=lambda team: ranks[team[0]])
         out.append(Group("nations", "Sélections nationales", nations))
         out.append(
             Group("legends", "Nations de légende", [(t.id, t.name) for t in legends.NATION_LEGENDS])

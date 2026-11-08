@@ -22,6 +22,7 @@ from datetime import date
 from pathlib import Path
 
 from data.leagues import DEFAULT_LEAGUE, LEAGUES, League
+from data.names import local_name
 from data.nations import home_nation, nation_code
 from engine.economy import SQUAD_MAX, SQUAD_MIN, STADIUM_STEPS, staff_wage, wage_for
 from engine.regulations import fit_under_cap
@@ -142,6 +143,10 @@ def generate_player(
         nationality=nationality,
         **attributes,
     )
+    # Un nom de son pays, quand on en connaît (data/names.py).
+    local = local_name(nationality, player_id)
+    if local is not None:
+        player.first_name, player.last_name = local
     # Salaire négocié autour de la valeur du joueur (de -10 % à +15 %).
     player.wage = wage_for(player, noise=rng.uniform(0.9, 1.15))
     # Contrat : de la dernière année (négociable par les autres clubs) à quatre saisons.

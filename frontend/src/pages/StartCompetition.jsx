@@ -5,7 +5,7 @@ import { api } from "../api.js";
 import { useClubTheme } from "../clubs.js";
 import ClubCrest from "../components/ClubCrest.jsx";
 import { ActionError } from "../components/FullGame.jsx";
-import { DIFFICULTIES } from "../format.js";
+import { DIFFICULTIES, formatWorldRank } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
 import { chosenSlot } from "../save.js";
 
@@ -19,7 +19,8 @@ const COMPETITIONS = [
   {
     code: "world_cup",
     name: "Coupe du monde",
-    detail: "16 nations, invitées comprises. Quatre poules de quatre, puis quarts, demies et finale.",
+    detail:
+      "24 nations, tirées en chapeaux selon le classement mondial. Six poules de quatre, puis huitièmes, quarts, demies et finale.",
   },
 ];
 
@@ -34,6 +35,10 @@ export default function StartCompetition() {
   const [managerName, setManagerName] = useState("");
   const [teamId, setTeamId] = useState(null);
   const [difficulty, setDifficulty] = useState("normal");
+  // Coupe du monde : le classement mondial range les nations et les place.
+  const worldCup = competition.data?.code === "world_cup";
+  const ranking = useApi(useCallback(() => (worldCup ? api.getRanking() : Promise.resolve(null)), [worldCup]));
+  const ranks = Object.fromEntries((ranking.data?.nations ?? []).map((n) => [n.nation.id, n.rank]));
   const choices = [...(competition.data?.teams ?? []), ...(competition.data?.legends ?? [])];
   const chosen = choices.find((team) => team.id === teamId);
   useClubTheme(chosen?.name);
@@ -150,7 +155,7 @@ export default function StartCompetition() {
           </p>
         </div>
         <div className="club-list__scroll">
-          <TeamList teams={competition.data.teams} chosen={teamId} onPick={setTeamId} />
+          <TeamList teams={competition.data.teams} chosen={teamId} onPick={setTeamId} ranks={ranks} />
           {competition.data.legends.length > 0 && (
             <>
               <p className="eyebrow club-list__heading">Équipes de légende · à la place de leur pays</p>
@@ -171,16 +176,19 @@ export default function StartCompetition() {
   );
 }
 
-function TeamList({ teams, chosen, onPick }) {
+// `ranks` : la place de chaque nation au classement mondial, qui ordonne alors la liste.
+function TeamList({ teams, chosen, onPick, ranks = {} }) {
+  const ordered = [...teams].sort((a, b) => (ranks[a.id] ?? 0) - (ranks[b.id] ?? 0));
   return (
     <ul className="club-list">
-      {teams.map((team) => (
+      {ordered.map((team) => (
         <li key={team.id}>
           <button type="button" className="club-option" aria-pressed={team.id === chosen} onClick={() => onPick(team.id)}>
             <span className="club-option__name with-crest">
               <ClubCrest name={team.name} size={32} />
               {team.name}
             </span>
+            {ranks[team.id] && <span className="num">{formatWorldRank(ranks[team.id])}</span>}
           </button>
         </li>
       ))}
