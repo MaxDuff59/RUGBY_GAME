@@ -225,7 +225,8 @@ def test_the_player_decides_dilemmas_in_a_friendly(guest, monkeypatch):
     guest.post("/friendly/kickoff")
     live = guest.post("/friendly/advance", json={"minutes": 10}).json()
     dilemma = live["dilemma"]
-    assert dilemma is not None and live["minute"] == 1
+    # Dès la première minute sans essai ni coup de pied au but.
+    assert dilemma is not None and dilemma["minute"] == live["minute"] <= 10
     mine = live["home"] if live["home"]["club"]["id"] == live["my_club_id"] else live["away"]
     assert dilemma["player_id"] in {p["id"] for p in mine["players"] if p["status"] == "field"}
     key = dilemma["options"][0]["key"]

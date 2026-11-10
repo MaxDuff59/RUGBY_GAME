@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { api } from "../api.js";
-import { POSITIONS } from "../format.js";
+import { NATION_CODES, NATIONALITIES, POSITIONS } from "../format.js";
 import { chosenSlot } from "../save.js";
 import { ActionError } from "./FullGame.jsx";
 
@@ -14,6 +14,8 @@ export default function StartHero({ roles, picker, clubId }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [position, setPosition] = useState(null);
+  // Vide : celle du pays de son club (un club inventé n'en donne aucune).
+  const [nationality, setNationality] = useState("");
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -24,7 +26,7 @@ export default function StartHero({ roles, picker, clubId }) {
     setSubmitting(true);
     setError(null);
     try {
-      await api.startHero({ first_name: firstName.trim(), last_name: lastName.trim(), position, club_id: clubId });
+      await api.startHero({ first_name: firstName.trim(), last_name: lastName.trim(), position, club_id: clubId, nationality: nationality || null });
       navigate("/", { replace: true });
     } catch (err) {
       setError(err);
@@ -72,6 +74,25 @@ export default function StartHero({ roles, picker, clubId }) {
             required
           />
         </div>
+      </div>
+
+      <div className="field">
+        <label htmlFor="hero-nation">Nationalité</label>
+        <select
+          id="hero-nation"
+          className="input"
+          value={nationality}
+          onChange={(event) => setNationality(event.target.value)}
+        >
+          <option value="">Celle du pays de mon club</option>
+          {[...NATION_CODES]
+            .sort((a, b) => NATIONALITIES[a].localeCompare(NATIONALITIES[b], "fr"))
+            .map((code) => (
+              <option key={code} value={code}>
+                {NATIONALITIES[code]}
+              </option>
+            ))}
+        </select>
       </div>
 
       <div className="field field--wide">

@@ -426,6 +426,11 @@ AI_SUBSTITUTIONS_KEPT = 1
 # Il ne remplace pas un joueur entré depuis moins de 25 minutes.
 AI_MIN_MINUTES_ON_FIELD = 25
 
+# Ce qui, survenu dans la minute, empêche un dilemme d'y arriver (`_scored_in`).
+DILEMMA_BLOCKERS = frozenset(
+    {EventType.TRY, EventType.PENALTY_GOAL, EventType.PENALTY_MISSED, EventType.DROP_GOAL}
+)
+
 # --- Notes des joueurs sur 10 ----------------------------------------------------------
 
 RATING_START = 6.0
@@ -1935,13 +1940,24 @@ class LiveMatch:
             return None
         return side, slot
 
+    def _scored_in(self, minute: int) -> bool:
+        """La minute a-t-elle déjà vu un essai ou une tentative au but ? Le jeu repart
+        alors du coup d'envoi ou d'une mêlée : pas de place pour un dilemme, qui
+        ajouterait un deuxième essai à la même minute."""
+        for event in reversed(self.events):
+            if event.minute != minute:
+                return False
+            if event.type in DILEMMA_BLOCKERS:
+                return True
+        return False
+
     def _dilemma_due(self, minute: int) -> None:
         """Le match s'arrête-t-il sur un dilemme du joueur incarné ? Seulement s'il est sur
         le terrain, pas trop tôt après le précédent, et pas à la dernière minute."""
         if self.hero is None:
             self._coach_dilemma_due(minute)
             return
-        if minute >= self.last_minute:
+        if minute >= self.last_minute or self._scored_in(minute):
             return
         found = self._hero_slot(minute)
         if found is None or len(self.outcomes) >= dilemmas.DILEMMA_MAX:
@@ -1964,7 +1980,7 @@ class LiveMatch:
     def _coach_dilemma_due(self, minute: int) -> None:
         """Le match s'arrête-t-il sur un dilemme pour le manager (`coach`) ? Pour un de ses
         joueurs sur le terrain, tiré au hasard ; plus rarement qu'en carrière de joueur."""
-        if self.coach is None or minute >= self.last_minute:
+        if self.coach is None or minute >= self.last_minute or self._scored_in(minute):
             return
         if len(self.outcomes) >= dilemmas.COACH_DILEMMA_MAX:
             return

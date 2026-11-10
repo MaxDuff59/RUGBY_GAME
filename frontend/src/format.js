@@ -35,7 +35,7 @@ export const NATIONALITIES = {
   JPN: "Japon",
   POR: "Portugal",
   ESP: "Espagne",
-  ROM: "Roumanie",
+  ROU: "Roumanie",
   NAM: "Namibie",
   ZIM: "Zimbabwe",
   USA: "États-Unis",
@@ -47,7 +47,22 @@ export const NATIONALITIES = {
   GER: "Allemagne",
   ALG: "Algérie",
   MOR: "Maroc",
+  SUI: "Suisse",
+  BRA: "Brésil",
+  PAR: "Paraguay",
+  KEN: "Kenya",
+  HKG: "Hong Kong",
+  KOR: "Corée du Sud",
+  UAE: "Émirats arabes unis",
+  SRI: "Sri Lanka",
 };
+
+// Les 36 sélections du jeu (data/nations.py), au choix pour le joueur que l'on crée.
+export const NATION_CODES = [
+  "FRA", "ENG", "IRE", "SCO", "WAL", "ITA", "NZL", "RSA", "AUS", "ARG", "FIJ", "GEO",
+  "JPN", "SAM", "TON", "POR", "ESP", "ROU", "NED", "BEL", "GER", "SUI", "USA", "CAN",
+  "URU", "CHI", "BRA", "PAR", "NAM", "ZIM", "KEN", "ALG", "HKG", "KOR", "UAE", "SRI",
+];
 
 export const nationalityLabel = (code) => (code ? (NATIONALITIES[code] ?? code) : null);
 

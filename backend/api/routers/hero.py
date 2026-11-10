@@ -29,8 +29,8 @@ from api.routers.seasons import (
 from api.schemas import (
     CareerOut,
     HeroAgentIn,
-    HeroCareerOut,
     HeroApplyIn,
+    HeroCareerOut,
     HeroChoiceIn,
     HeroHurtIn,
     HeroIn,
@@ -41,7 +41,7 @@ from api.schemas import (
     SocialOut,
 )
 from data.leagues import league_config
-from data.nations import home_nation
+from data.nations import NATIONS_BY_CODE, home_nation, nation_code
 from engine import hero as rules
 from engine.economy import wage_for
 from models import Player, Squad
@@ -82,6 +82,9 @@ def start_hero(payload: HeroIn, session: SessionDep, user: UserDep) -> CareerOut
     if first_season:
         plans.require_season(user)
     club = load_club(session, payload.club_id)
+    nationality = nation_code(payload.nationality) or home_nation(club.name)
+    if payload.nationality and nationality not in NATIONS_BY_CODE:
+        raise HTTPException(status_code=422, detail="Nationalité inconnue")
     kinds = (CareerRow, SelectorRow, HeroRow, DismissalRow)
     for table in (*kinds, LiveMatchRow, LiveInternationalRow):
         session.execute(delete(table))
@@ -100,7 +103,7 @@ def start_hero(payload: HeroIn, session: SessionDep, user: UserDep) -> CareerOut
         position=payload.position,
         club_id=club.id,
         squad=Squad.PRO,
-        nationality=home_nation(club.name),
+        nationality=nationality,
         contract_until=season.year + rules.START_CONTRACT_YEARS,
         **rules.start_attributes(payload.position),
     )

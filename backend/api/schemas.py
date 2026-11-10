@@ -940,6 +940,8 @@ class HeroIn(BaseModel):
     last_name: str = Field(min_length=1, max_length=50)
     position: Position
     club_id: int
+    # Code de la sélection (ex. "IRE") ; à défaut, le pays de son club.
+    nationality: str | None = Field(default=None, max_length=3)
 
 
 class HeroTrainIn(BaseModel):

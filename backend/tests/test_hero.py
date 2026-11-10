@@ -17,7 +17,13 @@ from data.leagues import league
 from data.nations import NATIONS_BY_ID
 from engine import dilemmas, hero_market, social
 from engine import hero as rules
-from engine.match_engine import HALF_TIME, LiveMatch, leadership, simulate_match
+from engine.match_engine import (
+    DILEMMA_BLOCKERS,
+    HALF_TIME,
+    LiveMatch,
+    leadership,
+    simulate_match,
+)
 from engine.team_talk import TOUCHLINE_COOLDOWN, Moment
 from models import ATTRIBUTE_NAMES, EventType, Position
 from models.orm import Base, ClubRow, HeroRow, InjuryRow, PlayerRow
@@ -117,6 +123,11 @@ def test_dilemmas_stop_the_clock_until_the_hero_chooses():
                 continue
             seen += 1
             minute = live.minute
+            if not live.dilemma.chained:
+                # Jamais après un essai ou un coup de pied au but de la même minute.
+                assert not any(
+                    e.minute == minute and e.type in DILEMMA_BLOCKERS for e in live.events
+                )
             assert live.advance(3) == [] and live.minute == minute  # le chrono attend
             odds = live.dilemma_odds()
             assert all(dilemmas.CHANCE_MIN <= c <= dilemmas.CHANCE_MAX for c in odds.values())
@@ -178,6 +189,14 @@ def test_a_player_career_follows_his_club(client):
     # Le calendrier suit son club.
     next_match = client.get("/seasons/current").json()["next_match"]
     assert any(3 in (m["home"]["id"], m["away"]["id"]) for m in next_match["matches"])
+
+
+def test_the_player_picks_his_nationality(client):
+    hero = {"first_name": "Jean", "last_name": "Dupont", "position": "WING", "club_id": 3}
+    assert client.post("/hero", json={**hero, "nationality": "XYZ"}).status_code == 422
+    assert client.post("/hero", json={**hero, "nationality": "NZL"}).status_code == 201
+    player_id = client.get("/hero").json()["player_id"]
+    assert client.get(f"/players/{player_id}").json()["player"]["nationality"] == "NZL"
 
 
 def test_points_buy_attributes(client):
@@ -519,7 +538,7 @@ def test_a_young_hero_is_not_always_in_the_squad(client, monkeypatch):
 def _to_minute(live: LiveMatch, minute: int) -> None:
     while live.minute < minute and not live.finished:
         if live.dilemma is not None:
-            live.choose(live.dilemma.options[0].key)
+            live.choose(next(iter(live.dilemma_odds())))
         else:
             live.step()
 
