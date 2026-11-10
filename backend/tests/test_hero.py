@@ -201,7 +201,7 @@ def test_a_live_match_with_dilemmas_earns_experience(client):
     _start(client)
     # Titulaire (l'entraîneur lui fait confiance) : assez de minutes pour ses dilemmes.
     session = _db(client)
-    session.scalars(select(HeroRow)).first().trust = 90
+    session.scalars(select(HeroRow)).first().trust = 80
     session.commit()
     live = client.post("/live").json()
     assert live["hero"] is not None and live["my_club_id"] == 3
@@ -304,6 +304,9 @@ def test_good_matches_bring_followers_and_praise():
 
 def test_the_social_feed_follows_the_hero(client):
     _start(client)
+    session = _db(client)
+    session.scalars(select(HeroRow)).first().trust = 80  # titulaire : il joue
+    session.commit()
     feed = client.get("/hero/social").json()
     assert [p["voice"] for p in feed["posts"]] == ["fan", "media"]  # sa signature
     live = client.post("/live").json()
@@ -465,14 +468,83 @@ def _play_live(client, pick=0):
 def test_the_coach_starts_a_player_he_trusts(client):
     _start(client)
     session = _db(client)
-    session.scalars(select(HeroRow)).first().trust = 90
+    session.scalars(select(HeroRow)).first().trust = 80
     session.commit()
     hero = client.get("/hero").json()
-    assert hero["status"] == "starter" and hero["entry"] == rules.entry_minute(90)
+    assert hero["status"] == "starter" and hero["entry"] == rules.entry_minute(80)
     first, _ = _play_live(client)
     me = next(p for p in [*first["home"]["players"], *first["away"]["players"]]
               if p["id"] == hero["player_id"])  # fmt: skip
     assert me["status"] == "field"
+
+
+def test_playing_time_follows_the_coach_trust():
+    # Un jeune loin derrière les titulaires est rarement du groupe ; la confiance l'y met.
+    assert rules.squad_chance(40, 3, False) < rules.squad_chance(40, 1, False)
+    assert rules.squad_chance(40, 1, False) < rules.squad_chance(65, 1, False)
+    assert rules.squad_chance(10, 5, False) == rules.SQUAD_BOUNDS[0]
+    assert rules.squad_chance(10, 5, True) == 1.0  # en phase finale, tout le monde
+    # Sur le banc, il n'entre pas toujours.
+    assert rules.entry_chance(20) < rules.entry_chance(55) < rules.entry_chance(80) < 1
+    # Une star souffle parfois en déplacement ou contre plus faible ; jamais en phase finale.
+    assert rules.star_rest(90, away=True, weaker=True, knockout=False) == 2 * rules.STAR_REST
+    assert rules.star_rest(90, away=False, weaker=False, knockout=False) == 0
+    assert rules.star_rest(80, away=True, weaker=True, knockout=False) == 0
+    assert rules.star_rest(90, away=True, weaker=True, knockout=True) == 0
+    fresh = rules.FRESHNESS_FULL
+    assert rules.start_chance(True, 90, fresh, 0, False, 0.14) < rules.start_chance(
+        True, 90, fresh, 0, False
+    )
+    # Sorti : très mauvais, et en manque de confiance ou sans celle de l'entraîneur.
+    assert rules.hooked(50, 4.0, -0.5, 80)
+    assert rules.hooked(50, 4.0, 0.2, 30)
+    assert not rules.hooked(50, 4.0, 0.2, 80)
+    assert not rules.hooked(50, 5.5, -0.5, 30)
+    assert not rules.hooked(20, 4.0, -0.5, 30)
+
+
+def test_a_young_hero_is_not_always_in_the_squad(client, monkeypatch):
+    monkeypatch.setattr(rules, "SQUAD_BOUNDS", (0.0, 0.0))  # jamais retenu
+    monkeypatch.setattr(rules, "ROTATION_START", 0.0)
+    _start(client)
+    hero = client.get("/hero").json()
+    if hero["first_choice"]:
+        return  # titulaire d'office dans ce monde de test : rien à vérifier
+    assert hero["status"] == "out" and not hero["rested"]
+    result = client.post("/hero/simulate").json()
+    assert result["hero"]["match"] is None or result["hero"]["match"]["minutes"] == 0
+    assert client.get("/live").status_code == 404
+
+
+def _to_minute(live: LiveMatch, minute: int) -> None:
+    while live.minute < minute and not live.finished:
+        if live.dilemma is not None:
+            live.choose(live.dilemma.options[0].key)
+        else:
+            live.step()
+
+
+def test_the_coach_hooks_a_poor_hero_short_of_confidence():
+    home, away = make_club(1, 12, 1), make_club(2, 12, 2)
+    me = min((p for p in home.players if p.position == Position.WING), key=lambda p: p.overall)
+    live = LiveMatch(
+        home, away, rng=random.Random(3), hero=me.id, hero_entry=2,
+        hero_confidence=-0.6, hero_trust=80.0,
+    )  # fmt: skip
+    side = live.hero_side()
+    _to_minute(live, 38)
+    assert side.slot_of(me.id) is not None and side.slot_of(me.id).present(live.minute)
+    side.ratings[me.id] = 3.0
+    _to_minute(live, 42)
+    assert live.hero_hooked and not side.slot_of(me.id).present(live.minute)
+
+
+def test_a_benched_hero_does_not_always_come_on():
+    home, away = make_club(1, 12, 1), make_club(2, 12, 2)
+    me = min((p for p in home.players if p.position == Position.WING), key=lambda p: p.overall)
+    live = LiveMatch(home, away, rng=random.Random(3), hero=me.id, hero_entry_chance=0.0)
+    live.advance_to_hero()
+    assert live.hero_entry is None and live.hero_side().slot_of(me.id) is None
 
 
 def test_a_rested_starter_begins_on_the_bench_as_announced(client, monkeypatch):
@@ -480,7 +552,7 @@ def test_a_rested_starter_begins_on_the_bench_as_announced(client, monkeypatch):
     monkeypatch.setattr(rules, "REST_MAX", 1.0)
     _start(client)
     session = _db(client)
-    session.scalars(select(HeroRow)).first().trust = 90
+    session.scalars(select(HeroRow)).first().trust = 80
     session.commit()
     hero = client.get("/hero").json()
     assert hero["status"] == "bench" and hero["first_choice"]
@@ -542,7 +614,7 @@ def test_an_injured_hero_can_play_hurt(client):
 def test_simulated_days_follow_one_another_with_the_hero(client):
     _start(client)
     session = _db(client)
-    session.scalars(select(HeroRow)).first().trust = 90  # titulaire
+    session.scalars(select(HeroRow)).first().trust = 80  # titulaire
     session.commit()
     before = client.get("/hero").json()
     days = []
@@ -564,7 +636,7 @@ def test_simulated_days_follow_one_another_with_the_hero(client):
 def test_handing_over_at_half_time_earns_half_the_experience(client):
     _start(client)
     session = _db(client)
-    session.scalars(select(HeroRow)).first().trust = 90  # titulaire
+    session.scalars(select(HeroRow)).first().trust = 80  # titulaire
     session.commit()
     live = client.post("/live").json()
     while live["minute"] < 40:
@@ -626,6 +698,28 @@ def test_bigger_clubs_wait_for_a_better_player():
     assert hero_market.wage(50_000, 2, star) > hero_market.wage(50_000, 2, none)
 
 
+def test_the_hero_can_apply_to_any_club_within_reach(client):
+    _start(client, club_id=3)
+    assert client.post("/hero/offers/apply", json={"club_id": 1}).status_code == 400
+    while client.get("/seasons/current").json()["phase"] != "finished":
+        assert client.post("/seasons/current/play").status_code == 200
+    market = client.get("/hero/offers").json()
+    assert sum(o["kind"] == "transfer" for o in market["offers"]) <= 3  # les trois meilleures
+    clubs = market["clubs"]
+    assert clubs and all(c["club"]["id"] != 3 for c in clubs)  # tous, sauf le sien
+    assert [c["level"] for c in clubs] == sorted((c["level"] for c in clubs), reverse=True)
+    closed = [c for c in clubs if not c["open"]]
+    if closed:
+        refused = client.post("/hero/offers/apply", json={"club_id": closed[0]["club"]["id"]})
+        assert refused.status_code == 400 and closed[0]["net_wage"] is None
+    smallest = clubs[-1]  # plus modeste que le sien : toujours ouvert
+    assert smallest["open"]
+    after = client.post("/hero/offers/apply", json={"club_id": smallest["club"]["id"]}).json()
+    assert [c["chosen"] for c in after["clubs"]].count(True) == 1
+    assert client.post("/seasons/next").status_code == 201
+    assert client.get("/hero").json()["club"]["id"] == smallest["club"]["id"]
+
+
 def test_the_end_of_season_mercato_moves_the_hero(client):
     _start(client, club_id=3)
     assert client.get("/hero/offers").json()["offers"] == []  # pas avant la fin
@@ -655,6 +749,9 @@ def test_the_end_of_season_mercato_moves_the_hero(client):
 def test_a_season_then_retirement_and_a_coaching_career(client):
     _start(client, club_id=3)
     assert client.post("/hero/retire").status_code == 400  # pas en cours de saison
+    session = _db(client)
+    session.scalars(select(HeroRow)).first().trust = 80  # titulaire : il joue
+    session.commit()
     first, _ = _play_live(client)
     career = client.get("/hero/career").json()
     assert career["matches"] == 1 and career["seasons"][0]["clubs"][0]["id"] == 3

@@ -532,6 +532,16 @@ def _play_day(session: Session, season: SeasonRow, day: datetime.date) -> DayRes
     away = internationals.absentees_on(session, season, day)
     for club in clubs.values():
         internationals.rules.release(club, away, day)
+    # Carrière de joueur : l'entraîneur de son club décide de sa place, comme au coup
+    # d'envoi d'un direct (titulaire, sur le banc, ou hors du groupe).
+    hero_row = heroes.hero(session)
+    if hero_row is not None and my_club_id in clubs:
+        fixture = next((m for m in todays if my_club_id in (m.home_club_id, m.away_club_id)), None)
+        team = clubs[my_club_id]
+        if fixture is not None and any(p.id == hero_row.player_id for p in team.players):
+            call = heroes.lineup_call(session, season, team, hero_row.player_id, hero_row.trust, fixture)
+            heroes.apply_call(team, hero_row.player_id, call)
+            team.forced_starters |= forced_starters(session, my_club_id)
     human = internationals.selector(session)
     watched = _selector_list(session, season, human) if human is not None else set()
 

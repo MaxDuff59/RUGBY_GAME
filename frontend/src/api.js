@@ -142,6 +142,7 @@ export const api = {
   getHeroCareer: () => request("/hero/career"),
   getHeroOffers: () => request("/hero/offers"),
   chooseHeroOffer: (index) => post("/hero/offers/choose", { index }),
+  applyHeroClub: (clubId) => post("/hero/offers/apply", { club_id: clubId }),
   setHeroAgent: (agent) => post("/hero/agent", { agent }),
   retireHero: () => post("/hero/retire"),
 

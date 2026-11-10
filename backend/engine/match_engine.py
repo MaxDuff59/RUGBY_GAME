@@ -69,6 +69,7 @@ from itertools import accumulate
 
 from engine import crowd as crowds
 from engine import dilemmas, momentum, regulations, team_talk
+from engine import hero as hero_rules
 from engine.coaching import Coaching
 from engine.coaching import coaching as coaching_of
 from engine.crowd import Crowd
@@ -418,6 +419,9 @@ SHORT_HANDED_EFFORT = 0.25
 # Le staff (IA) fait entrer un remplaçant à ces minutes, en gardant un
 # changement en réserve pour une blessure.
 AI_SUBSTITUTION_MINUTES = (50, 56, 62, 68, 74)
+# Minutes où l'entraîneur peut sortir le joueur incarné pour un mauvais match : à la
+# pause, puis avec les changements.
+HOOK_MINUTES = (41, *AI_SUBSTITUTION_MINUTES)
 AI_SUBSTITUTIONS_KEPT = 1
 # Il ne remplace pas un joueur entré depuis moins de 25 minutes.
 AI_MIN_MINUTES_ON_FIELD = 25
@@ -1208,9 +1212,11 @@ class LiveMatch:
         crowd: Crowd | None = None,
         derby: bool = False,
         hero: int | None = None,
-        hero_entry: int = dilemmas.HERO_ENTRY_MINUTE,
+        hero_entry: int | None = dilemmas.HERO_ENTRY_MINUTE,
         hero_confidence: float = 0.0,
         hero_hurt: bool = False,
+        hero_trust: float = 50.0,
+        hero_entry_chance: float = 1.0,
         final: bool = False,
         coach: int | None = None,
     ) -> None:
@@ -1240,9 +1246,14 @@ class LiveMatch:
         # Carrière de joueur (engine/dilemmas.py) : le joueur incarné, le dilemme qui
         # l'attend, et comment se sont finis les précédents.
         self.hero = hero
-        self.hero_entry = hero_entry  # minute où il entre s'il est sur le banc
+        # Minute où il entre s'il est sur le banc ; None : l'entraîneur ne le fait pas
+        # entrer (tiré à cette minute, selon `hero_entry_chance`).
+        self.hero_entry = hero_entry
+        self.hero_entry_chance = hero_entry_chance
         self.hero_confidence = hero_confidence  # de -1 à 1 (engine/dilemmas.py)
         self.hero_hurt = hero_hurt  # joue blessé
+        self.hero_trust = hero_trust  # confiance de l'entraîneur, sur 100 (engine/hero.py)
+        self.hero_hooked = False  # sorti par l'entraîneur pour un mauvais match
         self.final = final
         self.coach = coach  # le club dont le manager tranche des dilemmes pour ses joueurs
         self.dilemma: dilemmas.Dilemma | None = None
@@ -1534,6 +1545,8 @@ class LiveMatch:
                     self.events.append(event)
         if self.hero is not None and minute == self.hero_entry:
             self._hero_enters(minute)
+        if self.hero is not None and minute in HOOK_MINUTES:
+            self._hook_hero(minute)
 
         home_ratings = self.home.collective(minute)
         away_ratings = self.away.collective(minute)
@@ -1876,9 +1889,12 @@ class LiveMatch:
 
     def _hero_enters(self, minute: int) -> None:
         """Le joueur incarné, resté sur le banc, entre à son poste à l'heure de jeu, à la
-        place du plus fatigué."""
+        place du plus fatigué, si l'entraîneur le décide (`hero_entry_chance`)."""
         side = self.hero_side()
         if side is None or side.club.id not in self.auto or side.substitutions_left() <= 0:
+            return
+        if side.slot_of(self.hero) is None and self.rng.random() >= self.hero_entry_chance:
+            self.hero_entry = None  # il reste sur le banc
             return
         hero = next((p for p in side.available_bench() if p.id == self.hero), None)
         if hero is None:
@@ -1888,6 +1904,29 @@ class LiveMatch:
             return
         tired = min(slots, key=lambda s: side.energy(s.player))
         self.events.append(side.substitute(tired.player.id, hero.id, minute))
+
+    def _hook_hero(self, minute: int) -> None:
+        """Très mauvais et en manque de confiance (engine/hero.py, `hooked`) : le staff
+        le sort, pour le meilleur remplaçant de son poste (à défaut, le meilleur)."""
+        found = self._hero_slot(minute)
+        if found is None or self.dilemma is not None:
+            return
+        side, slot = found
+        if side.club.id not in self.auto or side.substitutions_left() <= 0:
+            return
+        rating = side.ratings.get(self.hero, RATING_START)
+        if not hero_rules.hooked(minute, rating, self.hero_confidence, self.hero_trust):
+            return
+        bench = side.available_bench()
+        same = [p for p in bench if p.position == slot.position]
+        if not bench:
+            return
+        incoming = max(
+            same or bench,
+            key=lambda p: RATING_FOR_POSITION[slot.position](p) if same else p.overall,
+        )
+        self.events.append(side.substitute(self.hero, incoming.id, minute))
+        self.hero_hooked = True
 
     def _hero_slot(self, minute: int) -> tuple[Side, Slot] | None:
         side = self.hero_side()
@@ -1975,12 +2014,13 @@ class LiveMatch:
 
     def advance_to_hero(self) -> list[MatchEvent]:
         """Joue jusqu'à l'entrée en jeu du joueur incarné resté sur le banc (ou jusqu'à
-        ce que le match s'arrête : un dilemme, un choix crucial, la fin)."""
+        ce que le match s'arrête : un dilemme, un choix crucial, la fin, ou que
+        l'entraîneur décide de ne pas le faire entrer)."""
         before = len(self.events)
         side = self.hero_side()
         while not self.finished and self.crunch is None and self.dilemma is None:
             waiting = side is not None and any(p.id == self.hero for p in side.available_bench())
-            if not waiting:
+            if not waiting or self.hero_entry is None:  # l'entraîneur ne le fait pas entrer
                 break
             self.step()
         return self.events[before:]
@@ -2283,6 +2323,9 @@ class LiveMatch:
             "hero_entry": self.hero_entry,
             "hero_confidence": self.hero_confidence,
             "hero_hurt": self.hero_hurt,
+            "hero_trust": self.hero_trust,
+            "hero_entry_chance": self.hero_entry_chance,
+            "hero_hooked": self.hero_hooked,
             "final": self.final,
             "coach": self.coach,
             "dilemma": self.dilemma.to_dict() if self.dilemma else None,
@@ -2328,6 +2371,9 @@ class LiveMatch:
         live.hero_entry = state.get("hero_entry", dilemmas.HERO_ENTRY_MINUTE)
         live.hero_confidence = state.get("hero_confidence", 0.0)
         live.hero_hurt = state.get("hero_hurt", False)
+        live.hero_trust = state.get("hero_trust", 50.0)
+        live.hero_entry_chance = state.get("hero_entry_chance", 1.0)
+        live.hero_hooked = state.get("hero_hooked", False)
         live.final = state.get("final", False)
         live.coach = state.get("coach")
         dilemma = state.get("dilemma")

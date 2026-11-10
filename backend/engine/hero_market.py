@@ -8,6 +8,10 @@ prêté une saison à un club plus modeste (`loan_clubs`) pour jouer davantage ;
 revient à l'intersaison suivante. Son club lui propose toujours de prolonger, à un
 salaire qui suit sa valeur.
 
+On lui montre au plus les `BEST_OFFERS` meilleures offres. Il peut aussi se proposer à
+n'importe quel club dont le XV ne dépasse pas sa portée (`open_to`), même un petit club
+qui ne l'aurait pas appelé.
+
 Un agent (`AGENTS`) lui obtient plus d'offres, de plus grands clubs et de meilleurs
 salaires, contre une commission.
 
@@ -21,7 +25,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Agent:
-    offers: int  # offres de plus
+    offers: int  # clubs plus nombreux à appeler
     reach: float  # portée de plus (points de niveau)
     wage: float  # salaire obtenu, en multiple
     commission: float  # part du salaire qu'il prend
@@ -41,7 +45,7 @@ VALUE_MIN_MATCHES = 5
 REACH = 1.0
 FLOOR = 2.0
 OFFER_CHANCE = 0.45
-BASE_OFFERS = 2
+BEST_OFFERS = 3
 # Prêt : s'il a joué moins de cette part des minutes de son club, vers un des LOAN_POOL
 # clubs les plus modestes ; au plus LOAN_OFFERS.
 LOAN_MINUTES_SHARE = 0.35
@@ -60,6 +64,17 @@ def value(overall: float, average: float | None, matches: int) -> float:
     return overall + VALUE_PER_RATING * (average - 6.0)
 
 
+def ceiling(worth: float, agent: Agent) -> float:
+    """Le niveau de XV le plus haut qui peut le prendre."""
+    return worth + REACH + agent.reach
+
+
+def open_to(level: float, worth: float, agent: Agent, home: float) -> bool:
+    """Ce club peut-il le prendre ? Tout club à sa portée, si modeste soit-il, et tout
+    club pas plus fort que le sien (`home`, le niveau de son XV)."""
+    return level <= max(home, ceiling(worth, agent))
+
+
 def transfer_clubs(
     worth: float,
     current: int,
@@ -68,18 +83,19 @@ def transfer_clubs(
     agent: Agent,
     rng: random.Random,
 ) -> list[int]:
-    """Les clubs qui lui font une offre de transfert, du plus prestigieux au moins."""
-    ceiling = worth + REACH + agent.reach
+    """Les clubs qui lui font une offre de transfert, du plus prestigieux au moins : les
+    `BEST_OFFERS` meilleures."""
+    top = ceiling(worth, agent)
     within = sorted(
         (
             cid
             for cid, level in levels.items()
-            if cid != current and worth - FLOOR <= level <= ceiling
+            if cid != current and worth - FLOOR <= level <= top
         ),
         key=lambda cid: (-prestige[cid], cid),
     )
     chance = min(1.0, OFFER_CHANCE * (1 + 0.5 * agent.offers))
-    return [cid for cid in within if rng.random() < chance][: BASE_OFFERS + agent.offers]
+    return [cid for cid in within if rng.random() < chance][:BEST_OFFERS]
 
 
 def loan_clubs(

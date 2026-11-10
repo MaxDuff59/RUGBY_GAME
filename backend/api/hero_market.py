@@ -1,8 +1,10 @@
 """Carrière de joueur : le mercato de fin de saison (engine/hero_market.py).
 
 Une fois la saison de son championnat finie, le joueur reçoit des offres : prolonger
-dans son club, partir dans un club à sa portée, ou être prêté s'il a peu joué. Elles se
-calculent une fois par saison et par agent, puis restent (`HeroRow.offers`). Le choix
+dans son club, partir dans un club à sa portée (les trois meilleures offres), ou être
+prêté s'il a peu joué. Il voit aussi tous les clubs du jeu et peut se proposer à ceux qui
+sont à sa portée, même modestes. Elles se calculent une fois par saison et par agent,
+puis restent (`HeroRow.offers`), avec sa valeur et le marché de ce jour. Le choix
 (`HeroRow.choice`) s'applique à l'intersaison, après la fin des prêts
 (api/hero.py, `apply_choice`).
 """
@@ -18,7 +20,7 @@ from api import hero as heroes
 from api.deps import load_club
 from api.ledger import current_season
 from api.routers.seasons import _phase, focus_league
-from api.schemas import ClubRef, HeroOfferOut, HeroOffersOut
+from api.schemas import ClubRef, HeroClubOut, HeroOfferOut, HeroOffersOut
 from data.leagues import league_config
 from engine import hero_market as rules
 from engine.economy import wage_for
@@ -46,13 +48,19 @@ def _role(session: Session, club_id: int, player) -> str:
 
 def offers(session: Session) -> list[dict]:
     """Les offres de la fin de saison, calculées une fois par saison et par agent."""
+    return _market(session).get("list", [])
+
+
+def _market(session: Session) -> dict:
+    """Les offres, sa valeur et le niveau de chaque club, calculés une fois par saison et
+    par agent (vide avant la fin de la saison)."""
     row = heroes.hero(session)
     season = current_season(session)
     if not season_finished(session):
-        return []
+        return {}
     cached = row.offers or {}
-    if cached.get("year") == season.year and cached.get("agent") == row.agent:
-        return cached["list"]
+    if cached.get("year") == season.year and cached.get("agent") == row.agent and "worth" in cached:
+        return cached
     player_row = session.get(PlayerRow, row.player_id)
     player = player_row.to_domain()
     current = player.club_id
@@ -90,18 +98,68 @@ def offers(session: Session) -> list[dict]:
     for offer in found:
         offer["role"] = _role(session, offer["club_id"], player)
         offer["level"] = round(levels[offer["club_id"]], 1)
-    row.offers = {"year": season.year, "agent": row.agent, "list": found}
-    return found
+    row.offers = {
+        "year": season.year,
+        "agent": row.agent,
+        "list": found,
+        "worth": worth,
+        "base": base,
+        "current": current,
+        # Clés en texte : la colonne est du JSON.
+        "levels": {str(cid): round(level, 2) for cid, level in levels.items()},
+        "prestige": {str(cid): round(p, 2) for cid, p in prestige.items()},
+    }
+    return row.offers
+
+
+def _application(cached: dict, club_id: int, agent) -> dict:
+    """Ce qu'il obtient en se proposant à ce club : l'offre qu'il a déjà, sinon un
+    transfert au salaire du marché."""
+    found = next(
+        (o for o in cached["list"] if o["kind"] == "transfer" and o["club_id"] == club_id), None
+    )
+    if found:
+        return found
+    gap = cached["prestige"][str(club_id)] - cached["prestige"][str(cached["current"])]
+    return {
+        "kind": "transfer",
+        "club_id": club_id,
+        "wage": rules.wage(cached["base"], gap, agent),
+        "years": rules.TRANSFER_YEARS[0],
+        "level": cached["levels"][str(club_id)],
+    }
 
 
 def offers_out(session: Session) -> HeroOffersOut:
     row = heroes.hero(session)
     player = session.get(PlayerRow, row.player_id)
-    found = offers(session)
-    ids = [offer["club_id"] for offer in found]
-    clubs = {club.id: club for club in session.scalars(select(ClubRow).where(ClubRow.id.in_(ids)))}
+    cached = _market(session)
+    found = cached.get("list", [])
+    clubs = {club.id: club for club in session.scalars(select(ClubRow))}
     agent = rules.AGENTS[row.agent]
     chosen = row.choice or {}
+
+    home = cached.get("levels", {}).get(str(cached.get("current")), 0.0)
+
+    def club_line(club_id: str, level: float) -> HeroClubOut:
+        cid = int(club_id)
+        reachable = rules.open_to(level, cached["worth"], agent, home)
+        wage = _application(cached, cid, agent)["wage"] if reachable else None
+        return HeroClubOut(
+            club=ClubRef(id=cid, name=clubs[cid].name),
+            league_name=league_config(clubs[cid].league).short_name,
+            level=round(level, 1),
+            open=reachable,
+            net_wage=round(wage * (1 - agent.commission)) if wage else None,
+            chosen=chosen.get("kind") == "transfer" and chosen.get("club_id") == cid,
+        )
+
+    others = [
+        club_line(cid, level)
+        for cid, level in cached.get("levels", {}).items()
+        if int(cid) != cached["current"] and int(cid) in clubs
+    ]
+    others.sort(key=lambda c: (-c.level, c.club.name))
     return HeroOffersOut(
         open=season_finished(session),
         wage=player.wage,
@@ -123,6 +181,7 @@ def offers_out(session: Session) -> HeroOffersOut:
             )
             for index, offer in enumerate(found)
         ],
+        clubs=others,
     )
 
 
@@ -138,6 +197,25 @@ def choose(session: Session, index: int | None) -> None:
     if not 0 <= index < len(found):
         raise HTTPException(status_code=404, detail="Offre inconnue")
     row.choice = dict(found[index])
+
+
+def apply_to(session: Session, club_id: int) -> None:
+    """Il se propose à un club de son choix : accepté s'il est à sa portée."""
+    cached = _market(session)
+    if not cached:
+        raise HTTPException(status_code=400, detail="Le mercato ouvre à la fin de la saison")
+    level = cached["levels"].get(str(club_id))
+    if level is None or club_id == cached["current"]:
+        raise HTTPException(status_code=404, detail="Club inconnu")
+    row = heroes.hero(session)
+    agent = rules.AGENTS[row.agent]
+    home = cached["levels"][str(cached["current"])]
+    if not rules.open_to(level, cached["worth"], agent, home):
+        raise HTTPException(status_code=400, detail="Ce club vise plus haut que ton niveau")
+    choice = dict(_application(cached, club_id, agent))
+    player = session.get(PlayerRow, row.player_id).to_domain()
+    choice.setdefault("role", _role(session, club_id, player))
+    row.choice = choice
 
 
 def set_agent(session: Session, agent: str) -> None:

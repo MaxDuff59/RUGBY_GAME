@@ -24,6 +24,15 @@ Jamais en phase finale : les meilleurs jouent. La forme compte aussi : le meille
 son poste sur le papier perd sa place quand la confiance de l'entraîneur tombe sous
 `TRUST_KEEP_PLACE`, et souffle plus souvent tant qu'elle reste sous `TRUST_START`.
 
+Remplaçant, il n'est pas toujours du groupe (`squad_chance`) : un jeune derrière les
+titulaires joue de temps en temps, plus souvent quand l'entraîneur lui fait confiance.
+Sur le banc, il n'entre pas toujours non plus (`entry_chance`). Une star
+(`TRUST_STAR`) est parfois laissée au repos, en déplacement ou contre un adversaire
+plus faible (`STAR_REST`) : ce jour-là, il ne joue pas.
+
+En match, très mauvais et en manque de confiance (ou sans celle de l'entraîneur),
+il est sorti (`hooked`).
+
 En sélection, le staff de son pays retient les meilleurs à chaque poste
 (engine/internationals.py) : ses chances (`call_up_chance`) suivent l'écart entre sa
 note au poste et celle du dernier retenu, d'ici l'annonce de la prochaine liste.
@@ -86,6 +95,25 @@ ROTATION_START = 0.35
 TRUST_KEEP_PLACE = 50.0
 REST_DOUBT = 0.12
 
+# Groupe du jour, pour un remplaçant : SQUAD_BASE, plus SQUAD_PER_TRUST à confiance
+# pleine, moins SQUAD_PER_RIVAL par joueur de plus devant lui ; borné.
+SQUAD_BASE = 0.2
+SQUAD_PER_TRUST = 0.75
+SQUAD_PER_RIVAL = 0.15
+SQUAD_BOUNDS = (0.1, 0.95)
+# Sur le banc : ses chances d'entrer, selon la confiance de l'entraîneur.
+ENTRY_CHANCE_BY_TRUST = ((TRUST_START, 0.95), (50.0, 0.8), (30.0, 0.6), (0.0, 0.4))
+# Star : au-delà de TRUST_STAR, STAR_REST de risque en plus d'être laissé au repos en
+# déplacement, autant contre un adversaire dont le XV a WEAK_GAP points de moins.
+TRUST_STAR = 85.0
+STAR_REST = 0.07
+WEAK_GAP = 1.0
+# Sortie en match : à partir de HOOK_FROM, note sous HOOK_RATING, et en manque de
+# confiance (HOOK_CONFIDENCE) ou sans celle de l'entraîneur (TRUST_KEEP_PLACE).
+HOOK_FROM = 41
+HOOK_RATING = 4.5
+HOOK_CONFIDENCE = -0.3
+
 # Jouer blessé : risque d'aggraver la blessure, de 1 à 3 semaines.
 AGGRAVATION_CHANCE = 0.4
 AGGRAVATION_WEEKS = (1, 3)
@@ -145,20 +173,56 @@ def next_trust(trust: float, rating: float | None, carded: bool, risky_failures:
     return round(clamp(value, 0.0, 100.0), 1)
 
 
+def star_rest(trust: float, away: bool, weaker: bool, knockout: bool) -> float:
+    """Le risque qu'une star soit laissée au repos : en déplacement, contre plus faible."""
+    if knockout or trust < TRUST_STAR:
+        return 0.0
+    return STAR_REST * (away + weaker)
+
+
 def start_chance(
-    first_choice: bool, trust: float, freshness: float, behind: int, knockout: bool
+    first_choice: bool,
+    trust: float,
+    freshness: float,
+    behind: int,
+    knockout: bool,
+    rest: float = 0.0,
 ) -> float:
     """Ses chances d'être titulaire au prochain match, de 0 à 1. `first_choice` : il
     l'est d'office (confiance de l'entraîneur, ou le meilleur à son poste tant qu'elle
     reste au-dessus de `TRUST_KEEP_PLACE`) ; sinon,
-    `behind` joueurs de plus que les places de titulaires sont devant lui."""
+    `behind` joueurs de plus que les places de titulaires sont devant lui. `rest` : le
+    risque d'une star d'être laissée au repos (`star_rest`)."""
     if knockout:
         return 1.0 if first_choice else 0.0
     if first_choice:
         tired = REST_PER_FATIGUE * max(0.0, FRESHNESS_FULL - freshness)
         doubt = REST_DOUBT if trust < TRUST_START else 0.0
-        return round(1 - clamp(REST_FLOOR + tired + doubt, REST_FLOOR, REST_MAX), 2)
+        return round(1 - clamp(REST_FLOOR + tired + doubt + rest, REST_FLOOR, REST_MAX), 2)
     return round(ROTATION_START * trust / 100 / max(1, behind), 2)
+
+
+def squad_chance(trust: float, behind: int, knockout: bool) -> float:
+    """Remplaçant (pas premier choix) : ses chances d'être du groupe du jour."""
+    if knockout:
+        return 1.0
+    value = SQUAD_BASE + SQUAD_PER_TRUST * trust / 100 - SQUAD_PER_RIVAL * max(0, behind - 1)
+    return round(clamp(value, *SQUAD_BOUNDS), 2)
+
+
+def entry_chance(trust: float) -> float:
+    """Sur le banc : ses chances que l'entraîneur le fasse entrer."""
+    return next(chance for floor, chance in ENTRY_CHANCE_BY_TRUST if trust >= floor)
+
+
+def hooked(minute: int, rating: float, confidence: float, trust: float) -> bool:
+    """L'entraîneur le sort-il ? Très mauvais, et en manque de confiance ou sans la
+    sienne."""
+    return (
+        minute >= HOOK_FROM
+        and rating < HOOK_RATING
+        and (confidence <= HOOK_CONFIDENCE or trust < TRUST_KEEP_PLACE)
+    )
 
 
 # Sélection : d'ici l'annonce de la liste, tout peut bouger (progression, forme,

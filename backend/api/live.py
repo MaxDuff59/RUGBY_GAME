@@ -270,6 +270,7 @@ def _hero_out(live: LiveMatch) -> LiveHeroOut | None:
         entry=live.hero_entry,
         confidence=round(live.hero_confidence, 2),
         hurt=live.hero_hurt,
+        hooked=live.hero_hooked,
         leadership=round(20 * leadership(side.players()[live.hero]), 1),
         speaks=live.hero_speaks(),
     )

@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import delete, func, select
 
 from api import hero as heroes
-from api import hero_market, plans
+from api import hero_market, internationals, plans
 from api.auth import UserDep
 from api.deps import SessionDep, load_club
 from api.ledger import current_season, game_date
@@ -30,6 +30,7 @@ from api.schemas import (
     CareerOut,
     HeroAgentIn,
     HeroCareerOut,
+    HeroApplyIn,
     HeroChoiceIn,
     HeroHurtIn,
     HeroIn,
@@ -160,8 +161,8 @@ def get_social(session: SessionDep) -> SocialOut:
 
 
 def _plays_next(session, season, row: HeroRow) -> bool:
-    """Son club joue la prochaine journée, avant tout match en sélection, et il est apte
-    (ou a choisi de jouer blessé) : son match se joue avec lui."""
+    """Son club joue la prochaine journée, avant tout match en sélection, il est apte (ou
+    a choisi de jouer blessé) et du groupe du jour : son match se joue avec lui."""
     _prepare_day(session, season)
     fixture = next_fixture(session, season)
     if fixture is None:
@@ -175,7 +176,12 @@ def _plays_next(session, season, row: HeroRow) -> bool:
         return False
     if me.is_injured(game_date(session)):
         return row.play_hurt
-    return not me.is_suspended
+    if me.is_suspended:
+        return False
+    # Hors du groupe du jour (pas retenu, ou laissé au repos) : la journée se joue sans lui.
+    away = internationals.absentees_on(session, season, fixture.date)
+    internationals.rules.release(club, away, fixture.date)
+    return heroes.lineup_call(session, season, club, row.player_id, row.trust, fixture).squad
 
 
 @router.post("/simulate", response_model=PlayOut)
@@ -219,6 +225,16 @@ def choose_offer(payload: HeroChoiceIn, session: SessionDep) -> HeroOffersOut:
     """Choisit une offre, appliquée à l'intersaison (`index` à None : ne rien changer)."""
     _hero_or_404(session)
     hero_market.choose(session, payload.index)
+    session.commit()
+    return hero_market.offers_out(session)
+
+
+@router.post("/offers/apply", response_model=HeroOffersOut)
+def apply_to_club(payload: HeroApplyIn, session: SessionDep) -> HeroOffersOut:
+    """Il se propose à un club de son choix, s'il est à sa portée (appliqué à
+    l'intersaison, comme une offre)."""
+    _hero_or_404(session)
+    hero_market.apply_to(session, payload.club_id)
     session.commit()
     return hero_market.offers_out(session)
 

@@ -20,6 +20,8 @@ Un manager ou un sélectionneur a aussi les siens, plus rares, pour un joueur de
 XV (`dilemma.player_id`), par la même route.
 """
 
+import dataclasses
+
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
@@ -222,8 +224,9 @@ def start_live(session: SessionDep) -> LiveOut:
             me.injury, hurt = None, True
             hero_row.hurt_match_id, hero_row.play_hurt = match_row.id, False
         call = heroes.lineup_call(session, season, team, hero, hero_row.trust, match_row)
-        team.forced_starters = {hero} if call.starts else set()
-        team.rested = set() if call.starts else {hero}
+        if hurt:  # il a choisi de jouer diminué : l'entraîneur le prend dans le groupe
+            call = dataclasses.replace(call, squad=True, rested=False)
+        heroes.apply_call(team, hero, call)
         mine_tactics = staff_tactics(team_strength(team, day, forms[my_club_id]))
     else:
         mine_tactics = Tactics()
@@ -256,6 +259,8 @@ def start_live(session: SessionDep) -> LiveOut:
         hero_entry=hero_rules.entry_minute(hero_row.trust) if hero_row else HERO_ENTRY_MINUTE,
         hero_confidence=hero_row.confidence if hero_row else 0.0,
         hero_hurt=hurt,
+        hero_trust=hero_row.trust if hero_row else 50.0,
+        hero_entry_chance=call.entry_chance if hero is not None else 1.0,
         final=stage == Stage.FINAL,
         # Le manager tranche des dilemmes pour ses joueurs ; en carrière de joueur, le
         # joueur incarné tranche les siens.

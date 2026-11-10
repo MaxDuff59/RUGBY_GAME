@@ -384,6 +384,9 @@ class Club:
     # Laissés sur le banc pour souffler (rotation du joueur incarné, api/hero.py) : non
     # stocké, posé par l'API.
     rested: set[int] = field(default_factory=set)
+    # Hors du groupe du jour (le joueur incarné non retenu ou laissé au repos,
+    # api/hero.py) : non stocké, posé par l'API.
+    left_out: set[int] = field(default_factory=set)
     # XV choisi par le manager, place par place (None : place laissée au staff) ; vide
     # pour les clubs de l'IA. Voir select_lineup.
     lineup_choice: list[int | None] = field(default_factory=list)
@@ -404,7 +407,8 @@ class Club:
     def available_players(self, day: datetime.date | None) -> list[Player]:
         """Joueurs aptes à jouer à cette date : ni blessés, ni suspendus, ni retenus en
         sélection ; un jour de doublon, les espoirs appelés en renfort en sont."""
-        squad = [p for p in self.players if p.id not in self.called_up] + self.cover
+        out = self.called_up | self.left_out
+        squad = [p for p in self.players if p.id not in out] + self.cover
         return [p for p in squad if not p.is_injured(day) and not p.is_suspended]
 
     def staff_level(self, role: StaffRole) -> int:

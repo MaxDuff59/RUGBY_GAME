@@ -48,6 +48,7 @@ from engine.match_engine import (
     RATING_FOR_POSITION,
     leadership,
     select_lineup,
+    team_strength,
 )
 from engine.season import champion
 from models import (
@@ -274,9 +275,21 @@ class LineupCall:
     """Ce que décide l'entraîneur pour le prochain match du joueur incarné."""
 
     chance: float  # ses chances d'être titulaire, de 0 à 1 (engine/hero.py)
-    starts: bool  # titulaire (sinon sur le banc)
+    starts: bool  # titulaire
     first_choice: bool  # titulaire d'office : s'il ne l'est pas, il souffle
     dropped: bool  # le meilleur à son poste, mis sur le banc après ses mauvais matchs
+    squad: bool = True  # du groupe du jour (titulaire ou sur le banc)
+    rested: bool = False  # star laissée au repos : il ne joue pas ce match
+    entry_chance: float = 1.0  # sur le banc, ses chances d'entrer
+
+    @property
+    def status(self) -> str:
+        return "starter" if self.starts else "bench" if self.squad else "out"
+
+
+def _level(club: Club, day: datetime.date) -> float:
+    team = team_strength(club, day)
+    return (team.set_piece + team.pack + team.attack + team.defense) / 4
 
 
 def lineup_call(
@@ -287,30 +300,53 @@ def lineup_call(
     trust: float,
     fixture: MatchRow | None,
 ) -> LineupCall:
-    """Titulaire ou remplaçant au match `fixture` de son club (None : aucun en vue, il
-    est titulaire s'il l'est d'office). Le tirage tient au match : la fiche annonce ce
-    que fera le coup d'envoi (api/routers/live.py)."""
+    """Titulaire, remplaçant ou hors du groupe au match `fixture` de son club (None :
+    aucun en vue, il est titulaire s'il l'est d'office). Le tirage tient au match : la
+    fiche annonce ce que fera le coup d'envoi (api/routers/live.py)."""
     day = fixture.date if fixture is not None else game_date(session)
     me = next(p for p in club.players if p.id == player_id)
-    club.forced_starters, club.rested = set(), set()
+    club.forced_starters, club.rested, club.left_out = set(), set(), set()
     best = any(p.id == player_id for p in select_lineup(club, day))
     dropped = best and trust < rules.TRUST_KEEP_PLACE
     first_choice = trust >= rules.TRUST_START or (best and not dropped)
     rating = RATING_FOR_POSITION[me.position]
     ahead = sum(1 for p in club.players if p.position == me.position and rating(p) > rating(me))
     behind = ahead + 1 - FORMATION[Position(me.position)]
+    knockout = fixture is not None and Stage(fixture.stage).is_playoff
+    rest = 0.0
+    if fixture is not None and first_choice and trust >= rules.TRUST_STAR and not knockout:
+        away = fixture.away_club_id == club.id and not fixture.neutral
+        other = fixture.home_club_id if away else fixture.away_club_id
+        weaker = _level(load_club(session, other), day) <= _level(club, day) - rules.WEAK_GAP
+        rest = rules.star_rest(trust, away, weaker, knockout)
     chance = rules.start_chance(
         first_choice,
         trust,
         _freshness(session, season, club, player_id, day),
         behind,
-        fixture is not None and Stage(fixture.stage).is_playoff,
+        knockout,
+        rest,
     )
+    entry = rules.entry_chance(trust)
     if fixture is None:
-        starts = first_choice
+        return LineupCall(chance, first_choice, first_choice, dropped, entry_chance=entry)
+    draw = random.Random(f"rotation:{fixture.id}:{player_id}").random()
+    starts = draw < chance
+    rested = not starts and draw < chance + rest  # la part du repos d'une star
+    if starts or first_choice or best:
+        squad = not rested
     else:
-        starts = random.Random(f"rotation:{fixture.id}:{player_id}").random() < chance
-    return LineupCall(chance=chance, starts=starts, first_choice=first_choice, dropped=dropped)
+        squad_draw = random.Random(f"squad:{fixture.id}:{player_id}").random()
+        squad = squad_draw < rules.squad_chance(trust, behind, knockout)
+    return LineupCall(chance, starts, first_choice, dropped, squad, rested, entry)
+
+
+def apply_call(club: Club, player_id: int, call: LineupCall) -> None:
+    """Pose sur son club ce qu'a décidé l'entraîneur : titulaire, sur le banc (il passe
+    derrière à son poste), ou hors du groupe du jour."""
+    club.forced_starters = {player_id} if call.starts else set()
+    club.rested = set() if call.starts else {player_id}
+    club.left_out = set() if call.squad else {player_id}
 
 
 def _freshness(
@@ -382,7 +418,7 @@ def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
     ]
     club_ref = league_name = None
     status, rank, at_position, injury_weeks = "retired", 1, 1, 0
-    first_choice = dropped = False
+    first_choice = dropped = rested = False
     matches: list[HeroMatchOut] = []
     if player.club_id is not None:
         # api/routers/seasons.py importe ce module : son prochain match se lit ici.
@@ -405,7 +441,7 @@ def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
                 away = internationals.absentees_on(session, season, fixture.date)
                 internationals.rules.release(club, away, fixture.date)
             call = lineup_call(session, season, club, player.id, row.trust, fixture)
-            status = "starter" if call.starts else "bench"
+            status, rested = call.status, call.rested
             first_choice, dropped = call.first_choice, call.dropped and not call.starts
         rating = RATING_FOR_POSITION[position]
         rivals = sorted(
@@ -451,6 +487,7 @@ def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
         status=status,
         first_choice=first_choice,
         dropped=dropped,
+        rested=rested,
         points=row.points,
         xp=row.xp,
         xp_per_point=rules.XP_PER_POINT,
@@ -460,6 +497,7 @@ def hero_out(session: Session, season: SeasonRow | None) -> HeroOut:
         confidence=row.confidence,
         trust=row.trust,
         entry=rules.entry_minute(row.trust),
+        entry_chance=rules.entry_chance(row.trust),
         coach_notes=[CoachNoteOut(**note) for note in row.coach_notes or []],
         injury_weeks=injury_weeks,
         play_hurt=row.play_hurt,

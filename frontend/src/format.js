@@ -1092,10 +1092,10 @@ export const OFFER_KINDS = { extend: "Prolongation", transfer: "Transfert", loan
 export const OFFER_ROLES = { starter: "titulaire", rotation: "dans la rotation", prospect: "à faire ses preuves" };
 export const AGENTS = {
   none: { label: "Sans agent", scope: "Tu négocies seul : pas de commission." },
-  local: { label: "Agent local", scope: "Une offre de plus, des salaires +10 %, 5 % de commission." },
+  local: { label: "Agent local", scope: "Plus de clubs intéressés, des salaires +10 %, 5 % de commission." },
   star: {
     label: "Agent star",
-    scope: "Deux offres de plus, de plus grands clubs, des salaires +25 %, 10 % de commission.",
+    scope: "Encore plus de clubs intéressés, de plus grands clubs, des salaires +25 %, 10 % de commission.",
   },
 };
 
@@ -1103,6 +1103,7 @@ export const AGENTS = {
 export const HERO_STATUS = {
   starter: "Titulaire",
   bench: "Remplaçant",
+  out: "Hors du groupe",
   injured: "Blessé",
   suspended: "Suspendu",
   retired: "Retraité",

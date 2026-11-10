@@ -833,9 +833,10 @@ class LiveHeroOut(BaseModel):
     player_id: int
     club_id: int
     outcomes: list[OutcomeOut]
-    entry: int  # minute où il entre s'il commence sur le banc
+    entry: int | None  # minute où il entre s'il commence sur le banc ; None : il n'entrera pas
     confidence: float  # de -1 à 1
     hurt: bool  # joue blessé
+    hooked: bool = False  # sorti par l'entraîneur pour un mauvais match
     leadership: float = 0.0  # sa note de meneur, sur 20
     speaks: bool = False  # assez meneur pour parler à l'équipe (`talk`)
 
@@ -1004,12 +1005,28 @@ class HeroOfferOut(BaseModel):
     chosen: bool
 
 
+class HeroClubOut(BaseModel):
+    """Un club du jeu, au mercato : il peut s'y proposer s'il est à sa portée."""
+
+    club: ClubRef
+    league_name: str
+    level: float
+    open: bool  # à sa portée
+    net_wage: int | None  # ce qu'il y gagnerait, s'il est à sa portée
+    chosen: bool
+
+
 class HeroOffersOut(BaseModel):
     open: bool  # la saison de son championnat est finie
     wage: int
     contract_until: int
     agent: Literal["none", "local", "star"]
     offers: list[HeroOfferOut]
+    clubs: list[HeroClubOut] = []  # tous les autres clubs, du plus fort au plus faible
+
+
+class HeroApplyIn(BaseModel):
+    club_id: int
 
 
 class HeroChoiceIn(BaseModel):
@@ -1098,10 +1115,11 @@ class HeroOut(BaseModel):
     leadership: float = 0.0
     rank: int  # rang à son poste dans l'effectif (1 : le meilleur)
     at_position: int  # joueurs de l'effectif à son poste
-    status: Literal["starter", "bench", "injured", "suspended", "retired"]
+    status: Literal["starter", "bench", "out", "injured", "suspended", "retired"]
     # Titulaire d'office au prochain match : sur le banc, il souffle ; titulaire sans
     # l'être, il doit sa place à la rotation (engine/hero.py).
     first_choice: bool
+    rested: bool = False  # star laissée au repos (status « out »)
     # Le meilleur à son poste, mis sur le banc du prochain match après ses mauvais matchs.
     dropped: bool
     points: int
@@ -1113,6 +1131,7 @@ class HeroOut(BaseModel):
     confidence: float  # sa confiance, de -1 à 1 (engine/hero.py)
     trust: float  # celle de l'entraîneur, sur 100
     entry: int  # minute où l'entraîneur le fait entrer s'il est sur le banc
+    entry_chance: float = 1.0  # ses chances d'entrer, sur le banc
     coach_notes: list[CoachNoteOut]  # les plus récentes d'abord
     injury_weeks: int  # semaines d'indisponibilité restantes
     play_hurt: bool  # blessé, il jouera quand même le prochain match

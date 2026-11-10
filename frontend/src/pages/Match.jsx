@@ -1317,14 +1317,18 @@ function HeroBar({ live, side, busy, onTalk, onToEntry }) {
     me.status === "field"
       ? "Sur le terrain"
       : me.status === "bench"
-        ? `Sur le banc · le staff te fait entrer à la ${live.hero.entry}e minute`
+        ? live.hero.entry === null
+          ? "Sur le banc · l'entraîneur ne te fait pas entrer"
+          : `Sur le banc · tu pourrais entrer vers la ${live.hero.entry}e minute`
         : me.status === "sin_bin"
           ? `Carton jaune · retour à la ${me.back_at}e`
           : me.status === "injured"
             ? "Blessé, sorti"
             : me.status === "sent_off"
               ? "Exclu"
-              : "Remplacé";
+              : live.hero.hooked
+                ? "Sorti par l'entraîneur"
+                : "Remplacé";
   return (
     <section className={`card live-hero${live.hero.speaks ? " live-hero--leader" : ""}`}>
       <div>
@@ -1336,7 +1340,7 @@ function HeroBar({ live, side, busy, onTalk, onToEntry }) {
           {live.hero.confidence >= 0.3 && " · en confiance"}
           {live.hero.confidence <= -0.3 && " · en manque de confiance"}
         </span>
-        {me.status === "bench" && !live.finished && (
+        {me.status === "bench" && live.hero.entry !== null && !live.finished && (
           <button type="button" className="button button--small live-hero__skip" disabled={busy} onClick={onToEntry}>
             Simuler jusqu'à ton entrée
           </button>

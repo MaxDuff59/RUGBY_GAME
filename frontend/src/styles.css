@@ -9963,6 +9963,72 @@ td > .tag:first-child,
   opacity: 0.8;
 }
 
+/* Tous les clubs du jeu, au mercato du joueur : une ligne par club, grisée hors de portée. */
+.hero-clubs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 6px;
+}
+
+.hero-club {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: "crest name wage" "crest meta wage";
+  column-gap: 10px;
+  align-items: center;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.hero-club > :nth-child(1) { grid-area: crest; }
+.hero-club > :nth-child(2) { grid-area: name; }
+.hero-club > :nth-child(3) { grid-area: meta; font-size: 13px; }
+.hero-club > :nth-child(4) { grid-area: wage; font-size: 13px; }
+
+.hero-club__name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hero-club:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.hero-club:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
+
+.hero-club[aria-pressed="true"] {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.hero-club[aria-pressed="true"] .muted {
+  color: inherit;
+  opacity: 0.85;
+}
+
+@media (max-width: 480px) {
+  .hero-clubs {
+    grid-template-columns: 1fr;
+  }
+}
+
 .hero-career {
   display: flex;
   flex-direction: column;

@@ -40,6 +40,7 @@ export default function HeroSeasonEnd({ name, playerId, onClose, onNextSeason, b
   }
 
   const choose = (index) => act(() => api.chooseHeroOffer(index), offers.setData);
+  const applyTo = (clubId) => act(() => api.applyHeroClub(clubId), offers.setData);
   const setAgent = (agent) => act(() => api.setHeroAgent(agent), offers.setData);
   const retire = () => act(api.retireHero, setRetired);
 
@@ -147,6 +148,7 @@ export default function HeroSeasonEnd({ name, playerId, onClose, onNextSeason, b
               ))}
             </div>
             <span className="muted">{AGENTS[market.agent].scope}</span>
+            <h4 className="eyebrow">Les trois meilleures offres</h4>
             <ul className="hero-offers">
               {market.offers.map((offer) => (
                 <li key={offer.index}>
@@ -174,10 +176,13 @@ export default function HeroSeasonEnd({ name, playerId, onClose, onNextSeason, b
               ))}
             </ul>
             <span className="muted">
-              {market.offers.some((offer) => offer.chosen)
+              {[...market.offers, ...market.clubs].some((offer) => offer.chosen)
                 ? "Ton choix s'applique à l'intersaison. Clique de nouveau pour l'annuler."
                 : "Sans choix, tu restes dans ton club aux mêmes conditions."}
             </span>
+            {market.clubs.length > 0 && (
+              <AllClubs clubs={market.clubs} disabled={acting} onApply={applyTo} onCancel={() => choose(null)} />
+            )}
           </section>
         )}
           </>
@@ -211,6 +216,63 @@ export default function HeroSeasonEnd({ name, playerId, onClose, onNextSeason, b
         )}
       </div>
     </Modal>
+  );
+}
+
+// Tous les clubs du jeu, du plus fort au plus faible : il peut se proposer à ceux qui
+// sont à sa portée (même un petit club qui ne l'a pas appelé) ; les autres sont grisés.
+function AllClubs({ clubs, disabled, onApply, onCancel }) {
+  const leagues = [...new Set(clubs.map((club) => club.league_name))];
+  const [league, setLeague] = useState(null);
+  const shown = league ? clubs.filter((club) => club.league_name === league) : clubs;
+  const reachable = clubs.filter((club) => club.open).length;
+  return (
+    <>
+      <div className="section__head">
+        <h4 className="eyebrow">Tous les clubs</h4>
+        <span className="muted">
+          {reachable} sur {clubs.length} à ta portée : propose-toi à celui que tu veux
+        </span>
+      </div>
+      {leagues.length > 1 && (
+        <div className="chips" role="group" aria-label="Championnat">
+          {[null, ...leagues].map((key) => (
+            <button
+              key={key ?? "all"}
+              type="button"
+              className="chip"
+              aria-pressed={league === key}
+              onClick={() => setLeague(key)}
+            >
+              {key ?? "Tous"}
+            </button>
+          ))}
+        </div>
+      )}
+      <ul className="hero-clubs">
+        {shown.map((club) => (
+          <li key={club.club.id}>
+            <button
+              type="button"
+              className="hero-club"
+              aria-pressed={club.chosen}
+              disabled={disabled || !club.open}
+              title={club.open ? undefined : "Ce club vise plus haut que ton niveau"}
+              onClick={() => (club.chosen ? onCancel() : onApply(club.club.id))}
+            >
+              <ClubCrest name={club.club.name} size={22} />
+              <span className="hero-club__name">{club.club.name}</span>
+              <span className="muted">
+                {club.league_name} · niveau {formatNote(club.level)}
+              </span>
+              <span className="num">
+                {club.open ? `${formatMoney(club.net_wage)} net` : "Hors de portée"}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 
