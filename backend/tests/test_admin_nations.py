@@ -81,10 +81,10 @@ def test_a_home_only_federation_limits_who_can_be_listed(admin):
     ireland = admin.get(f"{URL}/IRE").json()
     assert ireland["home_only"]
     assert {p["club"] for p in ireland["players"]} <= {
-        "Leinster Rugby",
-        "Munster Rugby",
-        "Ulster Rugby",
-        "Connacht Rugby",
+        "Dublin Harps",
+        "Limerick Raiders",
+        "Belfast Shipwrights",
+        "Galway Gales",
     }
     france = admin.get(FRANCE).json()
     outsider = entry(france["players"][0])

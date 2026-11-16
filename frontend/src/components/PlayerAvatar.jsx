@@ -2,8 +2,8 @@ import { useState } from "react";
 
 import { BASE_URL } from "../api.js";
 
-// Photo de profil d'un joueur : celle du vrai joueur quand on l'a (servie par l'API,
-// `/photos/...`), sinon (joueur inventé, photo introuvable ou hors ligne) une
+// Photo de profil d'un joueur : celle envoyée depuis le backoffice quand il y en a une
+// (servie par l'API), sinon (pas de photo, photo introuvable ou hors ligne) une
 // silhouette vide.
 export default function PlayerAvatar({ src: photo, size = 28, className = "" }) {
   // Adresse dont le chargement a échoué (un autre joueur, une autre adresse, on réessaie).

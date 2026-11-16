@@ -29,7 +29,7 @@ def test_photo_is_fetched_once_then_served_from_disk(client, monkeypatch):
     assert "max-age" in first.headers["cache-control"]
     second = client.get("/photos/Shahn%20Eru.jpg")
     assert second.status_code == 200
-    assert calls == ["Shahn Eru.jpg"]
+    assert calls == ["Shahn Iru.jpg"]
     assert list(photos.cache_dir().iterdir())
 
 

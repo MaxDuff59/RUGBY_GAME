@@ -87,11 +87,11 @@ def club_form(club: dict, **changes) -> dict:
 def test_club_edits_reach_new_worlds_only(admin):
     accounts.grant_premium(accounts.find(ADMIN).id)
     assert admin.post("/saves/1/new").status_code == 201
-    club = admin.get("/backoffice/clubs/Stade Toulousain").json()
+    club = admin.get("/backoffice/clubs/Capitouls de Toulouse").json()
     assert club["edited"] == [] and club["roster_source"] == "fichier"
 
     saved = admin.put(
-        "/backoffice/clubs/Stade Toulousain", json=club_form(club, capacity=40_000, wealth=0.2)
+        "/backoffice/clubs/Capitouls de Toulouse", json=club_form(club, capacity=40_000, wealth=0.2)
     ).json()
     assert sorted(saved["edited"]) == ["capacity", "wealth"]
     assert saved["defaults"]["capacity"] == 19_000
@@ -106,13 +106,15 @@ def test_club_edits_reach_new_worlds_only(admin):
         ],
         "youths": [],
     }
-    saved = admin.put("/backoffice/clubs/Stade Toulousain/roster", json=roster).json()
+    saved = admin.put("/backoffice/clubs/Capitouls de Toulouse/roster", json=roster).json()
     assert saved["roster_source"] == "backoffice" and saved["pros"] == 1
     assert saved["roster"]["pros"][0]["position"] == "FLY_HALF"
 
     def toulouse(slot: int) -> tuple[ClubRow, list[str]]:
         with database.open_slot(accounts.find(ADMIN).id, slot) as session:
-            row = session.scalars(select(ClubRow).where(ClubRow.name == "Stade Toulousain")).one()
+            row = session.scalars(
+                select(ClubRow).where(ClubRow.name == "Capitouls de Toulouse")
+            ).one()
             names = session.scalars(
                 select(PlayerRow.last_name).where(PlayerRow.club_id == row.id)
             ).all()
@@ -128,43 +130,47 @@ def test_club_edits_reach_new_worlds_only(admin):
     assert new.balance < old.balance
 
     # Revenir à la valeur du code efface la retouche ; tout effacer rend le club d'origine.
-    back = admin.put("/backoffice/clubs/Stade Toulousain", json=club_form(club, wealth=0.2)).json()
+    back = admin.put(
+        "/backoffice/clubs/Capitouls de Toulouse", json=club_form(club, wealth=0.2)
+    ).json()
     assert sorted(back["edited"]) == ["roster", "wealth"]
-    assert admin.delete("/backoffice/clubs/Stade Toulousain").json()["edited"] == []
+    assert admin.delete("/backoffice/clubs/Capitouls de Toulouse").json()["edited"] == []
     assert catalog.edits() == {}
 
 
 def test_colours_and_logo_are_public(admin):
-    club = admin.get("/backoffice/clubs/RC Toulon").json()
+    club = admin.get("/backoffice/clubs/Corsaires de Toulon").json()
     form = club_form(club, colors=["#ff0000", "#000000"], light=True)
-    saved = admin.put("/backoffice/clubs/RC Toulon", json=form).json()
+    saved = admin.put("/backoffice/clubs/Corsaires de Toulon", json=form).json()
     assert saved["colors"] == ["#FF0000", "#000000"]
     assert (
         admin.put(
-            "/backoffice/clubs/RC Toulon/logo", json={"data": base64.b64encode(b"<svg/>").decode()}
+            "/backoffice/clubs/Corsaires de Toulon/logo",
+            json={"data": base64.b64encode(b"<svg/>").decode()},
         ).status_code
         == 400
     )
     saved = admin.put(
-        "/backoffice/clubs/RC Toulon/logo", json={"data": base64.b64encode(PIXEL).decode()}
+        "/backoffice/clubs/Corsaires de Toulon/logo",
+        json={"data": base64.b64encode(PIXEL).decode()},
     ).json()
     assert "logo" in saved["edited"]
 
     visitor = TestClient(app)
-    shown = visitor.get("/catalog/clubs").json()["RC Toulon"]
+    shown = visitor.get("/catalog/clubs").json()["Corsaires de Toulon"]
     assert shown["colors"] == ["#FF0000", "#000000"] and shown["light"] is True
     image = visitor.get(shown["logo"])
     assert image.status_code == 200 and image.content == PIXEL
     assert image.headers["content-type"] == "image/png"
 
-    admin.delete("/backoffice/clubs/RC Toulon/logo")
-    assert "logo" not in visitor.get("/catalog/clubs").json()["RC Toulon"]
+    admin.delete("/backoffice/clubs/Corsaires de Toulon/logo")
+    assert "logo" not in visitor.get("/catalog/clubs").json()["Corsaires de Toulon"]
 
 
 def test_unknown_club_and_bad_roster(admin):
     assert admin.get("/backoffice/clubs/Club Inconnu").status_code == 404
     bad = {"pros": [{"name": "X", "position": "GOALKEEPER"}]}
-    assert admin.put("/backoffice/clubs/RC Toulon/roster", json=bad).status_code == 422
+    assert admin.put("/backoffice/clubs/Corsaires de Toulon/roster", json=bad).status_code == 422
 
 
 def world_clubs(slot: int) -> dict[str, str]:
@@ -175,8 +181,10 @@ def world_clubs(slot: int) -> dict[str, str]:
 
 def test_a_club_changes_league_in_new_worlds(admin):
     accounts.grant_premium(accounts.find(ADMIN).id)
-    vannes = admin.get("/backoffice/clubs/RC Vannes").json()
-    moved = admin.put("/backoffice/clubs/RC Vannes", json=club_form(vannes, league="top14")).json()
+    vannes = admin.get("/backoffice/clubs/Hermines de Vannes").json()
+    moved = admin.put(
+        "/backoffice/clubs/Hermines de Vannes", json=club_form(vannes, league="top14")
+    ).json()
     assert moved["league"] == "top14" and moved["edited"] == ["league"]
     assert moved["defaults"]["league"] == "prod2"
     leagues = {lg["code"]: lg for lg in admin.get("/backoffice/leagues").json()}
@@ -185,20 +193,26 @@ def test_a_club_changes_league_in_new_worlds(admin):
 
     assert admin.post("/saves/1/new").status_code == 201
     clubs = world_clubs(1)
-    assert clubs["RC Vannes"] == "top14"
+    assert clubs["Hermines de Vannes"] == "top14"
     assert sum(league == "top14" for league in clubs.values()) == 15
     # Retour dans son championnat d'origine : plus de retouche.
-    back = admin.put("/backoffice/clubs/RC Vannes", json=club_form(vannes, league="prod2")).json()
+    back = admin.put(
+        "/backoffice/clubs/Hermines de Vannes", json=club_form(vannes, league="prod2")
+    ).json()
     assert back["edited"] == [] and catalog.edits() == {}
-    unknown = admin.put("/backoffice/clubs/RC Vannes", json=club_form(vannes, league="nope"))
+    unknown = admin.put(
+        "/backoffice/clubs/Hermines de Vannes", json=club_form(vannes, league="nope")
+    )
     assert unknown.status_code == 400
 
 
 def test_a_league_has_at_most_sixteen_clubs(admin):
     prod2 = [c for c in admin.get("/backoffice/clubs").json() if c["league"] == "prod2"]
     assert len(prod2) == 16
-    toulon = admin.get("/backoffice/clubs/RC Toulon").json()
-    refused = admin.put("/backoffice/clubs/RC Toulon", json=club_form(toulon, league="prod2"))
+    toulon = admin.get("/backoffice/clubs/Corsaires de Toulon").json()
+    refused = admin.put(
+        "/backoffice/clubs/Corsaires de Toulon", json=club_form(toulon, league="prod2")
+    )
     assert refused.status_code == 400 and "16" in refused.json()["detail"]
 
 

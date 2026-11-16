@@ -68,16 +68,15 @@ const PAGES = [
           <>
             <p>
               Rugby Manager est un jeu indépendant. Il n'est ni affilié, ni
-              approuvé, ni soutenu par les clubs, ligues, fédérations,
-              compétitions ou joueurs cités. Leurs noms, logos et marques
-              appartiennent à leurs propriétaires respectifs et ne servent qu'à
-              les désigner.
+              approuvé, ni soutenu par un club, une ligue, une fédération ou
+              une compétition.
             </p>
             <p>
-              Les photos de joueurs viennent de Wikimedia Commons, chacune sous
-              la licence indiquée sur sa page (auteur et licence). Un titulaire
-              de droits qui souhaite le retrait d'un contenu peut écrire à{" "}
-              <Mail /> : il sera retiré rapidement.
+              Les clubs, leurs blasons, leurs stades et les joueurs du jeu sont
+              inventés. Toute ressemblance avec un club ou une personne
+              existants serait fortuite. Un titulaire de droits qui souhaite le
+              retrait d'un contenu peut écrire à <Mail /> : il sera retiré
+              rapidement.
             </p>
           </>
         ),

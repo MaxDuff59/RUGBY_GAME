@@ -34,10 +34,12 @@ def remote_names(url: str) -> list[str]:
 def test_backoffice_writes_to_the_catalog_database(remote):
     auth._attempts.clear()
     admin = sign_up(ADMIN)
-    club = admin.get("/backoffice/clubs/Stade Toulousain").json()
-    saved = admin.put("/backoffice/clubs/Stade Toulousain", json=club_form(club, capacity=40_000))
+    club = admin.get("/backoffice/clubs/Capitouls de Toulouse").json()
+    saved = admin.put(
+        "/backoffice/clubs/Capitouls de Toulouse", json=club_form(club, capacity=40_000)
+    )
     assert saved.status_code == 200, saved.text
-    assert remote_names(remote) == ["Stade Toulousain"]
+    assert remote_names(remote) == ["Capitouls de Toulouse"]
     # Les comptes, eux, restent dans leur base, sans le catalogue.
     tables = inspect(accounts.engine()).get_table_names()
     assert "users" in tables and "catalog_clubs" not in tables
@@ -48,8 +50,8 @@ def test_push_copies_local_edits(world, tmp_path, monkeypatch, capsys):
     prod = f"sqlite:///{tmp_path / 'prod.db'}"
     monkeypatch.setenv("RUGBY_CATALOG_DB_URL", local)
     monkeypatch.setattr(catalog, "_own", None)
-    catalog.save_club("Stade Toulousain", ADMIN, capacity=40_000)
-    catalog.save_logo("Stade Toulousain", "image/png", PIXEL)
+    catalog.save_club("Capitouls de Toulouse", ADMIN, capacity=40_000)
+    catalog.save_logo("Capitouls de Toulouse", "image/png", PIXEL)
     catalog._own.dispose()
     monkeypatch.setattr(catalog, "_own", None)
     monkeypatch.delenv("RUGBY_CATALOG_DB_URL")
@@ -58,7 +60,7 @@ def test_push_copies_local_edits(world, tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", argv)
     push_catalog.main()
     assert "2 lignes recopiées" in capsys.readouterr().out
-    assert remote_names(prod) == ["Stade Toulousain"]
+    assert remote_names(prod) == ["Capitouls de Toulouse"]
 
     # Une seconde fois, rien ne change.
     push_catalog.main()

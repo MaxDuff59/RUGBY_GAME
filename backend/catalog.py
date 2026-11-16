@@ -52,13 +52,14 @@ from sqlalchemy import (
     inspect,
     select,
     text,
+    update,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 import accounts
 import database
 from data import leagues as league_data
-from data import nations
+from data import nations, renames
 from data.generator import UPLOADED_PHOTO_PATH, load_rosters
 from data.leagues import LEAGUES, League, RealClub
 from engine import europe
@@ -202,6 +203,41 @@ def prepare(bound: Engine) -> None:
             if name not in present:
                 connection.execute(
                     text(f"ALTER TABLE catalog_clubs ADD COLUMN {name} {definition}")
+                )
+    _rename_real_names(bound)
+
+
+def _rename_real_names(bound: Engine) -> None:
+    """Un catalogue rempli du temps des vrais clubs prend les noms inventés
+    (data/renames.py) : les retouches suivent leur club, les effectifs saisis et les
+    compos des sélections suivent leurs joueurs. Un blason envoyé sous un ancien nom
+    reste en base sans plus servir : c'était celui du vrai club."""
+    clubs, compos = ClubEditRow.__table__, NationEditRow.__table__
+    with bound.begin() as connection:
+        rows = connection.execute(select(clubs.c.name, clubs.c.roster)).all()
+        taken = {name for name, _ in rows}
+        for name, roster in rows:
+            values = {}
+            if roster is not None and (renamed := renames.roster(roster)) != roster:
+                values["roster"] = renamed
+            new = renames.club(name)
+            if new and new not in taken:
+                values["name"] = new
+                taken.add(new)
+            if values:
+                connection.execute(update(clubs).where(clubs.c.name == name).values(values))
+        for code, squad in connection.execute(select(compos.c.code, compos.c.squad)).all():
+            renamed = [
+                {
+                    **entry,
+                    "club": renames.club(entry.get("club")) or entry.get("club"),
+                    "name": renames.player(entry.get("name")) or entry.get("name"),
+                }
+                for entry in squad or []
+            ]
+            if renamed != squad:
+                connection.execute(
+                    update(compos).where(compos.c.code == code).values(squad=renamed)
                 )
 
 
@@ -487,6 +523,7 @@ def save_league(code: str | None, **values) -> str:
 
 
 # --- Compos des sélections -------------------------------------------------------------------
+
 
 def nation_compos() -> dict[str, NationEditRow]:
     with _session() as session:

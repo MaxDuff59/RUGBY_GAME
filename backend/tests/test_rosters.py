@@ -12,7 +12,7 @@ POSITIONS += ["scrum_half"] * 3 + ["fly_half"] * 3 + ["centre"] * 5 + ["wing"] *
 
 
 def roster(pros: list[dict], youths: list[dict] | None = None) -> dict:
-    return {"Stade Toulousain": {"pros": pros, "youths": youths or []}}
+    return {"Capitouls de Toulouse": {"pros": pros, "youths": youths or []}}
 
 
 def pro(i: int, position: str, **extra) -> dict:
@@ -21,7 +21,7 @@ def pro(i: int, position: str, **extra) -> dict:
 
 def toulouse(rosters: dict, released: list | None = None):
     clubs = generate_real_clubs(random.Random(0), [league("top14")], rosters, released)
-    return next(c for c in clubs if c.name == "Stade Toulousain"), clubs
+    return next(c for c in clubs if c.name == "Capitouls de Toulouse"), clubs
 
 
 def test_a_known_club_gets_its_real_players_with_their_age():
@@ -36,7 +36,7 @@ def test_a_known_club_gets_its_real_players_with_their_age():
     youth = next(p for p in club.youths if p.name == "Joueur Réel100")
     assert youth.squad == Squad.YOUTH and youth.age == 20
     # Les autres clubs, absents du fichier, restent inventés.
-    other = next(c for c in clubs if c.name == "RC Toulon")
+    other = next(c for c in clubs if c.name == "Corsaires de Toulon")
     assert not any(p.name.startswith("Joueur Réel") for p in other.players)
 
 

@@ -175,7 +175,7 @@ def test_the_cup_is_played_with_the_real_leagues():
     TestSession = sessionmaker(bind=engine, expire_on_commit=False)
     with TestSession() as session:
         seed_if_empty(session, seed=0, real=True)
-        toulouse = next(r.id for r in session.query(ClubRow) if r.name == "Stade Toulousain")
+        toulouse = next(r.id for r in session.query(ClubRow) if r.name == "Capitouls de Toulouse")
 
     def override():
         with TestSession() as session:

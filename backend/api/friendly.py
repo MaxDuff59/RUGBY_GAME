@@ -290,7 +290,7 @@ def _squad(session: Session, nation_id: int, opponent: int, day: datetime.date) 
 
 def _legend_xv(team: legends.LegendTeam) -> list[int | None]:
     """Le XV d'une équipe de légende avant le staff : ses titulaires attitrés à leur
-    numéro (Julien Arias en 14 au Stade Français), les autres places vides."""
+    numéro (un ailier en 14 dans son club de légende), les autres places vides."""
     xv: list[int | None] = [None] * len(SLOT_NUMBERS)
     for number, player_id in team.starters.items():
         xv[SLOT_NUMBERS.index(number)] = player_id

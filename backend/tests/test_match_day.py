@@ -32,12 +32,12 @@ def test_forecast_is_the_weather_of_the_day():
 def test_climate_follows_the_hemisphere():
     january, july = datetime.date(2027, 1, 9), datetime.date(2027, 7, 10)
     # L'hiver européen est pluvieux, l'été austral sec et parfois chaud.
-    assert climate("Leinster Rugby", "urc", january)[Weather.RAIN] > 0.3
-    assert climate("Crusaders", "super_rugby", january)[Weather.HEAT] > 0
-    assert climate("Crusaders", "super_rugby", july)[Weather.HEAT] == 0
+    assert climate("Dublin Harps", "urc", january)[Weather.RAIN] > 0.3
+    assert climate("Christchurch Knights", "super_rugby", january)[Weather.HEAT] > 0
+    assert climate("Christchurch Knights", "super_rugby", july)[Weather.HEAT] == 0
     # Les hauts plateaux sud-africains : un hiver austral plus sec qu'en Nouvelle-Zélande.
-    bulls = climate("Bulls", "urc", july)[Weather.RAIN]
-    assert bulls < climate("Crusaders", "super_rugby", july)[Weather.RAIN]
+    bulls = climate("Pretoria Buffaloes", "urc", july)[Weather.RAIN]
+    assert bulls < climate("Christchurch Knights", "super_rugby", july)[Weather.RAIN]
 
 
 def _average(home, away, weather, count=300, **kwargs):
@@ -252,7 +252,9 @@ def test_three_yellows_in_a_season_cost_a_match(even_clubs):
 
 def test_suspension_makes_the_news():
     player = Person(1, "Jean Dupont", Position.PROP, 28, 12.0)
-    article = suspension_article(5, player, club_team(3, "RC Toulon"), 3, "red_card", None)
+    article = suspension_article(
+        5, player, club_team(3, "Corsaires de Toulon"), 3, "red_card", None
+    )
     assert article.kind == Kind.DISCIPLINE
     assert "3 matchs" in article.body and "carton rouge" in article.body
 

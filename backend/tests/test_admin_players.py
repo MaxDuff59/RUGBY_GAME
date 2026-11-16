@@ -17,8 +17,8 @@ from models import ATTRIBUTE_NAMES
 from models.orm import ClubRow, PlayerRow
 from tests.test_admin import PIXEL, sign_up
 
-TOULOUSE, TOULON = "Stade Toulousain", "RC Toulon"
-PLAYER = "Dorian Aldegheri"
+TOULOUSE, TOULON = "Capitouls de Toulouse", "Corsaires de Toulon"
+PLAYER = "Dorian Aldeghari"
 NOTES = {name: 17 for name in ATTRIBUTE_NAMES} | {"kicking": 3}
 
 
@@ -56,7 +56,7 @@ def test_move_a_player_and_fix_his_notes(admin):
     players = admin.get("/backoffice/players").json()
     found = next(p for p in players if p["name"] == PLAYER)
     assert found["club"] == TOULOUSE and found["league"] == "top14" and found["squad"] == "pros"
-    assert found["attributes"] is None and found["photo_url"].startswith("/photos/")
+    assert found["attributes"] is None and found["photo_url"] is None
     assert found["overall"] is None
 
     detail = admin.get(url(TOULOUSE, PLAYER)).json()
@@ -80,13 +80,18 @@ def test_move_a_player_and_fix_his_notes(admin):
     assert admin.get(url(TOULON, PLAYER)).json()["attributes"] == NOTES
 
     assert admin.post("/saves/1/new").status_code == 201
-    club, row = world_player(1, "Aldegheri")
+    club, row = world_player(1, "Aldeghari")
     assert club == TOULON
     assert {name: getattr(row, name) for name in ATTRIBUTE_NAMES} == NOTES
 
 
 def test_create_and_delete_players(admin):
-    body = {"name": "Jean  Neuf", "position": "WING", "nationality": "FRA", "club": "RC Vannes"}
+    body = {
+        "name": "Jean  Neuf",
+        "position": "WING",
+        "nationality": "FRA",
+        "club": "Hermines de Vannes",
+    }
     created = admin.post("/backoffice/players", json=body)
     assert created.status_code == 201, created.text
     assert created.json()["name"] == "Jean Neuf" and created.json()["squad"] == "pros"
@@ -99,16 +104,20 @@ def test_create_and_delete_players(admin):
     # Le renommer vers le nom d'un coéquipier est refusé ; passer chez les espoirs, non.
     detail = created.json()
     teammate = next(
-        p["name"] for p in admin.get("/backoffice/players").json() if p["club"] == "RC Vannes"
+        p["name"]
+        for p in admin.get("/backoffice/players").json()
+        if p["club"] == "Hermines de Vannes"
     )
-    renamed = admin.put(url("RC Vannes", "Jean Neuf"), json=form(detail, name=teammate))
+    renamed = admin.put(url("Hermines de Vannes", "Jean Neuf"), json=form(detail, name=teammate))
     assert renamed.status_code == 400
-    youth = admin.put(url("RC Vannes", "Jean Neuf"), json=form(detail, squad="youths")).json()
+    youth = admin.put(
+        url("Hermines de Vannes", "Jean Neuf"), json=form(detail, squad="youths")
+    ).json()
     assert youth["squad"] == "youths"
 
-    assert admin.delete(url("RC Vannes", "Jean Neuf")).status_code == 204
-    assert admin.get(url("RC Vannes", "Jean Neuf")).status_code == 404
-    assert admin.delete(url("RC Vannes", "Jean Neuf")).status_code == 404
+    assert admin.delete(url("Hermines de Vannes", "Jean Neuf")).status_code == 204
+    assert admin.get(url("Hermines de Vannes", "Jean Neuf")).status_code == 404
+    assert admin.delete(url("Hermines de Vannes", "Jean Neuf")).status_code == 404
 
 
 def test_a_club_without_roster_gets_its_first_player(admin):
@@ -122,7 +131,7 @@ def test_a_club_without_roster_gets_its_first_player(admin):
     assert name == club["name"]
 
 
-def test_an_uploaded_photo_wins_over_wikimedia(admin):
+def test_an_uploaded_photo_follows_the_player(admin):
     refused = admin.put(url(TOULOUSE, PLAYER, "/photo"), json={"data": "pas une image"})
     assert refused.status_code == 400
     sent = admin.put(
@@ -138,9 +147,9 @@ def test_an_uploaded_photo_wins_over_wikimedia(admin):
     moved = admin.put(url(TOULOUSE, PLAYER), json=form(sent, club=TOULON)).json()
     assert moved["photo_id"] == sent["photo_id"]
     assert admin.post("/saves/1/new").status_code == 201
-    assert world_player(1, "Aldegheri")[1].photo == sent["photo_url"]
+    assert world_player(1, "Aldeghari")[1].photo == sent["photo_url"]
 
     back = admin.delete(url(TOULON, PLAYER, "/photo")).json()
-    assert back["photo_id"] is None and back["photo_url"].startswith("/photos/")
+    assert back["photo_id"] is None and back["photo_url"] is None
     # La photo reste servie : la partie commencée la montre encore.
     assert TestClient(admin.app).get(sent["photo_url"]).status_code == 200

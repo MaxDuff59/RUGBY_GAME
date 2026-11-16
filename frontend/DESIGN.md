@@ -25,7 +25,7 @@ des joueurs, des personnages low-poly en pixels. Nulle part ailleurs.
 | Terrain | `#2E4A38` |
 
 - Un seul accent à la fois : la couleur du club choisi. Chaque club a une couleur
-  primaire et une secondaire (`src/clubLogos.json` pour les vrais clubs, tirées du nom
+  primaire et une secondaire (`src/clubLogos.json` pour les clubs du jeu, tirées du nom
   pour les inventés, `src/clubs.js`). L'accent (`--accent`) prend la première assez
   foncée pour un bouton à texte blanc (contraste 4,5:1), sinon la primaire foncée ;
   l'autre devient `--accent-2`, visible seulement dans le liseré sous l'en-tête.
@@ -46,15 +46,15 @@ des joueurs, des personnages low-poly en pixels. Nulle part ailleurs.
 
 ## Composants
 
-- Blason (`ClubCrest`) : l'image du club téléchargée depuis TheSportsDB
-  (`backend/scripts/fetch_club_logos.py`, dans `public/clubs/`) ; un blason blanc
-  est posé sur une pastille ronde de la couleur du club ; sans blason (club inventé ou
-  introuvable), un écusson à initiales aux couleurs du club. Partout où un club est
+- Blason (`ClubCrest`) : un écu inventé, dessiné aux couleurs du club
+  (`backend/scripts/draw_crests.py`, dans `public/clubs/`) ; un blason blanc envoyé
+  depuis le backoffice est posé sur une pastille ronde de la couleur du club ; sans
+  blason (club créé ou introuvable), un écusson à initiales aux couleurs du club. Partout où un club est
   nommé : en-tête, choix du club, parties, prochain match, rapport de force,
   classements, affiches, calendrier, match en direct, marché des transferts.
 - Photo de joueur (`PlayerAvatar`) : ronde, cadrée sur le haut (le visage). La photo
-  du vrai joueur quand Wikimedia Commons en a une (`player.photo`), sinon (joueur
-  inventé, pas de photo, hors ligne) une silhouette grise sur fond clair. Devant le nom
+  envoyée depuis le backoffice quand il y en a une (`player.photo`), sinon (pas de
+  photo, hors ligne) une silhouette grise sur fond clair. Devant le nom
   dans l'effectif, la formation, le médical et les transferts ; en grand (96 px) sur la
   fiche joueur.
 - Navigation latérale (Club, Effectif, Match, Calendrier, Classement, Recrutement),
@@ -263,7 +263,7 @@ des joueurs, des personnages low-poly en pixels. Nulle part ailleurs.
   d'affichage du match en direct, à la suite de la météo ; dans la fiche d'un match, sous
   la météo, avec l'avantage du terrain (« ×1,3 »). Rien sur terrain neutre.
   En direct, l'ambiance suit le score, et une ligne en capitales sous la météo dit ce
-  que fait le stade (« Le stade s'enflamme · Section Paloise », pousse, s'éteint, se
+  que fait le stade (« Le stade s'enflamme · Isards de Pau », pousse, s'éteint, se
   tait) : noir, en accent quand c'est notre public qui pousse, gris quand il s'éteint.
 - Fiche d'un match joué (`MatchReport`, grande fenêtre) : un score se clique dans les
   affiches et dans l'onglet Saison (pas pour les matchs internationaux). En tête la
@@ -386,10 +386,9 @@ des joueurs, des personnages low-poly en pixels. Nulle part ailleurs.
   accent, ses coéquipiers en noir, les autres joueurs du poste en gris, et son percentile ;
   terrain avec sa note à chaque place, son poste naturel en accent.
 
-- Sélections nationales : chacune a son blason, téléchargé comme ceux des clubs
-  (`fetch_club_logos.py`, rangé dans `public/clubs/` et `clubLogos.json` sous son nom
-  français, avec ses deux couleurs) ; un blason blanc (la fougère néo-zélandaise) est posé
-  sur une pastille sombre. L'interface prend les couleurs de la sélection pour un
+- Sélections nationales : chacune a son médaillon rond au code du pays, dessiné comme
+  les écus des clubs (`draw_crests.py`, rangé dans `public/clubs/` et `clubLogos.json`
+  sous son nom français, avec ses deux couleurs). L'interface prend les couleurs de la sélection pour un
   sélectionneur, comme pour un club.
 - Difficulté (carrière de club) : sous les pastilles de carrière, « Difficulté » et trois
   pastilles (Facile, Normal, Difficile), puis ce que change le niveau choisi ; les matchs ne

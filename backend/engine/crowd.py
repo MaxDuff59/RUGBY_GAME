@@ -3,8 +3,8 @@
 L'ambiance d'un match à domicile (de 0 à 1) tient à trois choses :
 - le remplissage du stade : une enceinte à moitié vide ne fait pas peur ;
 - la ferveur des supporters (engine/supporters.py), qui suit les résultats ;
-- la tradition du stade (`STADIUM_TRADITION`, data/leagues.py) : à Aimé-Giral,
-  Marcel-Michelin ou Thomond Park, le public pousse plus fort qu'ailleurs.
+- la tradition du stade (`STADIUM_TRADITION`, data/leagues.py) : à Perpignan,
+  Toulon ou Limerick, le public pousse plus fort qu'ailleurs.
 
 Elle fait l'avantage du terrain (engine/match_engine.py) : le territoire de
 l'équipe qui reçoit est multiplié de 1,05 (stade clairsemé et froid) à 1,33

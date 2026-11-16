@@ -4,7 +4,7 @@ Un blason inventé pour chaque équipe, pas celui de sa fédération ou de son c
 aux couleurs du pays ou du club, liseré, étoiles et laurier dorés, le code du pays ou les
 initiales du club, et un bandeau « LÉGENDES ».
 Les SVG vont dans frontend/public/clubs/legendes/, le nom → blason et couleurs dans
-frontend/src/clubLogos.json, comme les autres blasons (scripts/fetch_club_logos.py).
+frontend/src/clubLogos.json, comme les autres blasons (scripts/draw_crests.py).
 Une nouvelle équipe de légende reçoit ses couleurs dans `COLORS` (un club dans
 `CLUB_COLORS`), puis on relance.
 
@@ -16,7 +16,7 @@ import json
 import math
 
 from data.legends import LEGENDS, SUFFIX
-from scripts.fetch_club_logos import LOGO_DIR, MANIFEST, dump, slug
+from scripts.draw_crests import LOGO_DIR, MANIFEST, dump, slug
 
 GOLD = "#D9A93A"
 # Pays -> (fond, code du pays[, ornements]) ; les ornements sont dorés, sauf pour
@@ -32,17 +32,17 @@ COLORS = {
 }
 # Club -> (fond, initiales[, ornements]), même règle.
 CLUB_COLORS = {
-    "Racing 92": ("#0A1F44", "#8FD0F2"),
-    "Stade Toulousain": ("#111111", "#E30613"),
-    "RC Toulon": ("#C8102E", "#FFFFFF", "#111111"),
-    "ASM Clermont Auvergne": ("#002B5C", "#FFD100", "#FFD100"),
-    "Stade Français Paris": ("#E4007C", "#FFFFFF", "#0A1F5C"),
-    "Leinster Rugby": ("#0055A4", "#FFFFFF"),
-    "Munster Rugby": ("#C8102E", "#FFFFFF"),
-    "Saracens": ("#111111", "#FFFFFF", "#E4002B"),
-    "Leicester Tigers": ("#00553B", "#FFFFFF"),
-    "Crusaders": ("#D00F16", "#FFFFFF", "#111111"),
-    "Blues": ("#002B7F", "#6CACE4"),
+    "Flèches de Nanterre": ("#0A1F44", "#8FD0F2"),
+    "Capitouls de Toulouse": ("#111111", "#E30613"),
+    "Corsaires de Toulon": ("#C8102E", "#FFFFFF", "#111111"),
+    "Volcans de Clermont": ("#002B5C", "#FFD100", "#FFD100"),
+    "Roses de Paris": ("#E4007C", "#FFFFFF", "#0A1F5C"),
+    "Dublin Harps": ("#0055A4", "#FFFFFF"),
+    "Limerick Raiders": ("#C8102E", "#FFFFFF"),
+    "London Scimitars": ("#111111", "#FFFFFF", "#E4002B"),
+    "Leicester Jaguars": ("#00553B", "#FFFFFF"),
+    "Christchurch Knights": ("#D00F16", "#FFFFFF", "#111111"),
+    "Auckland Mariners": ("#002B7F", "#6CACE4"),
 }
 SHIELD = "M50 4 L93 15 V52 C93 81 74 100 50 112 C26 100 7 81 7 52 V15 Z"
 FOLDER = LOGO_DIR / "legendes"

@@ -23,8 +23,8 @@ from models.orm import Base, ClubRow, MoveRow, PlayerRow
 from tests import conftest
 
 DAY = datetime.date(2026, 10, 3)
-TOULOUSE = journal.club_team(1, "Stade Toulousain")
-CASTRES = journal.club_team(2, "Castres Olympique")
+TOULOUSE = journal.club_team(1, "Capitouls de Toulouse")
+CASTRES = journal.club_team(2, "Tisserands de Castres")
 TEAMS = {1: TOULOUSE, 2: CASTRES}
 
 
@@ -43,18 +43,21 @@ def played(home_tries=(), away_tries=(), home_penalties=0, away_penalties=0, **f
 
 
 def test_names_take_their_article_and_their_verb():
-    assert TOULOUSE.does("bat", "battent") == "Stade Toulousain bat"
-    # Une franchise au nom pluriel s'accorde ; seule, elle prend l'article.
-    assert journal.club_team(3, "Crusaders").does("bat", "battent") == "Les Crusaders battent"
-    assert journal.club_team(4, "Leicester Tigers").subject == "Leicester Tigers"
-    assert journal.club_team(4, "Leicester Tigers").verb("bat", "battent") == "battent"
+    assert TOULOUSE.does("bat", "battent") == "Capitouls de Toulouse battent"
+    assert journal.club_team(5, "Lynx d'Oyonnax").verb("bat", "battent") == "battent"
+    assert journal.club_team(6, "RC Port-Vasor").does("bat", "battent") == "RC Port-Vasor bat"
+    # Un club au nom pluriel s'accorde ; d'un seul mot, il prend l'article.
+    assert journal.club_team(3, "Knights").does("bat", "battent") == "Les Knights battent"
+    assert journal.club_team(7, "Perth Surge").verb("bat", "battent") == "bat"
+    assert journal.club_team(4, "Leicester Jaguars").subject == "Leicester Jaguars"
+    assert journal.club_team(4, "Leicester Jaguars").verb("bat", "battent") == "battent"
     assert journal.nation_team(9011, "FIJ", "Fidji").does("bat", "battent") == "Les Fidji battent"
     assert journal.nation_team(9002, "ENG", "Angleterre").subject == "l'Angleterre"
 
 
 def test_small_words_follow_french_usage():
-    assert journal.of("Antoine Dupont") == "d'Antoine Dupont"
-    assert journal.of("Thomas Ramos") == "de Thomas Ramos"
+    assert journal.of("Antoine Dupert") == "d'Antoine Dupert"
+    assert journal.of("Thomas Ramas") == "de Thomas Ramas"
     assert journal.short_day(datetime.date(2027, 3, 1)) == "1er mars"
     assert journal.day_label(DAY) == "samedi 3 octobre"
     assert journal.money(2_850_000) == "2,85 M€" and journal.money(40_000) == "40 k€"
@@ -66,18 +69,21 @@ def test_small_words_follow_french_usage():
 
 def test_a_result_gives_the_score_and_the_player_of_the_match():
     match = played(home_tries=(7, 7, 8, 9), away_penalties=1)
-    article = journal.result_article(match, TEAMS, {7: "Antoine Dupont"}, "Top 14")
+    article = journal.result_article(match, TEAMS, {7: "Antoine Dupert"}, "Top 14")
     assert article.kind == Kind.RESULT and article.match is match
-    assert article.title.startswith("Stade Toulousain") and "Castres Olympique" in article.title
+    assert (
+        article.title.startswith("Capitouls de Toulouse")
+        and "Tisserands de Castres" in article.title
+    )
     assert article.body.startswith("20-3, 4 essais à 0.")
-    assert "Doublé d'Antoine Dupont." in article.body
+    assert "Doublé d'Antoine Dupert." in article.body
     assert [team.id for team in article.teams] == [1, 2]
 
 
 def test_a_draw_names_both_sides_and_no_winner():
     match = played(home_penalties=2, away_penalties=2)
     article = journal.result_article(match, TEAMS, {}, "Top 14")
-    assert "Stade Toulousain" in article.title and "Castres Olympique" in article.title
+    assert "Capitouls de Toulouse" in article.title and "Tisserands de Castres" in article.title
     assert article.body == "6-6, sans le moindre essai."
 
 
@@ -91,15 +97,18 @@ def test_a_low_ranked_winner_makes_a_bigger_story():
     assert shock.weight > plain.weight
     assert any(word in shock.title for word in ("surprend", "tomber", "Sensation"))
     # Battu de moins de six points : le bonus défensif est signalé.
-    assert "Stade Toulousain sauve le bonus défensif." not in shock.body
+    assert "Capitouls de Toulouse sauvent le bonus défensif." not in shock.body
     close = played(away_tries=(20,), home_penalties=1)
-    assert "sauve le bonus défensif" in journal.result_article(close, TEAMS, {}, "T", even).body
+    assert "sauvent le bonus défensif" in journal.result_article(close, TEAMS, {}, "T", even).body
 
 
 def test_a_final_crowns_its_winner():
     match = played(home_tries=(7,), away_penalties=1, stage=Stage.FINAL)
     article = journal.result_article(match, TEAMS, {}, "Top 14")
-    assert article.title == "Stade Toulousain bat Castres Olympique et décroche le titre"
+    assert (
+        article.title
+        == "Capitouls de Toulouse battent Tisserands de Castres et décrochent le titre"
+    )
     assert article.weight > journal.result_article(played(home_tries=(7,)), TEAMS, {}, "T").weight
 
 
@@ -109,9 +118,9 @@ def test_a_preview_sets_the_fixture_in_the_table():
     table = Table(rows, previous={}, rounds=5)
     article = journal.preview_article(match, TEAMS, "Top 14", table, {2: -3})
     assert article.kind == Kind.PREVIEW
-    assert article.title == "Choc au sommet : Stade Toulousain – Castres Olympique"
+    assert article.title == "Choc au sommet : Capitouls de Toulouse – Tisserands de Castres"
     assert "1er contre 2e." in article.body
-    assert "Castres Olympique reste sur 3 défaites de suite." in article.body
+    assert "Tisserands de Castres restent sur 3 défaites de suite." in article.body
     assert article.body.endswith("Coup d'envoi samedi 3 octobre.")
 
 
@@ -128,7 +137,7 @@ def test_streaks_count_results_in_a_row():
 
 # --- Mouvements ------------------------------------------------------------------------------
 
-DUPONT = Person(7, "Antoine Dupont", Position.SCRUM_HALF, 29, 16.0)
+DUPONT = Person(7, "Antoine Dupert", Position.SCRUM_HALF, 29, 16.0)
 
 
 def test_a_move_reads_by_its_kind():
@@ -136,19 +145,19 @@ def test_a_move_reads_by_its_kind():
         return journal.move_article(Move(kind, DAY, DUPONT, key="1", **fields))
 
     transfer = article(MoveKind.TRANSFER, origin=TOULOUSE, destination=CASTRES, fee=1_200_000)
-    assert "Castres Olympique" in transfer.title and "Antoine Dupont" in transfer.title
+    assert "Tisserands de Castres" in transfer.title and "Antoine Dupert" in transfer.title
     assert transfer.body == (
-        "Le demi de mêlée de 29 ans quitte Stade Toulousain : indemnité de 1,2 M€."
+        "Le demi de mêlée de 29 ans quitte Capitouls de Toulouse : indemnité de 1,2 M€."
     )
     signed = article(MoveKind.PRECONTRACT, origin=TOULOUSE, destination=CASTRES, pending=True)
-    assert signed.title == "Antoine Dupont rejoindra Castres Olympique"
+    assert signed.title == "Antoine Dupert rejoindra Tisserands de Castres"
     left = article(MoveKind.FREE, origin=TOULOUSE, destination=CASTRES)
-    assert left.title == "Antoine Dupont quitte Stade Toulousain pour Castres Olympique"
+    assert left.title == "Antoine Dupert quitte Capitouls de Toulouse pour Tisserands de Castres"
     assert article(MoveKind.FREE, destination=CASTRES).title == (
-        "Castres Olympique engage Antoine Dupont"
+        "Tisserands de Castres engagent Antoine Dupert"
     )
     retired = article(MoveKind.RETIREMENT, origin=TOULOUSE)
-    assert retired.title == "Antoine Dupont raccroche les crampons"
+    assert retired.title == "Antoine Dupert raccroche les crampons"
     assert [team.id for team in retired.teams] == [1]
     # Un départ sans club pèse moins qu'une arrivée.
     assert article(MoveKind.RELEASE, origin=TOULOUSE).weight < left.weight

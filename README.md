@@ -38,7 +38,7 @@ Toutes les commandes se lancent **depuis `backend/`**.
 ```bash
 uv run python -m scripts.run_season                              # 10 clubs, ton club au hasard
 uv run python -m scripts.run_season --clubs 14 --club 3 --seed 42
-uv run python -m scripts.run_season --league top14 --club 1          # les vrais clubs d'un championnat
+uv run python -m scripts.run_season --league top14 --club 1          # les clubs d'un championnat
 uv run python -m scripts.run_season --league top14 --seasons 10 --seed 1   # dix saisons d'affilée
 ```
 
@@ -47,32 +47,28 @@ forme, blessures, phases finales, argent, puis l'intersaison. Avec `--seasons`, 
 tableau suit le niveau, l'âge et la taille des effectifs et la trésorerie des clubs,
 saison après saison. La même graine (`--seed`) rejoue la même histoire.
 
-### Vrais effectifs
+### Effectifs
 
-```bash
-uv run python -m scripts.fetch_rosters            # pros et espoirs de chaque club (Wikipédia)
-uv run python -m scripts.fetch_rosters --missing  # seulement les clubs pas encore récupérés
-uv run python -m scripts.fetch_rosters --club "Stade Toulousain"
-```
+Clubs, stades et joueurs sont inventés : aucun ne porte le nom d'un vrai club ou d'un vrai
+joueur. Les effectifs de départ sont dans `backend/data/rosters.json` (nom, poste,
+nationalité, international, date de naissance). Une nouvelle partie le lit pour créer les
+joueurs des clubs ; un club absent du fichier, ou un poste vide, reçoit des joueurs tirés
+au hasard. Les notes restent calculées par le jeu (niveau du club, international, âge).
 
-Le résultat va dans `backend/data/rosters.json` (nom, poste, international, date de
-naissance et photo via Wikidata). Une nouvelle partie le lit pour créer les joueurs des
-vrais clubs ; un club absent du fichier, ou un poste vide, reçoit des joueurs inventés.
-Les notes restent calculées par le jeu (niveau du club, international, âge). Les parties
-déjà commencées gardent leurs joueurs.
+Les parties commencées du temps des vrais noms sont renommées à leur ouverture, comme le
+catalogue du backoffice (`backend/data/renames.py`).
 
 ### Blasons et couleurs des clubs et des sélections
 
 ```bash
-uv run python -m scripts.fetch_club_logos          # blasons manquants (TheSportsDB) et couleurs
-uv run python -m scripts.fetch_club_logos --force  # retélécharge tous les blasons
+uv run python -m scripts.draw_crests          # écus des clubs, médaillons des sélections
+uv run python -m scripts.draw_legend_crests   # blasons des équipes de légende
 ```
 
-Les blasons vont dans `frontend/public/clubs/`, la table nom → blason et couleurs dans
-`frontend/src/clubLogos.json`. Les couleurs se corrigent dans `COLORS`, en tête du script.
-Les trente-six sélections nationales y sont aussi, sous leur nom français (TheSportsDB
-refuse pour l'instant les requêtes : les nouvelles nations ont l'écusson à initiales, à
-leurs couleurs).
+Tous les blasons sont dessinés par le jeu, aux couleurs de l'équipe : aucun n'est celui
+d'un club ou d'une fédération. Les SVG vont dans `frontend/public/clubs/`, la table nom →
+blason et couleurs dans `frontend/src/clubLogos.json`, où se changent les couleurs avant
+de relancer le script.
 
 ### Lancer l'API
 
@@ -139,9 +135,9 @@ l'API répond 402 et l'interface propose le **jeu complet, 2 € une fois** par
 Stripe Checkout (`backend/api/billing.py`) : trois parties et des saisons sans
 limite. Reprendre un club dans le même monde, après un renvoi, ne coûte pas de saison.
 
-Les photos des vrais joueurs (`GET /photos/{nom}`) viennent de Wikimedia
-Commons mais passent par l'API : récupérées une fois, gardées dans
-`backend/saves/photos/`, puis servies de là.
+Les joueurs n'ont pas de photo d'origine : la silhouette, sauf photo envoyée depuis le
+backoffice. Une photo de Wikimedia Commons désignée dans le backoffice (`GET /photos/{nom}`)
+passe par l'API : récupérée une fois, gardée dans `backend/saves/photos/`, puis servie de là.
 
 Une nouvelle partie est créée avec les 63 clubs de
 cinq championnats (saison 2025-26 ; voir `backend/data/leagues.py`), leurs vrais
@@ -194,7 +190,7 @@ parties ailleurs (ex. pour une instance de test).
 | `POST /career`, `GET /career` | Choisir son club (et la difficulté : `easy`, `normal`, `hard`), ou sa sélection (`nation`) ; tire aussi le calendrier de la 1re saison |
 | `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | Compte : s'inscrire, se connecter (cookie de session), se déconnecter, qui suis-je |
 | `GET /saves`, `POST /saves/{n}/load`, `POST /saves/{n}/new`, `DELETE /saves/{n}` | Parties sauvegardées du compte : lister, charger, créer un monde neuf, supprimer |
-| `GET /photos/{nom}` | Photo d'un vrai joueur, depuis notre copie |
+| `GET /photos/{nom}` | Photo désignée dans le backoffice, depuis notre copie |
 | `GET /leagues` | Les championnats et leur formule |
 | `GET /seasons/current?league=` | Calendrier daté, classement, prochaine journée, phases finales (du championnat du club dirigé par défaut) |
 | `POST /seasons/current/play` | Joue la journée suivante (matchs, billetterie, sponsors, salaires) |

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { clubInfo, clubTheme, inkOn } from "../clubs.js";
 
-// Blason d'un club : l'image téléchargée (scripts/fetch_club_logos.py) pour les vrais
-// clubs, sinon un écusson à initiales aux couleurs du club (clubs inventés, blason
+// Blason d'un club : l'image dessinée (scripts/draw_crests.py) pour les clubs du
+// jeu, sinon un écusson à initiales aux couleurs du club (clubs inventés, blason
 // manquant ou cassé).
 export default function ClubCrest({ name, size = 24, className = "" }) {
   // Blason dont le chargement a échoué (un autre club, on réessaie).

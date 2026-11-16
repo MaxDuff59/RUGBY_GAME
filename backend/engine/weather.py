@@ -90,7 +90,13 @@ SOUTHERN_NATIONS = {
     "Zimbabwe",
 }
 # Hauts plateaux et Cap : plus secs.
-SOUTH_AFRICAN_CLUBS = {"Bulls", "Stormers", "Sharks", "Lions", "Afrique du Sud"}
+SOUTH_AFRICAN_CLUBS = {
+    "Pretoria Buffaloes",
+    "Cape Town Tempest",
+    "Durban Barracudas",
+    "Johannesburg Pride",
+    "Afrique du Sud",
+}
 
 
 def climate(name: str, league: str, day: datetime.date) -> dict[Weather, float]:

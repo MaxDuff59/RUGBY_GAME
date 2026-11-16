@@ -681,8 +681,8 @@ function Field({ label, origin, value, format = (v) => v, hint, children }) {
 
 const SOURCES = {
   backoffice: "Effectif retouché depuis le backoffice.",
-  fichier: "Vrai effectif du jeu (data/rosters.json, d'après Wikipédia).",
-  inventé: "Pas de vrai effectif : le jeu invente les joueurs. Ajoutes-en pour lui en donner un.",
+  fichier: "Effectif du jeu (data/rosters.json).",
+  inventé: "Pas d'effectif au fichier : le jeu invente les joueurs. Ajoutes-en pour lui en donner un.",
 };
 
 const blank = () => ({ name: "", position: "PROP", nationality: null, international: false, born: null, photo: null });

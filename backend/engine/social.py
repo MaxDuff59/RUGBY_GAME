@@ -231,7 +231,7 @@ def tier(rating: float | None) -> str:
 
 
 def _tag(club: str) -> str:
-    """Un mot du club pour les pseudos des supporters : « Biarritz Olympique » -> biarritz."""
+    """Un mot du club pour les pseudos des supporters : « Vagues de Biarritz » -> vagues."""
     words = [w for w in club.replace("-", " ").split() if len(w) > 3 and w[0].isupper()]
     word = (words[0] if words else club.split()[0]).lower()
     plain = str.maketrans("éèêëàâäîïôöûüç'", "eeeeaaaiioouuc_")

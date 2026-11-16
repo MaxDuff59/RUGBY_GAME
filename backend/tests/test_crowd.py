@@ -31,12 +31,12 @@ def test_atmosphere_follows_fill_fervour_and_tradition():
 
 
 def test_perpignan_has_a_hotter_crowd_than_the_racing():
-    assert tradition(Club(1, "USA Perpignan")) > tradition(Club(2, "Racing 92"))
+    assert tradition(Club(1, "Grenats de Perpignan")) > tradition(Club(2, "Flèches de Nanterre"))
     assert tradition(Club(3, "Club inventé")) == 0.5
 
 
 def test_gate_fills_the_stadium_with_a_crowd():
-    home = Club(1, "USA Perpignan")
+    home = Club(1, "Grenats de Perpignan")
     home.facilities.stadium_capacity = 14_500
     crowd = gate(home, rank=1, club_count=14, playoff=True, rng=random.Random(0))
     assert crowd.spectators == crowd.capacity == 14_500  # stade plein en phase finale

@@ -22,15 +22,18 @@ from pathlib import Path
 from sqlalchemy import Engine, create_engine, event, func, inspect, select, text, update
 from sqlalchemy.orm import Session, sessionmaker
 
+from data import renames
 from data.generator import (
     ATTRIBUTE_SPREAD,
     FIRST_SEASON_YEAR,
     PHOTO_PATH,
     POSITION_PROFILES,
+    UPLOADED_PHOTO_PATH,
     generate_clubs,
     generate_real_clubs,
     generate_staff_candidates,
     roster_nationalities,
+    split_name,
 )
 from data.leagues import LEAGUES
 from data.nations import home_nation
@@ -43,7 +46,16 @@ from models import (
     Position,
     overall_at_level,
 )
-from models.orm import LEAGUE_CODE_LENGTH, Base, ClubRow, MoveRow, PlayerRow, StaffRow
+from models.orm import (
+    LEAGUE_CODE_LENGTH,
+    AffairRow,
+    AwardRow,
+    Base,
+    ClubRow,
+    MoveRow,
+    PlayerRow,
+    StaffRow,
+)
 
 # Dossier des parties SQLite et des photos (surchargeable : instance de test, volume en prod).
 SAVES_DIR = Path(os.environ.get("RUGBY_SAVES_DIR", "./saves"))
@@ -537,6 +549,47 @@ def _migrate(engine: Engine) -> None:
         _migrate_sqlite(engine)
     _rescale_potential(engine)
     _fill_potential(engine)
+    _rename_real_names(engine)
+
+
+def _rename_real_names(engine: Engine) -> None:
+    """Une partie commencée avec les vrais clubs prend les noms inventés (data/renames.py) :
+    ses clubs, ses joueurs (qui perdent leur photo d'origine), et leurs noms recopiés dans
+    les palmarès, les mouvements et les affaires. Une fois les clubs renommés, il n'y a
+    plus rien à faire : la partie n'est reprise qu'une fois."""
+    with sessionmaker(bind=engine)() as session:
+        clubs = {
+            club_id: new
+            for club_id, name in session.execute(select(ClubRow.id, ClubRow.name))
+            if (new := renames.club(name))
+        }
+        if not clubs:
+            return
+        for club_id, new in clubs.items():
+            session.execute(update(ClubRow).where(ClubRow.id == club_id).values(name=new))
+        players = session.execute(
+            select(PlayerRow.id, PlayerRow.first_name, PlayerRow.last_name, PlayerRow.photo)
+        )
+        uploaded = UPLOADED_PHOTO_PATH.format("")
+        for player_id, first, last, photo in players.all():
+            values = {}
+            if new := renames.player(f"{first} {last}"):
+                values["first_name"], values["last_name"] = split_name(new)
+            if photo and not photo.startswith(uploaded):
+                values["photo"] = None
+            if values:
+                session.execute(update(PlayerRow).where(PlayerRow.id == player_id).values(values))
+        for model in (AwardRow, MoveRow):
+            for row_id, name in session.execute(select(model.id, model.player_name)).all():
+                if new := renames.player(name):
+                    session.execute(update(model).where(model.id == row_id).values(player_name=new))
+        for row_id, context in session.execute(select(AffairRow.id, AffairRow.context)).all():
+            renamed = {key: renames.text(value) for key, value in (context or {}).items()}
+            if renamed != context:
+                session.execute(
+                    update(AffairRow).where(AffairRow.id == row_id).values(context=renamed)
+                )
+        session.commit()
 
 
 def _migrate_sqlite(engine: Engine) -> None:

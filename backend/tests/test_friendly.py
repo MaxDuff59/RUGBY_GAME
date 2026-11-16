@@ -31,7 +31,7 @@ def test_club_against_nation_without_any_save(guest, monkeypatch):
     groups = guest.get("/friendly/teams").json()
     assert [g["code"] for g in groups[-3:]] == ["nations", "legends", "club_legends"]
     assert {"top14", "premiership", "urc"} <= {g["code"] for g in groups}
-    toulouse = _team(groups, "Stade Toulousain")
+    toulouse = _team(groups, "Capitouls de Toulouse")
     france = _team(groups, "France")
 
     assert guest.get("/friendly").status_code == 404
@@ -40,7 +40,7 @@ def test_club_against_nation_without_any_save(guest, monkeypatch):
     )
     assert prepared.status_code == 201
     setup = prepared.json()
-    assert setup["home"]["name"] == "Stade Toulousain" and not setup["started"]
+    assert setup["home"]["name"] == "Capitouls de Toulouse" and not setup["started"]
     assert not setup["team"]["lineup_custom"]
     # Pas encore de match : la composition d'abord.
     assert guest.get("/friendly").status_code == 404
@@ -63,8 +63,8 @@ def test_club_against_nation_without_any_save(guest, monkeypatch):
     assert bench[-1] in home_ids[:15]
     assert guest.put("/friendly/lineup", json={"player_ids": []}).status_code == 400
     assert live["my_club_id"] == toulouse and live["minute"] == 0
-    assert live["home"]["club"]["name"] == "Stade Toulousain"
-    # Un Toulousain ne joue pas contre son club avec la France.
+    assert live["home"]["club"]["name"] == "Capitouls de Toulouse"
+    # Un joueur de Toulouse ne joue pas contre son club avec la France.
     with friendly.reference() as session:
         clubs = {
             p.id: p.club_id
@@ -106,7 +106,7 @@ def test_legends_against_their_nation(guest):
     ).json()
     assert setup["home"]["name"] == "France de légende"
     names = {f"{p['first_name']} {p['last_name']}" for p in setup["team"]["players"]}
-    assert {"Antoine Dupont", "Serge Blanco", "Philippe Sella"} <= names
+    assert {"Antoine Dupert", "Serge Blenco", "Philippe Salla"} <= names
     # Les légendes sont un cran au-dessus de la sélection d'aujourd'hui.
     mine = setup["team"]["strength"]
     guest.delete("/friendly")
@@ -132,29 +132,29 @@ def test_club_legends_against_their_club(guest):
     assert {t["level"] for t in teams} <= {1 + n / 2 for n in range(9)}
     assert max(t["level"] for t in teams) == 5 and min(t["level"] for t in teams) == 1
     assert min(t["level"] for t in clubs["teams"]) >= 4
-    legends = _team(groups, "Stade Français Paris de légende")
-    paris = _team(groups, "Stade Français Paris")
+    legends = _team(groups, "Roses de Paris de légende")
+    paris = _team(groups, "Roses de Paris")
     setup = guest.post(
         "/friendly", json={"home_id": paris, "away_id": legends, "my_id": legends}
     ).json()
     players = {f"{p['first_name']} {p['last_name']}": p for p in setup["team"]["players"]}
-    assert {"Julien Arias", "Sergio Parisse", "Christophe Dominici"} <= set(players)
+    assert {"Julien Arios", "Sergio Paresse", "Christophe Domineci"} <= set(players)
     # Chacun garde sa nationalité, le club donne la sienne aux autres.
-    assert players["Sergio Parisse"]["nationality"] == "ITA"
-    assert players["Julien Arias"]["nationality"] == "FRA"
-    # Julien Arias, titulaire attitré, porte le 14 (13e place du XV) ; le joueur reste
+    assert players["Sergio Paresse"]["nationality"] == "ITA"
+    assert players["Julien Arios"]["nationality"] == "FRA"
+    # Julien Arios, titulaire attitré, porte le 14 (13e place du XV) ; le joueur reste
     # libre de composer autrement.
-    arias = players["Julien Arias"]["id"]
+    arias = players["Julien Arios"]["id"]
     assert setup["team"]["strength"]["lineup_ids"][13] == arias
     assert setup["team"]["lineup_custom"] is False
-    camara = players["Djibril Camara"]["id"]
+    camara = players["Djibril Camora"]["id"]
     xv = guest.put("/friendly/lineup", json={"player_ids": [None] * 13 + [camara]}).json()
     assert xv["team"]["strength"]["lineup_ids"][13] == camara and xv["team"]["lineup_custom"]
     xv = guest.delete("/friendly/lineup").json()
     assert xv["team"]["strength"]["lineup_ids"][13] == arias
 
     live = guest.post("/friendly/kickoff").json()
-    assert live["away"]["club"]["name"] == "Stade Français Paris de légende"
+    assert live["away"]["club"]["name"] == "Roses de Paris de légende"
     assert guest.post("/friendly/finish").json()["finished"] is True
 
 
@@ -171,7 +171,7 @@ def test_a_legend_keeps_his_rating_from_team_to_team():
 
 def test_friendly_refuses_bad_choices(guest):
     groups = guest.get("/friendly/teams").json()
-    toulouse = _team(groups, "Stade Toulousain")
+    toulouse = _team(groups, "Capitouls de Toulouse")
     nz = _team(groups, "Nouvelle-Zélande")
 
     def start(home, away, mine):
@@ -208,7 +208,7 @@ def test_interrupted_reference_world_is_rebuilt(guest, monkeypatch):
 
 def test_a_guest_who_leaves_takes_their_friendly_along(guest):
     groups = guest.get("/friendly/teams").json()
-    toulouse, nz = _team(groups, "Stade Toulousain"), _team(groups, "Nouvelle-Zélande")
+    toulouse, nz = _team(groups, "Capitouls de Toulouse"), _team(groups, "Nouvelle-Zélande")
     guest.post("/friendly", json={"home_id": toulouse, "away_id": nz, "my_id": toulouse})
     guest.post("/auth/logout")
     # Le compte suivant (SQLite peut lui redonner le même identifiant) part de zéro.
@@ -220,7 +220,7 @@ def test_the_player_decides_dilemmas_in_a_friendly(guest, monkeypatch):
     """Au match libre aussi, le joueur tranche des dilemmes pour son XV (/friendly/choose)."""
     monkeypatch.setattr(dilemmas, "COACH_DILEMMA_CHANCE", 1.0)
     groups = guest.get("/friendly/teams").json()
-    toulouse, france = _team(groups, "Stade Toulousain"), _team(groups, "France")
+    toulouse, france = _team(groups, "Capitouls de Toulouse"), _team(groups, "France")
     guest.post("/friendly", json={"home_id": toulouse, "away_id": france, "my_id": toulouse})
     guest.post("/friendly/kickoff")
     live = guest.post("/friendly/advance", json={"minutes": 10}).json()

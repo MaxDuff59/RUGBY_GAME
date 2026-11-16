@@ -6,9 +6,9 @@ classement) et lui donne un poids : c'est lui qui décide de la une (`edition`).
 Rien n'est tiré au hasard : le même monde donne le même journal.
 
 Les textes s'en tiennent à ce que le jeu sait dire sans faute. Un club s'écrit
-sans article, comme dans un titre de dépêche (« Stade Toulousain écrase... ») ;
-une sélection prend le sien (« la France », « les Fidji »), comme une franchise
-au nom pluriel (« les Crusaders »), et le verbe s'accorde.
+sans article, comme dans un titre de dépêche (« Capitouls de Toulouse écrasent... ») ;
+une sélection prend le sien (« la France », « les Fidji »), et le verbe s'accorde
+avec un nom pluriel (« Roses de Paris », « Leicester Jaguars »).
 """
 
 import datetime
@@ -122,29 +122,41 @@ _NATION_ARTICLES = {
     "SRI": "le ",
 }
 _PLURAL_NATIONS = frozenset({"FIJ", "SAM", "TON", "NED", "USA", "UAE"})
-# Franchises dont le dernier mot du nom est un pluriel (« les Crusaders dominent... »).
+# Clubs dont le dernier mot du nom est un pluriel (« Leicester Jaguars dominent... »).
 _PLURAL_NAMES = frozenset(
     {
-        "Bears",
-        "Blues",
-        "Brumbies",
-        "Bulls",
-        "Chiefs",
-        "Crusaders",
-        "Harlequins",
-        "Highlanders",
-        "Hurricanes",
-        "Lions",
-        "Reds",
-        "Saints",
-        "Saracens",
-        "Sharks",
-        "Stormers",
-        "Tigers",
-        "Waratahs",
-        "Warriors",
+        "Barracudas",
+        "Buccaneers",
+        "Buffaloes",
+        "Captains",
+        "Clansmen",
+        "Cyclones",
+        "Dockers",
+        "Gales",
+        "Harps",
+        "Jaguars",
+        "Jesters",
+        "Kestrels",
+        "Knights",
+        "Mariners",
+        "Mountaineers",
+        "Mustangs",
+        "Orcas",
+        "Pilgrims",
+        "Raiders",
+        "Romans",
+        "Rubies",
+        "Scimitars",
+        "Shipwrights",
+        "Stags",
+        "Thistles",
+        "Tides",
+        "Voyagers",
+        "Wattles",
     }
 )
+# « Roses de Paris », « Lynx d'Oyonnax », « Échassiers du Marsan » : le premier mot fait l'accord.
+_OF = (" de ", " d'", " du ", " des ")
 _FEATS = {2: "Doublé", 3: "Triplé", 4: "Quadruplé"}
 _VOWELS = "aeiouyhàâéèêëîïôöùûü"
 
@@ -178,7 +190,7 @@ def nth(rank: int) -> str:
 
 
 def of(name: str) -> str:
-    """« de Thomas Ramos », « d'Antoine Dupont »"""
+    """« de Thomas Ramas », « d'Antoine Dupert »"""
     return f"d'{name}" if name[:1].lower() in _VOWELS else f"de {name}"
 
 
@@ -224,9 +236,15 @@ class Team:
 
 
 def club_team(club_id: int, name: str) -> Team:
-    plural = name.split()[-1] in _PLURAL_NAMES if name else False
-    # « les Crusaders », mais « Leicester Tigers » : l'article ne va qu'au nom seul.
-    return Team(club_id, name, "les " if plural and " " not in name else "", plural)
+    words = name.split()
+    if not words:
+        return Team(club_id, name)
+    if any(of in name for of in _OF):
+        plural = words[0].endswith(("s", "x"))
+    else:
+        plural = words[-1] in _PLURAL_NAMES
+    # « les Knights », mais « Leicester Jaguars » : l'article ne va qu'au nom seul.
+    return Team(club_id, name, "les " if plural and len(words) == 1 else "", plural)
 
 
 def nation_team(team_id: int, code: str, name: str) -> Team:

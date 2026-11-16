@@ -278,8 +278,8 @@ def _appearance(match_id, rating, minutes=80, tries=0, started=True, moments=())
     return social.Appearance(
         match_id=match_id,
         date=datetime.date(2026, 9, match_id),
-        club="Biarritz Olympique",
-        opponent="SU Agen",
+        club="Vagues de Biarritz",
+        opponent="Pruniers d'Agen",
         score_for=20,
         score_against=13,
         minutes=minutes,
@@ -290,7 +290,7 @@ def _appearance(match_id, rating, minutes=80, tries=0, started=True, moments=())
     )
 
 
-HERO = social.Hero("Jean", "Dupont", Position.WING, "Biarritz Olympique")
+HERO = social.Hero("Jean", "Dupont", Position.WING, "Vagues de Biarritz")
 
 
 def test_the_feed_tells_the_story_newest_first():
@@ -830,7 +830,9 @@ def side_of(live: dict) -> str:
 
 def test_a_great_player_is_called_up_and_plays_his_test_live(top14):
     client, TestSession = top14
-    toulouse = next(c["id"] for c in client.get("/clubs").json() if c["name"] == "Stade Toulousain")
+    toulouse = next(
+        c["id"] for c in client.get("/clubs").json() if c["name"] == "Capitouls de Toulouse"
+    )
     _start(client, club_id=toulouse)
     beginner = client.get("/hero").json()
     assert beginner["nation"] == "France" and beginner["call_up_chance"] < 0.1
@@ -881,7 +883,9 @@ def test_a_great_player_is_called_up_and_plays_his_test_live(top14):
 
 def test_a_simulated_test_counts_in_his_season(top14):
     client, TestSession = top14
-    toulouse = next(c["id"] for c in client.get("/clubs").json() if c["name"] == "Stade Toulousain")
+    toulouse = next(
+        c["id"] for c in client.get("/clubs").json() if c["name"] == "Capitouls de Toulouse"
+    )
     _start(client, club_id=toulouse)
     with TestSession() as session:
         player = session.get(PlayerRow, session.scalars(select(HeroRow)).first().player_id)
@@ -901,7 +905,9 @@ def test_a_simulated_test_counts_in_his_season(top14):
 
 def test_an_international_title_is_celebrated_once_and_kept(top14, monkeypatch):
     client, TestSession = top14
-    toulouse = next(c["id"] for c in client.get("/clubs").json() if c["name"] == "Stade Toulousain")
+    toulouse = next(
+        c["id"] for c in client.get("/clubs").json() if c["name"] == "Capitouls de Toulouse"
+    )
     _start(client, club_id=toulouse)
     with TestSession() as session:
         player = session.get(PlayerRow, session.scalars(select(HeroRow)).first().player_id)

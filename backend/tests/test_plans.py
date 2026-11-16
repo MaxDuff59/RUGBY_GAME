@@ -41,7 +41,7 @@ def plan(client: TestClient) -> tuple[bool, int, int | None]:
 
 def test_a_free_account_counts_its_seasons_even_once_deleted(player):
     assert plan(player) == (False, 0, 2)
-    start(player, 1, "Maxence", "Stade Toulousain")
+    start(player, 1, "Maxence", "Capitouls de Toulouse")
     assert plan(player) == (False, 1, 1)
 
     # Une seule partie : la deuxième attend qu'on supprime la première.
@@ -51,7 +51,7 @@ def test_a_free_account_counts_its_seasons_even_once_deleted(player):
 
     # Supprimer la carrière ne rend pas sa saison : la suivante est la dernière.
     player.delete("/saves/1")
-    start(player, 1, "Maxence", "Bath Rugby")
+    start(player, 1, "Maxence", "Bath Romans")
     assert plan(player) == (False, 2, 0)
     player.delete("/saves/1")
     refused = player.post("/saves/1/new")
@@ -60,7 +60,7 @@ def test_a_free_account_counts_its_seasons_even_once_deleted(player):
 
 
 def test_the_next_season_waits_for_the_full_game(player):
-    start(player, 1, "Maxence", "Stade Toulousain")
+    start(player, 1, "Maxence", "Capitouls de Toulouse")
     accounts.count_season(1)  # la deuxième saison est commencée
     refused = player.post("/seasons/next")
     assert refused.status_code == 402 and "jeu complet" in refused.json()["detail"]
@@ -69,9 +69,9 @@ def test_the_next_season_waits_for_the_full_game(player):
 
 
 def test_taking_another_club_in_the_same_world_costs_no_season(player):
-    start(player, 1, "Maxence", "Stade Toulousain")
+    start(player, 1, "Maxence", "Capitouls de Toulouse")
     clubs = {c["name"]: c["id"] for c in player.get("/clubs").json()}
-    again = player.post("/career", json={"manager_name": "Alex", "club_id": clubs["Bath Rugby"]})
+    again = player.post("/career", json={"manager_name": "Alex", "club_id": clubs["Bath Romans"]})
     assert again.status_code == 201
     assert plan(player) == (False, 1, 1)
 
@@ -80,7 +80,7 @@ def test_a_guest_at_the_limit_is_sent_to_create_an_account(world):
     auth._attempts.clear()
     guest = TestClient(app)
     guest.post("/auth/guest")
-    start(guest, 1, "Maxence", "Stade Toulousain")
+    start(guest, 1, "Maxence", "Capitouls de Toulouse")
     user_id = guest.get("/auth/me").json()["id"]
     accounts.count_season(user_id)  # ses deux saisons sont commencées
     refused = guest.post("/seasons/next")
@@ -90,21 +90,21 @@ def test_a_guest_at_the_limit_is_sent_to_create_an_account(world):
 
 def test_without_the_paywall_everything_is_free(player, monkeypatch):
     monkeypatch.setattr(plans, "PAYWALL", False)
-    start(player, 1, "Maxence", "Stade Toulousain")
+    start(player, 1, "Maxence", "Capitouls de Toulouse")
     accounts.count_season(1)
     assert player.get("/auth/me").json()["paywall"] is False
-    start(player, 2, "Alex", "Leinster Rugby")  # une deuxième partie
+    start(player, 2, "Alex", "Dublin Harps")  # une deuxième partie
     assert database.slot_exists(1, 2)
     assert plan(player) == (False, 3, 0)  # les saisons se comptent toujours
     assert player.post("/seasons/next").status_code != 402
 
 
 def test_the_full_game_has_no_limit(player):
-    start(player, 1, "Maxence", "Stade Toulousain")
+    start(player, 1, "Maxence", "Capitouls de Toulouse")
     accounts.count_season(1)
     accounts.grant_premium(1, "pi_test")
     assert plan(player) == (True, 2, None)
-    start(player, 2, "Alex", "Leinster Rugby")
+    start(player, 2, "Alex", "Dublin Harps")
     assert plan(player) == (True, 2, None)  # le jeu complet ne compte plus
     assert player.post("/seasons/next").status_code != 402
 

@@ -2,8 +2,8 @@ import { useEffect } from "react";
 import { BASE_URL } from "./api.js";
 import manifest from "./clubLogos.json";
 
-// Blason et couleurs d'un club ou d'une sélection nationale. Les vrais clubs et les
-// sélections ont les leurs (clubLogos.json, rempli par backend/scripts/fetch_club_logos.py) ;
+// Blason et couleurs d'un club ou d'une sélection nationale. Les clubs du jeu et les
+// sélections ont les leurs (clubLogos.json, rempli par backend/scripts/draw_crests.py) ;
 // un club inventé reçoit deux couleurs tirées de son nom, toujours les mêmes, et l'écusson
 // à initiales.
 

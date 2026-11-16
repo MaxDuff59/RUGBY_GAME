@@ -1,21 +1,6 @@
 {
-  "AS Béziers Hérault": {
-    "logo": "/clubs/as-beziers-herault.png",
-    "colors": ["#C8102E", "#002B7F"],
-    "light": false
-  },
-  "ASM Clermont Auvergne": {
-    "logo": "/clubs/asm-clermont-auvergne.png",
-    "colors": ["#FFD100", "#002B5C"],
-    "light": false
-  },
-  "ASM Clermont Auvergne de légende": {
-    "logo": "/clubs/legendes/asm-clermont-auvergne.svg",
-    "colors": ["#002B5C", "#FFD100"],
-    "light": false
-  },
   "Afrique du Sud": {
-    "logo": "/clubs/afrique-du-sud.png",
+    "logo": "/clubs/afrique-du-sud.svg",
     "colors": ["#0B5A3C", "#F2C230"],
     "light": false
   },
@@ -25,13 +10,17 @@
     "light": false
   },
   "Algérie": {
-    "colors": ["#006233", "#FFFFFF"]
+    "logo": "/clubs/algerie.svg",
+    "colors": ["#006233", "#FFFFFF"],
+    "light": false
   },
   "Allemagne": {
-    "colors": ["#111111", "#FFFFFF"]
+    "logo": "/clubs/allemagne.svg",
+    "colors": ["#111111", "#FFFFFF"],
+    "light": false
   },
   "Angleterre": {
-    "logo": "/clubs/angleterre.png",
+    "logo": "/clubs/angleterre.svg",
     "colors": ["#C8102E", "#FFFFFF"],
     "light": false
   },
@@ -41,12 +30,22 @@
     "light": false
   },
   "Argentine": {
-    "logo": "/clubs/argentine.png",
+    "logo": "/clubs/argentine.svg",
     "colors": ["#3F87C5", "#FFFFFF"],
     "light": false
   },
+  "Auckland Mariners": {
+    "logo": "/clubs/auckland-mariners.svg",
+    "colors": ["#002B7F", "#6CACE4"],
+    "light": false
+  },
+  "Auckland Mariners de légende": {
+    "logo": "/clubs/legendes/auckland-mariners.svg",
+    "colors": ["#002B7F", "#6CACE4"],
+    "light": false
+  },
   "Australie": {
-    "logo": "/clubs/australie.png",
+    "logo": "/clubs/australie.svg",
     "colors": ["#B57A00", "#0B5A3C"],
     "light": false
   },
@@ -55,127 +54,188 @@
     "colors": ["#F0B323", "#0B5A3C"],
     "light": false
   },
-  "Aviron Bayonnais": {
-    "logo": "/clubs/aviron-bayonnais.png",
-    "colors": ["#6CACE4", "#FFFFFF"],
+  "Aviateurs de Colomiers": {
+    "logo": "/clubs/aviateurs-de-colomiers.svg",
+    "colors": ["#0050A0", "#FFFFFF"],
     "light": false
   },
-  "Bath Rugby": {
-    "logo": "/clubs/bath-rugby.png",
+  "Bath Romans": {
+    "logo": "/clubs/bath-romans.svg",
     "colors": ["#FFFFFF", "#000000"],
     "light": false
   },
+  "Belfast Shipwrights": {
+    "logo": "/clubs/belfast-shipwrights.svg",
+    "colors": ["#FFFFFF", "#C8102E"],
+    "light": false
+  },
   "Belgique": {
-    "colors": ["#C8102E", "#111111"]
-  },
-  "Benetton Rugby": {
-    "logo": "/clubs/benetton-rugby.png",
-    "colors": ["#006241", "#FFFFFF"],
+    "logo": "/clubs/belgique.svg",
+    "colors": ["#C8102E", "#111111"],
     "light": false
   },
-  "Biarritz Olympique": {
-    "logo": "/clubs/biarritz-olympique.png",
-    "colors": ["#D50032", "#FFFFFF"],
+  "Brisbane Rubies": {
+    "logo": "/clubs/brisbane-rubies.svg",
+    "colors": ["#C8102E", "#FFFFFF"],
     "light": false
   },
-  "Blues": {
-    "logo": "/clubs/blues.png",
-    "colors": ["#002B7F", "#6CACE4"],
-    "light": false
-  },
-  "Blues de légende": {
-    "logo": "/clubs/legendes/blues.svg",
-    "colors": ["#002B7F", "#6CACE4"],
-    "light": false
-  },
-  "Bristol Bears": {
-    "logo": "/clubs/bristol-bears.png",
+  "Bristol Buccaneers": {
+    "logo": "/clubs/bristol-buccaneers.svg",
     "colors": ["#13294B", "#FFFFFF"],
     "light": false
   },
-  "Brumbies": {
-    "logo": "/clubs/brumbies.png",
-    "colors": ["#002B5C", "#FFC72C"],
-    "light": false
-  },
   "Brésil": {
-    "colors": ["#FEDD00", "#009C3B"]
-  },
-  "Bulls": {
-    "logo": "/clubs/bulls.png",
-    "colors": ["#009FDB", "#002B5C"],
-    "light": false
-  },
-  "CA Brive": {
-    "logo": "/clubs/ca-brive.png",
-    "colors": ["#000000", "#FFFFFF"],
+    "logo": "/clubs/bresil.svg",
+    "colors": ["#FEDD00", "#009C3B"],
     "light": false
   },
   "Canada": {
-    "colors": ["#D80621", "#FFFFFF"]
-  },
-  "Castres Olympique": {
-    "logo": "/clubs/castres-olympique.png",
-    "colors": ["#0055A4", "#FFFFFF"],
+    "logo": "/clubs/canada.svg",
+    "colors": ["#D80621", "#FFFFFF"],
     "light": false
   },
-  "Chiefs": {
-    "logo": "/clubs/chiefs.png",
-    "colors": ["#FFC72C", "#000000"],
+  "Canberra Mustangs": {
+    "logo": "/clubs/canberra-mustangs.svg",
+    "colors": ["#002B5C", "#FFC72C"],
+    "light": false
+  },
+  "Cantalous d'Aurillac": {
+    "logo": "/clubs/cantalous-d-aurillac.svg",
+    "colors": ["#E30613", "#003A70"],
+    "light": false
+  },
+  "Canuts de Lyon": {
+    "logo": "/clubs/canuts-de-lyon.svg",
+    "colors": ["#E30613", "#000000"],
+    "light": false
+  },
+  "Cape Town Tempest": {
+    "logo": "/clubs/cape-town-tempest.svg",
+    "colors": ["#002B5C", "#FFFFFF"],
+    "light": false
+  },
+  "Capitouls de Toulouse": {
+    "logo": "/clubs/capitouls-de-toulouse.svg",
+    "colors": ["#D00F16", "#000000"],
+    "light": false
+  },
+  "Capitouls de Toulouse de légende": {
+    "logo": "/clubs/legendes/capitouls-de-toulouse.svg",
+    "colors": ["#111111", "#E30613"],
+    "light": false
+  },
+  "Chevaliers de Carcassonne": {
+    "logo": "/clubs/chevaliers-de-carcassonne.svg",
+    "colors": ["#FFD200", "#000000"],
     "light": false
   },
   "Chili": {
-    "colors": ["#D52B1E", "#0039A6"]
-  },
-  "Colomiers Rugby": {
-    "colors": ["#0050A0", "#FFFFFF"]
-  },
-  "Connacht Rugby": {
-    "logo": "/clubs/connacht-rugby.png",
-    "colors": ["#00843D", "#FFFFFF"],
+    "logo": "/clubs/chili.svg",
+    "colors": ["#D52B1E", "#0039A6"],
     "light": false
   },
-  "Corée du Sud": {
-    "colors": ["#CD2E3A", "#0047A0"]
+  "Christchurch Knights": {
+    "logo": "/clubs/christchurch-knights.svg",
+    "colors": ["#D00F16", "#000000"],
+    "light": false
   },
-  "Crusaders": {
-    "colors": ["#D00F16", "#000000"]
-  },
-  "Crusaders de légende": {
-    "logo": "/clubs/legendes/crusaders.svg",
+  "Christchurch Knights de légende": {
+    "logo": "/clubs/legendes/christchurch-knights.svg",
     "colors": ["#D00F16", "#111111"],
     "light": false
   },
-  "Edinburgh Rugby": {
-    "logo": "/clubs/edinburgh-rugby.png",
+  "Cigales d'Aix": {
+    "logo": "/clubs/cigales-d-aix.svg",
+    "colors": ["#1B3E8E", "#F5C400"],
+    "light": false
+  },
+  "Corsaires de Toulon": {
+    "logo": "/clubs/corsaires-de-toulon.svg",
+    "colors": ["#E2001A", "#000000"],
+    "light": false
+  },
+  "Corsaires de Toulon de légende": {
+    "logo": "/clubs/legendes/corsaires-de-toulon.svg",
+    "colors": ["#C8102E", "#111111"],
+    "light": false
+  },
+  "Corée du Sud": {
+    "logo": "/clubs/coree-du-sud.svg",
+    "colors": ["#CD2E3A", "#0047A0"],
+    "light": false
+  },
+  "Dauphins de Grenoble": {
+    "logo": "/clubs/dauphins-de-grenoble.svg",
+    "colors": ["#E30613", "#0055A4"],
+    "light": false
+  },
+  "Dublin Harps": {
+    "logo": "/clubs/dublin-harps.svg",
+    "colors": ["#0055A4", "#FFFFFF"],
+    "light": false
+  },
+  "Dublin Harps de légende": {
+    "logo": "/clubs/legendes/dublin-harps.svg",
+    "colors": ["#0055A4", "#D9A93A"],
+    "light": false
+  },
+  "Ducs de Nevers": {
+    "logo": "/clubs/ducs-de-nevers.svg",
+    "colors": ["#C8102E", "#FFC72C"],
+    "light": false
+  },
+  "Dunedin Mountaineers": {
+    "logo": "/clubs/dunedin-mountaineers.svg",
+    "colors": ["#1B2A6B", "#8A1538"],
+    "light": false
+  },
+  "Durban Barracudas": {
+    "logo": "/clubs/durban-barracudas.svg",
+    "colors": ["#000000", "#FFFFFF"],
+    "light": false
+  },
+  "Edinburgh Thistles": {
+    "logo": "/clubs/edinburgh-thistles.svg",
     "colors": ["#000000", "#B5121B"],
     "light": false
   },
   "Espagne": {
-    "colors": ["#C60B1E", "#FFC400"]
+    "logo": "/clubs/espagne.svg",
+    "colors": ["#C60B1E", "#FFC400"],
+    "light": false
   },
-  "Exeter Chiefs": {
-    "logo": "/clubs/exeter-chiefs.png",
+  "Exeter Stags": {
+    "logo": "/clubs/exeter-stags.svg",
     "colors": ["#000000", "#FFFFFF"],
     "light": false
   },
-  "FC Grenoble": {
-    "logo": "/clubs/fc-grenoble.png",
-    "colors": ["#E30613", "#0055A4"],
+  "Faucons de Montauban": {
+    "logo": "/clubs/faucons-de-montauban.svg",
+    "colors": ["#006B3F", "#000000"],
     "light": false
   },
   "Fidji": {
-    "logo": "/clubs/fidji.png",
+    "logo": "/clubs/fidji.svg",
     "colors": ["#1A1A1A", "#68BFE5"],
     "light": false
   },
-  "Fijian Drua": {
-    "logo": "/clubs/fijian-drua.png",
-    "colors": ["#0072CE", "#FFFFFF"],
-    "light": true
+  "Flamants de Montpellier": {
+    "logo": "/clubs/flamants-de-montpellier.svg",
+    "colors": ["#0A2D6E", "#6EC1E4"],
+    "light": false
+  },
+  "Flèches de Nanterre": {
+    "logo": "/clubs/fleches-de-nanterre.svg",
+    "colors": ["#7CC4EA", "#0A1F44"],
+    "light": false
+  },
+  "Flèches de Nanterre de légende": {
+    "logo": "/clubs/legendes/fleches-de-nanterre.svg",
+    "colors": ["#0A1F44", "#8FD0F2"],
+    "light": false
   },
   "France": {
-    "logo": "/clubs/france.png",
+    "logo": "/clubs/france.svg",
     "colors": ["#0B2A6F", "#FFFFFF"],
     "light": false
   },
@@ -184,41 +244,58 @@
     "colors": ["#0B2A6F", "#D9A93A"],
     "light": false
   },
-  "Glasgow Warriors": {
-    "logo": "/clubs/glasgow-warriors.png",
+  "Gaillards de Brive": {
+    "logo": "/clubs/gaillards-de-brive.svg",
+    "colors": ["#000000", "#FFFFFF"],
+    "light": false
+  },
+  "Galway Gales": {
+    "logo": "/clubs/galway-gales.svg",
+    "colors": ["#00843D", "#FFFFFF"],
+    "light": false
+  },
+  "Glasgow Clansmen": {
+    "logo": "/clubs/glasgow-clansmen.svg",
     "colors": ["#002D72", "#6EC1E4"],
     "light": false
   },
-  "Gloucester Rugby": {
-    "logo": "/clubs/gloucester-rugby.png",
+  "Gloucester Dockers": {
+    "logo": "/clubs/gloucester-dockers.svg",
     "colors": ["#CE0E2D", "#FFFFFF"],
     "light": false
   },
+  "Goélands de La Rochelle": {
+    "logo": "/clubs/goelands-de-la-rochelle.svg",
+    "colors": ["#FFD200", "#000000"],
+    "light": false
+  },
+  "Grenats de Perpignan": {
+    "logo": "/clubs/grenats-de-perpignan.svg",
+    "colors": ["#C8102E", "#FFC72C"],
+    "light": false
+  },
   "Géorgie": {
-    "logo": "/clubs/georgie.png",
+    "logo": "/clubs/georgie.svg",
     "colors": ["#8C1D2C", "#FFFFFF"],
     "light": false
   },
-  "Harlequins": {
-    "logo": "/clubs/harlequins.png",
-    "colors": ["#C8006A", "#00A9E0"],
+  "Hamilton Captains": {
+    "logo": "/clubs/hamilton-captains.svg",
+    "colors": ["#FFC72C", "#000000"],
     "light": false
   },
-  "Highlanders": {
-    "logo": "/clubs/highlanders.png",
-    "colors": ["#1B2A6B", "#8A1538"],
+  "Hermines de Vannes": {
+    "logo": "/clubs/hermines-de-vannes.svg",
+    "colors": ["#003C71", "#FFFFFF"],
     "light": false
   },
   "Hong Kong": {
-    "colors": ["#DE2910", "#FFFFFF"]
-  },
-  "Hurricanes": {
-    "logo": "/clubs/hurricanes.png",
-    "colors": ["#FFD100", "#000000"],
+    "logo": "/clubs/hong-kong.svg",
+    "colors": ["#DE2910", "#FFFFFF"],
     "light": false
   },
   "Irlande": {
-    "logo": "/clubs/irlande.png",
+    "logo": "/clubs/irlande.svg",
     "colors": ["#0E7C4A", "#FFFFFF"],
     "light": false
   },
@@ -227,107 +304,123 @@
     "colors": ["#0E7C4A", "#D9A93A"],
     "light": false
   },
+  "Isards de Pau": {
+    "logo": "/clubs/isards-de-pau.svg",
+    "colors": ["#00843D", "#FFFFFF"],
+    "light": false
+  },
   "Italie": {
-    "logo": "/clubs/italie.png",
+    "logo": "/clubs/italie.svg",
     "colors": ["#1B5FBF", "#FFFFFF"],
     "light": false
   },
   "Japon": {
-    "logo": "/clubs/japon.png",
+    "logo": "/clubs/japon.svg",
     "colors": ["#BC002D", "#FFFFFF"],
     "light": false
   },
-  "Kenya": {
-    "colors": ["#BB0000", "#006600"]
-  },
-  "LOU Rugby": {
-    "logo": "/clubs/lou-rugby.png",
-    "colors": ["#E30613", "#000000"],
-    "light": false
-  },
-  "Leicester Tigers": {
-    "logo": "/clubs/leicester-tigers.png",
-    "colors": ["#006A4E", "#C8102E"],
-    "light": false
-  },
-  "Leicester Tigers de légende": {
-    "logo": "/clubs/legendes/leicester-tigers.svg",
-    "colors": ["#00553B", "#D9A93A"],
-    "light": false
-  },
-  "Leinster Rugby": {
-    "logo": "/clubs/leinster-rugby.png",
-    "colors": ["#0055A4", "#FFFFFF"],
-    "light": false
-  },
-  "Leinster Rugby de légende": {
-    "logo": "/clubs/legendes/leinster-rugby.svg",
-    "colors": ["#0055A4", "#D9A93A"],
-    "light": false
-  },
-  "Lions": {
-    "logo": "/clubs/lions.png",
+  "Johannesburg Pride": {
+    "logo": "/clubs/johannesburg-pride.svg",
     "colors": ["#DA291C", "#FFFFFF"],
     "light": false
   },
-  "Moana Pasifika": {
-    "logo": "/clubs/moana-pasifika.png",
-    "colors": ["#00A0AF", "#000000"],
+  "Kenya": {
+    "logo": "/clubs/kenya.svg",
+    "colors": ["#BB0000", "#006600"],
     "light": false
   },
-  "Montpellier Hérault Rugby": {
-    "logo": "/clubs/montpellier-herault-rugby.png",
-    "colors": ["#0A2D6E", "#6EC1E4"],
+  "Lautoka Voyagers": {
+    "logo": "/clubs/lautoka-voyagers.svg",
+    "colors": ["#0072CE", "#FFFFFF"],
     "light": false
   },
-  "Munster Rugby": {
-    "logo": "/clubs/munster-rugby.png",
+  "Lavandes de Valence": {
+    "logo": "/clubs/lavandes-de-valence.svg",
+    "colors": ["#00447C", "#FFFFFF"],
+    "light": false
+  },
+  "Leicester Jaguars": {
+    "logo": "/clubs/leicester-jaguars.svg",
+    "colors": ["#006A4E", "#C8102E"],
+    "light": false
+  },
+  "Leicester Jaguars de légende": {
+    "logo": "/clubs/legendes/leicester-jaguars.svg",
+    "colors": ["#00553B", "#D9A93A"],
+    "light": false
+  },
+  "Limerick Raiders": {
+    "logo": "/clubs/limerick-raiders.svg",
     "colors": ["#C8102E", "#002B5C"],
     "light": false
   },
-  "Munster Rugby de légende": {
-    "logo": "/clubs/legendes/munster-rugby.svg",
+  "Limerick Raiders de légende": {
+    "logo": "/clubs/legendes/limerick-raiders.svg",
     "colors": ["#C8102E", "#D9A93A"],
     "light": false
   },
-  "NSW Waratahs": {
-    "logo": "/clubs/nsw-waratahs.png",
-    "colors": ["#3EA6E8", "#002B5C"],
+  "London Jesters": {
+    "logo": "/clubs/london-jesters.svg",
+    "colors": ["#C8006A", "#00A9E0"],
+    "light": false
+  },
+  "London Scimitars": {
+    "logo": "/clubs/london-scimitars.svg",
+    "colors": ["#000000", "#D00F16"],
+    "light": false
+  },
+  "London Scimitars de légende": {
+    "logo": "/clubs/legendes/london-scimitars.svg",
+    "colors": ["#111111", "#E4002B"],
+    "light": false
+  },
+  "Lynx d'Oyonnax": {
+    "logo": "/clubs/lynx-d-oyonnax.svg",
+    "colors": ["#D50032", "#000000"],
     "light": false
   },
   "Namibie": {
-    "colors": ["#003580", "#009543"]
+    "logo": "/clubs/namibie.svg",
+    "colors": ["#003580", "#009543"],
+    "light": false
   },
-  "Newcastle Red Bulls": {
-    "logo": "/clubs/newcastle-red-bulls.png",
+  "Newcastle Kestrels": {
+    "logo": "/clubs/newcastle-kestrels.svg",
     "colors": ["#DB0A40", "#001E62"],
     "light": false
   },
-  "Northampton Saints": {
-    "logo": "/clubs/northampton-saints.png",
+  "Northampton Pilgrims": {
+    "logo": "/clubs/northampton-pilgrims.svg",
     "colors": ["#00703C", "#C9A227"],
     "light": false
   },
   "Nouvelle-Zélande": {
-    "logo": "/clubs/nouvelle-zelande.png",
+    "logo": "/clubs/nouvelle-zelande.svg",
     "colors": ["#111111", "#FFFFFF"],
-    "light": true
+    "light": false
   },
   "Nouvelle-Zélande de légende": {
     "logo": "/clubs/legendes/nouvelle-zelande.svg",
     "colors": ["#111111", "#D9A93A"],
     "light": false
   },
-  "Oyonnax Rugby": {
-    "logo": "/clubs/oyonnax-rugby.png",
-    "colors": ["#D50032", "#000000"],
+  "Pacific Tides": {
+    "logo": "/clubs/pacific-tides.svg",
+    "colors": ["#00A0AF", "#000000"],
     "light": false
   },
   "Paraguay": {
-    "colors": ["#D52B1E", "#0038A8"]
+    "logo": "/clubs/paraguay.svg",
+    "colors": ["#D52B1E", "#0038A8"],
+    "light": false
+  },
+  "Parma Ducato": {
+    "logo": "/clubs/parma-ducato.svg",
+    "colors": ["#000000", "#FFFFFF"],
+    "light": false
   },
   "Pays de Galles": {
-    "logo": "/clubs/pays-de-galles.png",
+    "logo": "/clubs/pays-de-galles.svg",
     "colors": ["#B5121B", "#FFFFFF"],
     "light": false
   },
@@ -337,203 +430,158 @@
     "light": false
   },
   "Pays-Bas": {
-    "colors": ["#F36C21", "#FFFFFF"]
+    "logo": "/clubs/pays-bas.svg",
+    "colors": ["#F36C21", "#FFFFFF"],
+    "light": false
+  },
+  "Perth Surge": {
+    "logo": "/clubs/perth-surge.svg",
+    "colors": ["#002B5C", "#0072CE"],
+    "light": false
   },
   "Portugal": {
-    "logo": "/clubs/portugal.png",
+    "logo": "/clubs/portugal.svg",
     "colors": ["#046A38", "#DA291C"],
     "light": false
   },
-  "Provence Rugby": {
-    "logo": "/clubs/provence-rugby.png",
-    "colors": ["#1B3E8E", "#F5C400"],
-    "light": true
-  },
-  "Queensland Reds": {
-    "logo": "/clubs/queensland-reds.png",
-    "colors": ["#C8102E", "#FFFFFF"],
+  "Pretoria Buffaloes": {
+    "logo": "/clubs/pretoria-buffaloes.svg",
+    "colors": ["#009FDB", "#002B5C"],
     "light": false
   },
-  "RC Toulon": {
-    "logo": "/clubs/rc-toulon.png",
-    "colors": ["#E2001A", "#000000"],
+  "Pruniers d'Agen": {
+    "logo": "/clubs/pruniers-d-agen.svg",
+    "colors": ["#0072CE", "#FFFFFF"],
     "light": false
   },
-  "RC Toulon de légende": {
-    "logo": "/clubs/legendes/rc-toulon.svg",
-    "colors": ["#C8102E", "#111111"],
+  "Rameurs de Bayonne": {
+    "logo": "/clubs/rameurs-de-bayonne.svg",
+    "colors": ["#6CACE4", "#FFFFFF"],
     "light": false
   },
-  "RC Vannes": {
-    "colors": ["#003C71", "#FFFFFF"]
-  },
-  "Racing 92": {
-    "logo": "/clubs/racing-92.png",
-    "colors": ["#7CC4EA", "#0A1F44"],
+  "Remparts d'Angoulême": {
+    "logo": "/clubs/remparts-d-angouleme.svg",
+    "colors": ["#003A70", "#FFFFFF"],
     "light": false
   },
-  "Racing 92 de légende": {
-    "logo": "/clubs/legendes/racing-92.svg",
-    "colors": ["#0A1F44", "#8FD0F2"],
+  "Roses de Paris": {
+    "logo": "/clubs/roses-de-paris.svg",
+    "colors": ["#E5007E", "#00205B"],
+    "light": false
+  },
+  "Roses de Paris de légende": {
+    "logo": "/clubs/legendes/roses-de-paris.svg",
+    "colors": ["#E4007C", "#0A1F5C"],
     "light": false
   },
   "Roumanie": {
-    "colors": ["#002B7F", "#FCD116"]
+    "logo": "/clubs/roumanie.svg",
+    "colors": ["#002B7F", "#FCD116"],
+    "light": false
   },
-  "SU Agen": {
-    "logo": "/clubs/su-agen.png",
-    "colors": ["#0072CE", "#FFFFFF"],
-    "light": true
-  },
-  "Sale Sharks": {
-    "logo": "/clubs/sale-sharks.png",
+  "Salford Orcas": {
+    "logo": "/clubs/salford-orcas.svg",
     "colors": ["#0B1F4B", "#00A5DF"],
     "light": false
   },
   "Samoa": {
-    "logo": "/clubs/samoa.png",
+    "logo": "/clubs/samoa.svg",
     "colors": ["#002B7F", "#CE1126"],
     "light": false
   },
-  "Saracens": {
-    "logo": "/clubs/saracens.png",
-    "colors": ["#000000", "#D00F16"],
-    "light": false
-  },
-  "Saracens de légende": {
-    "logo": "/clubs/legendes/saracens.svg",
-    "colors": ["#111111", "#E4002B"],
-    "light": false
-  },
-  "Section Paloise": {
-    "logo": "/clubs/section-paloise.png",
-    "colors": ["#00843D", "#FFFFFF"],
-    "light": false
-  },
-  "Sharks": {
-    "logo": "/clubs/sharks.png",
-    "colors": ["#000000", "#FFFFFF"],
-    "light": false
-  },
-  "Soyaux Angoulême XV": {
-    "logo": "/clubs/soyaux-angouleme-xv.png",
-    "colors": ["#003A70", "#FFFFFF"],
-    "light": false
-  },
   "Sri Lanka": {
-    "colors": ["#8D153A", "#FFBE29"]
-  },
-  "Stade Aurillacois": {
-    "logo": "/clubs/stade-aurillacois.png",
-    "colors": ["#E30613", "#003A70"],
+    "logo": "/clubs/sri-lanka.svg",
+    "colors": ["#8D153A", "#FFBE29"],
     "light": false
-  },
-  "Stade Français Paris": {
-    "logo": "/clubs/stade-francais-paris.png",
-    "colors": ["#E5007E", "#00205B"],
-    "light": false
-  },
-  "Stade Français Paris de légende": {
-    "logo": "/clubs/legendes/stade-francais-paris.svg",
-    "colors": ["#E4007C", "#0A1F5C"],
-    "light": false
-  },
-  "Stade Montois": {
-    "colors": ["#FFD200", "#000000"]
-  },
-  "Stade Rochelais": {
-    "logo": "/clubs/stade-rochelais.png",
-    "colors": ["#FFD200", "#000000"],
-    "light": false
-  },
-  "Stade Toulousain": {
-    "logo": "/clubs/stade-toulousain.png",
-    "colors": ["#D00F16", "#000000"],
-    "light": false
-  },
-  "Stade Toulousain de légende": {
-    "logo": "/clubs/legendes/stade-toulousain.svg",
-    "colors": ["#111111", "#E30613"],
-    "light": false
-  },
-  "Stormers": {
-    "logo": "/clubs/stormers.png",
-    "colors": ["#002B5C", "#FFFFFF"],
-    "light": true
   },
   "Suisse": {
-    "colors": ["#D52B1E", "#FFFFFF"]
+    "logo": "/clubs/suisse.svg",
+    "colors": ["#D52B1E", "#FFFFFF"],
+    "light": false
+  },
+  "Sydney Wattles": {
+    "logo": "/clubs/sydney-wattles.svg",
+    "colors": ["#3EA6E8", "#002B5C"],
+    "light": false
+  },
+  "Taureaux de Béziers": {
+    "logo": "/clubs/taureaux-de-beziers.svg",
+    "colors": ["#C8102E", "#002B7F"],
+    "light": false
+  },
+  "Tisserands de Castres": {
+    "logo": "/clubs/tisserands-de-castres.svg",
+    "colors": ["#0055A4", "#FFFFFF"],
+    "light": false
   },
   "Tonga": {
-    "logo": "/clubs/tonga.png",
+    "logo": "/clubs/tonga.svg",
     "colors": ["#A3081F", "#FFFFFF"],
     "light": false
   },
-  "US Carcassonne": {
-    "logo": "/clubs/us-carcassonne.png",
-    "colors": ["#FFD200", "#000000"],
-    "light": false
-  },
-  "US Dax": {
-    "logo": "/clubs/us-dax.png",
-    "colors": ["#D50032", "#FFFFFF"],
-    "light": false
-  },
-  "US Montauban": {
-    "logo": "/clubs/us-montauban.png",
-    "colors": ["#006B3F", "#000000"],
-    "light": false
-  },
-  "USA Perpignan": {
-    "logo": "/clubs/usa-perpignan.png",
-    "colors": ["#C8102E", "#FFC72C"],
-    "light": false
-  },
-  "USON Nevers": {
-    "logo": "/clubs/uson-nevers.png",
-    "colors": ["#C8102E", "#FFC72C"],
-    "light": false
-  },
-  "Ulster Rugby": {
-    "logo": "/clubs/ulster-rugby.png",
-    "colors": ["#FFFFFF", "#C8102E"],
-    "light": false
-  },
-  "Union Bordeaux-Bègles": {
-    "logo": "/clubs/union-bordeaux-begles.png",
-    "colors": ["#5C1530", "#FFFFFF"],
+  "Treviso Dogi": {
+    "logo": "/clubs/treviso-dogi.svg",
+    "colors": ["#006241", "#FFFFFF"],
     "light": false
   },
   "Uruguay": {
-    "colors": ["#3A75C4", "#FFFFFF"]
-  },
-  "Valence Romans Drôme Rugby": {
-    "logo": "/clubs/valence-romans-drome-rugby.png",
-    "colors": ["#00447C", "#FFFFFF"],
+    "logo": "/clubs/uruguay.svg",
+    "colors": ["#3A75C4", "#FFFFFF"],
     "light": false
   },
-  "Western Force": {
-    "logo": "/clubs/western-force.png",
-    "colors": ["#002B5C", "#0072CE"],
+  "Vagues de Biarritz": {
+    "logo": "/clubs/vagues-de-biarritz.svg",
+    "colors": ["#D50032", "#FFFFFF"],
     "light": false
   },
-  "Zebre Parma": {
-    "logo": "/clubs/zebre-parma.png",
-    "colors": ["#000000", "#FFFFFF"],
-    "light": true
+  "Vendangeurs de Bordeaux": {
+    "logo": "/clubs/vendangeurs-de-bordeaux.svg",
+    "colors": ["#5C1530", "#FFFFFF"],
+    "light": false
+  },
+  "Volcans de Clermont": {
+    "logo": "/clubs/volcans-de-clermont.svg",
+    "colors": ["#FFD100", "#002B5C"],
+    "light": false
+  },
+  "Volcans de Clermont de légende": {
+    "logo": "/clubs/legendes/volcans-de-clermont.svg",
+    "colors": ["#002B5C", "#FFD100"],
+    "light": false
+  },
+  "Wellington Cyclones": {
+    "logo": "/clubs/wellington-cyclones.svg",
+    "colors": ["#FFD100", "#000000"],
+    "light": false
   },
   "Zimbabwe": {
-    "colors": ["#319208", "#FFD200"]
+    "logo": "/clubs/zimbabwe.svg",
+    "colors": ["#319208", "#FFD200"],
+    "light": false
+  },
+  "Écarteurs de Dax": {
+    "logo": "/clubs/ecarteurs-de-dax.svg",
+    "colors": ["#D50032", "#FFFFFF"],
+    "light": false
+  },
+  "Échassiers du Marsan": {
+    "logo": "/clubs/echassiers-du-marsan.svg",
+    "colors": ["#FFD200", "#000000"],
+    "light": false
   },
   "Écosse": {
-    "logo": "/clubs/ecosse.png",
+    "logo": "/clubs/ecosse.svg",
     "colors": ["#0B1F44", "#FFFFFF"],
     "light": false
   },
   "Émirats arabes unis": {
-    "colors": ["#00732F", "#111111"]
+    "logo": "/clubs/emirats-arabes-unis.svg",
+    "colors": ["#00732F", "#111111"],
+    "light": false
   },
   "États-Unis": {
-    "colors": ["#0A3161", "#B31942"]
+    "logo": "/clubs/etats-unis.svg",
+    "colors": ["#0A3161", "#B31942"],
+    "light": false
   }
 }

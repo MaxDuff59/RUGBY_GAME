@@ -378,12 +378,12 @@ def test_a_list_needs_42_players_and_enough_of_each_position():
 def test_some_federations_only_pick_players_from_home_clubs():
     english = generate_player(1, Position.WING, 14, 1, random.Random(0), nationality="ENG")
     french = generate_player(2, Position.WING, 14, 1, random.Random(0), nationality="FRA")
-    assert rules.is_eligible(english, ENGLAND, "Bath Rugby")
-    assert not rules.is_eligible(english, ENGLAND, "Stade Toulousain")  # exilé en Top 14
-    assert rules.is_eligible(french, FRANCE, "Bath Rugby")
-    assert not rules.is_eligible(french, ENGLAND, "Bath Rugby")
+    assert rules.is_eligible(english, ENGLAND, "Bath Romans")
+    assert not rules.is_eligible(english, ENGLAND, "Capitouls de Toulouse")  # exilé en Top 14
+    assert rules.is_eligible(french, FRANCE, "Bath Romans")
+    assert not rules.is_eligible(french, ENGLAND, "Bath Romans")
     youth = generate_youth_player(3, Position.WING, 10, 1, random.Random(0), nationality="FRA")
-    assert not rules.is_eligible(youth, FRANCE, "Stade Toulousain")
+    assert not rules.is_eligible(youth, FRANCE, "Capitouls de Toulouse")
 
 
 def test_a_thin_nation_calls_players_from_outside_the_game():
@@ -553,7 +553,7 @@ def test_invented_world_has_no_internationals(manager):
 
 def test_club_career_sees_the_international_calendar_and_its_called_up_players(nations):
     client, _ = nations
-    toulouse = club_id(client, "Stade Toulousain")
+    toulouse = club_id(client, "Capitouls de Toulouse")
     assert (
         client.post("/career", json={"manager_name": "Max", "club_id": toulouse}).status_code == 201
     )
@@ -591,7 +591,7 @@ def test_club_career_sees_the_international_calendar_and_its_called_up_players(n
 
 def test_internationals_miss_the_club_match_on_a_clash_day(nations):
     client, TestSession = nations
-    toulouse = club_id(client, "Stade Toulousain")
+    toulouse = club_id(client, "Capitouls de Toulouse")
     client.post("/career", json={"manager_name": "Max", "club_id": toulouse})
     pumas = {
         p["id"]
@@ -623,7 +623,7 @@ def test_internationals_miss_the_club_match_on_a_clash_day(nations):
 
 def test_new_lists_are_announced_to_the_club_manager(nations):
     client, _ = nations
-    toulouse = club_id(client, "Stade Toulousain")
+    toulouse = club_id(client, "Capitouls de Toulouse")
     client.post("/career", json={"manager_name": "Max", "club_id": toulouse})
 
     notices = []
@@ -643,7 +643,7 @@ def test_new_lists_are_announced_to_the_club_manager(nations):
 
 def test_the_world_ranking_moves_with_the_tests(nations):
     client, _ = nations
-    toulouse = club_id(client, "Stade Toulousain")
+    toulouse = club_id(client, "Capitouls de Toulouse")
     client.post("/career", json={"manager_name": "Max", "club_id": toulouse})
     start = client.get("/internationals/ranking").json()
     assert start["updated"] is None and start["recent"] == []
@@ -664,7 +664,7 @@ def test_the_world_ranking_moves_with_the_tests(nations):
 
 def test_world_awards_count_the_tests_and_crown_the_first_nation(nations, monkeypatch):
     client, TestSession = nations
-    toulouse = club_id(client, "Stade Toulousain")
+    toulouse = club_id(client, "Capitouls de Toulouse")
     client.post("/career", json={"manager_name": "Max", "club_id": toulouse})
     for _ in range(3):
         client.post("/seasons/current/play")
@@ -915,7 +915,7 @@ def world_cup_year(nations, monkeypatch) -> tuple[TestClient, sessionmaker]:
 
 def test_club_career_lives_through_a_world_cup(world_cup_year):
     client, _ = world_cup_year
-    toulouse = club_id(client, "Stade Toulousain")
+    toulouse = club_id(client, "Capitouls de Toulouse")
     client.post("/career", json={"manager_name": "Max", "club_id": toulouse})
 
     calendar = client.get("/internationals").json()
@@ -1021,7 +1021,7 @@ def test_old_saves_get_their_players_nationality_back(tmp_path):
     with sessionmaker(bind=engine)() as session:
         dupont = session.scalars(
             select(PlayerRow).where(
-                PlayerRow.first_name == "Antoine", PlayerRow.last_name == "Dupont"
+                PlayerRow.first_name == "Antoine", PlayerRow.last_name == "Dupert"
             )
         ).one()
         assert dupont.nationality == "FRA"
@@ -1030,7 +1030,7 @@ def test_old_saves_get_their_players_nationality_back(tmp_path):
         ).all()
         assert foreigners  # les étrangers du Top 14 gardent leur pays
         assert session.scalars(select(PlayerRow).where(PlayerRow.nationality.is_(None))).all() == []
-    assert home_nation("Stade Toulousain") == "FRA" and home_nation("RC Port-Vasor") is None
+    assert home_nation("Capitouls de Toulouse") == "FRA" and home_nation("RC Port-Vasor") is None
 
 
 def test_old_saves_get_the_stage_of_their_internationals(tmp_path):

@@ -14,7 +14,7 @@ def test_derbies_name_real_teams():
 
 
 def test_derby_works_both_ways():
-    assert derby("Aviron Bayonnais", "Biarritz Olympique") == "Derby basque"
-    assert derby("Biarritz Olympique", "Aviron Bayonnais") == "Derby basque"
+    assert derby("Rameurs de Bayonne", "Vagues de Biarritz") == "Derby basque"
+    assert derby("Vagues de Biarritz", "Rameurs de Bayonne") == "Derby basque"
     assert derby("Angleterre", "France") == "Le Crunch"
-    assert derby("Stade Toulousain", "Saracens") is None
+    assert derby("Capitouls de Toulouse", "London Scimitars") is None

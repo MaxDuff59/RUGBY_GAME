@@ -20,8 +20,8 @@ const coach = q.get("coach") === "1";
 
 const players = (base, start) =>
   Array.from({ length: 15 }, (_, i) => ({ id: base + i + 1, name: `Joueur ${start}${i + 1}`, slot_number: i + 1, number: i + 1, rating: 6.5 }));
-const home = { club: { id: 1, name: q.get("home") ?? "Stade Toulousain" }, score: 17, players: players(100, "A"), kicker_id: 110 };
-const away = { club: { id: 2, name: q.get("away") ?? "Racing 92" }, score: 20, players: players(200, "B"), kicker_id: 210 };
+const home = { club: { id: 1, name: q.get("home") ?? "Capitouls de Toulouse" }, score: 17, players: players(100, "A"), kicker_id: 110 };
+const away = { club: { id: 2, name: q.get("away") ?? "Flèches de Nanterre" }, score: 20, players: players(200, "B"), kicker_id: 210 };
 const OPTIONS = {
   kick: ["drop", "grubber", "hands"],
   one_on_one: ["step", "fend", "pass"],

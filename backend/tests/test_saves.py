@@ -43,24 +43,24 @@ def test_nothing_is_loaded_at_first(saves):
 
 def test_each_slot_keeps_its_own_world(saves):
     accounts.grant_premium(1)  # le compte gratuit n'a qu'une partie (tests/test_plans.py)
-    start(saves, 1, "Maxence", "Stade Toulousain")
+    start(saves, 1, "Maxence", "Capitouls de Toulouse")
     saves.post("/seasons/current/play")
-    start(saves, 2, "Alex", "Leinster Rugby")
+    start(saves, 2, "Alex", "Dublin Harps")
 
     listed = {s["slot"]: s for s in saves.get("/saves").json()}
     assert listed[2]["active"] and not listed[1]["active"]
     assert listed[1]["manager_name"] == "Maxence" and listed[1]["league_name"] == "Top 14"
-    assert listed[2]["club_name"] == "Leinster Rugby" and listed[3]["empty"]
+    assert listed[2]["club_name"] == "Dublin Harps" and listed[3]["empty"]
     # La journée jouée dans la partie 1 y est restée (sauvegarde automatique).
     assert listed[1]["game_date"] > listed[2]["game_date"]
 
     assert saves.post("/saves/1/load").json()["active"]
-    assert saves.get("/career").json()["club_name"] == "Stade Toulousain"
+    assert saves.get("/career").json()["club_name"] == "Capitouls de Toulouse"
     assert saves.post("/saves/1/new").status_code == 409  # emplacement pris
 
 
 def test_a_deleted_save_is_gone(saves):
-    start(saves, 3, "Maxence", "Bath Rugby")
+    start(saves, 3, "Maxence", "Bath Romans")
     listed = saves.delete("/saves/3").json()
     assert listed[2]["empty"]
     assert saves.get("/career").status_code == 409
@@ -70,12 +70,12 @@ def test_a_deleted_save_is_gone(saves):
 def test_each_player_has_their_own_saves(world):
     maxence = sign_up("maxence@example.com")
     alex = sign_up("alex@example.com")
-    start(maxence, 1, "Maxence", "Stade Toulousain")
-    start(alex, 1, "Alex", "Leinster Rugby")
+    start(maxence, 1, "Maxence", "Capitouls de Toulouse")
+    start(alex, 1, "Alex", "Dublin Harps")
 
     # Même emplacement, deux mondes : chacun retrouve le sien.
-    assert maxence.get("/career").json()["club_name"] == "Stade Toulousain"
-    assert alex.get("/career").json()["club_name"] == "Leinster Rugby"
+    assert maxence.get("/career").json()["club_name"] == "Capitouls de Toulouse"
+    assert alex.get("/career").json()["club_name"] == "Dublin Harps"
     assert [s["empty"] for s in alex.get("/saves").json()] == [False, True, True]
 
     # Alex quitte sa partie : Maxence n'est pas touché.
@@ -87,12 +87,12 @@ def test_each_player_has_their_own_saves(world):
 
 def test_the_loaded_save_follows_the_account(world):
     maxence = sign_up("maxence@example.com")
-    start(maxence, 2, "Maxence", "Bath Rugby")
+    start(maxence, 2, "Maxence", "Bath Romans")
     # Un autre navigateur : nouvelle session, même compte, même partie chargée.
     other = TestClient(app)
     other.post("/auth/login", json={"email": "Maxence@Example.com", "password": "ballon-ovale"})
     assert other.get("/auth/me").json()["active_slot"] == 2
-    assert other.get("/career").json()["club_name"] == "Bath Rugby"
+    assert other.get("/career").json()["club_name"] == "Bath Romans"
 
 
 def test_the_game_needs_an_account(world):

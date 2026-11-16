@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 116" width="200" height="232">
+<clipPath id="s"><path d="M8 8 H92 V58 C92 86 72 102 50 112 C28 102 8 86 8 58 Z"/></clipPath>
+<path d="M8 8 H92 V58 C92 86 72 102 50 112 C28 102 8 86 8 58 Z" fill="#00843D"/>
+<g clip-path="url(#s)"><polygon points="0,96 50,58 100,96 100,116 50,80 0,116" fill="#FFFFFF"/><polygon points="0,36 50,0 100,36 100,16 50,-20 0,16" fill="#FFFFFF"/></g>
+<path d="M8 8 H92 V58 C92 86 72 102 50 112 C28 102 8 86 8 58 Z" fill="none" stroke="#00843D" stroke-width="5" stroke-linejoin="round"/>
+<circle cx="50" cy="57" r="24" fill="#00843D" stroke="#00843D" stroke-width="3"/>
+<text x="50" y="64.7" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="22" fill="#FFFFFF">IP</text>
+</svg>

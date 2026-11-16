@@ -144,11 +144,9 @@ def test_world_cup_with_a_legend_team_in_place_of_its_nation(client):
     cup = client.post("/competition", json={"code": "world_cup"}).json()
     legends = next(t for t in cup["legends"] if t["name"] == "France de légende")
     # Les clubs de légende n'y sont pas : seules les nations prennent la place d'un pays.
-    assert "Stade Toulousain de légende" not in {t["name"] for t in cup["legends"]}
+    assert "Capitouls de Toulouse de légende" not in {t["name"] for t in cup["legends"]}
     france = next(t for t in cup["teams"] if t["name"] == "France")
-    taken = client.post(
-        "/competition/team", json={"manager_name": "Max", "team_id": legends["id"]}
-    )
+    taken = client.post("/competition/team", json={"manager_name": "Max", "team_id": legends["id"]})
     assert taken.status_code == 201 and taken.json()["nation"] == "FRA"
     assert client.get("/competition").json()["team"] == legends
 
@@ -156,7 +154,7 @@ def test_world_cup_with_a_legend_team_in_place_of_its_nation(client):
     selection = client.get("/selection").json()
     pool = client.get("/selection/pool").json()
     names = {f"{p['player']['first_name']} {p['player']['last_name']}" for p in pool["players"]}
-    assert "Antoine Dupont" in names and "Serge Blanco" in names
+    assert "Antoine Dupert" in names and "Serge Blenco" in names
     assert pool["size"] == selection["squad_size"] == len(pool["players"]) < 42
 
     for _ in range(MAX_DAYS):
@@ -177,6 +175,6 @@ def test_world_cup_with_a_legend_team_in_place_of_its_nation(client):
 
 def test_a_started_game_is_not_a_competition(client):
     assert client.get("/competition").status_code == 404
-    toulouse = next(c for c in client.get("/clubs").json() if c["name"] == "Stade Toulousain")
+    toulouse = next(c for c in client.get("/clubs").json() if c["name"] == "Capitouls de Toulouse")
     client.post("/career", json={"manager_name": "Max", "club_id": toulouse["id"]})
     assert client.post("/competition", json={"code": "champions_cup"}).status_code == 409

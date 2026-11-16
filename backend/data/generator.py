@@ -295,8 +295,8 @@ def _real_age(entry: dict, ages: tuple[int, int], rng: random.Random) -> int:
     return rng.randint(*ages)
 
 
-def _split_name(name: str) -> tuple[str, str]:
-    """'Juan Cruz Mallía' -> ('Juan', 'Cruz Mallía') ; un seul mot devient le nom."""
+def split_name(name: str) -> tuple[str, str]:
+    """'Juan Cruz Mollía' -> ('Juan', 'Cruz Mollía') ; un seul mot devient le nom."""
     first, _, last = name.strip().partition(" ")
     return (first, last) if last else ("", first)
 
@@ -343,7 +343,7 @@ def _entries(raw: list[dict], ages: tuple[int, int], rng: random.Random) -> list
 def _real_player(
     entry: dict, player_id: int, player_level: float, club_id: int | None, rng: random.Random
 ) -> Player:
-    first, last = _split_name(entry["name"])
+    first, last = split_name(entry["name"])
     # Le tirage a lieu même pour des notes fixées : le hasard des autres joueurs ne bouge pas.
     attributes = _attributes(player_id, entry["position"], player_level, rng)
     for name, value in (entry["attributes"] or {}).items():

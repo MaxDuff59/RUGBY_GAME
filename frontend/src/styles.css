@@ -429,7 +429,7 @@ body,
   line-height: 1.1;
 }
 
-/* Blason d'un club (ClubCrest) : l'image du vrai club, sinon un écusson à initiales
+/* Blason d'un club (ClubCrest) : l'écu dessiné du club, sinon un écusson à initiales
    aux couleurs du club (fond et texte posés par le composant). */
 .club-crest {
   flex: none;

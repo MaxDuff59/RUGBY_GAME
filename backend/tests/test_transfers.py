@@ -132,8 +132,8 @@ def test_top14_clubs_are_generated_with_their_stadiums():
     clubs = generate_real_clubs(random.Random(0), [league("top14")])
     assert [c.name for c in clubs] == [real.name for real in TOP14]
     assert len(clubs) == 14 and all(SQUAD_MIN <= len(c.players) <= SQUAD_MAX for c in clubs)
-    toulouse = next(c for c in clubs if c.name == "Stade Toulousain")
-    montauban = next(c for c in clubs if c.name == "US Montauban")
+    toulouse = next(c for c in clubs if c.name == "Capitouls de Toulouse")
+    montauban = next(c for c in clubs if c.name == "Faucons de Montauban")
     assert toulouse.facilities.stadium_capacity == 19_000
     assert club_level(toulouse) > club_level(montauban)
     assert toulouse.balance > montauban.balance
@@ -149,9 +149,9 @@ def test_every_league_is_generated_with_unique_ids_and_capped_stadiums():
     player_ids = [p.id for c in clubs for p in c.players + c.youths]
     assert len(set(player_ids)) == len(player_ids)
     by_name = {c.name: c for c in clubs}
-    assert by_name["Leinster Rugby"].league == "urc"
-    assert by_name["Crusaders"].league == "super_rugby"
-    assert by_name["Lions"].facilities.stadium_capacity == STADIUM_STEPS[-1]
+    assert by_name["Dublin Harps"].league == "urc"
+    assert by_name["Christchurch Knights"].league == "super_rugby"
+    assert by_name["Johannesburg Pride"].facilities.stadium_capacity == STADIUM_STEPS[-1]
 
 
 def test_real_stadium_capacities_fit_between_the_steps():
