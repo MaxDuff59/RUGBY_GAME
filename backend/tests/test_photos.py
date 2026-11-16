@@ -23,13 +23,13 @@ def test_photo_is_fetched_once_then_served_from_disk(client, monkeypatch):
         return b"\xff\xd8fake-jpeg"
 
     monkeypatch.setattr(photos, "fetch", fake_fetch)
-    first = client.get("/photos/Shahn%20Eru.jpg")
+    first = client.get("/photos/Jean%20Essai.jpg")
     assert first.status_code == 200 and first.content == b"\xff\xd8fake-jpeg"
     assert first.headers["content-type"] == "image/jpeg"
     assert "max-age" in first.headers["cache-control"]
-    second = client.get("/photos/Shahn%20Eru.jpg")
+    second = client.get("/photos/Jean%20Essai.jpg")
     assert second.status_code == 200
-    assert calls == ["Shahn Iru.jpg"]
+    assert calls == ["Jean Essai.jpg"]
     assert list(photos.cache_dir().iterdir())
 
 
