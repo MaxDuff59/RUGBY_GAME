@@ -93,10 +93,10 @@ function Standings({ rows, myId, title, qualified }) {
           <th scope="col" className="left">{title ?? "Sélection"}</th>
           <th scope="col" title="Joués">J</th>
           <th scope="col" title="Gagnés">G</th>
-          <th scope="col" title="Nuls">N</th>
+          <th scope="col" className="col-opt" title="Nuls">N</th>
           <th scope="col" title="Perdus">P</th>
           <th scope="col" title="Différence de points">Diff</th>
-          <th scope="col" title="Bonus offensifs et défensifs">Bon.</th>
+          <th scope="col" className="col-opt" title="Bonus offensifs et défensifs">Bon.</th>
           <th scope="col">Pts</th>
         </tr>
       </thead>
@@ -115,10 +115,10 @@ function Standings({ rows, myId, title, qualified }) {
             </td>
             <td>{row.played}</td>
             <td>{row.won}</td>
-            <td>{row.drawn}</td>
+            <td className="col-opt">{row.drawn}</td>
             <td>{row.lost}</td>
             <td>{formatDiff(row.points_difference)}</td>
-            <td>{row.offensive_bonus + row.defensive_bonus}</td>
+            <td className="col-opt">{row.offensive_bonus + row.defensive_bonus}</td>
             <td style={{ fontWeight: 600 }}>{row.league_points}</td>
           </tr>
         ))}

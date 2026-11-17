@@ -186,6 +186,11 @@ body,
   .app--phone .fill.player-grid {
     grid-auto-rows: auto;
   }
+  /* Deux colonnes de 380 px minimum ne tiennent pas dans un téléphone : une seule,
+     à la largeur de l'écran, sans débordement à droite. */
+  .app--phone .two-col {
+    grid-template-columns: minmax(0, 1fr);
+  }
   /* Les longues listes (marché des transferts, opérations…) défilent dans leur carte,
      bornée aux deux tiers de l'écran, plutôt que d'allonger la page. */
   .app--phone .section.fill > .card,
@@ -2599,8 +2604,49 @@ select.tactics__select {
   .start .club-option__name {
     font-size: 18px;
   }
+  /* La ligne de détail (rendez-vous d'une sélection, format d'une compétition) sous le
+     nom, jamais dans la colonne du niveau. */
+  .start .club-option__detail {
+    grid-column: 1;
+  }
   .start__submit .button {
     width: 100%;
+  }
+}
+
+/* Téléphone, choix de carrière et écran des parties : le contenu (surtout celui du joueur) dépasse
+   l'écran ; c'est donc le cadre entier qui défile d'un seul geste, la liste des clubs à
+   sa hauteur naturelle (plus de petite zone imbriquée où le doigt reste bloqué), le
+   bouton collé en bas du cadre. La page elle-même ne défile toujours pas. */
+@media (max-width: 960px) {
+  .start--career,
+  .start--saves {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .start--career {
+    padding-bottom: 0;
+  }
+  .start--career > .section {
+    flex: none;
+  }
+  .start--career .club-list__scroll {
+    overflow: visible;
+  }
+  /* Écran des parties : la formule puis les parties, à leur hauteur naturelle. */
+  .start.start--saves > .saves {
+    flex: none;
+    overflow: visible;
+  }
+  .start--career > .start__submit {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin-top: auto;
+    padding: 12px 0 calc(16px + env(safe-area-inset-bottom, 0px));
+    background: var(--bg);
+    box-shadow: 0 -10px 16px -12px rgba(22, 24, 27, 0.25);
   }
 }
 
@@ -3491,18 +3537,72 @@ select.tactics__select {
 
 /* --- Calendrier ---------------------------------------------------------------- */
 
+/* Navigation du calendrier : « ‹ 8 – 14 avr. › » sur une ligne, le retour à la journée
+   à venir à droite quand on s'en est éloigné. */
 .calendar-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px 12px;
   flex-wrap: wrap;
 }
 
+.calendar-nav__pager {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.calendar-nav__arrow {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0 0 3px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.calendar-nav__arrow:hover {
+  background: var(--line-soft);
+}
+
+.calendar-nav__arrow:focus-visible {
+  outline: 2px solid var(--ink);
+}
+
 .calendar-nav__title {
+  min-width: 170px;
+  padding: 0 8px;
+  text-align: center;
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 22px;
+  font-size: 20px;
+  white-space: nowrap;
+}
+
+/* Téléphone : le sélecteur prend toute la largeur, le titre au centre. */
+@media (max-width: 960px) {
+  .calendar-nav__pager {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+  .calendar-nav__title {
+    min-width: 0;
+  }
+  .calendar-nav__today {
+    margin: 0 auto;
+  }
 }
 
 .calendar {
@@ -3589,6 +3689,576 @@ select.tactics__select {
 
 .amount--in {
   color: var(--accent);
+}
+
+/* --- Sélections : fenêtres, classement mondial, colonnes facultatives ---------- */
+
+.intl-tabs {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px 18px;
+}
+
+.intl-tabs__windows {
+  flex: 0 1 auto;
+}
+
+.intl-tabs__ranking {
+  flex: none;
+}
+
+/* Le classement mondial n'est pas une fenêtre : séparé des autres par un filet. */
+.intl-tabs__ranking {
+  position: relative;
+}
+
+.intl-tabs__ranking::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: var(--line);
+}
+
+.intl-tabs__done {
+  opacity: 0.6;
+  font-size: 12px;
+}
+
+@media (max-width: 960px) {
+  /* Une seule rangée qui défile au doigt, jusqu'au bord de l'écran. */
+  .intl-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin: 0 -16px;
+    padding: 0 16px 2px;
+    scrollbar-width: none;
+  }
+  .intl-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .intl-tabs__windows {
+    flex-wrap: nowrap;
+  }
+  .intl-tabs .chip {
+    flex: none;
+    white-space: nowrap;
+  }
+  .intl-tabs {
+    gap: 8px 18px;
+  }
+  .intl-pane {
+    align-self: stretch;
+    display: flex;
+  }
+  /* Tableaux trop larges pour un téléphone : on garde l'essentiel. */
+  .table .col-opt {
+    display: none;
+  }
+  .col-opt-text {
+    display: none;
+  }
+  .intl-squad .squad__name > :first-child {
+    display: none;
+  }
+}
+
+/* --- Finances ---------------------------------------------------------------- */
+
+.finance-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  gap: 16px;
+}
+
+.finance-card {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.finance-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.finance-balance {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 44px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.finance-balance--neg,
+.finance-out {
+  color: var(--loss);
+}
+
+.finance-in {
+  color: var(--win);
+}
+
+.finance-facts {
+  margin: auto 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px 16px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.finance-facts dt {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.finance-facts dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.finance-total {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.payroll-bar {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--line-soft);
+}
+
+.payroll-bar__part {
+  flex-basis: 0;
+  min-width: 2px;
+}
+
+.payroll-bar__part--pros {
+  background: var(--accent);
+}
+
+.payroll-bar__part--youth {
+  background: color-mix(in srgb, var(--accent) 45%, var(--surface));
+}
+
+.payroll-bar__part--staff {
+  background: var(--neutral);
+}
+
+.payroll-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 16px;
+}
+
+.payroll-legend li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  font-size: 13px;
+}
+
+.payroll-legend li > .num {
+  font-weight: 600;
+}
+
+.payroll-legend li > .muted {
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.payroll-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.payroll-legend__label {
+  color: var(--ink-muted);
+}
+
+.cap-gauge {
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cap-gauge__head {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cap-gauge__track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+
+.cap-gauge__track > span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--win);
+}
+
+.cap-gauge__track--tight > span {
+  background: var(--loss);
+}
+
+.ledger-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.ledger-head .eyebrow {
+  margin: 0;
+}
+
+.ledger-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--line-soft);
+  font-size: 12px;
+}
+
+.ledger-note {
+  margin: 0;
+  font-size: 12px;
+}
+
+.ledger-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ledger-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+}
+
+.ledger-item + .ledger-item {
+  border-top: 1px solid var(--line-soft);
+}
+
+.ledger-item__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ledger-item__label {
+  font-weight: 600;
+}
+
+.ledger-item__main .muted {
+  font-size: 12px;
+}
+
+.ledger-item__amounts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.ledger-item__amounts .muted {
+  font-size: 12px;
+}
+
+@media (max-width: 960px) {
+  .payroll-legend {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  .finance-top {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .finance-card {
+    padding: 16px;
+  }
+  .finance-balance {
+    font-size: 44px;
+  }
+  .finance-total {
+    font-size: 28px;
+  }
+}
+
+/* --- Staff : liste des postes, panneau du poste choisi ------------------------- */
+
+.staff-scroll {
+  display: flex;
+  flex-direction: column;
+}
+
+.staff-list,
+.staff-candidates {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.staff-list > li + li,
+.staff-candidates > li + li {
+  border-top: 1px solid var(--line-soft);
+}
+
+.staff-slot {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 16px;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 14px 16px 14px 13px;
+  border: 0;
+  border-left: 3px solid transparent;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.staff-slot:hover {
+  background: var(--line-soft);
+}
+
+.staff-slot[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  border-left-color: var(--accent);
+}
+
+.staff-slot__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.staff-slot__role {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.staff-slot__scope {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.staff-slot__member {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+.staff-slot__vacant {
+  font-weight: 600;
+  color: var(--loss);
+}
+
+.staff-slot--vacant {
+  border-left-color: var(--loss);
+}
+
+.staff-slot__level {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  max-width: 150px;
+  text-align: right;
+}
+
+.staff-slot__chevron {
+  font-size: 22px;
+  line-height: 1;
+  color: var(--ink-muted);
+  transition: transform 0.15s;
+}
+
+.staff-slot[aria-pressed="true"] .staff-slot__chevron {
+  color: var(--accent);
+}
+
+.staff-note {
+  margin: 0;
+  padding: 12px 16px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.staff-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.staff-panel__holder {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.staff-panel__label {
+  margin: 0 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.staff-panel__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.staff-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 14px 16px 6px;
+}
+
+.segmented--sm > button {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.staff-candidate {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+}
+
+.staff-candidate__main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.staff-candidate__name {
+  font-weight: 600;
+}
+
+.staff-candidate__level {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.staff-candidate__level .staff-effect {
+  margin: 0;
+}
+
+.staff-candidate__wage {
+  white-space: nowrap;
+}
+
+/* Action qui coûte (licencier) : contour rouge, rempli au survol. */
+.button--danger {
+  border-color: var(--loss);
+  color: var(--loss);
+}
+
+.button--danger:hover {
+  background: var(--loss);
+  color: #fff;
+}
+
+/* Téléphone : une liste de postes ; le poste touché s'ouvre en dessous, dans un
+   encart en retrait, avec son titulaire et ses candidats. */
+@media (max-width: 960px) {
+  .staff-list.card {
+    overflow: hidden;
+  }
+  /* Sous l'en-tête collé en haut quand le poste ouvert remonte. */
+  .staff-list > li {
+    scroll-margin-top: 76px;
+  }
+  .staff-slot {
+    padding: 12px 12px 12px 11px;
+    gap: 4px 10px;
+  }
+  .staff-slot__level {
+    max-width: 120px;
+  }
+  .staff-slot[aria-pressed="true"] .staff-slot__chevron {
+    transform: rotate(90deg);
+  }
+  .staff-panel {
+    background: var(--bg);
+    border-top: 1px solid var(--line-soft);
+    border-left: 3px solid var(--accent);
+  }
+  .staff-panel__holder,
+  .staff-panel__head,
+  .staff-candidate {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .staff-candidate {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 10px;
+  }
+  .staff-candidate__wage {
+    grid-column: 2;
+    grid-row: 1;
+    text-align: right;
+  }
+  .staff-candidate > .button {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .staff-candidate__main {
+    grid-row: 1 / span 2;
+  }
 }
 
 /* Page Staff : ce qu'un poste apporte, sous ses étoiles. */

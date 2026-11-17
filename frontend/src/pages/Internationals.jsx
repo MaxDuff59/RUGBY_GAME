@@ -9,6 +9,7 @@ import WindowBoard from "../components/WindowBoard.jsx";
 import { RankingMoves, RankingTable } from "../components/WorldRanking.jsx";
 import { POSITION_ORDER, POSITIONS, formatLongDate, formatNote, formatShortDate } from "../format.js";
 import { useApi } from "../hooks/useApi.js";
+import { PHONE_QUERY, useMediaQuery } from "../hooks/useMediaQuery.js";
 
 // Le calendrier international de la saison : une fenêtre à la fois (ses matchs, son
 // classement s'il y en a un), et la liste de 42 de chacune de ses sélections. Dans une
@@ -24,6 +25,9 @@ export default function Internationals() {
   // Un lien peut ouvrir directement le classement mondial.
   const location = useLocation();
   const [code, setCode] = useState(location.state?.view === RANKING ? RANKING : null);
+  // Téléphone : la fenêtre (classement et matchs) ou les listes, l'une après l'autre.
+  const phone = useMediaQuery(PHONE_QUERY);
+  const [pane, setPane] = useState("board");
 
   if (calendar.loading) return <p className="status">Chargement…</p>;
   if (calendar.error) return <p className="status status--error">{calendar.error.message}</p>;
@@ -32,8 +36,11 @@ export default function Internationals() {
   const shown = windows.find((w) => w.code === code) ?? windows.find((w) => !w.finished) ?? windows.at(-1);
   // Les sélections à mettre en avant : la sienne, ou celles de ses joueurs retenus.
   const highlight = selector ? [career.club_id] : [...new Set(mine.map((called) => called.nation.id))];
+  // Les fenêtres de la saison (une rangée qui défile sur téléphone), puis, à part, le
+  // classement mondial.
   const chips = (
-    <div className="chips" role="group" aria-label="Fenêtre internationale">
+    <div className="intl-tabs">
+      <div className="chips intl-tabs__windows" role="group" aria-label="Fenêtre internationale">
       {windows.map((w) => (
         <button
           key={w.code}
@@ -43,9 +50,16 @@ export default function Internationals() {
           onClick={() => setCode(w.code)}
         >
           {w.short_name}
+          {w.finished && <span className="intl-tabs__done" aria-label="terminée"> ✓</span>}
         </button>
       ))}
-      <button type="button" className="chip" aria-pressed={code === RANKING} onClick={() => setCode(RANKING)}>
+      </div>
+      <button
+        type="button"
+        className="chip intl-tabs__ranking"
+        aria-pressed={code === RANKING}
+        onClick={() => setCode(RANKING)}
+      >
         Classement mondial
       </button>
     </div>
@@ -105,14 +119,29 @@ export default function Internationals() {
         {chips}
       </header>
 
+      {phone && (
+        <div className="segmented intl-pane" role="group" aria-label="Affichage">
+          <button type="button" aria-pressed={pane === "board"} onClick={() => setPane("board")}>
+            {shown.pools.length > 0 ? "Poules et matchs" : "Classement et matchs"}
+          </button>
+          <button type="button" aria-pressed={pane === "squads"} onClick={() => setPane("squads")}>
+            Listes de 42
+          </button>
+        </div>
+      )}
+
       <div className="two-col fill">
-        <WindowBoard key={shown.code} windows={[shown]} myId={selector ? career.club_id : null} />
-        <Squads
-          key={`squads-${shown.code}`}
-          window={shown}
-          initial={selector ? career.nation : mine[0]?.nation.code}
-          myClubId={selector ? null : career.club_id}
-        />
+        {(!phone || pane === "board") && (
+          <WindowBoard key={shown.code} windows={[shown]} myId={selector ? career.club_id : null} />
+        )}
+        {(!phone || pane === "squads") && (
+          <Squads
+            key={`squads-${shown.code}`}
+            window={shown}
+            initial={selector ? career.nation : mine[0]?.nation.code}
+            myClubId={selector ? null : career.club_id}
+          />
+        )}
       </div>
     </>
   );
@@ -190,15 +219,15 @@ function Squads({ window, initial, myClubId }) {
           </p>
         )}
         {players.length > 0 && (
-          <table className="table">
+          <table className="table intl-squad">
             <thead>
               <tr>
                 <th scope="col" className="left">Joueur</th>
                 <th scope="col" className="left">Poste</th>
-                <th scope="col">Âge</th>
+                <th scope="col" className="col-opt">Âge</th>
                 <th scope="col" className="left">Club</th>
                 <th scope="col" title="Note à son poste">Au poste</th>
-                <th scope="col" title="Titularisations cette saison, club et sélection">Tit.</th>
+                <th scope="col" className="col-opt" title="Titularisations cette saison, club et sélection">Tit.</th>
               </tr>
             </thead>
             <tbody>
@@ -220,19 +249,19 @@ function Squads({ window, initial, myClubId }) {
                     </div>
                   </td>
                   <td className="left">{POSITIONS[player.position].label}</td>
-                  <td className="muted">{player.age}</td>
+                  <td className="muted col-opt">{player.age}</td>
                   <td className="left">
                     {club ? (
                       <span className="with-crest">
                         <ClubCrest name={club.name} size={18} />
-                        {club.name}
+                        <span className="col-opt-text" title={club.name}>{club.name}</span>
                       </span>
                     ) : (
                       <span className="muted">Hors championnats</span>
                     )}
                   </td>
                   <td className="note">{formatNote(rating)}</td>
-                  <td className="muted">{starts}</td>
+                  <td className="muted col-opt">{starts}</td>
                 </tr>
               ))}
             </tbody>

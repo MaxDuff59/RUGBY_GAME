@@ -136,7 +136,7 @@ export default function Saves() {
   const blocked = newSaveBlocked(me.data, occupied);
 
   return (
-    <div className="start">
+    <div className="start start--saves">
       {confirm.dialog}
       <header className="page-head">
         <div>

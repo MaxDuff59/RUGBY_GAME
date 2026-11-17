@@ -99,18 +99,35 @@ export default function Calendar() {
 
       {(view === "week" || view === "month") && (
         <div className="calendar-nav">
-          <button type="button" className="button button--small" onClick={() => (view === "week" ? shift(-7) : shift(0, -1))}>
-            ← {view === "week" ? "Semaine précédente" : "Mois précédent"}
-          </button>
-          <span className="calendar-nav__title">
-            {view === "week" ? weekTitle(current) : capitalize(formatMonthYear(current))}
-          </span>
-          <button type="button" className="button button--small" onClick={() => setCursor(parseDate(todayIso))}>
-            Prochaine journée
-          </button>
-          <button type="button" className="button button--small" onClick={() => (view === "week" ? shift(7) : shift(0, 1))}>
-            {view === "week" ? "Semaine suivante" : "Mois suivant"} →
-          </button>
+          <div className="calendar-nav__pager">
+            <button
+              type="button"
+              className="calendar-nav__arrow"
+              aria-label={view === "week" ? "Semaine précédente" : "Mois précédent"}
+              title={view === "week" ? "Semaine précédente" : "Mois précédent"}
+              onClick={() => (view === "week" ? shift(-7) : shift(0, -1))}
+            >
+              ‹
+            </button>
+            <span className="calendar-nav__title" aria-live="polite">
+              {view === "week" ? weekTitle(current) : capitalize(formatMonthYear(current))}
+            </span>
+            <button
+              type="button"
+              className="calendar-nav__arrow"
+              aria-label={view === "week" ? "Semaine suivante" : "Mois suivant"}
+              title={view === "week" ? "Semaine suivante" : "Mois suivant"}
+              onClick={() => (view === "week" ? shift(7) : shift(0, 1))}
+            >
+              ›
+            </button>
+          </div>
+          {/* Retour à la journée à venir : seulement quand on s'en est éloigné. */}
+          {!samePeriod(view, current, parseDate(todayIso)) && (
+            <button type="button" className="chip calendar-nav__today" onClick={() => setCursor(parseDate(todayIso))}>
+              ↺ Prochaine journée
+            </button>
+          )}
         </div>
       )}
 
@@ -537,9 +554,20 @@ function groupByMatchday(matches) {
   return [...groups.values()].sort((a, b) => a.matchday - b.matchday);
 }
 
+// « 8 – 14 avr. », ou « 29 avr. – 5 mai » quand la semaine change de mois.
 function weekTitle(date) {
   const monday = startOfWeek(date);
-  return `Semaine du ${formatShortDate(toIso(monday))} au ${formatShortDate(toIso(addDays(monday, 6)))}`;
+  const sunday = addDays(monday, 6);
+  const month = (d) => d.toLocaleDateString("fr-FR", { month: "short" });
+  return monday.getMonth() === sunday.getMonth()
+    ? `${monday.getDate()} – ${sunday.getDate()} ${month(sunday)}`
+    : `${monday.getDate()} ${month(monday)} – ${sunday.getDate()} ${month(sunday)}`;
+}
+
+// La vue montre-t-elle déjà la période (semaine ou mois) de `target` ?
+function samePeriod(view, date, target) {
+  if (view === "week") return toIso(startOfWeek(date)) === toIso(startOfWeek(target));
+  return date.getFullYear() === target.getFullYear() && date.getMonth() === target.getMonth();
 }
 
 const capitalize = (text) => text.charAt(0).toUpperCase() + text.slice(1);
