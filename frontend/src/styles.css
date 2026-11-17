@@ -2621,6 +2621,209 @@ select.tactics__select {
   max-width: 640px;
 }
 
+/* Sélecteur segmenté : un seul choix parmi deux ou trois, dans un rail commun. Se
+   distingue des pastilles de filtre (`.chip`), qui, elles, ne s'excluent pas toujours. */
+.segmented {
+  display: inline-flex;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 4px;
+  gap: 2px;
+  border-radius: 999px;
+  background: var(--line-soft);
+  border: 1px solid var(--line);
+}
+
+.segmented > button {
+  flex: 1 1 auto;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-muted);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.segmented > button:hover {
+  color: var(--ink);
+}
+
+.segmented > button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(22, 24, 27, 0.14);
+}
+
+.segmented--lg > button {
+  min-height: 42px;
+  padding: 0 22px;
+  font-size: 15px;
+}
+
+@media (min-width: 961px) {
+  .start--career > .segmented--lg {
+    align-self: center;
+  }
+}
+
+.segmented--lg > button[aria-pressed="true"] {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Choix de carrière : nom, poste et difficulté côte à côte dans une même carte. */
+.start__setup {
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px 32px;
+  padding: 20px 24px;
+  text-align: left;
+}
+
+.start .start__setup .field {
+  width: auto;
+  max-width: none;
+  align-items: stretch;
+}
+
+.start__setup .field__label,
+.start__setup .field label {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.start__setup .segmented {
+  align-self: stretch;
+}
+
+.start__hint {
+  font-size: 12px;
+}
+
+/* Cartes de championnat : quelques blasons des clubs, le nombre, une flèche. */
+.league-option__foot {
+  margin-top: auto;
+  padding-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.league-option__crests {
+  display: flex;
+}
+
+.league-option__crests > * + * {
+  margin-left: -8px;
+}
+
+.league-option__go {
+  margin-left: auto;
+  font-size: 18px;
+  color: var(--ink-muted);
+  transition: transform 0.15s, color 0.15s;
+}
+
+.league-option:hover .league-option__go {
+  color: var(--accent);
+  transform: translateX(3px);
+}
+
+.league-option:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(22, 24, 27, 0.08);
+}
+
+.club-option {
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+
+/* Barre d'action : ce qui manque (ou le récapitulatif) à gauche, le bouton à droite. */
+.start__submit--bar {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+}
+
+.start__summary {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+@media (max-width: 960px) {
+  .start__setup {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding: 14px;
+  }
+  .start__hint {
+    display: none;
+  }
+  /* Libellé à gauche, contrôle à droite : trois lignes compactes, plus de clubs visibles. */
+  .start .start__setup .field {
+    display: grid;
+    grid-template-columns: 78px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+  }
+  .start__setup .field__label,
+  .start__setup .field label {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
+  .start__setup .input {
+    min-height: 38px;
+  }
+  .start__setup .segmented > button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 30px;
+    padding: 0 6px;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .start__submit--bar {
+    flex-direction: column;
+    align-items: stretch;
+    padding-top: 12px;
+  }
+  .start .league-option {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .start .league-option > .num {
+    grid-row: auto;
+  }
+  .league-option__foot {
+    padding-top: 4px;
+  }
+  .segmented--lg {
+    align-self: stretch;
+  }
+  .segmented--lg > button {
+    padding: 0 12px;
+    font-size: 14px;
+  }
+}
+
 /* --- Pages de gestion -------------------------------------------------------- */
 
 .page-head {

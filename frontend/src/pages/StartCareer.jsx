@@ -84,6 +84,11 @@ export default function StartCareer() {
 
   const chosen = kind === "nation" ? nationCode !== null : clubId !== null;
   const canSubmit = managerName.trim() !== "" && chosen && !submitting;
+  // Ce qui manque encore, dit en clair près du bouton plutôt qu'un bouton grisé muet.
+  const missing = [
+    managerName.trim() === "" && "ton nom",
+    !chosen && (kind === "nation" ? "une sélection" : "un club"),
+  ].filter(Boolean);
   // Le même manager ne reprend qu'un club à sa portée ; un nouveau nom repart de zéro.
   const outOfReach = (id) =>
     dismissal?.reachable != null && managerName.trim() === dismissal.manager_name && !dismissal.reachable.includes(id);
@@ -98,11 +103,11 @@ export default function StartCareer() {
 
   // Les deux carrières : le choix en tête de page, sauf pour un manager qui rebondit.
   const roles = dismissal ? null : (
-    <div className="chips" role="group" aria-label="Carrière">
-      <button type="button" className="chip" aria-pressed={role === "coach"} onClick={() => setRole("coach")}>
+    <div className="segmented segmented--lg" role="group" aria-label="Carrière">
+      <button type="button" aria-pressed={role === "coach"} onClick={() => setRole("coach")}>
         Carrière d'entraîneur
       </button>
-      <button type="button" className="chip" aria-pressed={role === "player"} onClick={() => setRole("player")}>
+      <button type="button" aria-pressed={role === "player"} onClick={() => setRole("player")}>
         Carrière de joueur
       </button>
     </div>
@@ -152,6 +157,7 @@ export default function StartCareer() {
 
       {roles}
 
+      <div className="start__setup card">
       <div className="field">
         <label htmlFor="manager">Ton nom de manager</label>
         <input
@@ -160,34 +166,39 @@ export default function StartCareer() {
           value={managerName}
           onChange={(event) => setManagerName(event.target.value)}
           autoComplete="name"
+          placeholder="Ton nom ou un pseudo"
           required
         />
       </div>
 
       {hasNations && (
-        <div className="chips" role="group" aria-label="Carrière">
-          <button type="button" className="chip" aria-pressed={kind === "club"} onClick={() => setKind("club")}>
-            Manager d'un club
-          </button>
-          <button type="button" className="chip" aria-pressed={kind === "nation"} onClick={() => setKind("nation")}>
-            Sélectionneur national
-          </button>
+        <div className="field">
+          <span className="field__label">Tu diriges</span>
+          <div className="segmented" role="group" aria-label="Tu diriges">
+            <button type="button" aria-pressed={kind === "club"} onClick={() => setKind("club")}>
+              Un club
+            </button>
+            <button type="button" aria-pressed={kind === "nation"} onClick={() => setKind("nation")}>
+              Une sélection
+            </button>
+          </div>
         </div>
       )}
 
       {kind === "club" && (
-        <div className="field field--wide">
+        <div className="field">
           <span className="field__label">Difficulté</span>
-          <div className="chips" role="group" aria-label="Difficulté">
+          <div className="segmented" role="group" aria-label="Difficulté">
             {Object.entries(DIFFICULTIES).map(([key, level]) => (
-              <button key={key} type="button" className="chip" aria-pressed={difficulty === key} onClick={() => setDifficulty(key)}>
+              <button key={key} type="button" aria-pressed={difficulty === key} onClick={() => setDifficulty(key)}>
                 {level.label}
               </button>
             ))}
           </div>
-          <span className="muted">{DIFFICULTIES[difficulty].scope} Les matchs, eux, ne changent pas.</span>
+          <span className="muted start__hint">{DIFFICULTIES[difficulty].scope} Les matchs, eux, ne changent pas.</span>
         </div>
       )}
+      </div>
 
       {kind === "nation" ? (
         <div className="section">
@@ -229,9 +240,22 @@ export default function StartCareer() {
 
       <ActionError error={submitError} />
 
-      <div className="start__submit">
+      <div className="start__submit start__submit--bar">
+        <p className="start__summary" aria-live="polite">
+          {missing.length > 0 ? (
+            <span className="muted">Il te reste à choisir {missing.join(" et ")}.</span>
+          ) : (
+            <>
+              <ClubCrest name={chosenName} size={28} />
+              <span>
+                <strong>{managerName.trim()}</strong> · {chosenName}
+                {kind === "club" && <span className="muted"> · {DIFFICULTIES[difficulty].label}</span>}
+              </span>
+            </>
+          )}
+        </p>
         <button type="submit" className="button button--primary" disabled={!canSubmit}>
-          Prendre les rênes
+          {submitting ? "Signature…" : "Prendre les rênes"}
         </button>
       </div>
     </form>
@@ -249,10 +273,21 @@ function ClubPicker({ leagues, league, clubs, clubId, onLeague, onClub, blocked 
           <ul className="club-list">
             {leagues.map((item) => (
               <li key={item.code}>
-                <button type="button" className="club-option" onClick={() => onLeague(item.code)}>
+                <button type="button" className="club-option league-option" onClick={() => onLeague(item.code)}>
                   <span className="club-option__name">{item.name}</span>
                   <span className="muted">{item.country}</span>
-                  <span className="num">{item.club_count} clubs</span>
+                  <span className="league-option__foot">
+                    <span className="league-option__crests" aria-hidden="true">
+                      {clubs
+                        .filter((club) => club.league === item.code)
+                        .slice(0, 5)
+                        .map((club) => (
+                          <ClubCrest key={club.id} name={club.name} size={26} />
+                        ))}
+                    </span>
+                    <span className="num">{item.club_count} clubs</span>
+                    <span className="league-option__go" aria-hidden="true">→</span>
+                  </span>
                 </button>
               </li>
             ))}
